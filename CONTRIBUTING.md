@@ -1,6 +1,6 @@
 # Contributing
 
-Hot Pursuit is at an early, safety-sensitive stage. Small, testable changes are
+Balloon Crumbs is at an early, safety-sensitive stage. Small, testable changes are
 preferred over broad feature additions.
 
 ## Development workflow

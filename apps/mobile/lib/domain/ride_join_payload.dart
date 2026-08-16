@@ -60,7 +60,7 @@ class RideJoinPayload {
     final parts = raw.trim().split(_separator);
     if (parts.length != 5 || parts.first != scheme) {
       throw const FormatException(
-        'That code is not a Hot Pursuit ride invitation.',
+        'That code is not a Balloon Crumbs ride invitation.',
       );
     }
     final [_, rideCode, rideId, inviteSecret, joinToken] = parts;

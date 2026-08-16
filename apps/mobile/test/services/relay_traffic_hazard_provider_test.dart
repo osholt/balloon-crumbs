@@ -10,7 +10,7 @@ import 'package:ride_relay/services/relay_traffic_hazard_provider.dart';
 
 void main() {
   final configuration = InternetRelayConfiguration(
-    baseUri: Uri.parse('https://relay.hot-pursuit.invalid/api'),
+    baseUri: Uri.parse('https://relay.balloon-crumbs.invalid/api'),
   );
   final now = DateTime.utc(2026, 7, 24, 20);
 

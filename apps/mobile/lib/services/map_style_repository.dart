@@ -73,7 +73,7 @@ class MapStyleRepository {
        _ownsClient = client == null;
 
   static const fallbackStyle =
-      '{"version":8,"name":"Hot Pursuit offline fallback","sources":{},'
+      '{"version":8,"name":"Balloon Crumbs offline fallback","sources":{},'
       '"layers":[{"id":"background","type":"background",'
       '"paint":{"background-color":"#111820"}}]}';
 

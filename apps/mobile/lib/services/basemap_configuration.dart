@@ -64,7 +64,7 @@ class BasemapConfiguration {
   final String cacheNamespace;
   final bool persistentCachingAllowed;
 
-  /// Whether the default Liberty day style receives Hot Pursuit's
+  /// Whether the default Liberty day style receives Balloon Crumbs'
   /// quieter road-first repaint. False preserves the provider's original
   /// daytime palette. Custom styles are never repainted either way (#489).
   final bool restrainedLightStyle;

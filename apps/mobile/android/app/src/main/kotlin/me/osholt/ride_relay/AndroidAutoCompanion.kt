@@ -164,7 +164,7 @@ private class TailEndCharlieStatusScreen(carContext: CarContext) : Screen(carCon
             rows.addItem(
                 Row.Builder()
                     .setTitle("Waiting for ride status")
-                    .addText("Open Hot Pursuit on the phone")
+                    .addText("Open Balloon Crumbs on the phone")
                     .build(),
             )
         } else {
@@ -223,7 +223,7 @@ private class TailEndCharlieStatusScreen(carContext: CarContext) : Screen(carCon
         if (carContext.carAppApiLevel >= 7) {
             template.setHeader(
                 Header.Builder()
-                    .setTitle("Hot Pursuit")
+                    .setTitle("Balloon Crumbs")
                     .setStartHeaderAction(Action.APP_ICON)
                     .build(),
             )
@@ -245,7 +245,7 @@ private class TailEndCharlieStatusScreen(carContext: CarContext) : Screen(carCon
     @Suppress("DEPRECATION")
     private fun applyLegacyHeader(template: ListTemplate.Builder) {
         template
-            .setTitle("Hot Pursuit")
+            .setTitle("Balloon Crumbs")
             .setHeaderAction(Action.APP_ICON)
     }
 }

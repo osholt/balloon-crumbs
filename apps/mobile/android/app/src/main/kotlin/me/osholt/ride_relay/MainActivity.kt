@@ -60,7 +60,7 @@ class MainActivity : FlutterActivity() {
     private var eventSink: EventChannel.EventSink? = null
     private var permissionResult: MethodChannel.Result? = null
     private var pushPermissionResult: MethodChannel.Result? = null
-    private var endpointName = "Hot Pursuit"
+    private var endpointName = "Balloon Crumbs"
     private var serviceId = "me.osholt.ride_relay.relay.v1"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -95,7 +95,7 @@ class MainActivity : FlutterActivity() {
                 )
                 "requestPermissions" -> requestNearbyPermissions(result)
                 "start" -> {
-                    endpointName = call.argument<String>("endpointName")?.take(32) ?: "Hot Pursuit"
+                    endpointName = call.argument<String>("endpointName")?.take(32) ?: "Balloon Crumbs"
                     serviceId = call.argument<String>("serviceId") ?: serviceId
                     startNearby(result)
                 }
@@ -293,7 +293,7 @@ class MainActivity : FlutterActivity() {
         val uri = intent.data ?: return
         if (
             uri.scheme != "https" ||
-            !uri.host.equals("hot-pursuit.invalid", ignoreCase = true) ||
+            !uri.host.equals("balloon-crumbs.invalid", ignoreCase = true) ||
             uri.toString().length > 2048
         ) {
             return

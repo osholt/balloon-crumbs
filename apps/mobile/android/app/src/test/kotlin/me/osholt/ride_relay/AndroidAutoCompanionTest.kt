@@ -25,8 +25,8 @@ class AndroidAutoCompanionTest {
                 "markerStatus" to "Marker at the next junction",
                 "riders" to listOf(
                     mapOf(
-                        "label" to "TEC",
-                        "role" to "Hot Pursuit",
+                        "label" to "Charlie",
+                        "role" to "Rider",
                         "needsAttention" to true,
                     ),
                 ),

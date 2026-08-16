@@ -89,7 +89,7 @@ void main() {
         expectedCode: '123456',
         expectedToken: 'Abcdefghijklmnop12345678',
       ),
-      link: 'https://hot-pursuit.invalid/join.html#broken',
+      link: 'https://balloon-crumbs.invalid/join.html#broken',
     );
     addTearDown(fixture.dispose);
 

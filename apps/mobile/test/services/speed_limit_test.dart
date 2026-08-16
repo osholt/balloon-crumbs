@@ -107,7 +107,7 @@ void main() {
       ),
       client: MockClient((request) async {
         final body = jsonDecode(request.body) as Map<String, Object?>;
-        expect(request.headers['x-client-id'], 'hot-pursuit.invalid');
+        expect(request.headers['x-client-id'], 'balloon-crumbs.invalid');
         if (request.url.path.endsWith('locate')) {
           locateRequests.add(body);
           return http.Response(locate ?? '[]', 200);

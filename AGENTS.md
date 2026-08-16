@@ -1,8 +1,8 @@
-# Hot Pursuit — Codex Instructions
+# Balloon Crumbs — Codex Instructions
 
 ## Project overview
 
-Hot Pursuit is an account-free, offline-first hot-air-balloon chase coordination
+Balloon Crumbs is an account-free, offline-first hot-air-balloon chase coordination
 app for iOS and Android. It is derived from Tail End Charlie's Flutter client,
 native Swift/Kotlin transport bridges, FastAPI/PostgreSQL relay, and CI.
 

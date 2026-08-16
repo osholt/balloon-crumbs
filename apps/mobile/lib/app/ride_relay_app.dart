@@ -195,7 +195,7 @@ class RideRelayApp extends StatelessWidget {
     final links = rideInvitationLinks;
 
     return MaterialApp(
-      title: 'Hot Pursuit',
+      title: 'Balloon Crumbs',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

@@ -62,7 +62,7 @@ void main() {
           'location': RiderLocation(
             riderId: 'bill',
             displayName: 'Bill',
-            role: RideRole.tailEndCharlie,
+            role: RideRole.rider,
             sample: LocationSample(
               position: const GeoPoint(latitude: 51.20011, longitude: -2.40022),
               recordedAt: startedAt.add(const Duration(minutes: 20)),
@@ -116,7 +116,7 @@ void main() {
     // Bill was last known to be.
     expect(find.byKey(const Key('roster-rider-bill')), findsOneWidget);
     expect(
-      find.textContaining('Hot Pursuit · Left the ride at 14:32'),
+      find.textContaining('Rider · Left the ride at 14:32'),
       findsOneWidget,
     );
     expect(

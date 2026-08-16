@@ -204,7 +204,7 @@ def create_app(
         engine.dispose()
 
     app = FastAPI(
-        title="Hot Pursuit Server",
+        title="Balloon Crumbs Server",
         version="0.1.0",
         docs_url=None,
         redoc_url=None,
@@ -404,7 +404,7 @@ def create_app(
                 status_code=426,
                 content={
                     "code": "update_required",
-                    "message": "Update Hot Pursuit before joining or synchronizing.",
+                    "message": "Update Balloon Crumbs before joining or synchronizing.",
                     "updateUrl": update_url,
                     "minimumClientProtocol": settings.minimum_client_protocol,
                 },
@@ -424,7 +424,7 @@ def create_app(
                 status_code=426,
                 content={
                     "code": "update_required",
-                    "message": "Update Hot Pursuit to continue safely.",
+                    "message": "Update Balloon Crumbs to continue safely.",
                     "updateUrl": update_url,
                     "requiredCapabilities": missing,
                 },

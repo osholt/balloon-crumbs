@@ -248,7 +248,7 @@ class _Relay {
           'capabilities': RelayProtocolCapabilities.current.toList(),
           'requiredCapabilities': <String>[],
           'cacheSeconds': 300,
-          'updateUrls': {'default': 'https://hot-pursuit.invalid'},
+          'updateUrls': {'default': 'https://balloon-crumbs.invalid'},
         }),
         200,
         headers: {'content-type': 'application/json'},

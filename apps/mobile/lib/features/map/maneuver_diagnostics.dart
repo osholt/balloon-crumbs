@@ -53,7 +53,7 @@ String maneuverDiagnosticsReport(
       direction.isStated ? direction.label : 'unstated';
 
   final lines = <String>[
-    'Hot Pursuit · turn detail${position == null ? '' : ' $position'}',
+    'Balloon Crumbs · turn detail${position == null ? '' : ' $position'}',
     'Instruction:      ${instruction.standaloneText}',
     'Shown as:         ${label(instruction.direction)} (${instruction.kind.name})',
     'Engine type:      ${maneuver.type}',

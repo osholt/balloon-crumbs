@@ -192,7 +192,7 @@ void main() {
       track: DistributionTrack.playInternal,
       platform: platform,
       builtAt: builtAt,
-      relayHost: 'relay.hot-pursuit.invalid',
+      relayHost: 'relay.balloon-crumbs.invalid',
       testerBuildLifetime: const Duration(days: 14),
     );
 
@@ -319,7 +319,7 @@ void main() {
       expect(subject.versionLabel, '1.0.1 (build 123)');
       expect(
         subject.bugReportLine,
-        'Hot Pursuit 1.0.1+123 · Play internal testing · android',
+        'Balloon Crumbs 1.0.1+123 · Play internal testing · android',
       );
     });
   });

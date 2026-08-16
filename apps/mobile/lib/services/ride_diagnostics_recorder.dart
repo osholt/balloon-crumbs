@@ -278,7 +278,7 @@ class RideDiagnosticsRecorder {
   /// The whole record, as the text that gets shared.
   String render({String? rideCode, String? appBuild}) {
     final lines = <String>[
-      'Hot Pursuit · ride diagnostics',
+      'Balloon Crumbs · ride diagnostics',
       if (rideCode != null) 'Ride:  $rideCode',
       if (appBuild != null) 'Build: $appBuild',
       'Written: ${_stamp()}',

@@ -54,7 +54,7 @@ void main() {
 
       final style = jsonDecode((await repository.resolve()).style) as Map;
 
-      expect(style['name'], 'Hot Pursuit offline fallback');
+      expect(style['name'], 'Balloon Crumbs offline fallback');
       expect(style['sources'], isEmpty);
     },
   );

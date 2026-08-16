@@ -200,7 +200,7 @@ class BuildIdentity {
 
   /// A single line a tester can copy into a bug report.
   String get bugReportLine =>
-      'Hot Pursuit ${reportsVersion ? '$appVersion+$appBuild' : 'unstamped build (version not reported)'} · '
+      'Balloon Crumbs ${reportsVersion ? '$appVersion+$appBuild' : 'unstamped build (version not reported)'} · '
       '${track.label} · ${platform.name}';
 
   bool get hasRelayEndpoint => relayHost.isNotEmpty;
@@ -235,7 +235,7 @@ class BuildIdentity {
       'Open Google Play, then Manage apps & device → Updates available. '
           'Play can take a few minutes to show a new internal-testing build.',
     TargetPlatform.iOS =>
-      'Open TestFlight and pull to refresh, then choose Update for Hot Pursuit.',
+      'Open TestFlight and pull to refresh, then choose Update for Balloon Crumbs.',
     _ => 'Reinstall the build from the channel it was distributed on.',
   };
 

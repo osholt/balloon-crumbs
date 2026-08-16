@@ -473,17 +473,6 @@ import UserNotifications
     )
   }
 
-  /// Relays the rider's answer to a leader's Hot Pursuit request (#128).
-  /// Dart owns whether the answer is admissible - the reducer accepts one only
-  /// from the rider the request named, and rejects an expired or superseded
-  /// request - so this passes the id through untouched rather than deciding.
-  func answerCarPlayTecRoleRequest(requestID: String, accepted: Bool) {
-    carPlayChannel?.invokeMethod(
-      "answerTecRoleRequest",
-      arguments: ["requestId": requestID, "accepted": accepted]
-    )
-  }
-
   /// Called from SceneDelegate when the OS hands this app a file URL (Open
   /// in..., a share sheet, or a cold launch from one of those). Dart pulls
   /// this on its own schedule via consumePendingGpxImport rather than being
@@ -501,7 +490,7 @@ import UserNotifications
   func handleIncomingAppLink(url: URL) {
     guard
       url.scheme == "https",
-      url.host?.lowercased() == "hot-pursuit.invalid",
+      url.host?.lowercased() == "balloon-crumbs.invalid",
       url.absoluteString.count <= 2048
     else { return }
     switch url.path {
@@ -589,7 +578,7 @@ extension AppDelegate: FlutterStreamHandler {
 extension AppDelegate: DiscovererDelegate {
   func discoverer(_ discoverer: Discoverer, didFind endpointID: EndpointID, with context: Data) {
     guard !connectedPeers.contains(endpointID), pendingPeers.insert(endpointID).inserted else { return }
-    discoverer.requestConnection(to: endpointID, using: Data("Hot Pursuit".utf8)) { [weak self] error in
+    discoverer.requestConnection(to: endpointID, using: Data("Balloon Crumbs".utf8)) { [weak self] error in
       if let error {
         self?.pendingPeers.remove(endpointID)
         self?.emitStatus("searching", message: "Connection request failed: \(error.localizedDescription)")

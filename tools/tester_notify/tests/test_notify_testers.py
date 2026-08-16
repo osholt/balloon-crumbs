@@ -87,7 +87,7 @@ class RenderingTest(unittest.TestCase):
 
         self.assertEqual(
             email.subject,
-            "Hot Pursuit 1.0.1 (31) is on Play closed testing (alpha)",
+            "Balloon Crumbs 1.0.1 (31) is on Play closed testing (alpha)",
         )
         for required in [
             "1.0.1",
@@ -139,7 +139,7 @@ class SafetyTest(unittest.TestCase):
 
     def test_refuses_a_relay_url(self) -> None:
         with self.assertRaises(UnsafeContentError):
-            assert_safe("update at https://relay.hot-pursuit.invalid/api/v1/x")
+            assert_safe("update at https://relay.balloon-crumbs.invalid/api/v1/x")
 
     def test_refuses_plaintext_and_credential_bearing_links(self) -> None:
         with self.assertRaises(UnsafeContentError):
@@ -149,7 +149,7 @@ class SafetyTest(unittest.TestCase):
 
     def test_a_relay_url_smuggled_through_the_changelog_is_caught(self) -> None:
         with self.assertRaises(UnsafeContentError):
-            render_email(context(changes=("- see https://relay.hot-pursuit.invalid/api",)))
+            render_email(context(changes=("- see https://relay.balloon-crumbs.invalid/api",)))
 
     def test_masks_the_group_address(self) -> None:
         self.assertEqual(

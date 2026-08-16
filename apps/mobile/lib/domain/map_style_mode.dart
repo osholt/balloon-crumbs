@@ -6,7 +6,7 @@ enum MapStyleMode { system, light, dark, sunriseSunset }
 /// Which palette to use when the map resolves to daytime/light mode.
 ///
 /// Both choices use the same OpenFreeMap Liberty data. [restrained] applies
-/// Hot Pursuit's quieter road-first repaint; [original] leaves the
+/// Balloon Crumbs' quieter road-first repaint; [original] leaves the
 /// provider style unchanged (#489).
 enum DayMapStyle { restrained, original }
 

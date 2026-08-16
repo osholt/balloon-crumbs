@@ -54,18 +54,18 @@ String rideInvitationUrl(String rideCode, String joinToken) {
     throw const FormatException('Cannot create an invalid ride invitation.');
   }
   return Uri.https(
-    'hot-pursuit.invalid',
+    'balloon-crumbs.invalid',
     rideInvitationPath,
   ).replace(fragment: invitation).toString();
 }
 
-/// Parses a Hot Pursuit invitation link without ever logging its fragment.
+/// Parses a Balloon Crumbs invitation link without ever logging its fragment.
 RideInvitationLink? rideInvitationFromLink(String value) {
   if (value.length > 2048) return null;
   final uri = Uri.tryParse(value);
   if (uri == null ||
       uri.scheme != 'https' ||
-      uri.host.toLowerCase() != 'hot-pursuit.invalid' ||
+      uri.host.toLowerCase() != 'balloon-crumbs.invalid' ||
       uri.path != rideInvitationPath ||
       uri.userInfo.isNotEmpty ||
       uri.hasPort ||

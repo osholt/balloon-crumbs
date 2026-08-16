@@ -5,7 +5,7 @@ void main() {
   test('accepts the production planner URL and normalises its code', () {
     expect(
       planCodeFromPlannerLink(
-        'https://hot-pursuit.invalid/planner.html?code=7f3k9qrt',
+        'https://balloon-crumbs.invalid/planner.html?code=7f3k9qrt',
       ),
       '7F3K9QRT',
     );
@@ -14,7 +14,7 @@ void main() {
   test('rejects other origins, paths, fragments and ambiguous codes', () {
     expect(
       planCodeFromPlannerLink(
-        'http://hot-pursuit.invalid/planner.html?code=7F3K9QRT',
+        'http://balloon-crumbs.invalid/planner.html?code=7F3K9QRT',
       ),
       isNull,
     );
@@ -25,24 +25,24 @@ void main() {
       isNull,
     );
     expect(
-      planCodeFromPlannerLink('https://hot-pursuit.invalid/?code=7F3K9QRT'),
+      planCodeFromPlannerLink('https://balloon-crumbs.invalid/?code=7F3K9QRT'),
       isNull,
     );
     expect(
       planCodeFromPlannerLink(
-        'https://hot-pursuit.invalid/planner.html?code=7F3K9QRT#route',
+        'https://balloon-crumbs.invalid/planner.html?code=7F3K9QRT#route',
       ),
       isNull,
     );
     expect(
       planCodeFromPlannerLink(
-        'https://hot-pursuit.invalid/planner.html?code=AAAA&code=BBBB',
+        'https://balloon-crumbs.invalid/planner.html?code=AAAA&code=BBBB',
       ),
       isNull,
     );
     expect(
       planCodeFromPlannerLink(
-        'https://hot-pursuit.invalid/planner.html?code=bad-code',
+        'https://balloon-crumbs.invalid/planner.html?code=bad-code',
       ),
       isNull,
     );

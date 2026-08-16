@@ -106,7 +106,7 @@ class RideSession {
     joinToken: _joinTokenOrFallback(json['joinToken']),
     localRiderId: json['localRiderId']! as String,
     displayName: json['displayName']! as String,
-    role: RideRole.values.byName(json['role']! as String),
+    role: rideRoleFromName(json['role']),
     joinedAt: DateTime.parse(json['joinedAt']! as String).toLocal(),
     isSimulation: json['isSimulation'] as bool? ?? false,
     simulationRiderCount: _simulationRiderCount(json['simulationRiderCount']),

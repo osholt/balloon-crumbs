@@ -5,7 +5,7 @@ import UIKit
 /// projected snapshot used by Android Auto.
 enum CarPlayStatusTemplate {
   static func makeTemplate() -> CPListTemplate {
-    let template = CPListTemplate(title: "Hot Pursuit", sections: [])
+    let template = CPListTemplate(title: "Balloon Crumbs", sections: [])
     template.trailingNavigationBarButtons = [emergencyButton()]
     return template
   }
@@ -52,20 +52,6 @@ enum CarPlayStatusTemplate {
       items.append(CPListItem(text: "Alert", detailText: message))
     }
 
-    // The back-marker, above the marker and group rows because it is the one
-    // fact this app exists to keep. Always present, including when nobody holds
-    // the role: a missing row reads as "fine", and "nobody is watching the
-    // back" is the opposite of fine. Dart has already decided the wording for
-    // all four availability states.
-    if let tec = snapshot["tec"] as? [String: Any] {
-      items.append(
-        CPListItem(
-          text: "Hot Pursuit",
-          detailText: tec["detail"] as? String
-        )
-      )
-    }
-
     if let markerStatus = snapshot["markerStatus"] as? String {
       items.append(CPListItem(text: "Marker", detailText: markerStatus))
     }
@@ -94,7 +80,7 @@ enum CarPlayStatusTemplate {
     }
 
     if items.isEmpty {
-      items = [CPListItem(text: "Hot Pursuit", detailText: "Waiting for ride data…")]
+      items = [CPListItem(text: "Balloon Crumbs", detailText: "Waiting for ride data…")]
     }
 
     template.updateSections([CPListSection(items: items)])

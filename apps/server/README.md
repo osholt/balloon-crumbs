@@ -1,6 +1,6 @@
-# Hot Pursuit server
+# Balloon Crumbs server
 
-The online store-and-forward service for Hot Pursuit. It implements the mobile
+The online store-and-forward service for Balloon Crumbs. It implements the mobile
 `events:sync` contract with automatic first-use ride claiming, encrypted event
 storage, authenticated opaque cursors, idempotent batches, bounded pagination,
 rate limits and automatic retention.
