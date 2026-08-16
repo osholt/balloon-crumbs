@@ -548,12 +548,19 @@ class RideSimulationController extends ChangeNotifier {
       for (final entry in samples) {
         final agent = entry.agent;
         final sampled = entry.sampled;
+        final flight = _balloonFlightAt(agent);
         final sample = LocationSample(
           position: sampled.position,
           recordedAt: recordedAt,
           accuracyMeters: 4,
           speedMetersPerSecond: _speedFor(agent),
           headingDegrees: sampled.headingDegrees,
+          altitudeMeters: flight?.altitudeMeters,
+          altitudeSource: flight == null
+              ? AltitudeSource.unknown
+              : AltitudeSource.gnss,
+          altitudeAccuracyMeters: flight == null ? null : 6,
+          verticalSpeedMetersPerSecond: flight?.verticalSpeedMetersPerSecond,
         );
         if (agent.isLocal) {
           await _awarenessController.recordLocalLocation(sample);
@@ -607,6 +614,55 @@ class RideSimulationController extends ChangeNotifier {
           expiresAt: recordedAt.add(const Duration(minutes: 30)),
         );
     await _awarenessController.ingestRemoteEvent(event);
+  }
+
+  /// The balloon's height and climb rate at its current point in the flight.
+  ///
+  /// Only the lead agent flies: it stands in for the balloon while the rest of
+  /// the fleet are chase vehicles on the road. Null for everyone else, and null
+  /// before the ride starts, so Ride Lab exercises the "this fix carries no
+  /// altitude" path as well as the flying one — the two have to look different
+  /// on every surface, and a demo that only ever shows a number would never
+  /// prove it.
+  ///
+  /// The shape is a short UK flight: climb out, ride the wind for most of the
+  /// track, then a long descent onto the landing field. Deliberately not a
+  /// smooth arc — a balloon holds a level while the pilot looks for a layer,
+  /// which is what makes an altitude trail worth colouring.
+  ({double altitudeMeters, double verticalSpeedMetersPerSecond})?
+  _balloonFlightAt(_SimulatedAgent agent) {
+    if (agent.role != RideRole.lead || routeDistanceMeters <= 0) return null;
+    final progress = (agent.progressMeters / routeDistanceMeters).clamp(
+      0.0,
+      1.0,
+    );
+    const groundMeters = 100.0;
+    const cruiseMeters = 640.0;
+    const climbRate = 2.4;
+    const descentRate = -1.6;
+
+    return switch (progress) {
+      // Climb out of the launch field.
+      < 0.18 => (
+        altitudeMeters:
+            groundMeters + (cruiseMeters - groundMeters) * (progress / 0.18),
+        verticalSpeedMetersPerSecond: climbRate,
+      ),
+      // Holding a layer, with the small drift a burner actually produces.
+      < 0.68 => (
+        altitudeMeters:
+            cruiseMeters + 40 * math.sin((progress - 0.18) * math.pi * 3),
+        verticalSpeedMetersPerSecond:
+            0.6 * math.cos((progress - 0.18) * math.pi * 3),
+      ),
+      // Long descent onto the field.
+      _ => (
+        altitudeMeters:
+            cruiseMeters -
+            (cruiseMeters - groundMeters) * ((progress - 0.68) / 0.32),
+        verticalSpeedMetersPerSecond: descentRate,
+      ),
+    };
   }
 
   double _speedFor(_SimulatedAgent agent) {
