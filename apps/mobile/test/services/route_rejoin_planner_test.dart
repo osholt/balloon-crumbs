@@ -8,7 +8,6 @@ import 'package:ride_relay/domain/imported_route.dart' as route_domain;
 import 'package:ride_relay/domain/rider_location.dart';
 import 'package:ride_relay/domain/route_alert.dart';
 import 'package:ride_relay/services/geo_calculations.dart';
-import 'package:ride_relay/services/leader_ride_status.dart';
 import 'package:ride_relay/services/road_routing.dart';
 import 'package:ride_relay/services/route_rejoin_planner.dart';
 
@@ -408,42 +407,7 @@ void main() {
       expect(plan.guidance, contains('turning around'));
     });
 
-    test('routes a massively off-course rider to the TEC', () async {
-      final routing = _StubRouting();
-      final planner = RouteRejoinPlanner(routingService: routing);
-      final now = start.add(const Duration(minutes: 2));
-
-      await planner.update(
-        riderId: 'rider',
-        sample: _sample(51, -0.96, start),
-        assessment: _onRoute(start),
-        plannedRoute: route,
-      );
-      final plan = await planner.update(
-        riderId: 'rider',
-        sample: _sample(51.03, -0.9, now),
-        assessment: _offRoute(at: now, distance: 3336, since: start),
-        plannedRoute: route,
-        leaderPosition: const GeoPoint(latitude: 51, longitude: -0.9),
-        tecAvailability: TecAvailability.tracking,
-        tecPosition: const GeoPoint(latitude: 51, longitude: -0.94),
-      );
-
-      expect(plan.severity, RouteRejoinSeverity.massivelyOffRoute);
-      expect(plan.target, RouteRejoinTarget.tailEndCharlie);
-      expect(plan.guidance, contains('Hot Pursuit'));
-      expect(plan.guidance, contains('stays behind the leader'));
-      // Rejoin point behind the leader, and the TEC is the final waypoint.
-      expect(
-        progressOf(plan.rejoinPoint!),
-        lessThanOrEqualTo(
-          progressOf(const GeoPoint(latitude: 51, longitude: -0.9)) + 100,
-        ),
-      );
-      expect(routing.calls.single.last.longitude, closeTo(-0.94, 1e-9));
-    });
-
-    test('routes to the leader when no TEC is registered', () async {
+    test('routes a massively off-course rider to the ride leader', () async {
       final routing = _StubRouting();
       final planner = RouteRejoinPlanner(routingService: routing);
       final now = start.add(const Duration(minutes: 2));
@@ -465,76 +429,6 @@ void main() {
       expect(plan.target, RouteRejoinTarget.leader);
       expect(plan.guidance, contains('on to the ride leader'));
       expect(routing.calls.single.last.longitude, closeTo(-0.92, 1e-9));
-    });
-
-    test('a TEC fix that projects ahead of the leader is not used', () async {
-      final routing = _StubRouting();
-      final planner = RouteRejoinPlanner(routingService: routing);
-      final now = start.add(const Duration(minutes: 2));
-
-      await planner.update(
-        riderId: 'rider',
-        sample: _sample(51, -0.96, start),
-        assessment: _onRoute(start),
-        plannedRoute: route,
-      );
-      final plan = await planner.update(
-        riderId: 'rider',
-        sample: _sample(51.03, -0.9, now),
-        assessment: _offRoute(at: now, distance: 3336, since: start),
-        plannedRoute: route,
-        leaderPosition: const GeoPoint(latitude: 51, longitude: -0.92),
-        // A wild TEC fix, further along the route than the leader.
-        tecAvailability: TecAvailability.tracking,
-        tecPosition: const GeoPoint(latitude: 51, longitude: -0.88),
-      );
-
-      expect(plan.target, RouteRejoinTarget.leader);
-      expect(routing.calls.single.last.longitude, closeTo(-0.92, 1e-9));
-    });
-
-    test('an unusable TEC falls back to the ride leader', () async {
-      final now = start.add(const Duration(minutes: 2));
-
-      for (final availability in [
-        // Nobody holds the role.
-        TecAvailability.none,
-        // Registered, but has never reported a position.
-        TecAvailability.awaitingLocation,
-        // Last reported too long ago to be trusted to say where they are.
-        TecAvailability.stale,
-      ]) {
-        final routing = _StubRouting();
-        final planner = RouteRejoinPlanner(routingService: routing);
-        await planner.update(
-          riderId: 'rider',
-          sample: _sample(51, -0.96, start),
-          assessment: _onRoute(start),
-          plannedRoute: route,
-        );
-        final plan = await planner.update(
-          riderId: 'rider',
-          sample: _sample(51.03, -0.9, now),
-          assessment: _offRoute(at: now, distance: 3336, since: start),
-          plannedRoute: route,
-          leaderPosition: const GeoPoint(latitude: 51, longitude: -0.92),
-          tecAvailability: availability,
-          // A position is supplied even for the unusable states: the
-          // availability, not the presence of a fix, is what decides.
-          tecPosition: const GeoPoint(latitude: 51, longitude: -0.94),
-        );
-
-        expect(
-          plan.target,
-          RouteRejoinTarget.leader,
-          reason: availability.name,
-        );
-        expect(
-          routing.calls.single.last.longitude,
-          closeTo(-0.92, 1e-9),
-          reason: availability.name,
-        );
-      }
     });
 
     test('a rider following the leader is not routed at all', () async {

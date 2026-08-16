@@ -47,7 +47,6 @@ class MarkerAssistanceController extends ChangeNotifier {
   MarkerSuggestionEvaluation get evaluation => _evaluation;
   MarkerSuggestion? get suggestion => _evaluation.suggestion;
   bool get hasSuggestion => suggestion != null;
-  bool get tecPassed => _rideController.tecPassedCurrentMarker;
 
   void initialize() {
     _rideController.addListener(_scheduleEvaluation);
@@ -121,7 +120,7 @@ class MarkerAssistanceController extends ChangeNotifier {
         await _rideController.reloadEvents();
       }
       for (final pass in passes) {
-        final role = RideRole.values.byName(pass.roleName);
+        final role = rideRoleFromName(pass.roleName);
         await _rideController.recordMarkerPass(
           pass.riderId,
           evidenceEventId: pass.locationEventId,

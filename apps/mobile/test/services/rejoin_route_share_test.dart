@@ -105,7 +105,7 @@ void main() {
         plan: plan(
           computedAt: start.add(const Duration(seconds: 50)),
           severity: RouteRejoinSeverity.massivelyOffRoute,
-          target: RouteRejoinTarget.tailEndCharlie,
+          target: RouteRejoinTarget.leader,
         ),
         displayName: 'Bill',
         routeRevisionNumber: 1,
@@ -120,14 +120,14 @@ void main() {
         plan: plan(
           computedAt: start.add(const Duration(seconds: 125)),
           severity: RouteRejoinSeverity.massivelyOffRoute,
-          target: RouteRejoinTarget.tailEndCharlie,
+          target: RouteRejoinTarget.leader,
         ),
         displayName: 'Bill',
         routeRevisionNumber: 1,
         now: start.add(const Duration(seconds: 125)),
       );
       expect(afterInterval.action, RejoinRouteRelayAction.share);
-      expect(afterInterval.share?.target, RouteRejoinTarget.tailEndCharlie);
+      expect(afterInterval.share?.target, RouteRejoinTarget.leader);
     });
 
     test('a bounded breadcrumb keeps the event inside the schema limits', () {
@@ -500,7 +500,7 @@ void main() {
         routeRevisionNumber: 3,
         severity: RouteRejoinSeverity.massivelyOffRoute,
         status: RouteRejoinStatus.routed,
-        target: RouteRejoinTarget.tailEndCharlie,
+        target: RouteRejoinTarget.leader,
         breadcrumb: breadcrumb(points: 5),
         rejoinPoint: const GeoPoint(latitude: 51.52, longitude: -0.08),
         distanceMeters: 4200,
@@ -514,12 +514,12 @@ void main() {
 
       expect(decoded.riderId, 'bill');
       expect(decoded.severity, RouteRejoinSeverity.massivelyOffRoute);
-      expect(decoded.target, RouteRejoinTarget.tailEndCharlie);
+      expect(decoded.target, RouteRejoinTarget.leader);
       expect(decoded.requiresBacktracking, isTrue);
       expect(decoded.distanceMeters, 4200);
       expect(decoded.duration, const Duration(minutes: 6));
       expect(decoded.breadcrumb, hasLength(5));
-      expect(decoded.mapLabel, contains('Hot Pursuit'));
+      expect(decoded.mapLabel, contains('then on to you'));
       // Coordinates are relayed to five decimal places, about 1.1 m: fine
       // enough to draw, and deliberately coarser than a rider's own fix.
       expect(decoded.breadcrumb.first.latitude, closeTo(51.5, 0.00002));

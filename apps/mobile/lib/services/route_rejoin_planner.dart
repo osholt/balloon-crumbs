@@ -10,7 +10,6 @@ import '../domain/rider_location.dart';
 import '../domain/route_alert.dart';
 import 'geo_calculations.dart';
 import 'route_origin_bearing.dart';
-import 'leader_ride_status.dart' show TecAvailability;
 import 'measurement_formatter.dart';
 import 'road_routing.dart'
     show OsrmRoadRoutingService, RoadRouteManeuver, RoadRoutingService;
@@ -71,7 +70,7 @@ enum RouteRejoinSeverity { onRoute, offRoute, massivelyOffRoute }
 
 /// What a rejoin route is aimed at. [plannedRoute] is a point on the imported
 /// GPX; the other two are live rider positions and therefore move.
-enum RouteRejoinTarget { plannedRoute, tailEndCharlie, leader }
+enum RouteRejoinTarget { plannedRoute, leader }
 
 /// Why a rider has - or has not - been given a rejoin breadcrumb. Every value
 /// other than [routed] must degrade to the plain "you are off route by X"
@@ -535,12 +534,10 @@ class RouteRejoinPlanner {
   /// second-guess it. [followingLeaderTrack] is the leader-follow exemption:
   /// when true the rider is on route by definition and no rejoin is computed.
   ///
-  /// [tecAvailability] is the one TEC model from `leader_ride_status.dart`, not
-  /// a null check on [tecPosition]. A massively off-course rider is sent to the
-  /// TEC only when it is [TecAvailability.tracking]; `none` (nobody holds the
-  /// role), `awaitingLocation` (registered but never reported) and `stale` (a
-  /// fix that can no longer be trusted to say where they are) all fall back to
-  /// the ride leader rather than a null or guessed target.
+  /// A massively off-course rider is sent to the ride leader. This once
+  /// preferred the back-marker when its position was trustworthy; that role was
+  /// removed with the Tail End Charlie migration, and the leader was already the
+  /// documented fallback for every other case.
   Future<RouteRejoinPlan> update({
     required String riderId,
     required LocationSample sample,
@@ -548,8 +545,6 @@ class RouteRejoinPlanner {
     required List<GeoPoint> plannedRoute,
     bool followingLeaderTrack = false,
     GeoPoint? leaderPosition,
-    TecAvailability tecAvailability = TecAvailability.none,
-    GeoPoint? tecPosition,
     DateTime? now,
   }) async {
     final evaluatedAt = now ?? assessment.evaluatedAt;
@@ -638,32 +633,10 @@ class RouteRejoinPlanner {
             plannedRoute,
           ).distanceAlongRouteMeters;
 
-    // A massively off-course rider is sent to the TEC when there is a usable
-    // one, and to the leader otherwise. Two independent gates: the TEC's
-    // position must be believable at all (tracking), and it must not project
-    // further along the route than the leader - a wild fix that does would send
-    // the rider past the group, which is the one thing this must never do.
-    final trackedTec = tecAvailability == TecAvailability.tracking
-        ? tecPosition
-        : null;
-    final tecProgress = trackedTec == null || !massivelyOffRoute
-        ? null
-        : GeoCalculations.projectOntoPolyline(
-            trackedTec,
-            plannedRoute,
-          ).distanceAlongRouteMeters;
-    final tecIsBehindLeader =
-        tecProgress != null &&
-        leaderProgress != null &&
-        tecProgress <=
-            leaderProgress + thresholds.leaderProgressToleranceMeters;
-    final target = !massivelyOffRoute
-        ? RouteRejoinTarget.plannedRoute
-        : tecIsBehindLeader
-        ? RouteRejoinTarget.tailEndCharlie
-        : RouteRejoinTarget.leader;
+    final target = massivelyOffRoute
+        ? RouteRejoinTarget.leader
+        : RouteRejoinTarget.plannedRoute;
     final targetPosition = switch (target) {
-      RouteRejoinTarget.tailEndCharlie => trackedTec,
       RouteRejoinTarget.leader => leaderPosition,
       RouteRejoinTarget.plannedRoute => null,
     };
@@ -908,11 +881,6 @@ class RouteRejoinPlanner {
         : 'Rejoining ahead of where you left the route.';
     final destination = switch (target) {
       RouteRejoinTarget.plannedRoute => 'Advisory rejoin route of $length.',
-      RouteRejoinTarget.tailEndCharlie =>
-        'Advisory route of $length back to the route and on to Hot Pursuit, '
-            'who is behind the leader. It updates as they move.',
-      // Deliberately does not claim there is no TEC: the leader is also used
-      // when a TEC's own fix cannot be trusted to be behind the leader.
       RouteRejoinTarget.leader =>
         'Advisory route of $length back to the route and on to the ride '
             'leader. It updates as they move.',

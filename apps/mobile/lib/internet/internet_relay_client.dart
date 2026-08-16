@@ -70,10 +70,6 @@ abstract final class RelayProtocolCapabilities {
   static const trafficIncidents = 'traffic-incidents-v1';
   static const trafficReroutes = 'traffic-reroutes-v1';
 
-  /// The leader asking a named rider to take the Hot Pursuit role, and
-  /// that rider's answer (issue #128 part 1).
-  static const tecRoleAssignment = 'tec-role-assignment-v1';
-
   /// A separated rider's advisory rejoin route, relayed to the ride leader only
   /// (issue #128 part 2).
   static const rejoinRouteSharing = 'rejoin-route-sharing-v1';
@@ -110,7 +106,6 @@ abstract final class RelayProtocolCapabilities {
     observerAccess,
     trafficIncidents,
     trafficReroutes,
-    tecRoleAssignment,
     rejoinRouteSharing,
     riderContactSharing,
     roadRatings,
@@ -641,7 +636,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
     final error = configuration.configurationError;
     if (error != null) {
       throw const RideCodeDirectoryException(
-        'Joining by ride code needs the Hot Pursuit service to be connected.',
+        'Joining by ride code needs the Balloon Crumbs service to be connected.',
       );
     }
   }
@@ -1410,7 +1405,7 @@ Future<RelayCompatibilityResult> _fetchCompatibility({
         : RelayCompatibilityDisposition.compatible;
     final message = switch (disposition) {
       RelayCompatibilityDisposition.updateRequired =>
-        'Update Hot Pursuit before joining or synchronizing this ride.',
+        'Update Balloon Crumbs before joining or synchronizing this ride.',
       RelayCompatibilityDisposition.serverUpgradeRequired =>
         'This app is newer than the configured ride service. Try again after the service is updated.',
       _ => null,

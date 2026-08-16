@@ -20,7 +20,7 @@ import 'package:ride_relay/services/situation_event_factory.dart';
 
 void main() {
   test(
-    'authenticated approach counts one TEC passage for current session',
+    'authenticated approach counts one verified passage for current session',
     () async {
       final fixture = await _Fixture.create();
       await fixture.awareness.recordLocalLocation(
@@ -38,7 +38,7 @@ void main() {
 
       await fixture.ingestRemoteLocation(
         riderId: 'tec',
-        role: RideRole.tailEndCharlie,
+        role: RideRole.rider,
         longitude: -1.001,
         speed: 5,
         eventId: 'far',
@@ -47,7 +47,7 @@ void main() {
       fixture.now = fixture.now.add(const Duration(seconds: 5));
       await fixture.ingestRemoteLocation(
         riderId: 'tec',
-        role: RideRole.tailEndCharlie,
+        role: RideRole.rider,
         longitude: -1.0001,
         speed: 5,
         eventId: 'near',
@@ -56,17 +56,16 @@ void main() {
 
       expect(fixture.ride.verifiedMarkerPassCount, 1);
       expect(fixture.ride.markerPassCount, 1);
-      expect(fixture.ride.tecPassedCurrentMarker, isTrue);
       final pass = fixture.ride.events.singleWhere(
         (event) => event.type == RideEventType.markerPass,
       );
       expect(pass.payload['evidenceEventId'], 'near');
       expect(pass.payload['authenticated'], isTrue);
-      expect(pass.payload['role'], RideRole.tailEndCharlie.name);
+      expect(pass.payload['role'], RideRole.rider.name);
 
       await fixture.ingestRemoteLocation(
         riderId: 'tec',
-        role: RideRole.tailEndCharlie,
+        role: RideRole.rider,
         longitude: -1.0001,
         speed: 5,
         eventId: 'near-again',

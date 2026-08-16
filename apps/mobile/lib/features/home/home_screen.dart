@@ -229,7 +229,6 @@ class _HomeScreenState extends State<HomeScreen> {
         surfaceMode: CarPlaySurfaceMode.home,
         canPlanRoute: true,
         canFreeRoam: true,
-        showTecStatus: false,
         followRider: position != null,
         distanceUnit: widget.distanceUnits.value,
         basemap: _homeBasemap,
@@ -1509,7 +1508,7 @@ class _ShareCodeStep extends StatelessWidget {
                   onPressed: () => SharePlus.instance.share(
                     ShareParams(
                       text: controller.rideCodeShareText,
-                      subject: 'Join my Hot Pursuit group',
+                      subject: 'Join my Balloon Crumbs group',
                     ),
                   ),
                   icon: const Icon(Icons.ios_share),

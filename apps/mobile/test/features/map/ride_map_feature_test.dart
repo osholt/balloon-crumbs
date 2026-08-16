@@ -1031,212 +1031,6 @@ void main() {
     expect(find.text('Arrive at the destination'), findsOneWidget);
   });
 
-  testWidgets('turn guidance reduces the TEC gap to a single-line chip', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync(
-      'map-compact-tec-test',
-    );
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final route = ImportedRoute(
-      id: 'guided',
-      name: 'Guided route',
-      importedAt: DateTime.utc(2026, 7, 24),
-      sourceFileName: 'guided.gpx',
-      paths: const [
-        RoutePath(
-          kind: RoutePathKind.track,
-          points: [
-            GeoPoint(latitude: 51.45, longitude: -2.59),
-            GeoPoint(latitude: 51.451, longitude: -2.58),
-          ],
-        ),
-      ],
-      waypoints: const [],
-      maneuvers: const [
-        RouteManeuver(
-          position: GeoPoint(latitude: 51.451, longitude: -2.58),
-          type: 'turn',
-          modifier: 'right',
-        ),
-      ],
-    );
-    final navigation = ValueNotifier(
-      MapNavigationPosition(
-        point: const GeoPoint(latitude: 51.45, longitude: -2.59),
-        recordedAt: DateTime.utc(2026, 7, 24, 12),
-        speedMetersPerSecond: 10,
-        headingDegrees: 90,
-      ),
-    );
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        tecName: 'Charlie',
-        distanceToTecMeters: 3200,
-        estimatedTimeToTec: Duration(minutes: 4),
-        offCourseAlerts: [],
-      ),
-    );
-    addTearDown(navigation.dispose);
-    addTearDown(leaderStatus.dispose);
-
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(route),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          navigationPosition: navigation,
-          leaderStatus: leaderStatus,
-          distanceUnit: DistanceUnit.miles,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final chip = find.byKey(const Key('leader-tec-gap'));
-    expect(chip, findsOneWidget);
-    expect(find.text('TEC GAP'), findsNothing);
-    expect(find.text('TEC'), findsOneWidget);
-    expect(find.textContaining('2.0 mi · ~4 min'), findsOneWidget);
-    expect(find.textContaining('Charlie ·'), findsNothing);
-    expect(tester.getSize(chip).height, lessThanOrEqualTo(44));
-    expect(tester.getSize(chip).width, lessThanOrEqualTo(360));
-  });
-
-  testWidgets('a registered TEC without a position yet still says so', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync(
-      'map-tec-waiting-position-test',
-    );
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final route = ImportedRoute(
-      id: 'waiting-for-location',
-      name: 'Waiting route',
-      importedAt: DateTime.utc(2026, 7, 24),
-      sourceFileName: 'waiting.gpx',
-      paths: const [
-        RoutePath(
-          kind: RoutePathKind.track,
-          points: [
-            GeoPoint(latitude: 51.45, longitude: -2.59),
-            GeoPoint(latitude: 51.451, longitude: -2.58),
-          ],
-        ),
-      ],
-      waypoints: const [],
-      maneuvers: const [
-        RouteManeuver(
-          position: GeoPoint(latitude: 51.451, longitude: -2.58),
-          type: 'turn',
-          modifier: 'right',
-        ),
-      ],
-    );
-    final navigation = ValueNotifier<MapNavigationPosition?>(null);
-    // A TEC that is registered but has never reported a position: no name, no
-    // distance, no estimate and no location age.
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        tecAvailability: TecAvailability.awaitingLocation,
-        offCourseAlerts: [],
-      ),
-    );
-    addTearDown(navigation.dispose);
-    addTearDown(leaderStatus.dispose);
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(route),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          navigationPosition: navigation,
-          leaderStatus: leaderStatus,
-          distanceUnit: DistanceUnit.miles,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final chip = find.byKey(const Key('leader-tec-gap'));
-    expect(chip, findsOneWidget);
-    expect(find.textContaining('Waiting for location'), findsOneWidget);
-    expect(find.byKey(const Key('navigation-guidance-banner')), findsNothing);
-    // The status band now lives in the lower part of the screen so the road
-    // ahead stays visible at the top.
-    final screenHeight =
-        tester.view.physicalSize.height / tester.view.devicePixelRatio;
-    expect(tester.getTopLeft(chip).dy, greaterThan(screenHeight / 2));
-  });
-
-  testWidgets('no registered TEC hides the distance-to-TEC surface entirely', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync('map-no-tec-test');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      // No TEC identity of any kind: nobody holds the role.
-      const LeaderRideStatus(offCourseAlerts: []),
-    );
-    addTearDown(leaderStatus.dispose);
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(
-            _testRoute(id: 'no-tec', name: 'No TEC route'),
-          ),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          leaderStatus: leaderStatus,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('leader-tec-gap')), findsNothing);
-    expect(find.textContaining('waiting for location'), findsNothing);
-    expect(find.textContaining('Hot Pursuit'), findsNothing);
-
-    // Assigning a TEC mid-ride brings the surface back without a restart.
-    leaderStatus.value = const LeaderRideStatus(
-      tecAvailability: TecAvailability.stale,
-      tecName: 'Charlie',
-      tecLocationAge: Duration(minutes: 4),
-      offCourseAlerts: [],
-    );
-    await tester.pump();
-
-    expect(find.byKey(const Key('leader-tec-gap')), findsOneWidget);
-    expect(find.textContaining('4 min ago'), findsOneWidget);
-
-    leaderStatus.value = const LeaderRideStatus(offCourseAlerts: []);
-    await tester.pump();
-
-    expect(find.byKey(const Key('leader-tec-gap')), findsNothing);
-  });
-
   testWidgets('initial speed-limit lookup starts after the first map frame', (
     tester,
   ) async {
@@ -2125,9 +1919,6 @@ void main() {
     addTearDown(overlays.dispose);
     final leaderStatus = ValueNotifier<LeaderRideStatus?>(
       const LeaderRideStatus(
-        tecName: 'Charlie',
-        distanceToTecMeters: 3200,
-        estimatedTimeToTec: Duration(minutes: 4),
         offCourseAlerts: [
           LeaderOffCourseAlert(
             riderId: 'alex',
@@ -2169,10 +1960,7 @@ void main() {
     expect(find.text('Import GPX'), findsOneWidget);
     expect(find.text('ROUTE-ONLY OFFLINE MAP'), findsOneWidget);
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
-    expect(find.byKey(const Key('leader-tec-gap')), findsOneWidget);
-    expect(find.text('TEC'), findsOneWidget);
     expect(find.textContaining('Alex is clearly off course'), findsOneWidget);
-    expect(find.textContaining('2.0 mi'), findsOneWidget);
     expect(find.textContaining('0.1 mi'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Use demo route'));
@@ -2821,7 +2609,7 @@ void main() {
           isLocalMarker: true,
           ridersPassed: 2,
           ridersExpected: 3,
-          tecDistanceMeters: 210,
+          backRiderDistanceMeters: 210,
           instruction: 'You are holding the junction while riders pass.',
           stage: MapJunctionMarkerStage.waitingForRiders,
         ),
@@ -2884,7 +2672,7 @@ void main() {
         isLocalMarker: false,
         ridersPassed: 2,
         ridersExpected: 3,
-        tecDistanceMeters: 210,
+        backRiderDistanceMeters: 210,
         instruction: 'Maya is holding the junction while riders pass.',
         stage: MapJunctionMarkerStage.waitingForRiders,
       );
@@ -2900,7 +2688,7 @@ void main() {
         isLocalMarker: true,
         ridersPassed: 2,
         ridersExpected: 3,
-        tecDistanceMeters: 210,
+        backRiderDistanceMeters: 210,
         instruction: 'You are holding the junction while riders pass.',
         stage: MapJunctionMarkerStage.waitingForRiders,
       );
@@ -3276,7 +3064,7 @@ void main() {
             MapEmergencyContact(
               riderId: 'tec',
               displayName: 'Charlie',
-              role: RideRole.tailEndCharlie,
+              role: RideRole.rider,
             ),
           ],
           onEmergencyAlert: () async => alerts += 1,
@@ -3344,7 +3132,7 @@ void main() {
             MapEmergencyContact(
               riderId: 'tec',
               displayName: 'Charlie',
-              role: RideRole.tailEndCharlie,
+              role: RideRole.rider,
             ),
           ],
           onEmergencyAlert: () async {},
@@ -3362,9 +3150,7 @@ void main() {
 
     // Both roles are listed, by name and role.
     expect(find.byKey(const Key('emergency-contact-lead')), findsOneWidget);
-    expect(find.byKey(const Key('emergency-contact-tec')), findsOneWidget);
     expect(find.text('Oliver (leader)'), findsOneWidget);
-    expect(find.text('Charlie (TEC)'), findsOneWidget);
 
     // The leader shared, so both dial controls are offered.
     expect(
@@ -3564,10 +3350,6 @@ void main() {
     addTearDown(navigation.dispose);
     final leaderStatus = ValueNotifier<LeaderRideStatus?>(
       const LeaderRideStatus(
-        tecName: 'Charlie',
-        distanceToTecMeters: 3200,
-        estimatedTimeToTec: Duration(minutes: 4),
-        tecLocationAge: Duration(seconds: 10),
         offCourseAlerts: [
           LeaderOffCourseAlert(
             riderId: 'rider-alex',
@@ -3602,7 +3384,6 @@ void main() {
       'route-progress-panel-position',
       'navigation-guidance-banner',
       'leader-off-course-alert',
-      'leader-tec-gap',
       'group-mini-map',
       'ride-menu-button',
       'emergency-alert-button',
@@ -3676,7 +3457,6 @@ void main() {
           'ride-paused-banner',
           'route-progress-panel-position',
           'leader-off-course-alert',
-          'leader-tec-gap',
           'group-mini-map',
           'ride-menu-button',
           'emergency-alert-button',
@@ -3734,7 +3514,6 @@ void main() {
           lessThanOrEqualTo(guidance.top),
           reason: 'the camera must lift the rider above the wider card',
         );
-        expect(rects['leader-tec-gap']!.bottom, lessThanOrEqualTo(miniMap.top));
         expect(
           rects['emergency-alert-button']!.left,
           greaterThanOrEqualTo(miniMap.right + 10),
@@ -5294,10 +5073,6 @@ void main() {
     addTearDown(navigation.dispose);
     final leaderStatus = ValueNotifier<LeaderRideStatus?>(
       const LeaderRideStatus(
-        tecName: 'Charlie',
-        distanceToTecMeters: 3200,
-        estimatedTimeToTec: Duration(minutes: 4),
-        tecLocationAge: Duration(seconds: 10),
         offCourseAlerts: [
           LeaderOffCourseAlert(
             riderId: 'rider-alex',
@@ -5420,7 +5195,6 @@ void main() {
       // Nothing it shares the band with is covered.
       for (final key in const [
         'leader-off-course-alert',
-        'leader-tec-gap',
         'navigation-guidance-banner',
         ...actionKeys,
       ]) {

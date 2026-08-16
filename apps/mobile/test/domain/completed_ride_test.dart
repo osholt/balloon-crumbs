@@ -10,7 +10,7 @@ void main() {
     final restored = CompletedRide.fromJson(ride.toJson());
 
     expect(restored.rideId, ride.rideId);
-    expect(restored.localRole, RideRole.tailEndCharlie);
+    expect(restored.localRole, RideRole.rider);
     expect(restored.traveledRoute?.pathPointCount, 2);
     expect(restored.mapPoints, hasLength(2));
   });
@@ -36,7 +36,7 @@ CompletedRide _ride() => CompletedRide(
   rideCode: '123456',
   rideName: null,
   localDisplayName: 'Oliver',
-  localRole: RideRole.tailEndCharlie,
+  localRole: RideRole.rider,
   startedAt: DateTime.utc(2026, 7, 23, 12),
   endedAt: DateTime.utc(2026, 7, 23, 14),
   archivedAt: DateTime.utc(2026, 7, 23, 14),

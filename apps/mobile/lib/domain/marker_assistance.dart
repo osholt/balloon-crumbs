@@ -79,7 +79,6 @@ class MarkerSessionSummary {
     required this.verifiedRiderIds,
     this.endedAt,
     this.decisionPointId,
-    this.tecPassedAt,
   });
 
   final String sessionId;
@@ -92,7 +91,6 @@ class MarkerSessionSummary {
   final List<String> uniqueRiderIds;
   final int verifiedPassCount;
   final List<String> verifiedRiderIds;
-  final DateTime? tecPassedAt;
 
   bool get completed => endedAt != null;
 
@@ -113,7 +111,6 @@ class MarkerSessionSummary {
     'uniqueRiderIds': uniqueRiderIds,
     'verifiedPassCount': verifiedPassCount,
     'verifiedRiderIds': verifiedRiderIds,
-    'tecPassedAt': tecPassedAt?.toUtc().toIso8601String(),
   };
 
   factory MarkerSessionSummary.fromJson(Map<String, Object?> json) =>
@@ -131,10 +128,6 @@ class MarkerSessionSummary {
         uniqueRiderIds: (json['uniqueRiderIds']! as List).cast<String>(),
         verifiedPassCount: (json['verifiedPassCount']! as num).toInt(),
         verifiedRiderIds: (json['verifiedRiderIds']! as List).cast<String>(),
-        tecPassedAt: switch (json['tecPassedAt']) {
-          final String value => DateTime.parse(value).toLocal(),
-          _ => null,
-        },
       );
 }
 
@@ -148,8 +141,6 @@ class RideMarkingSummary {
       sessions.where((session) => session.completed).length;
   int get verifiedPassCount =>
       sessions.fold(0, (total, session) => total + session.verifiedPassCount);
-  int get tecPassageCount =>
-      sessions.where((session) => session.tecPassedAt != null).length;
   Duration get totalMarkingTime => sessions.fold(
     Duration.zero,
     (total, session) => total + session.durationAt(asOf),
@@ -167,7 +158,6 @@ class RideMarkingSummary {
     'sessions': sessions.map((session) => session.toJson()).toList(),
     'completedSessionCount': completedSessionCount,
     'verifiedPassCount': verifiedPassCount,
-    'tecPassageCount': tecPassageCount,
     'totalMarkingSeconds': totalMarkingTime.inSeconds,
   };
 

@@ -58,7 +58,7 @@ class RideDashboard extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Hot Pursuit'),
+        title: const Text('Balloon Crumbs'),
         backgroundColor: Colors.transparent,
       ),
       body: AnimatedBuilder(
@@ -429,11 +429,8 @@ class _MarkerCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   active
-                      ? controller.tecPassedCurrentMarker
-                            ? 'TEC passed · ${controller.verifiedMarkerPassCount} '
-                                  'verified riders'
-                            : '${controller.verifiedMarkerPassCount} verified · '
-                                  '${controller.markerPassCount} total riders'
+                      ? '${controller.verifiedMarkerPassCount} verified · '
+                            '${controller.markerPassCount} total riders'
                       : rideStarted
                       ? 'Assistance only suggests; you always confirm marker mode'
                       : 'Marker assistance begins after the leader starts the ride',
@@ -572,7 +569,7 @@ class _RideCodeCard extends StatelessWidget {
                         onPressed: () => SharePlus.instance.share(
                           ShareParams(
                             text: controller.rideCodeShareText,
-                            subject: 'Join my Hot Pursuit group',
+                            subject: 'Join my Balloon Crumbs group',
                           ),
                         ),
                         icon: const Icon(Icons.ios_share),
@@ -697,11 +694,6 @@ class _EventRow extends StatelessWidget {
       RideEventType.rideReopened => 'Ride reopened by the leader',
       RideEventType.iceInfoShared => 'Emergency contact shared',
       RideEventType.iceInfoViewed => 'Emergency contact viewed',
-      RideEventType.tecRoleRequested => 'Hot Pursuit requested',
-      RideEventType.tecRoleResponded =>
-        event.payload['accepted'] == true
-            ? 'Hot Pursuit accepted'
-            : 'Hot Pursuit declined',
       RideEventType.rejoinRouteShared =>
         (event.payload['share'] as Map?)?['cleared'] == true
             ? 'Rejoin route cleared'

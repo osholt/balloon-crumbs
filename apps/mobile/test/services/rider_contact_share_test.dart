@@ -235,7 +235,7 @@ void main() {
       final recipients = RiderContactRecipients.resolve(
         localRole: RideRole.rider,
         leaderRiderId: 'leader',
-        tecRiderIds: const ['tec-a', 'tec-b'],
+        coordinationRiderIds: const ['tec-a', 'tec-b'],
       );
 
       expect(recipients.toRideGroup, isFalse);
@@ -247,18 +247,18 @@ void main() {
       final recipients = RiderContactRecipients.resolve(
         localRole: RideRole.rider,
         leaderRiderId: null,
-        tecRiderIds: const [],
+        coordinationRiderIds: const [],
       );
 
       expect(recipients.isEmpty, isTrue);
     });
 
-    for (final role in [RideRole.lead, RideRole.tailEndCharlie]) {
+    for (final role in [RideRole.lead, RideRole.lead]) {
       test('a ${role.name} offers theirs to the ride', () {
         final recipients = RiderContactRecipients.resolve(
           localRole: role,
           leaderRiderId: null,
-          tecRiderIds: const [],
+          coordinationRiderIds: const [],
         );
 
         expect(recipients.toRideGroup, isTrue);

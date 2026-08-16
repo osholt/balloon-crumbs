@@ -57,13 +57,13 @@ void main() {
           _join(deviceId: 'bill', displayName: 'Bill', at: startedAt),
           _roleChanged(
             deviceId: 'bill',
-            role: RideRole.tailEndCharlie,
+            role: RideRole.rider,
             at: startedAt.add(const Duration(minutes: 1)),
           ),
           _location(
             deviceId: 'bill',
             displayName: 'Bill',
-            role: RideRole.tailEndCharlie,
+            role: RideRole.rider,
             at: startedAt.add(const Duration(minutes: 10)),
             latitude: 51.20011,
             longitude: -2.40022,
@@ -83,7 +83,7 @@ void main() {
       expect(bill.leftAt, startedAt.add(const Duration(minutes: 32)));
       expect(bill.stateLabel, 'Left the ride at 14:32');
       // Role and last-seen survive: this is the record you look somebody up in.
-      expect(bill.role, RideRole.tailEndCharlie);
+      expect(bill.role, RideRole.rider);
       expect(bill.lastSeenAt, startedAt.add(const Duration(minutes: 32)));
       // Last known position survives, read from the ride's own journal.
       expect(bill.lastKnownLocation?.sample.position.latitude, 51.20011);
@@ -187,7 +187,7 @@ void main() {
         _rosterMember(
           riderId: 'bill',
           displayName: 'Bill',
-          role: RideRole.tailEndCharlie,
+          role: RideRole.rider,
           joinedAt: startedAt,
           left: true,
           leftAt: startedAt.add(const Duration(minutes: 32)),
@@ -198,7 +198,7 @@ void main() {
     final bill = riderIn(participants, 'bill');
     expect(bill.state, RideMembershipState.left);
     expect(bill.stateLabel, 'Left the ride at 14:32');
-    expect(bill.role, RideRole.tailEndCharlie);
+    expect(bill.role, RideRole.rider);
     expect(bill.knownFromRelayOnly, isTrue);
     expect(bill.isIncludedInLiveCount, isFalse);
     expect(bill.lastKnownPositionLabel, isNull);

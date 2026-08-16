@@ -206,7 +206,7 @@ class GpxParser {
   }
 }
 
-/// Reads the preferences a Hot Pursuit route was planned with.
+/// Reads the preferences a Balloon Crumbs route was planned with.
 ///
 /// Absent for a file from any other tool, which is the honest answer: nothing
 /// is assumed about a route whose planner never recorded one.

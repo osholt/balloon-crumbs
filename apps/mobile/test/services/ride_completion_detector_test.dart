@@ -16,7 +16,7 @@ void main() {
       _location('lead', RideRole.lead, destination, now),
       _location(
         'tec',
-        RideRole.tailEndCharlie,
+        RideRole.rider,
         const GeoPoint(latitude: 51.5003, longitude: -2.5),
         now,
       ),
@@ -63,7 +63,7 @@ void main() {
         ),
         _location(
           'tec',
-          RideRole.tailEndCharlie,
+          RideRole.rider,
           const GeoPoint(latitude: 51.5002, longitude: -2.5002),
           now,
         ),
@@ -88,7 +88,7 @@ void main() {
           _location('lead', RideRole.lead, destination, now),
           _location(
             'tec',
-            RideRole.tailEndCharlie,
+            RideRole.rider,
             destination,
             now.subtract(const Duration(minutes: 3)),
           ),

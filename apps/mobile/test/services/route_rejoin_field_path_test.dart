@@ -18,8 +18,6 @@ import 'package:ride_relay/domain/ride_role.dart';
 import 'package:ride_relay/domain/ride_session.dart';
 import 'package:ride_relay/domain/rider_location.dart';
 import 'package:ride_relay/domain/route_alert.dart';
-import 'package:ride_relay/services/leader_ride_status.dart'
-    show TecAvailability;
 import 'package:ride_relay/services/road_routing.dart';
 import 'package:ride_relay/services/route_rejoin_planner.dart';
 
@@ -64,7 +62,6 @@ void _testsFor(RideRole role) {
       leaderPosition: role == RideRole.lead
           ? position
           : const GeoPoint(latitude: 51, longitude: -0.9915),
-      tecAvailability: TecAvailability.none,
       now: now,
     );
   }

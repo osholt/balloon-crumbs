@@ -499,8 +499,6 @@ class SituationalAwarenessController extends ChangeNotifier {
       // reconciled by their own reducers from the durable journal, not by this
       // controller. They are listed rather than defaulted so a future event
       // type still has to be considered here.
-      case RideEventType.tecRoleRequested:
-      case RideEventType.tecRoleResponded:
       case RideEventType.rejoinRouteShared:
       case RideEventType.riderContactShared:
         break;

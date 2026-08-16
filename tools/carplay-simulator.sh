@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Brings up Apple's CarPlay simulator and, optionally, installs and launches
-# Hot Pursuit on it.
+# Balloon Crumbs on it.
 #
 # Usage:
 #   tools/carplay-simulator.sh                     # bring the CarPlay display up
@@ -9,7 +9,7 @@
 #   tools/carplay-simulator.sh --recreate          # discard and rebuild the device first
 #
 # Environment:
-#   CARPLAY_SIM_NAME     device name to use          (default "Hot Pursuit CarPlay")
+#   CARPLAY_SIM_NAME     device name to use          (default "Balloon Crumbs CarPlay")
 #   CARPLAY_SIM_TYPE     simctl device type          (default iPhone-15-Pro)
 #   CARPLAY_SIM_RUNTIME  simctl runtime              (default the newest installed iOS)
 #
@@ -36,7 +36,7 @@
 # external display pixels instead.
 set -euo pipefail
 
-DEVICE_NAME="${CARPLAY_SIM_NAME:-Hot Pursuit CarPlay}"
+DEVICE_NAME="${CARPLAY_SIM_NAME:-Balloon Crumbs CarPlay}"
 # iPhone 15 Pro exists in the iOS 17.5 runtime deliberately selected below.
 # iPhone 17 Pro requires iOS 26 and makes `--recreate` fail with
 # "Incompatible device" after selecting the CarPlay-safe runtime.

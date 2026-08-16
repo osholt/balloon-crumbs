@@ -41,7 +41,6 @@ import '../../services/gpx_import_source.dart';
 import '../../services/group_pip_bridge.dart';
 import '../../services/imported_track_matcher.dart';
 import '../../services/leader_ride_status.dart';
-import '../../services/tec_gap_trend.dart';
 import '../../services/map_geojson.dart';
 import '../../services/map_style_repository.dart';
 import '../../services/maplibre_offline_manager.dart';
@@ -176,7 +175,6 @@ class RideMapFeature extends StatefulWidget {
     this.riderTrails,
     this.rejoinNavigationRoute,
     this.leaderStatus,
-    this.tecGapTrend,
     this.groupRiderCount,
     this.onOpenRoster,
     this.junctionMarkerOverlay,
@@ -241,7 +239,6 @@ class RideMapFeature extends StatefulWidget {
     ValueListenable<List<MapOverlayTrace>>? riderTrails,
     ValueListenable<ImportedRoute?>? rejoinNavigationRoute,
     ValueListenable<LeaderRideStatus?>? leaderStatus,
-    ValueListenable<TecGapTrend>? tecGapTrend,
     int? groupRiderCount,
     VoidCallback? onOpenRoster,
     ValueListenable<MapJunctionMarkerOverlay?>? junctionMarkerOverlay,
@@ -302,7 +299,6 @@ class RideMapFeature extends StatefulWidget {
     riderTrails: riderTrails,
     rejoinNavigationRoute: rejoinNavigationRoute,
     leaderStatus: leaderStatus,
-    tecGapTrend: tecGapTrend,
     groupRiderCount: groupRiderCount,
     onOpenRoster: onOpenRoster,
     junctionMarkerOverlay: junctionMarkerOverlay,
@@ -367,7 +363,6 @@ class RideMapFeature extends StatefulWidget {
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
-  final ValueListenable<TecGapTrend>? tecGapTrend;
   final int? groupRiderCount;
   final VoidCallback? onOpenRoster;
   final ValueListenable<MapJunctionMarkerOverlay?>? junctionMarkerOverlay;
@@ -566,7 +561,6 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         riderTrails: widget.riderTrails,
         rejoinNavigationRoute: widget.rejoinNavigationRoute,
         leaderStatus: widget.leaderStatus,
-        tecGapTrend: widget.tecGapTrend,
         groupRiderCount: widget.groupRiderCount,
         onOpenRoster: widget.onOpenRoster,
         junctionMarkerOverlay: widget.junctionMarkerOverlay,
@@ -653,7 +647,6 @@ class RideMapScreen extends StatefulWidget {
     this.riderTrails,
     this.rejoinNavigationRoute,
     this.leaderStatus,
-    this.tecGapTrend,
     this.groupRiderCount,
     this.onOpenRoster,
     this.junctionMarkerOverlay,
@@ -741,7 +734,6 @@ class RideMapScreen extends StatefulWidget {
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
-  final ValueListenable<TecGapTrend>? tecGapTrend;
   final int? groupRiderCount;
   final VoidCallback? onOpenRoster;
   final ValueListenable<MapJunctionMarkerOverlay?>? junctionMarkerOverlay;
@@ -2011,18 +2003,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               },
             )
           : null;
-      // With nobody holding the TEC role there is nothing honest to show, so
-      // the surface is hidden entirely and its space reclaimed rather than
-      // presenting an empty or zero gap. A registered TEC keeps the surface
-      // through its waiting, stale and tracking states.
-      final tecGap = leaderStatus != null && leaderStatus.hasRegisteredTec
-          ? _TecGapCard(
-              status: leaderStatus,
-              compact: compactStatus,
-              distanceUnit: widget.distanceUnit,
-              trend: widget.tecGapTrend?.value ?? TecGapTrend.unknown,
-            )
-          : null;
+      const Widget? tecGap = null;
       final miniMap = canShowGroupMiniMap
           ? _buildGroupMiniMap(
               overlays: overlays,
@@ -3758,7 +3739,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       if (acquired == null && _effectivePosition == null) {
         _showMessage(
           'Could not get your position. Check Location Services and '
-          'Hot Pursuit location access.',
+          'Balloon Crumbs location access.',
         );
         return;
       }
@@ -6161,11 +6142,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
       status =
           '$offCourseCount rider${offCourseCount == 1 ? '' : 's'} '
           'need attention';
-    } else if (leaderStatus?.distanceToTecMeters case final distance?) {
-      status =
-          'TEC '
-          '${MeasurementFormatter(widget.distanceUnit).distance(distance)} '
-          'behind';
     } else if (widget.groupRiderCount case final count?) {
       status = '$count rider${count == 1 ? '' : 's'}';
     }
@@ -6527,7 +6503,7 @@ class MapNavigationPosition {
   );
 }
 
-enum MapJunctionMarkerStage { waitingForRiders, tecApproaching, readyToRideOff }
+enum MapJunctionMarkerStage { waitingForRiders, backRiderApproaching, readyToRideOff }
 
 /// Presentation data for the automatic second-bike-drop view. It lives beside
 /// the map so a marker stop does not have to interrupt navigation with a tab
@@ -6541,7 +6517,7 @@ class MapJunctionMarkerOverlay {
     required this.ridersExpected,
     required this.instruction,
     required this.stage,
-    this.tecDistanceMeters,
+    this.backRiderDistanceMeters,
   });
 
   final GeoPoint markerPoint;
@@ -6549,7 +6525,7 @@ class MapJunctionMarkerOverlay {
   final bool isLocalMarker;
   final int ridersPassed;
   final int ridersExpected;
-  final double? tecDistanceMeters;
+  final double? backRiderDistanceMeters;
   final String instruction;
   final MapJunctionMarkerStage stage;
 }
@@ -6589,7 +6565,6 @@ class MapEmergencyContact {
 
   String get shortRoleLabel => switch (role) {
     RideRole.lead => 'the leader',
-    RideRole.tailEndCharlie => 'the TEC',
     _ => displayName,
   };
 
@@ -6597,7 +6572,6 @@ class MapEmergencyContact {
   /// know both who and which role.
   String get roleQualifiedName => switch (role) {
     RideRole.lead => '$displayName (leader)',
-    RideRole.tailEndCharlie => '$displayName (TEC)',
     _ => displayName,
   };
 }
@@ -6948,7 +6922,7 @@ class _WaitingForLeaderRoutePrompt extends StatelessWidget {
 /// locates nobody (#173).
 @visibleForTesting
 String emergencyMessageBody(GeoPoint? position) {
-  const opening = 'Hot Pursuit: I have stopped and need assistance.';
+  const opening = 'Balloon Crumbs: I have stopped and need assistance.';
   if (position == null) {
     return '$opening I do not have a GPS position to send.';
   }
@@ -8293,13 +8267,13 @@ class _JunctionMarkerOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (overlay.stage) {
       MapJunctionMarkerStage.waitingForRiders => const Color(0xFFFFC857),
-      MapJunctionMarkerStage.tecApproaching => const Color(0xFFFFA24C),
+      MapJunctionMarkerStage.backRiderApproaching => const Color(0xFFFFA24C),
       MapJunctionMarkerStage.readyToRideOff => const Color(0xFF6ED89A),
     };
     final padding = compact
         ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
         : const EdgeInsets.fromLTRB(16, 13, 16, 12);
-    final tecDistance = overlay.tecDistanceMeters;
+    final tecDistance = overlay.backRiderDistanceMeters;
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
       child: Card(
@@ -8366,7 +8340,7 @@ class _JunctionMarkerOverlay extends StatelessWidget {
                 overlay.instruction,
                 style: TextStyle(color: color, fontWeight: FontWeight.w800),
               ),
-              if (overlay.stage == MapJunctionMarkerStage.tecApproaching) ...[
+              if (overlay.stage == MapJunctionMarkerStage.backRiderApproaching) ...[
                 const SizedBox(height: 7),
                 const Text(
                   'GET READY TO RIDE OFF',
@@ -10119,154 +10093,6 @@ class _OffCourseBanner extends StatelessWidget {
       ),
     );
   }
-}
-
-/// The trend, as a shape and a word rather than a colour.
-///
-/// Never colour alone: riders wear tinted visors in direct sunlight - the
-/// condition #107 and #143 exist for - and some riders cannot distinguish the
-/// colours at all. Empty while the trend is unknown, so a leader is not told
-/// something the app does not know (#181).
-String _trendSuffix(TecGapTrend trend) =>
-    trend == TecGapTrend.unknown ? '' : ' · ${trend.arrow} ${trend.label}';
-
-class _TecGapCard extends StatelessWidget {
-  const _TecGapCard({
-    required this.status,
-    required this.compact,
-    required this.distanceUnit,
-    this.trend = TecGapTrend.unknown,
-  });
-
-  final LeaderRideStatus status;
-  final bool compact;
-  final DistanceUnit distanceUnit;
-
-  /// Which way the gap is going. A distance alone told a leader almost nothing
-  /// - on a fast road 1.2 miles is normal, in town it means the group has split
-  /// (#181).
-  final TecGapTrend trend;
-
-  @override
-  Widget build(BuildContext context) {
-    // Only reached once a TEC is registered: the map hides this surface for
-    // TecAvailability.none. One branch per remaining state, so a TEC that has
-    // never reported a position is never dressed up as a fresh or merely stale
-    // one, and no state borrows an age it does not have.
-    final formatter = MeasurementFormatter(distanceUnit);
-    final name = status.tecName ?? 'Hot Pursuit';
-    final distance = status.distanceToTecMeters;
-    final eta = status.estimatedTimeToTec;
-    final age = status.tecLocationAge;
-    final detail = switch (status.tecAvailability) {
-      TecAvailability.tracking when distance != null && eta != null =>
-        '$name · ${formatter.distance(distance)} · about ${_durationLabel(eta)}'
-            '${_trendSuffix(trend)}',
-      TecAvailability.stale when age != null =>
-        '$name · last update ${_ageLabel(age)}',
-      _ => '$name · waiting for location',
-    };
-    if (compact) {
-      final compactDetail = switch (status.tecAvailability) {
-        TecAvailability.tracking when distance != null && eta != null =>
-          '${formatter.distance(distance)} · ~${_durationLabel(eta)}'
-              '${_trendSuffix(trend)}',
-        TecAvailability.stale when age != null =>
-          'Last update ${_ageLabel(age)}',
-        _ => 'Waiting for location',
-      };
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Card(
-            key: const Key('leader-tec-gap'),
-            margin: EdgeInsets.zero,
-            color: rideMapPrimaryPanelFill,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.two_wheeler,
-                    size: 18,
-                    color: Color(0xFF6ED89A),
-                  ),
-                  const SizedBox(width: 7),
-                  const Text(
-                    'TEC',
-                    style: TextStyle(
-                      color: Color(0xFFB7C2CF),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      compactDetail,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return Card(
-      key: const Key('leader-tec-gap'),
-      margin: EdgeInsets.zero,
-      color: rideMapPrimaryPanelFill,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 10 : 14,
-          vertical: compact ? 5 : 10,
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.two_wheeler, color: Color(0xFF6ED89A)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'TEC GAP',
-                    style: TextStyle(
-                      color: Color(0xFFB7C2CF),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _durationLabel(Duration duration) {
-  final minutes = (duration.inSeconds / 60).ceil();
-  if (minutes <= 1) return '<1 min';
-  if (minutes < 60) return '$minutes min';
-  final hours = minutes ~/ 60;
-  final remainder = minutes % 60;
-  return remainder == 0 ? '$hours hr' : '$hours hr $remainder min';
-}
-
-String _ageLabel(Duration? age) {
-  if (age == null || age.inSeconds < 30) return 'just now';
-  if (age.inMinutes < 1) return '${age.inSeconds}s ago';
-  return '${age.inMinutes} min ago';
 }
 
 class _DownloadProgress extends StatelessWidget {

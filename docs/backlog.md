@@ -17,6 +17,8 @@ not a claim that every P0 item is small.
 | 10 | P1 | Decide airspace, NOTAM, landing-note, and access data sources | 3 |
 | 11 | P1 | Add revocable observer sharing and balloon-specific exports | 2, 3 |
 | 12 | P1 | Evaluate CarPlay and Android Auto chase companion | 5, 6 |
+| 13 | P0 | Carry balloon altitude through GPX export and import (#16) | 3 |
+| 14 | P1 | Evaluate aeronautical chart layers as flight context (#17) | 10 |
 
 Each implementation issue must add automated acceptance tests and update the
 product claim in `README.md` only after its evidence gate passes.

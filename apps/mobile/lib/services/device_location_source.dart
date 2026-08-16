@@ -155,7 +155,7 @@ class GeolocatorDeviceLocationPlatform implements DeviceLocationPlatform {
       foregroundNotificationConfig: const ForegroundNotificationConfig(
         notificationTitle: 'Sharing your position with your ride',
         notificationText:
-            'Hot Pursuit is recording your ride and keeping the group '
+            'Balloon Crumbs is recording your ride and keeping the group '
             'up to date. This stops when the ride ends.',
         notificationChannelName: 'Active ride',
         setOngoing: true,
@@ -178,18 +178,34 @@ class GeolocatorDeviceLocationPlatform implements DeviceLocationPlatform {
         LocationPermission.unableToDetermine => DeviceLocationPermission.denied,
       };
 
-  static LocationSample _mapPosition(Position position) => LocationSample(
-    position: GeoPoint(
-      latitude: position.latitude,
-      longitude: position.longitude,
-    ),
-    recordedAt: position.timestamp,
-    accuracyMeters: position.accuracy,
-    speedMetersPerSecond: position.speed < 0 ? null : position.speed,
-    headingDegrees: position.heading < 0 || position.heading >= 360
-        ? null
-        : position.heading,
-  );
+  static LocationSample _mapPosition(Position position) {
+    // Both platforms report altitude 0.0 when they have none, and a balloon
+    // sitting in the launch field genuinely reports 0.0 — so the reading cannot
+    // tell the two apart. The vertical accuracy can: CoreLocation documents a
+    // non-positive verticalAccuracy as "altitude invalid", and Android only
+    // reports a vertical accuracy when it has one. A fix without a positive
+    // vertical accuracy is therefore treated as carrying no altitude at all,
+    // rather than as a measurement of ground level.
+    final hasAltitude = position.altitudeAccuracy > 0;
+    return LocationSample(
+      position: GeoPoint(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      ),
+      recordedAt: position.timestamp,
+      accuracyMeters: position.accuracy,
+      speedMetersPerSecond: position.speed < 0 ? null : position.speed,
+      headingDegrees: position.heading < 0 || position.heading >= 360
+          ? null
+          : position.heading,
+      altitudeMeters: hasAltitude ? position.altitude : null,
+      // The platform fix reports height from the positioning solution. A
+      // barometric source would arrive from a separate sensor path and set its
+      // own value; nothing here may claim one it did not read.
+      altitudeSource: hasAltitude ? AltitudeSource.gnss : AltitudeSource.unknown,
+      altitudeAccuracyMeters: hasAltitude ? position.altitudeAccuracy : null,
+    );
+  }
 }
 
 /// Ride-scoped location source.
@@ -259,7 +275,7 @@ class DeviceLocationSource {
         state: DeviceLocationState.sampling,
         message: inspected.backgroundCapable
             ? 'Sharing your position for this ride, including in the background.'
-            : 'Sharing while Hot Pursuit is visible. Allow “Always” '
+            : 'Sharing while Balloon Crumbs is visible. Allow “Always” '
                   'location access to keep sharing with another app in front.',
         lastSample: _status.lastSample,
         backgroundCapable: inspected.backgroundCapable,
@@ -272,7 +288,7 @@ class DeviceLocationSource {
           state: DeviceLocationState.sampling,
           message: _status.backgroundCapable
               ? 'Location is active for this ride, including in the background.'
-              : 'Location is active only while Hot Pursuit is visible.',
+              : 'Location is active only while Balloon Crumbs is visible.',
           lastSample: sample,
           backgroundCapable: _status.backgroundCapable,
         ),
@@ -367,7 +383,7 @@ class DeviceLocationSource {
                 state: DeviceLocationState.sampling,
                 message: permission == DeviceLocationPermission.always
                     ? 'Location is active for this ride, including in the background.'
-                    : 'Location is active only while Hot Pursuit is visible.',
+                    : 'Location is active only while Balloon Crumbs is visible.',
                 lastSample: _status.lastSample,
                 backgroundCapable:
                     permission == DeviceLocationPermission.always,

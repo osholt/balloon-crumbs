@@ -298,7 +298,7 @@ void main() {
     final status = await blocked.timeout(const Duration(seconds: 1));
 
     expect(api.callCount, 0);
-    expect(status.actionUrl, Uri.parse('https://hot-pursuit.invalid/update'));
+    expect(status.actionUrl, Uri.parse('https://balloon-crumbs.invalid/update'));
     await worker.close();
   });
 }
@@ -447,7 +447,7 @@ RelayCompatibilityResult _compatibility(
       ? 'Update required.'
       : null,
   updateUri: disposition == RelayCompatibilityDisposition.updateRequired
-      ? Uri.parse('https://hot-pursuit.invalid/update')
+      ? Uri.parse('https://balloon-crumbs.invalid/update')
       : null,
 );
 

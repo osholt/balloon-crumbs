@@ -62,8 +62,6 @@ EVENT_TYPES = {
     # Issue #128. Additive: an older client that does not know these names skips
     # them per event and keeps the rest of the batch, so the relay may carry
     # them for the clients that do.
-    "tecRoleRequested",
-    "tecRoleResponded",
     "rejoinRouteShared",
     # Issue #188. A rider's own phone number, addressed to the ride's
     # coordination roles. Deliberately distinct from "iceInfoShared", which
@@ -1002,8 +1000,6 @@ class RelayService:
             "rejoinRouteShared": timedelta(minutes=30),
             # Who was asked to cover the back of the group, and what they said.
             # Ride-scoped coordination, not history worth keeping for days.
-            "tecRoleRequested": timedelta(hours=2),
-            "tecRoleResponded": timedelta(hours=2),
         }.get(event_type, timedelta(hours=72))
 
     @staticmethod

@@ -75,10 +75,8 @@ void main() {
     expect(all.sessions, hasLength(2));
     expect(all.sessions[0].markerDeviceId, 'marker-a');
     expect(all.sessions[0].uniquePassCount, 1);
-    expect(all.sessions[0].tecPassedAt, isNull);
     expect(all.sessions[1].markerDeviceId, 'marker-b');
     expect(all.sessions[1].uniquePassCount, 2);
-    expect(all.sessions[1].tecPassedAt, isNotNull);
 
     final local = MarkerStatistics.fromEvents(
       events,
@@ -116,7 +114,6 @@ void main() {
     final summary = MarkerStatistics.fromEvents(events, asOf: start);
     expect(summary.sessions.single.uniquePassCount, 1);
     expect(summary.sessions.single.verifiedPassCount, 0);
-    expect(summary.sessions.single.tecPassedAt, isNull);
   });
 
   test('evidence event must belong to the passed rider when supplied', () {
@@ -160,7 +157,6 @@ void main() {
           uniqueRiderIds: const ['a', 'b'],
           verifiedPassCount: 1,
           verifiedRiderIds: const ['a'],
-          tecPassedAt: start.add(const Duration(minutes: 1)),
         ),
       ],
     );

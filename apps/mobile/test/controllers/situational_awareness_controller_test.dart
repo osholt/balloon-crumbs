@@ -377,12 +377,12 @@ void main() {
 
   test('updated local role is used by subsequent location beacons', () async {
     controller.updateLocalSession(
-      _session.copyWith(role: RideRole.tailEndCharlie),
+      _session.copyWith(role: RideRole.rider),
     );
 
     await controller.recordLocalLocation(_sample(latitude: 51, at: now));
 
-    expect(controller.localLocation?.role, RideRole.tailEndCharlie);
+    expect(controller.localLocation?.role, RideRole.rider);
   });
 
   test('refreshing staleness escalates a rider who stops reporting', () async {

@@ -47,9 +47,6 @@ abstract final class MarkerStatistics {
                       riderId);
           if (verified) {
             active.verifiedRiderIds.add(riderId);
-            if (event.payload['role'] == 'tailEndCharlie') {
-              active.tecPassedAt ??= event.createdAt;
-            }
           }
           break;
         case RideEventType.markerEnded:
@@ -84,8 +81,6 @@ abstract final class MarkerStatistics {
         case RideEventType.rideReopened:
         case RideEventType.iceInfoShared:
         case RideEventType.iceInfoViewed:
-        case RideEventType.tecRoleRequested:
-        case RideEventType.tecRoleResponded:
         case RideEventType.rejoinRouteShared:
         case RideEventType.riderContactShared:
           break;
@@ -139,7 +134,6 @@ class _SessionBuilder {
   final Set<String> uniqueRiderIds = {};
   final Set<String> verifiedRiderIds = {};
   DateTime? endedAt;
-  DateTime? tecPassedAt;
 
   MarkerSessionSummary build() => MarkerSessionSummary(
     sessionId: sessionId,
@@ -152,6 +146,5 @@ class _SessionBuilder {
     uniqueRiderIds: uniqueRiderIds.toList(growable: false)..sort(),
     verifiedPassCount: verifiedRiderIds.length,
     verifiedRiderIds: verifiedRiderIds.toList(growable: false)..sort(),
-    tecPassedAt: tecPassedAt,
   );
 }

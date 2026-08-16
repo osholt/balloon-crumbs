@@ -51,8 +51,8 @@ class Settings(BaseSettings):
     discovery_rejected_retention_days: int = Field(default=90, ge=7, le=365)
     discovery_allowed_origins: list[str] = Field(
         default_factory=lambda: [
-            "https://hot-pursuit.invalid",
-            "https://www.hot-pursuit.invalid",
+            "https://balloon-crumbs.invalid",
+            "https://www.balloon-crumbs.invalid",
         ]
     )
     maximum_request_bytes: int = Field(default=64 * 1024, ge=1024, le=1024 * 1024)
@@ -97,7 +97,6 @@ class Settings(BaseSettings):
             # rider's answer. Both are ordinary journal events; the capability
             # exists so a client can name the limitation instead of appearing to
             # have asked somebody who was never asked.
-            "tec-role-assignment-v1",
             # A separated rider's advisory rejoin route, addressed to the ride
             # leader only.
             "rejoin-route-sharing-v1",
@@ -120,9 +119,9 @@ class Settings(BaseSettings):
     )
     required_capabilities: list[str] = Field(default_factory=list)
     compatibility_cache_seconds: int = Field(default=300, ge=30, le=3600)
-    update_url: str = "https://hot-pursuit.invalid"
-    ios_update_url: str = "https://hot-pursuit.invalid"
-    android_update_url: str = "https://hot-pursuit.invalid"
+    update_url: str = "https://balloon-crumbs.invalid"
+    ios_update_url: str = "https://balloon-crumbs.invalid"
+    android_update_url: str = "https://balloon-crumbs.invalid"
     plan_retention_days: int = Field(default=30, ge=1, le=365)
     maximum_plan_bytes: int = Field(
         default=11 * 1024 * 1024,

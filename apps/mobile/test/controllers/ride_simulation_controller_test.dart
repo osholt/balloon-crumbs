@@ -55,10 +55,10 @@ void main() {
         awareness.riderLocations
             .singleWhere(
               (location) =>
-                  location.riderId == RideSimulationController.tecRiderId,
+                  location.riderId == RideSimulationController.backRiderId,
             )
             .role,
-        RideRole.tailEndCharlie,
+        RideRole.rider,
       );
 
       final initialProgress = simulation.progress;
@@ -181,7 +181,9 @@ void main() {
     expect(largeFleet.riders, hasLength(30));
     expect(largeFleet.riders.map((rider) => rider.id).toSet(), hasLength(30));
     expect(
-      largeFleet.riders.where((rider) => rider.role == RideRole.tailEndCharlie),
+      largeFleet.riders.where(
+        (rider) => rider.id == RideSimulationController.backRiderId,
+      ),
       hasLength(1),
     );
     largeFleet.setAlexOffRoute(true);
@@ -200,17 +202,17 @@ void main() {
     final initialLeader = simulation.riders.singleWhere(
       (rider) => rider.role == RideRole.lead,
     );
-    final tec = simulation.riders.singleWhere(
-      (rider) => rider.role == RideRole.tailEndCharlie,
+    final backRider = simulation.riders.singleWhere(
+      (rider) => rider.id == RideSimulationController.backRiderId,
     );
     expect(initialLeader.travelTrail.length, greaterThan(1));
     expect(
       initialLeader.travelTrail.first.latitude,
-      closeTo(tec.position.latitude, 1e-7),
+      closeTo(backRider.position.latitude, 1e-7),
     );
     expect(
       initialLeader.travelTrail.first.longitude,
-      closeTo(tec.position.longitude, 1e-7),
+      closeTo(backRider.position.longitude, 1e-7),
     );
 
     await simulation.advance(const Duration(seconds: 1));
@@ -232,12 +234,12 @@ void main() {
     expect(follower.progress, lessThan(leader.progress));
     expect(leader.role, RideRole.lead);
 
-    simulation.setLocalRole(RideRole.tailEndCharlie);
-    expect(simulation.localRole, RideRole.tailEndCharlie);
+    simulation.setLocalRole(RideRole.rider);
+    expect(simulation.localRole, RideRole.rider);
     expect(
       simulation.riders
           .singleWhere(
-            (rider) => rider.id == RideSimulationController.tecRiderId,
+            (rider) => rider.id == RideSimulationController.backRiderId,
           )
           .role,
       RideRole.rider,
@@ -337,7 +339,7 @@ void main() {
         await markerSimulation.advance(const Duration(milliseconds: 100));
         sawTecApproaching |=
             markerSimulation.markerPhase ==
-            SimulationMarkerPhase.tecApproaching;
+            SimulationMarkerPhase.backRiderApproaching;
       }
 
       expect(sawTecApproaching, isTrue);
@@ -468,11 +470,11 @@ void main() {
 
   test('can delay TEC and inject a synthetic roadworks hazard', () async {
     final normalTecSpeed = simulation.riders
-        .singleWhere((rider) => rider.id == RideSimulationController.tecRiderId)
+        .singleWhere((rider) => rider.id == RideSimulationController.backRiderId)
         .speedMetersPerSecond;
-    simulation.setTecDelayed(true);
+    simulation.setBackRiderDelayed(true);
     final delayedTecSpeed = simulation.riders
-        .singleWhere((rider) => rider.id == RideSimulationController.tecRiderId)
+        .singleWhere((rider) => rider.id == RideSimulationController.backRiderId)
         .speedMetersPerSecond;
     expect(delayedTecSpeed, lessThan(normalTecSpeed));
 

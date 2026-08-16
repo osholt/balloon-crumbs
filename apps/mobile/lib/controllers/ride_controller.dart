@@ -36,35 +36,10 @@ import '../services/ride_route_reducer.dart';
 import '../services/rejoin_route_share.dart';
 import '../services/rider_contact_share.dart';
 import '../services/situation_event_factory.dart';
-import '../services/tec_role_assignment.dart';
 import '../internet/internet_relay_client.dart';
 
 typedef Clock = DateTime Function();
 typedef IdFactory = String Function();
-
-/// Why a leader's Hot Pursuit request did or did not go out.
-///
-/// Every value other than [sent] is something the leader is told in words: the
-/// one outcome this feature must never have is appearing to have asked somebody
-/// who was never asked.
-enum TecRoleRequestOutcome {
-  sent,
-
-  /// Only the current leader may ask.
-  notLeader,
-
-  /// No such rider in the live roster, or the leader picked themselves.
-  invalidTarget,
-
-  /// That rider already holds the role, so there is nothing to ask.
-  alreadyTailEndCharlie,
-
-  /// The negotiated relay cannot carry the request, so nothing was recorded.
-  relayUnsupported,
-
-  /// The journal write failed. [RideController.errorMessage] carries the reason.
-  failed,
-}
 
 /// Why a leader's attempt to un-end a ride did or did not take effect.
 ///
@@ -572,8 +547,6 @@ class RideController extends ChangeNotifier {
   int get verifiedMarkerPassCount =>
       currentMarkerSession?.verifiedPassCount ?? 0;
 
-  bool get tecPassedCurrentMarker => currentMarkerSession?.tecPassedAt != null;
-
   int get pendingEventCount =>
       _events.where((event) => !event.acknowledged).length;
 
@@ -658,7 +631,7 @@ class RideController extends ChangeNotifier {
   String get rideCodeShareText {
     final activeSession = _requireSession();
     final name = activeSession.rideName;
-    final group = name == null ? 'my Hot Pursuit group' : '"$name"';
+    final group = name == null ? 'my Balloon Crumbs group' : '"$name"';
     final invite = joinInviteText(
       activeSession.rideCode,
       activeSession.joinToken,
@@ -667,7 +640,7 @@ class RideController extends ChangeNotifier {
       activeSession.rideCode,
       activeSession.joinToken,
     );
-    return 'Join $group in Hot Pursuit: $link\n\n'
+    return 'Join $group in Balloon Crumbs: $link\n\n'
         'Enter ride code ${activeSession.rideCode} in the app, or paste this '
         'private invite: $invite.';
   }
@@ -994,36 +967,6 @@ class RideController extends ChangeNotifier {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Issue #128 part 1 - a leader can ask a named rider to be Hot Pursuit.
-  //
-  // Deliberately a request, not an assignment. Roles stay self-selected: the
-  // target's acceptance records their own `roleChanged`, so the membership
-  // reducer, the session's own role and every TEC surface keep exactly one
-  // source of truth. These two events carry only who was asked and what they
-  // answered, which is what lets the leader see pending versus accepted instead
-  // of believing the back is covered when nobody is watching it.
-  // ---------------------------------------------------------------------------
-
-  /// Every leader-issued TEC request in this ride, reconciled from the journal.
-  TecRoleAssignmentState get tecRoleAssignments {
-    final activeSession = _session;
-    if (activeSession == null) return const TecRoleAssignmentState();
-    return const TecRoleAssignmentReducer().fromEvents(
-      rideId: activeSession.rideId,
-      inviteSecret: activeSession.inviteSecret,
-      events: _events,
-      now: _clock(),
-    );
-  }
-
-  /// The unanswered request addressed to this phone, if any.
-  TecRoleAssignment? get pendingTecRoleRequestForLocalRider {
-    final localRiderId = _session?.localRiderId;
-    if (localRiderId == null) return null;
-    return tecRoleAssignments.pendingFor(localRiderId);
-  }
-
   /// The rider currently holding [RideRole.lead] in the reconciled roster.
   ///
   /// Used to address a leader-only event. Null when the leader has left or is
@@ -1036,8 +979,8 @@ class RideController extends ChangeNotifier {
 
   /// True when a running ride has nobody holding the lead role.
   ///
-  /// A leader who leaves takes the group's pace, the line the TEC is following
-  /// and the route authority with them, and until #176 nothing said so: a tester
+  /// A leader who leaves takes the group's pace and the route authority with
+  /// them, and until #176 nothing said so: a tester
   /// left as leader to see what would happen and the ride carried on, with the
   /// remaining riders untold and nobody offered the role.
   ///
@@ -1046,91 +989,6 @@ class RideController extends ChangeNotifier {
   bool get rideHasNoLeader =>
       rideStarted && !rideEnded && leaderRiderId == null;
 
-  /// Asks [targetRiderId] to take the Hot Pursuit role.
-  ///
-  /// [relayCanCarryRequest] is the negotiated `tec-role-assignment-v1`
-  /// capability. When it is false nothing is recorded at all: a request that
-  /// cannot leave this phone must not sit on the leader's screen looking sent.
-  Future<TecRoleRequestOutcome> requestTecRole({
-    required String targetRiderId,
-    required String targetDisplayName,
-    bool relayCanCarryRequest = true,
-  }) async {
-    final activeSession = _session;
-    if (activeSession == null || !isLocalRideLeader) {
-      return TecRoleRequestOutcome.notLeader;
-    }
-    if (targetRiderId == activeSession.localRiderId) {
-      return TecRoleRequestOutcome.invalidTarget;
-    }
-    final target = participantFor(targetRiderId);
-    if (target == null || !target.isIncludedInLiveCount) {
-      return TecRoleRequestOutcome.invalidTarget;
-    }
-    final acceptedTecRiderId = tecRoleAssignments.acceptedTecRiderId;
-    if (target.role == RideRole.tailEndCharlie &&
-        (acceptedTecRiderId == null || acceptedTecRiderId == targetRiderId)) {
-      return TecRoleRequestOutcome.alreadyTailEndCharlie;
-    }
-    if (!relayCanCarryRequest) {
-      return TecRoleRequestOutcome.relayUnsupported;
-    }
-    await _run(() async {
-      await _record(
-        type: RideEventType.tecRoleRequested,
-        priority: EventPriority.important,
-        // Outlives the reducer's ten-minute pending window so the answer and
-        // the question are never orphaned from each other in the journal.
-        expiresAt: _clock().add(const Duration(hours: 2)),
-        payload: TecRoleAssignmentReducer.requestPayload(
-          requestId: _idFactory(),
-          leaderRiderId: activeSession.localRiderId,
-          targetRiderId: targetRiderId,
-          targetDisplayName: targetDisplayName,
-        ),
-      );
-    });
-    return _errorMessage == null
-        ? TecRoleRequestOutcome.sent
-        : TecRoleRequestOutcome.failed;
-  }
-
-  /// Answers the request addressed to this phone.
-  ///
-  /// Accepting records the answer **and** the local rider's own
-  /// [RideEventType.roleChanged], in that order, so a peer that reads only one
-  /// of the two still converges: the role change alone is the existing
-  /// self-selection, and the answer alone leaves the leader's view honest.
-  Future<bool> respondToTecRoleRequest({
-    required String requestId,
-    required bool accepted,
-  }) async {
-    final activeSession = _session;
-    if (activeSession == null) return false;
-    final pending = tecRoleAssignments.pendingFor(activeSession.localRiderId);
-    if (pending == null || pending.requestId != requestId) return false;
-    await _run(() async {
-      await _record(
-        type: RideEventType.tecRoleResponded,
-        priority: EventPriority.important,
-        expiresAt: _clock().add(const Duration(hours: 2)),
-        payload: TecRoleAssignmentReducer.responsePayload(
-          requestId: requestId,
-          targetRiderId: activeSession.localRiderId,
-          accepted: accepted,
-        ),
-      );
-      if (!accepted) return;
-      final updated = activeSession.copyWith(role: RideRole.tailEndCharlie);
-      _session = updated;
-      await _sessionStore.save(updated);
-      await _record(
-        type: RideEventType.roleChanged,
-        payload: {'role': RideRole.tailEndCharlie.name},
-      );
-    });
-    return _errorMessage == null;
-  }
 
   // ---------------------------------------------------------------------------
   // Issue #128 part 2 - a separated rider's rejoin route, for the leader only.
@@ -1589,7 +1447,6 @@ class RideController extends ChangeNotifier {
           'markerSessionId': current?.sessionId,
           'uniquePasses': current?.uniquePassCount ?? 0,
           'verifiedPasses': current?.verifiedPassCount ?? 0,
-          'tecPassed': current?.tecPassedAt != null,
         },
       );
       final activeSession = _requireSession();
@@ -1616,8 +1473,7 @@ class RideController extends ChangeNotifier {
             'markerSessionId': current?.sessionId,
             'uniquePasses': current?.uniquePassCount ?? 0,
             'verifiedPasses': current?.verifiedPassCount ?? 0,
-            'tecPassed': current?.tecPassedAt != null,
-            'reason': 'ride-ended',
+              'reason': 'ride-ended',
           },
         );
       }

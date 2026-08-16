@@ -225,7 +225,7 @@ void main() {
       RideParticipant(
         riderId: 'follower-private-id',
         displayName: 'Alex',
-        role: RideRole.tailEndCharlie,
+        role: RideRole.rider,
         joinedAt: now,
         lastSeenAt: now,
         state: RideMembershipState.active,
@@ -238,7 +238,7 @@ void main() {
     final remoteLocation = RiderLocation(
       riderId: 'follower-private-id',
       displayName: 'Alex',
-      role: RideRole.tailEndCharlie,
+      role: RideRole.rider,
       sample: LocationSample(
         position: const GeoPoint(latitude: 51.6, longitude: -0.2),
         recordedAt: now,

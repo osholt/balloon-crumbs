@@ -123,7 +123,7 @@ void main() {
 
       expect(access.backgroundCapable, isFalse);
       expect(started.backgroundCapable, isFalse);
-      expect(started.message, contains('Hot Pursuit is visible'));
+      expect(started.message, contains('Balloon Crumbs is visible'));
       await source.dispose();
       await platform.dispose();
     },

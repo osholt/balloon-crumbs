@@ -154,20 +154,6 @@ class MarkerStatisticsCard extends StatelessWidget {
               ),
             ],
           ),
-          if (summary.activeSession case final active?) ...[
-            const Divider(height: 26),
-            Text(
-              active.tecPassedAt == null
-                  ? 'Waiting for verified TEC passage'
-                  : 'TEC passage verified · finish when safe',
-              style: TextStyle(
-                color: active.tecPassedAt == null
-                    ? const Color(0xFF9CA7B5)
-                    : const Color(0xFF6ED89A),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
         ],
       ),
     ),
@@ -198,8 +184,7 @@ class EndRideMarkingSummary extends StatelessWidget {
           '${summary.sessions.length} session'
           '${summary.sessions.length == 1 ? '' : 's'} · '
           '${formatMarkerDuration(summary.totalMarkingTime)} marking · '
-          '${summary.verifiedPassCount} verified passes · '
-          '${summary.tecPassageCount} TEC passages',
+          '${summary.verifiedPassCount} verified passes',
           key: const Key('end-ride-marking-summary'),
           style: const TextStyle(color: Color(0xFFB8C2CF)),
         ),

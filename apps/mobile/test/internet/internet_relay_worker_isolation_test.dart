@@ -120,7 +120,7 @@ void main() {
     await eventStore.append(_event(id: 'local', createdAt: _base));
     final api = _RejectingApi(
       const InternetRelayException(
-        'Update Hot Pursuit.',
+        'Update Balloon Crumbs.',
         code: 'update_required',
         statusCode: 426,
       ),

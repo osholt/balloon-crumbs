@@ -73,7 +73,7 @@ void main() {
           id: 'joined-bill',
           deviceId: 'bill',
           displayName: 'Bill Smith',
-          role: RideRole.tailEndCharlie,
+          role: RideRole.rider,
           createdAt: startedAt.add(const Duration(minutes: 1)),
         ),
       ],
@@ -90,7 +90,7 @@ void main() {
 
     final bill = participants.firstWhere((entry) => entry.riderId == 'bill');
     expect(bill.displayName, 'Bill Smith');
-    expect(bill.role, RideRole.tailEndCharlie);
+    expect(bill.role, RideRole.rider);
     expect(bill.knownFromRelayOnly, isFalse);
     expect(bill.transportLabel, 'Internet relay');
   });

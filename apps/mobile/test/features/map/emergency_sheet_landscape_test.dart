@@ -55,7 +55,7 @@ void main() {
             MapEmergencyContact(
               riderId: 'tec',
               displayName: 'Charlie',
-              role: RideRole.tailEndCharlie,
+              role: RideRole.rider,
             ),
           ],
           onEmergencyAlert: () async {},

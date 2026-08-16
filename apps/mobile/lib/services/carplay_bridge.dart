@@ -14,7 +14,6 @@ import '../domain/route_alert.dart';
 import '../features/map/motorcycle_icon.dart';
 import 'basemap_configuration.dart';
 import 'guidance_time_remaining.dart';
-import 'carplay_tec_status.dart';
 import 'navigation_camera.dart';
 import 'route_progress.dart';
 import 'route_journey_progress.dart';
@@ -95,9 +94,9 @@ String _readableCarPlayError(Object error, {required String fallback}) =>
 /// CarPlay renders the route and rider positions in its navigation scene and
 /// keeps the existing glanceable ride-status list available from that map.
 ///
-/// The snapshot carries the back-marker as its own block ([CarPlayTecStatus])
-/// rather than leaving a head unit to infer it from the rider list. The app is
-/// named after that role, and a leader who can see five riders listed but not
+/// The snapshot carries the rider list the phone map already draws, so a head
+/// unit never has to infer group state for itself. A leader who can see five
+/// riders listed but not
 /// whether anybody is watching the back has been told the least useful half of
 /// the group's state.
 ///
@@ -111,7 +110,6 @@ class CarPlayBridge {
     this.onEmergencyTriggered,
     this.onLeaveRequested,
     this.onHazardReported,
-    this.onTecRoleAnswered,
     this.onRideStartRequested,
     this.onDestinationSearch,
     this.onDestinationSelected,
@@ -148,11 +146,6 @@ class CarPlayBridge {
   /// validating it, attaching the current fix and publishing the event.
   final Future<void> Function(HazardType type)? onHazardReported;
 
-  /// The rider's answer to a leader's Hot Pursuit request, given on the
-  /// head unit (#128).
-  final Future<void> Function(String requestId, bool accepted)?
-  onTecRoleAnswered;
-
   /// Starts a ride that was already configured on the phone. Native only
   /// offers the action when the projected state says it is safe, but Dart
   /// revalidates the leader and lifecycle state before recording anything.
@@ -182,9 +175,6 @@ class CarPlayBridge {
   final Future<void> Function()? onStateRequested;
   DateTime? _lastPublishedAt;
 
-  /// The request the head unit was last told about, so a new one can jump the
-  /// throttle and an answered one can take its alert down.
-  String? _publishedTecRequestId;
   String? _publishedRideStartKey;
   String? _publishedSurfaceKey;
   int _publishAttempt = 0;
@@ -211,18 +201,6 @@ class CarPlayBridge {
             .firstOrNull;
         if (type == null || !type.isRiderReportable) return;
         await onHazardReported?.call(type);
-      case 'answerTecRoleRequest':
-        final arguments = call.arguments;
-        if (arguments is! Map) return;
-        final requestId = arguments['requestId'];
-        final accepted = arguments['accepted'];
-        // A malformed answer is dropped rather than guessed at: recording
-        // "accepted" for a request this phone cannot identify would put a rider
-        // on the back of the group without them having agreed to it.
-        if (requestId is! String || requestId.isEmpty || accepted is! bool) {
-          return;
-        }
-        await onTecRoleAnswered?.call(requestId, accepted);
       case 'startPreparedRide':
         await onRideStartRequested?.call();
       case 'searchDestinations':
@@ -341,14 +319,10 @@ class CarPlayBridge {
     String? groupStatus,
     String? markerStatus,
     CarPlayMarkerStatus? marker,
-    CarPlayTecStatus tec = CarPlayTecStatus.absent,
-    Set<String> effectiveTecRiderIds = const {},
-    CarPlayTecRequest? tecRequest,
     CarPlayRideStart? rideStart,
     CarPlaySurfaceMode surfaceMode = CarPlaySurfaceMode.activeRide,
     bool canPlanRoute = false,
     bool canFreeRoam = false,
-    bool showTecStatus = true,
     CarPlayLocalRider? localRider,
     BasemapConfiguration? basemap,
     String? mapStyleJson,
@@ -369,26 +343,22 @@ class CarPlayBridge {
     // fuel stop is standing there waiting, and an alert left on the head unit
     // after the request is answered, expired or superseded is asking a rider to
     // agree to something that is no longer on offer.
-    final requestChanged = tecRequest?.requestId != _publishedTecRequestId;
     final rideStartKey = rideStart?.projectionKey;
     final rideStartChanged = rideStartKey != _publishedRideStartKey;
     final surfaceKey =
-        '${surfaceMode.name}|$canPlanRoute|$canFreeRoam|$showTecStatus';
+        '${surfaceMode.name}|$canPlanRoute|$canFreeRoam';
     final surfaceChanged = surfaceKey != _publishedSurfaceKey;
-    if (!requestChanged &&
-        !rideStartChanged &&
+    if (!rideStartChanged &&
         !surfaceChanged &&
         _lastPublishedAt != null &&
         now.difference(_lastPublishedAt!) < _minimumPublishInterval) {
       return;
     }
     final previousPublishedAt = _lastPublishedAt;
-    final previousTecRequestId = _publishedTecRequestId;
     final previousRideStartKey = _publishedRideStartKey;
     final previousSurfaceKey = _publishedSurfaceKey;
     final attempt = ++_publishAttempt;
     _lastPublishedAt = now;
-    _publishedTecRequestId = tecRequest?.requestId;
     _publishedRideStartKey = rideStartKey;
     _publishedSurfaceKey = surfaceKey;
     final alertsByRider = {
@@ -430,8 +400,6 @@ class CarPlayBridge {
       'groupStatus': groupStatus,
       'markerStatus': markerStatus,
       'marker': marker?.toSnapshot(),
-      'tec': showTecStatus ? tec.toSnapshot() : null,
-      'tecRequest': tecRequest?.toSnapshot(),
       'rideStart': rideStart?.toSnapshot(),
       'speed': !speedLimitEnabled
           ? null
@@ -488,7 +456,7 @@ class CarPlayBridge {
             'label': location.displayName,
             'isLocal':
                 session != null && location.riderId == session.localRiderId,
-            'role': _roleLabel(location, effectiveTecRiderIds),
+            'role': location.role.label,
             // Project the same identity the rider chose on the phone. CarPlay
             // used to replace the local rider with a blue "You" pill and every
             // peer with a role-coloured initial, so the two screens described
@@ -496,11 +464,6 @@ class CarPlayBridge {
             'riderSymbol': location.riderSymbol.storageValue,
             'motorcycleStyle': location.motorcycleStyle.name,
             'riderColor': location.riderColor.name,
-            // Issue #128: two riders can hold the role at once, and the group
-            // needs one answer. The phone map resolves that before it draws a
-            // marker; the head unit now resolves it the same way rather than
-            // labelling both of them the back of the group.
-            'isTec': effectiveTecRiderIds.contains(location.riderId),
             'needsAttention': _needsAttention(location, alertsByRider),
             'latitude': location.sample.position.latitude,
             'longitude': location.sample.position.longitude,
@@ -517,7 +480,6 @@ class CarPlayBridge {
       // newer publish owns the state if one completed while this call waited.
       if (_publishAttempt == attempt) {
         _lastPublishedAt = previousPublishedAt;
-        _publishedTecRequestId = previousTecRequestId;
         _publishedRideStartKey = previousRideStartKey;
         _publishedSurfaceKey = previousSurfaceKey;
       }
@@ -665,26 +627,6 @@ class CarPlayBridge {
   }
 
   /// The role a head unit shows against one rider.
-  ///
-  /// Every role but the back-marker is the rider's own journal role. The TEC is
-  /// the exception: two riders can legitimately carry
-  /// [RideRole.tailEndCharlie] at once - one self-selected, one asked by the
-  /// leader (#128) - and a car screen listing both as the back of the group
-  /// tells the leader something that is not true. Only the effective
-  /// back-marker keeps the label, which is what the phone's map already draws.
-  ///
-  /// An empty [effectiveTecRiderIds] means the caller did not resolve one, not
-  /// that nobody holds the role, so the journal role stands.
-  String _roleLabel(RiderLocation location, Set<String> effectiveTecRiderIds) {
-    if (location.role != RideRole.tailEndCharlie ||
-        effectiveTecRiderIds.isEmpty) {
-      return location.role.label;
-    }
-    return effectiveTecRiderIds.contains(location.riderId)
-        ? RideRole.tailEndCharlie.label
-        : RideRole.rider.label;
-  }
-
   bool _needsAttention(
     RiderLocation location,
     Map<String, RiderRouteAlert> alertsByRider,
@@ -741,7 +683,6 @@ class CarPlayRideStart {
     required bool busy,
     required bool locationReady,
     required bool isGroup,
-    required bool hasTec,
     String? routeName,
   }) {
     if (!hasSession || !isLeader || rideStarted || rideEnded) return null;
@@ -750,10 +691,7 @@ class CarPlayRideStart {
       detail: routeName == null
           ? 'No route selected. Recording and group location sharing will start.'
           : '$routeName. Recording, sharing and navigation will start.',
-      warning: isGroup && !hasTec
-          ? 'No Hot Pursuit is assigned. The group can still start, but '
-                'nobody is explicitly covering the back.'
-          : null,
+      warning: null,
       unavailableReason: locationReady
           ? (busy ? 'Ride setup is still being saved.' : null)
           : 'Allow location access on the iPhone before starting from CarPlay.',
@@ -784,7 +722,7 @@ class CarPlayMarkerStatus {
     required this.detail,
     required this.ridersPassed,
     required this.ridersExpected,
-    this.tecDistanceMeters,
+    this.backRiderDistanceMeters,
   });
 
   final String stage;
@@ -792,7 +730,7 @@ class CarPlayMarkerStatus {
   final String detail;
   final int ridersPassed;
   final int ridersExpected;
-  final double? tecDistanceMeters;
+  final double? backRiderDistanceMeters;
 
   Map<String, Object?> toSnapshot() => {
     'stage': stage,
@@ -800,6 +738,6 @@ class CarPlayMarkerStatus {
     'detail': detail,
     'ridersPassed': ridersPassed,
     'ridersExpected': ridersExpected,
-    'tecDistanceMeters': tecDistanceMeters,
+    'backRiderDistanceMeters': backRiderDistanceMeters,
   };
 }

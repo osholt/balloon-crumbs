@@ -116,7 +116,7 @@ class CompletedRide {
       rideCode: json['rideCode']! as String,
       rideName: json['rideName'] as String?,
       localDisplayName: json['localDisplayName']! as String,
-      localRole: RideRole.values.byName(json['localRole']! as String),
+      localRole: rideRoleFromName(json['localRole']),
       startedAt: DateTime.parse(json['startedAt']! as String).toUtc(),
       endedAt: DateTime.parse(json['endedAt']! as String).toUtc(),
       archivedAt: DateTime.parse(json['archivedAt']! as String).toUtc(),

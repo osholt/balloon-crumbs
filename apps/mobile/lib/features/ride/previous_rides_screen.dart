@@ -295,7 +295,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
           ),
           const SizedBox(height: 14),
           const Text(
-            'Ride history is stored locally on this phone. Hot Pursuit '
+            'Ride history is stored locally on this phone. Balloon Crumbs '
             'does not upload a permanent copy. The native share destination '
             'determines where an exported GPX is saved.',
             style: TextStyle(color: Color(0xFF8994A2), fontSize: 12),

@@ -23,7 +23,7 @@ void main() {
     expect(passes, hasLength(1));
     expect(passes.single.riderId, 'tec');
     expect(passes.single.locationEventId, 'near');
-    expect(passes.single.roleName, RideRole.tailEndCharlie.name);
+    expect(passes.single.roleName, RideRole.rider.name);
     expect(duplicate, isEmpty);
   });
 
@@ -73,7 +73,7 @@ RiderLocationEvidence _evidence({
   location: RiderLocation(
     riderId: 'tec',
     displayName: 'TEC',
-    role: RideRole.tailEndCharlie,
+    role: RideRole.rider,
     sample: LocationSample(
       position: GeoPoint(latitude: 51, longitude: longitude),
       recordedAt: at,

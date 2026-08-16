@@ -70,8 +70,6 @@ class RideLifecycleReducer {
         case RideEventType.rideReopened:
         case RideEventType.iceInfoShared:
         case RideEventType.iceInfoViewed:
-        case RideEventType.tecRoleRequested:
-        case RideEventType.tecRoleResponded:
         case RideEventType.rejoinRouteShared:
         case RideEventType.riderContactShared:
           break;

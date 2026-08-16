@@ -72,5 +72,4 @@ RiderColor riderColorFromName(String? name) => RiderColor.values.firstWhere(
 /// Reserved status colours that never come from a rider's personal choice.
 /// They remain available for role/alert accents without replacing identity.
 const leadColor = Color(0xFFB58CFF);
-const tailEndCharlieColor = Color(0xFF68A9FF);
 const alertColor = Color(0xFFFF5D73);

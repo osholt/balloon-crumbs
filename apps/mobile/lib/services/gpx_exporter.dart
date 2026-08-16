@@ -12,10 +12,10 @@ class GpxExporter {
       'gpx',
       attributes: {
         'version': '1.1',
-        'creator': 'Hot Pursuit',
+        'creator': 'Balloon Crumbs',
         'xmlns': 'http://www.topografix.com/GPX/1/1',
         if (route.preferences != null || route.markerReview.isNotEmpty)
-          'xmlns:tec': 'https://hot-pursuit.invalid/gpx/1',
+          'xmlns:tec': 'https://balloon-crumbs.invalid/gpx/1',
       },
       nest: () {
         builder.element(

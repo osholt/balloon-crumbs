@@ -104,10 +104,6 @@ void main() {
         final leaderStatus = ValueNotifier<LeaderRideStatus?>(
           scenario.maximumOverlays
               ? const LeaderRideStatus(
-                  tecName: 'Charlie',
-                  distanceToTecMeters: 3200,
-                  estimatedTimeToTec: Duration(minutes: 4),
-                  tecLocationAge: Duration(seconds: 10),
                   offCourseAlerts: [
                     LeaderOffCourseAlert(
                       riderId: 'rider-alex',

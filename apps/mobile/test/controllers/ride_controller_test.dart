@@ -689,7 +689,7 @@ void main() {
   );
 
   test(
-    'authenticated TEC evidence is reflected in marker statistics',
+    'authenticated pass evidence is reflected in marker statistics',
     () async {
       await controller.createRide('Oliver');
       await controller.startRide();
@@ -698,18 +698,17 @@ void main() {
         eventStore: eventStore,
         controller: controller,
         riderId: 'tec',
-        role: RideRole.tailEndCharlie,
+        role: RideRole.rider,
         eventId: 'location-event',
       );
       await controller.recordMarkerPass(
         'tec',
         evidenceEventId: 'location-event',
-        riderRole: RideRole.tailEndCharlie,
+        riderRole: RideRole.rider,
         observedAt: DateTime.utc(2026, 7, 16, 12),
       );
 
       expect(controller.verifiedMarkerPassCount, 1);
-      expect(controller.tecPassedCurrentMarker, isTrue);
     },
   );
 

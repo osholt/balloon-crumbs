@@ -98,7 +98,7 @@ class _DestinationRouteSheetState extends State<DestinationRouteSheet> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Enter a place, postcode, or latitude and longitude. Hot Pursuit '
+              'Enter a place, postcode, or latitude and longitude. Balloon Crumbs '
               'will generate a road-following GPX route from your location.',
               style: TextStyle(color: Color(0xFF98A3B1)),
             ),
@@ -355,20 +355,20 @@ _DestinationHandoff _handoffFromTarget(NavigationTarget? target) =>
 
 extension on _DestinationHandoff {
   String get label => switch (this) {
-    _DestinationHandoff.rideRelay => 'Hot Pursuit',
+    _DestinationHandoff.rideRelay => 'Balloon Crumbs',
     _DestinationHandoff.calimoto => 'Calimoto',
     _DestinationHandoff.myRouteApp => 'MyRoute-app',
     _DestinationHandoff.googleMaps => 'Google Maps',
   };
 
   String get detail => switch (this) {
-    _DestinationHandoff.rideRelay => 'Show and save the route in Hot Pursuit.',
+    _DestinationHandoff.rideRelay => 'Show and save the route in Balloon Crumbs.',
     _DestinationHandoff.calimoto =>
       'Generate GPX, then choose Calimoto in the system share sheet.',
     _DestinationHandoff.myRouteApp =>
       'Generate GPX, then choose MyRoute-app in the system share sheet.',
     _DestinationHandoff.googleMaps =>
-      'Open a Google Maps route preview after saving it in Hot Pursuit.',
+      'Open a Google Maps route preview after saving it in Balloon Crumbs.',
   };
 
   NavigationTarget? get target => switch (this) {

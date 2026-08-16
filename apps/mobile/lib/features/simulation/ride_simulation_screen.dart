@@ -20,7 +20,6 @@ class RideSimulationScreen extends StatelessWidget {
     required this.onRideOff,
     required this.onRiderCountChanged,
     this.markerPassCount = 0,
-    this.tecPassedMarker = false,
   });
 
   final RideSimulationController controller;
@@ -32,7 +31,6 @@ class RideSimulationScreen extends StatelessWidget {
   final Future<void> Function() onRideOff;
   final Future<void> Function(int riderCount) onRiderCountChanged;
   final int markerPassCount;
-  final bool tecPassedMarker;
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +66,6 @@ class RideSimulationScreen extends StatelessWidget {
               onRideOff: onRideOff,
               onRiderCountChanged: onRiderCountChanged,
               markerPassCount: markerPassCount,
-              tecPassedMarker: tecPassedMarker,
             );
             final fleet = _FleetCard(
               controller: controller,
@@ -106,7 +103,6 @@ class _SimulationControls extends StatelessWidget {
     required this.onRideOff,
     required this.onRiderCountChanged,
     required this.markerPassCount,
-    required this.tecPassedMarker,
   });
 
   final RideSimulationController controller;
@@ -115,7 +111,6 @@ class _SimulationControls extends StatelessWidget {
   final Future<void> Function() onRideOff;
   final Future<void> Function(int riderCount) onRiderCountChanged;
   final int markerPassCount;
-  final bool tecPassedMarker;
 
   @override
   Widget build(BuildContext context) {
@@ -186,11 +181,6 @@ class _SimulationControls extends StatelessWidget {
                   value: RideRole.rider,
                   icon: Icon(Icons.two_wheeler),
                   label: Text('Follower'),
-                ),
-                ButtonSegment(
-                  value: RideRole.tailEndCharlie,
-                  icon: Icon(Icons.safety_check_outlined),
-                  label: Text('TEC'),
                 ),
               ],
               selected: {controller.localRole},
@@ -302,10 +292,10 @@ class _SimulationControls extends StatelessWidget {
             SwitchListTile.adaptive(
               key: const Key('simulation-tec-delay'),
               contentPadding: EdgeInsets.zero,
-              title: const Text('Delay Hot Pursuit'),
+              title: const Text('Delay the back rider'),
               subtitle: const Text('Increases the lead-to-TEC gap'),
-              value: controller.tecDelayed,
-              onChanged: controller.setTecDelayed,
+              value: controller.backRiderDelayed,
+              onChanged: controller.setBackRiderDelayed,
             ),
             const SizedBox(height: 6),
             OutlinedButton.icon(
@@ -331,14 +321,11 @@ class _SimulationControls extends StatelessWidget {
             if (controller.markerMode && !controller.automaticMarkerActive) ...[
               const SizedBox(height: 8),
               Text(
-                'MARKER ACTIVE · $markerPassCount passed · '
-                '${tecPassedMarker ? 'TEC passed' : 'waiting for TEC'}',
+                'MARKER ACTIVE · $markerPassCount passed',
                 key: const Key('simulation-marker-status'),
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: tecPassedMarker
-                      ? const Color(0xFF6ED89A)
-                      : const Color(0xFFFFC857),
+                style: const TextStyle(
+                  color: Color(0xFFFFC857),
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
@@ -378,11 +365,11 @@ class _AutomaticMarkerViewport extends StatelessWidget {
     final phase = controller.markerPhase;
     final color = switch (phase) {
       SimulationMarkerPhase.waitingForRiders => const Color(0xFFFFC857),
-      SimulationMarkerPhase.tecApproaching => const Color(0xFFFFA24C),
+      SimulationMarkerPhase.backRiderApproaching => const Color(0xFFFFA24C),
       SimulationMarkerPhase.readyToRideOff => const Color(0xFF6ED89A),
       SimulationMarkerPhase.riding => const Color(0xFF8F9BAA),
     };
-    final tecDistance = controller.tecDistanceToMarkerMeters;
+    final tecDistance = controller.backRiderDistanceToMarkerMeters;
     return Container(
       key: const Key('simulation-auto-marker-viewport'),
       padding: const EdgeInsets.all(14),
@@ -430,7 +417,7 @@ class _AutomaticMarkerViewport extends StatelessWidget {
             controller.markerInstruction,
             style: TextStyle(color: color, fontWeight: FontWeight.w800),
           ),
-          if (phase == SimulationMarkerPhase.tecApproaching) ...[
+          if (phase == SimulationMarkerPhase.backRiderApproaching) ...[
             const SizedBox(height: 10),
             const Text(
               'GET READY TO RIDE OFF',

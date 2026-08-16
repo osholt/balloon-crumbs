@@ -190,7 +190,7 @@ void main() {
     await simulation.advance(const Duration(seconds: 4));
     for (var tick = 0; tick < 180; tick += 1) {
       await simulation.advance(const Duration(milliseconds: 100));
-      if (simulation.markerPhase == SimulationMarkerPhase.tecApproaching) {
+      if (simulation.markerPhase == SimulationMarkerPhase.backRiderApproaching) {
         break;
       }
     }
@@ -198,7 +198,7 @@ void main() {
       simulation.dispose();
       awareness.dispose();
     });
-    expect(simulation.markerPhase, SimulationMarkerPhase.tecApproaching);
+    expect(simulation.markerPhase, SimulationMarkerPhase.backRiderApproaching);
 
     await tester.pumpWidget(
       MaterialApp(
