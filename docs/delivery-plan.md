@@ -419,6 +419,60 @@ Where the chase crew gets its value.
 - Explicit separation of balloon position, predicted area, and road target.
 - Losing balloon fixes freezes the last target and says so.
 
+#### What the chase routes toward, and when to stop trusting it
+
+Routing has a **primary destination and a divergence check**, and the second is
+what makes it usable rather than merely correct.
+
+**Primary: the pilot's intended landing area** (WP6). It is the only statement of
+intent anyone has, it comes from the person who can see the wind they are
+actually in, and it is a far better destination than a projection from the last
+few minutes of track. So the default road target is a road-accessible point
+serving that area.
+
+**The divergence check.** An intended area is a guess made earlier, and a balloon
+that has found a different wind layer will leave it. So the app continuously
+compares the balloon's actual position and recent track against the area it is
+supposed to be heading for, and surfaces that gap as a first-class number — the
+same role the old distance-to-back-marker card played, pointed at something that
+now matters. Concretely:
+
+- Distance from the balloon to the intended area, and whether that distance is
+  **opening or closing**. Closing means the plan is holding. Opening means it is
+  not.
+- Whether the balloon's recent track, extended, still intersects the area at all.
+  A balloon eight kilometres out and tracking away from it has left the plan
+  regardless of what the distance says.
+- How old the intended area is, because a twenty-minute-old guess that the
+  balloon has drifted out of is worse than no guess.
+
+**When it diverges, the app hands the decision to the crew rather than making
+it.** It should not silently re-target: the crew know things the app does not —
+which lanes flood, which farmer is fine about it, where the trailer can turn
+round. It says clearly that the plan and the balloon no longer agree, offers the
+projected alternative alongside the pilot's area, and lets a crew member choose.
+Voice says it once; it does not nag a driver.
+
+#### The mini-map is the decision surface
+
+This divergence is a *spatial* judgement and cannot be made from a distance
+readout. The crew need to see, at a glance and without leaving the guidance
+screen, the balloon, its recent track, the intended area, and their own vehicles
+in one frame. The mini-map is therefore not decoration — it is where the decision
+gets made, and it should be sized and placed accordingly, with the whole picture
+in view rather than a zoomed-in road view.
+
+For a passenger it can be interactive; for a driver it must be glanceable and
+never require a touch.
+
+Acceptance:
+- [ ] The default road target serves the pilot's intended area
+- [ ] Distance to the area, and whether it is opening or closing, are always visible
+- [ ] A balloon tracking away from the area is called out, not just measured
+- [ ] Divergence offers a choice; the app never silently re-targets
+- [ ] The mini-map shows balloon, track, intended area and own vehicles together
+- [ ] Nothing on the divergence path requires the driver to touch the screen
+
 ### WP8 — Voice-first chase guidance
 
 - Spoken manoeuvres, recalculation, loss of fix, arrival.
