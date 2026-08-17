@@ -19,7 +19,6 @@ void main() {
       'route ahead': (4.11, 9.54, 10.27),
       'travelled': (2.81, 6.52, 7.02),
       'leader trail': (4.22, 9.78, 10.53),
-      'off route': (2.73, 6.33, 6.81),
       'route start connector': (4.77, 11.06, 11.91),
     };
 
@@ -166,7 +165,6 @@ void main() {
     expect(RouteTrailStyle.travelled.isDashed, isFalse);
     expect(RouteTrailStyle.leaderTrail.isDashed, isFalse);
     expect(RouteTrailStyle.routeAhead.isDashed, isTrue);
-    expect(RouteTrailStyle.offRouteTrail.isDashed, isTrue);
     expect(RouteTrailStyle.routeStartConnectorLine.isDashed, isTrue);
   });
 
@@ -262,10 +260,6 @@ void main() {
     expect(
       RouteTrailStyle.forTrail(RiderTrailKind.leader),
       RouteTrailStyle.leaderTrail,
-    );
-    expect(
-      RouteTrailStyle.forTrail(RiderTrailKind.offRoute),
-      RouteTrailStyle.offRouteTrail,
     );
   });
 

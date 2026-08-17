@@ -41,7 +41,6 @@ void main() {
     Future<void> publish() => bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       routeName: 'Friday to the Ferry',
       rideState: 'Ride in progress',
@@ -102,7 +101,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       localSpeedMetersPerSecond: 10,
       localSpeedIsAgeing: true,
@@ -132,7 +130,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       surfaceMode: CarPlaySurfaceMode.home,
       canPlanRoute: true,
@@ -178,7 +175,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       rideStart: const CarPlayRideStart(
         enabled: true,
@@ -249,8 +245,7 @@ void main() {
       Future<void> publish({CarPlayRideStart? rideStart}) => bridge.publish(
         session: null,
         riderLocations: const [],
-        routeAlerts: const [],
-        activeHazards: const [],
+          activeHazards: const [],
         rideStart: rideStart,
       );
 
@@ -289,7 +284,6 @@ void main() {
     Future<void> publish() => bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
     );
 
@@ -337,8 +331,7 @@ void main() {
       await bridge.publish(
         session: null,
         riderLocations: const [],
-        routeAlerts: const [],
-        activeHazards: const [],
+          activeHazards: const [],
         route: route,
         routeName: route.name,
         followRider: true,
@@ -382,7 +375,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       routeProgress: const RouteProgressGeometry(
         riddenPaths: [
@@ -429,7 +421,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       distanceUnit: DistanceUnit.miles,
       journeyProgress: RouteJourneyProgress(
@@ -537,7 +528,6 @@ void main() {
           riderColor: RiderColor.white,
         ),
       ],
-      routeAlerts: const [],
       activeHazards: const [],
     );
 
@@ -574,8 +564,7 @@ void main() {
           riderColor: RiderColor.orange,
         ),
         riderLocations: const [],
-        routeAlerts: const [],
-        activeHazards: const [],
+          activeHazards: const [],
         basemap: const BasemapConfiguration(
           styleUrl: 'https://tiles.example.com/day',
         ),
@@ -671,7 +660,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       basemap: const BasemapConfiguration(
         styleUrl: 'https://tiles.example.com/day',
@@ -703,8 +691,7 @@ void main() {
       await bridge.publish(
         session: null,
         riderLocations: const [],
-        routeAlerts: const [],
-        activeHazards: const [],
+          activeHazards: const [],
         basemap: const BasemapConfiguration(
           styleUrl: 'https://tiles.example.com/day',
         ),

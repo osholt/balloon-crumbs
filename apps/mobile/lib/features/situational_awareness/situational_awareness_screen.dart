@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../controllers/foreground_location_controller.dart';
 import '../../controllers/situational_awareness_controller.dart';
 import '../../domain/hazard.dart';
-import '../../domain/route_alert.dart';
 import '../../services/device_location_source.dart';
 import '../../services/external_hazard_provider.dart';
 
@@ -54,14 +53,6 @@ class SituationalAwarenessScreen extends StatelessWidget {
                 _ErrorBanner(
                   message: message,
                   onDismiss: controller.clearError,
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (controller.routeAlerts.isNotEmpty ||
-                  rejoinGuidance != null) ...[
-                _RouteStatusCard(
-                  controller: controller,
-                  rejoinGuidance: rejoinGuidance,
                 ),
                 const SizedBox(height: 12),
               ],
@@ -116,23 +107,6 @@ class SituationalAwarenessScreen extends StatelessWidget {
                   onReview: onReviewTrafficAlternative!,
                   onDismiss: onDismissTrafficAlternative!,
                 ),
-              ],
-              if (controller.routeAlerts.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                const _SectionHeader(title: 'RIDERS NEEDING ATTENTION'),
-                const SizedBox(height: 10),
-                ...controller.routeAlerts.map((alert) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 9),
-                    child: RiderStatusCard(
-                      displayName: alert.displayName,
-                      alert: alert,
-                      onAcknowledge: alert.acknowledged
-                          ? null
-                          : () => controller.acknowledgeAlert(alert.riderId),
-                    ),
-                  );
-                }),
               ],
             ],
           ),
@@ -477,39 +451,6 @@ class HazardCard extends StatelessWidget {
   }
 }
 
-class RiderStatusCard extends StatelessWidget {
-  const RiderStatusCard({
-    super.key,
-    required this.displayName,
-    required this.alert,
-    this.onAcknowledge,
-  });
-
-  final String displayName;
-  final RiderRouteAlert? alert;
-  final VoidCallback? onAcknowledge;
-
-  @override
-  Widget build(BuildContext context) {
-    final assessment = alert?.assessment;
-    final level = assessment?.alertLevel ?? RouteAlertLevel.none;
-    final color = _alertColor(level);
-    return Card(
-      child: ListTile(
-        leading: Icon(_alertIcon(level), color: color),
-        title: Text(displayName),
-        subtitle: Text(assessment?.message ?? 'Location received.'),
-        trailing: assessment?.coordinatorActionRequired == true
-            ? TextButton(
-                onPressed: onAcknowledge,
-                child: Text(alert!.acknowledged ? 'Seen' : 'Acknowledge'),
-              )
-            : null,
-      ),
-    );
-  }
-}
-
 class ProviderStatusCard extends StatelessWidget {
   const ProviderStatusCard({super.key, required this.provider});
 
@@ -530,67 +471,6 @@ class ProviderStatusCard extends StatelessWidget {
           provider.status.state.label.toUpperCase(),
           style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
         ),
-      ),
-    );
-  }
-}
-
-class _RouteStatusCard extends StatelessWidget {
-  const _RouteStatusCard({required this.controller, this.rejoinGuidance});
-
-  final SituationalAwarenessController controller;
-  final String? rejoinGuidance;
-
-  @override
-  Widget build(BuildContext context) {
-    final alerts = controller.routeAlerts;
-    final urgent = alerts.where(
-      (alert) => alert.assessment.coordinatorActionRequired,
-    );
-    final returningToRoute = rejoinGuidance != null;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF171D25),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: urgent.isEmpty
-              ? const Color(0xFF2B3542)
-              : const Color(0xFFFF715B),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            urgent.isEmpty ? Icons.route_outlined : Icons.crisis_alert,
-            color: urgent.isEmpty
-                ? const Color(0xFF6ED89A)
-                : const Color(0xFFFF715B),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  returningToRoute
-                      ? 'Return to the route'
-                      : '${alerts.length} route alert'
-                            '${alerts.length == 1 ? '' : 's'}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 3),
-                if (!returningToRoute)
-                  Text(
-                    urgent.isEmpty
-                        ? 'Check the rider shown below.'
-                        : 'The ride coordinator may need to respond.',
-                    style: const TextStyle(color: Color(0xFF9CA7B5)),
-                  ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -686,16 +566,3 @@ Color _severityColor(HazardSeverity severity) => switch (severity) {
   HazardSeverity.critical => const Color(0xFFFF715B),
 };
 
-Color _alertColor(RouteAlertLevel level) => switch (level) {
-  RouteAlertLevel.none => const Color(0xFF6ED89A),
-  RouteAlertLevel.watch => const Color(0xFFFFC857),
-  RouteAlertLevel.urgent => const Color(0xFFFF9D4D),
-  RouteAlertLevel.critical => const Color(0xFFFF715B),
-};
-
-IconData _alertIcon(RouteAlertLevel level) => switch (level) {
-  RouteAlertLevel.none => Icons.check_circle_outline,
-  RouteAlertLevel.watch => Icons.location_searching,
-  RouteAlertLevel.urgent => Icons.wrong_location_outlined,
-  RouteAlertLevel.critical => Icons.crisis_alert,
-};

@@ -146,8 +146,6 @@ class RideRouteReducer {
         case RideEventType.riderLocationUpdated:
         case RideEventType.hazardReported:
         case RideEventType.hazardCleared:
-        case RideEventType.routeDeviationChanged:
-        case RideEventType.routeAlertAcknowledged:
         case RideEventType.ridePaused:
         case RideEventType.rideResumed:
         case RideEventType.rideEnded:

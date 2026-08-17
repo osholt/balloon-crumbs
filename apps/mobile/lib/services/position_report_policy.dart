@@ -141,18 +141,13 @@ class PositionReportPolicy {
   /// back to [minimumDisplacementMeters] alone rather than being refused.
   static const defaultMovingSpeedMetersPerSecond = 0.5;
 
-  /// 15 s, and it is bounded from above by two thresholds it must not cross:
+  /// 15 s, and it is bounded from above by a threshold it must not cross:
   ///
-  ///  - `RouteDeviationConfig.staleAfter` (30 s). A position older than that is
-  ///    reported as `gpsStale` — "No recent GPS position is available" — and at
-  ///    90 s it escalates to the coordinators. A stationary rider whose receiver
-  ///    is working must never produce that alarm, so the keep-alive has to
-  ///    refresh the position well inside 30 s.
   ///  - `PresenceFreshnessPolicy.liveWithin` (20 s). Keeping the interval under
   ///    it means a stationary rider's own marker stays `live` rather than
   ///    flickering to `ageing` between keep-alives.
   ///
-  /// 15 s satisfies both with margin and matches the ride shell's existing
+  /// 15 s satisfies it with margin and matches the ride shell's existing
   /// staleness-refresh period, so the two ticks stay in step. It is 4 reports a
   /// minute while stationary, against roughly 60 at the 1 Hz the platform
   /// delivers while moving.

@@ -47,22 +47,6 @@ bool spokenAudioAllows(SpokenAudioMode mode, SpokenAudioClass audioClass) =>
       (SpokenAudioMode.alertsOnly, SpokenAudioClass.navigation) => false,
     };
 
-/// The mode a rider lands in when they go off route, unless they have chosen
-/// silence.
-///
-/// Turn-by-turn for a route the rider is not on is worse than nothing: it names
-/// junctions that are not coming. Warnings still apply, because a camera does not
-/// care whether the rider is on the planned route.
-///
-/// A rider who chose [SpokenAudioMode.silent] stays there. The mapped speed limit
-/// follows the same rule for a rider who turned it off, and for the same reason:
-/// an explicit choice outranks an automatic one.
-SpokenAudioMode spokenAudioModeOffRoute(SpokenAudioMode chosen) =>
-    switch (chosen) {
-      SpokenAudioMode.silent => SpokenAudioMode.silent,
-      _ => SpokenAudioMode.alertsOnly,
-    };
-
 /// What the control on the map says it will do next, so a rider pressing it by
 /// feel knows what they are getting.
 String spokenAudioModeLabel(SpokenAudioMode mode) => switch (mode) {

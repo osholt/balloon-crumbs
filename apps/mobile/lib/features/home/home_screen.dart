@@ -221,7 +221,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _carPlayBridge.publish(
         session: null,
         riderLocations: const [],
-        routeAlerts: const [],
         activeHazards: const [],
         rideState: _planningDestination
             ? 'Planning route…'

@@ -46,9 +46,9 @@ class RideConnectivitySummary {
 
   /// A sync older than this stops counting as success.
   ///
-  /// 90 seconds, matching `RouteDeviationConfig.coordinatorStaleAfter`, so
-  /// "stale" means the same length of time here as it does when the app decides
-  /// a rider's position can no longer be trusted.
+  /// 90 seconds. It matched the deviation detector's coordinator-stale
+  /// threshold, which was deleted with off-route alerting; WP7's availability
+  /// model should be held against this number rather than picking its own.
   static const staleSyncAfter = Duration(seconds: 90);
 
   /// [positionsPaused] is the presence channel's own verdict, and it wins.

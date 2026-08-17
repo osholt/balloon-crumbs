@@ -294,39 +294,6 @@ void main() {
     expect(sam.isIncludedInLiveCount, isFalse);
   });
 
-  test('a departed rider stops carrying a route alert', () {
-    final participants = reduce(
-      events: [
-        _join(deviceId: 'bill', displayName: 'Bill', at: startedAt),
-        _event(
-          id: 'alert-bill',
-          deviceId: 'leader',
-          type: RideEventType.routeDeviationChanged,
-          createdAt: startedAt.add(const Duration(minutes: 4)),
-          payload: const {
-            'alert': {
-              'riderId': 'bill',
-              'assessment': {'state': 'offRoute'},
-            },
-          },
-        ),
-        _left(
-          deviceId: 'bill',
-          displayName: 'Bill',
-          at: startedAt.add(const Duration(minutes: 5)),
-        ),
-      ],
-    );
-
-    final bill = riderIn(participants, 'bill');
-    expect(bill.hasLeft, isTrue);
-    expect(
-      bill.attentionLabel,
-      isNull,
-      reason: 'a rider who has gone is not off course',
-    );
-  });
-
   test('the record is retained through the end of the ride, not beyond it', () {
     final events = [
       _join(deviceId: 'bill', displayName: 'Bill', at: startedAt),

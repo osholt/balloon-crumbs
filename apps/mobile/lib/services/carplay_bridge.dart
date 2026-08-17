@@ -10,7 +10,6 @@ import '../domain/rider_color.dart';
 import '../domain/ride_role.dart';
 import '../domain/ride_session.dart';
 import '../domain/rider_location.dart';
-import '../domain/route_alert.dart';
 import '../features/map/motorcycle_icon.dart';
 import 'basemap_configuration.dart';
 import 'guidance_time_remaining.dart';
@@ -305,7 +304,6 @@ class CarPlayBridge {
   Future<void> publish({
     required RideSession? session,
     required List<RiderLocation> riderLocations,
-    required List<RiderRouteAlert> routeAlerts,
     required List<HazardReport> activeHazards,
     ImportedRoute? route,
     String? routeName,
@@ -359,9 +357,6 @@ class CarPlayBridge {
     _lastPublishedAt = now;
     _publishedRideStartKey = rideStartKey;
     _publishedSurfaceKey = surfaceKey;
-    final alertsByRider = {
-      for (final alert in routeAlerts) alert.riderId: alert,
-    };
     final snapshot = {
       'routeId': route?.id,
       'routeName': routeName,
@@ -460,13 +455,12 @@ class CarPlayBridge {
             'riderSymbol': location.riderSymbol.storageValue,
             'motorcycleStyle': location.motorcycleStyle.name,
             'riderColor': location.riderColor.name,
-            'needsAttention': _needsAttention(location, alertsByRider),
             'latitude': location.sample.position.latitude,
             'longitude': location.sample.position.longitude,
             'headingDegrees': location.sample.headingDegrees,
           },
       ],
-      'alert': _topAlertMessage(routeAlerts, activeHazards),
+      'alert': _topHazardMessage(activeHazards),
     };
     try {
       await _channel.invokeMethod('updateSnapshot', snapshot);
@@ -622,36 +616,17 @@ class CarPlayBridge {
         math.atan2(math.sqrt(haversine), math.sqrt(1 - haversine));
   }
 
-  /// The role a head unit shows against one rider.
-  bool _needsAttention(
-    RiderLocation location,
-    Map<String, RiderRouteAlert> alertsByRider,
-  ) {
-    final alert = alertsByRider[location.riderId];
-    return alert != null &&
-        alert.assessment.alertLevel.index >= RouteAlertLevel.urgent.index;
-  }
-
-  Map<String, Object?>? _topAlertMessage(
-    List<RiderRouteAlert> routeAlerts,
-    List<HazardReport> activeHazards,
-  ) {
-    final alert = routeAlerts.isEmpty ? null : routeAlerts.first;
+  /// The one line a head unit shows above the map.
+  ///
+  /// Only hazards reach it now: off-route alerting was deleted with the
+  /// motorcycle domain, and a chase vehicle is never "off route" — it is en
+  /// route to a rendezvous that keeps moving.
+  Map<String, Object?>? _topHazardMessage(List<HazardReport> activeHazards) {
     final hazard = activeHazards.isEmpty ? null : activeHazards.first;
-    if (alert == null && hazard == null) return null;
-    final alertSeverity = alert?.assessment.alertLevel.index ?? -1;
-    final hazardSeverity = hazard == null
-        ? -1
-        : hazard.severity.index + RouteAlertLevel.values.length;
-    if (hazardSeverity > alertSeverity) {
-      return {
-        'message': '${hazard!.type.label}: ${hazard.severity.label}',
-        'severity': hazard.severity.name,
-      };
-    }
+    if (hazard == null) return null;
     return {
-      'message': alert!.assessment.message,
-      'severity': alert.assessment.alertLevel.name,
+      'message': '${hazard.type.label}: ${hazard.severity.label}',
+      'severity': hazard.severity.name,
     };
   }
 }

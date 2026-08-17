@@ -46,8 +46,6 @@ EVENT_TYPES = {
     "riderLocationUpdated",
     "hazardReported",
     "hazardCleared",
-    "routeDeviationChanged",
-    "routeAlertAcknowledged",
     "routeRevisionChunk",
     "routeRevisionPublished",
     "routeCleared",
@@ -986,8 +984,6 @@ class RelayService:
         return {
             "riderLocationUpdated": timedelta(minutes=30),
             "statusMessage": timedelta(hours=2),
-            "routeDeviationChanged": timedelta(hours=2),
-            "routeAlertAcknowledged": timedelta(hours=2),
             "hazardReported": timedelta(hours=24),
             "hazardCleared": timedelta(hours=24),
             # Carries a phone number and medical notes: capped independently

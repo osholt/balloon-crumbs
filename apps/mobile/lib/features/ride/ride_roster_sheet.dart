@@ -171,8 +171,7 @@ class _RideRosterSheetState extends State<RideRosterSheet> {
   bool _matchesFilter(RideParticipant participant) => switch (_filter) {
     _RosterFilter.active => participant.isIncludedInLiveCount,
     _RosterFilter.attention =>
-      participant.state == RideMembershipState.inactive ||
-          participant.attentionLabel != null,
+      participant.state == RideMembershipState.inactive,
     _RosterFilter.left => participant.hasLeft,
     _RosterFilter.all => true,
   };
@@ -181,12 +180,8 @@ class _RideRosterSheetState extends State<RideRosterSheet> {
     // Riders still in the ride come first; a departed record is history, and it
     // is kept rather than promoted.
     if (left.hasLeft != right.hasLeft) return left.hasLeft ? 1 : -1;
-    final leftAttention =
-        left.state == RideMembershipState.inactive ||
-        left.attentionLabel != null;
-    final rightAttention =
-        right.state == RideMembershipState.inactive ||
-        right.attentionLabel != null;
+    final leftAttention = left.state == RideMembershipState.inactive;
+    final rightAttention = right.state == RideMembershipState.inactive;
     if (leftAttention != rightAttention) return leftAttention ? -1 : 1;
     if (left.isLocal != right.isLocal) return left.isLocal ? -1 : 1;
     return left.displayName.compareTo(right.displayName);
@@ -315,7 +310,6 @@ class _ParticipantTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final role = _roleLabel(participant.role);
     final lastSeen = _lastSeenLabel(participant.lastSeenAt, now);
-    final attention = participant.attentionLabel;
     // A departed rider's record is only useful if it says where they were last
     // known to be, so an absent position is stated rather than left blank.
     final lastKnownPosition = participant.hasLeft
@@ -332,7 +326,6 @@ class _ParticipantTile extends StatelessWidget {
       participant.transportLabel,
       ?rejoin,
       ?lastKnownPosition,
-      ?attention,
       if (peerAppIsOlder) 'app is older',
     ].join(', ');
     return Semantics(
@@ -344,10 +337,9 @@ class _ParticipantTile extends StatelessWidget {
           style: participant.motorcycleStyle,
           symbol: participant.riderSymbol,
           displayName: participant.displayName,
-          // Identity colour belongs to the rider, not the role. Lead/TEC and
-          // attention remain explicit in text, semantics and status treatment
-          // without making the same person change colour between roster and
-          // map (#250).
+          // Identity colour belongs to the rider, not the role. Role and state
+          // remain explicit in text, semantics and status treatment without
+          // making the same person change colour between roster and map (#250).
           badgeColor: participant.riderColor.color,
           size: 42,
         ),
@@ -372,14 +364,8 @@ class _ParticipantTile extends StatelessWidget {
               'Last seen $lastSeen · ${participant.transportLabel}',
               ?rejoin,
               ?lastKnownPosition,
-              ?attention,
             ].join('\n'),
-            style: TextStyle(
-              color: attention == null
-                  ? const Color(0xFFA6B0BD)
-                  : const Color(0xFFFFC857),
-              height: 1.35,
-            ),
+            style: const TextStyle(color: Color(0xFFA6B0BD), height: 1.35),
           ),
         ),
       ),

@@ -39,7 +39,6 @@ import '../../services/ride_completion_detector.dart';
 import '../../services/gpx_import_source.dart';
 import '../../services/group_pip_bridge.dart';
 import '../../services/imported_track_matcher.dart';
-import '../../services/leader_ride_status.dart';
 import '../../services/map_geojson.dart';
 import '../../services/map_style_repository.dart';
 import '../../services/maplibre_offline_manager.dart';
@@ -171,7 +170,6 @@ class RideMapFeature extends StatefulWidget {
     this.navigationPosition,
     this.overlayMarkers,
     this.riderTrails,
-    this.leaderStatus,
     this.groupRiderCount,
     this.onOpenRoster,
     this.enforcementAlert,
@@ -231,7 +229,6 @@ class RideMapFeature extends StatefulWidget {
     ValueListenable<MapNavigationPosition?>? navigationPosition,
     ValueListenable<List<MapOverlayMarker>>? overlayMarkers,
     ValueListenable<List<MapOverlayTrace>>? riderTrails,
-    ValueListenable<LeaderRideStatus?>? leaderStatus,
     int? groupRiderCount,
     VoidCallback? onOpenRoster,
     ValueListenable<EnforcementAlert?>? enforcementAlert,
@@ -287,7 +284,6 @@ class RideMapFeature extends StatefulWidget {
     navigationPosition: navigationPosition,
     overlayMarkers: overlayMarkers,
     riderTrails: riderTrails,
-    leaderStatus: leaderStatus,
     groupRiderCount: groupRiderCount,
     onOpenRoster: onOpenRoster,
     enforcementAlert: enforcementAlert,
@@ -344,7 +340,6 @@ class RideMapFeature extends StatefulWidget {
   final ValueListenable<MapNavigationPosition?>? navigationPosition;
   final ValueListenable<List<MapOverlayMarker>>? overlayMarkers;
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
-  final ValueListenable<LeaderRideStatus?>? leaderStatus;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
@@ -540,7 +535,6 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         navigationPosition: widget.navigationPosition,
         overlayMarkers: widget.overlayMarkers,
         riderTrails: widget.riderTrails,
-        leaderStatus: widget.leaderStatus,
         groupRiderCount: widget.groupRiderCount,
         onOpenRoster: widget.onOpenRoster,
         enforcementAlert: widget.enforcementAlert,
@@ -623,7 +617,6 @@ class RideMapScreen extends StatefulWidget {
     this.navigationPosition,
     this.overlayMarkers,
     this.riderTrails,
-    this.leaderStatus,
     this.groupRiderCount,
     this.onOpenRoster,
     this.enforcementAlert,
@@ -703,7 +696,6 @@ class RideMapScreen extends StatefulWidget {
   final ValueListenable<MapNavigationPosition?>? navigationPosition;
   final ValueListenable<List<MapOverlayMarker>>? overlayMarkers;
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
-  final ValueListenable<LeaderRideStatus?>? leaderStatus;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
@@ -1119,7 +1111,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     widget.navigationPosition?.addListener(_onPositionChanged);
     widget.overlayMarkers?.addListener(_onOverlayDataChanged);
     widget.riderTrails?.addListener(_onOverlayDataChanged);
-    widget.leaderStatus?.addListener(_onGroupPipDataChanged);
     _connectorProgressGeometry = _connectorProgressTracker.update(
       _connectorRoute,
       _effectivePosition,
@@ -1157,11 +1148,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     if (oldWidget.riderTrails != widget.riderTrails) {
       oldWidget.riderTrails?.removeListener(_onOverlayDataChanged);
       widget.riderTrails?.addListener(_onOverlayDataChanged);
-    }
-    if (oldWidget.leaderStatus != widget.leaderStatus) {
-      oldWidget.leaderStatus?.removeListener(_onGroupPipDataChanged);
-      widget.leaderStatus?.addListener(_onGroupPipDataChanged);
-      _onGroupPipDataChanged();
     }
     if (oldWidget.speedLimitDisplay != widget.speedLimitDisplay) {
       if (_ownsSpeedLimitDisplay) _speedLimitDisplay.dispose();
@@ -1207,7 +1193,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     widget.navigationPosition?.removeListener(_onPositionChanged);
     widget.overlayMarkers?.removeListener(_onOverlayDataChanged);
     widget.riderTrails?.removeListener(_onOverlayDataChanged);
-    widget.leaderStatus?.removeListener(_onGroupPipDataChanged);
     _mapLibreController?.onFeatureTapped.remove(_onMapLibreFeatureTapped);
     _mapLibreController?.removeListener(_scheduleCameraFramingRefresh);
     _mapController.dispose();
@@ -1682,7 +1667,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     final compactStatus = landscape || hideChrome;
 
     Widget compose(
-      LeaderRideStatus? leaderStatus,
       List<MapOverlayMarker> overlays,
       List<RideQuickMessageAlert> quickMessages,
     ) {
@@ -1697,19 +1681,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
         // A paused ride is a ride-lifecycle state, not a route state (#124).
         if (widget.ridePaused) const _RidePausedBanner(),
         if (widget.rideHasNoLeader) const _NoLeaderBanner(),
-        if (leaderStatus != null && leaderStatus.offCourseAlerts.isNotEmpty)
-          _OffCourseBanner(
-            alerts: leaderStatus.offCourseAlerts,
-            compact: compactStatus,
-            distanceUnit: widget.distanceUnit,
-          ),
         // Last in the urgent run, so it is the urgent surface nearest the
         // rider's gaze and the targets their hand is already going to (#104's
         // ordering). It is also the one urgent surface carrying a target of its
         // own, and at the maximum overlay count in landscape - where #139
         // recorded the rail already overflowing the top of a 390 px screen -
-        // being last means the paused banner and the off-course card give way
-        // before the alert does.
+        // being last means the paused banner gives way before the alert does.
         //
         // It stays until acknowledged, so a rider who glances away does not lose
         // it: the persistence the transient interrupt cannot provide.
@@ -2290,34 +2267,23 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
     }
 
-    Widget withQuickMessages(
-      LeaderRideStatus? leaderStatus,
-      List<MapOverlayMarker> overlays,
-    ) => widget.quickMessageAlerts == null
-        ? compose(leaderStatus, overlays, const [])
+    Widget withQuickMessages(List<MapOverlayMarker> overlays) =>
+        widget.quickMessageAlerts == null
+        ? compose(overlays, const [])
         : ValueListenableBuilder<List<RideQuickMessageAlert>>(
             valueListenable: widget.quickMessageAlerts!,
             builder: (context, quickMessages, _) =>
-                compose(leaderStatus, overlays, quickMessages),
+                compose(overlays, quickMessages),
           );
 
-    Widget withOverlays(LeaderRideStatus? leaderStatus) =>
-        widget.overlayMarkers == null
-        ? withQuickMessages(leaderStatus, const [])
+    // The rider overlays only reach the tree through their own listenable:
+    // rebuilding the parent platform map on every rider update resizes the
+    // native view and was a source of visible flashing.
+    return widget.overlayMarkers == null
+        ? withQuickMessages(const [])
         : ValueListenableBuilder<List<MapOverlayMarker>>(
             valueListenable: widget.overlayMarkers!,
-            builder: (context, overlays, _) =>
-                withQuickMessages(leaderStatus, overlays),
-          );
-
-    // The leader status and rider overlays only reach the tree through their
-    // own listenables: rebuilding the parent platform map on every rider update
-    // resizes the native view and was a source of visible flashing.
-    return widget.leaderStatus == null
-        ? withOverlays(null)
-        : ValueListenableBuilder<LeaderRideStatus?>(
-            valueListenable: widget.leaderStatus!,
-            builder: (context, status, _) => withOverlays(status),
+            builder: (context, overlays, _) => withQuickMessages(overlays),
           );
   }
 
@@ -3277,10 +3243,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     unawaited(_publishGroupPipSnapshot());
   }
 
-  void _onGroupPipDataChanged() {
-    unawaited(_publishGroupPipSnapshot());
-  }
-
   void _onFlutterMapEvent(MapEvent event) {
     if (event.source == MapEventSource.nonRotatedSizeChange) return;
     if ((event.camera.rotation - _mapBearing.value).abs() >= 0.25) {
@@ -3909,9 +3871,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
         ),
         enableInteraction: false,
       );
-      // An off-route trail belongs on top of the plan: it is the deviation from
-      // it.
-      await _addTrailLayers(controller, RiderTrailKind.offRoute);
       // The route-start connector (#133) goes above everything else: it is the
       // one line the rider is being asked to follow right now.
       await _addTrailLayers(controller, RiderTrailKind.routeStartConnector);
@@ -4308,7 +4267,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     // direction arrows are the last thing the budget may drop.
     RiderTrailKind.routeStartConnector => 0,
     RiderTrailKind.leader => 1,
-    RiderTrailKind.offRoute => 2,
     RiderTrailKind.rider => 3,
   };
 
@@ -5524,14 +5482,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
   GroupPipSnapshot _groupPipSnapshot() {
     final overlays = widget.overlayMarkers?.value ?? const <MapOverlayMarker>[];
     final currentPosition = _effectivePosition;
-    final leaderStatus = widget.leaderStatus?.value;
-    final offCourseCount = leaderStatus?.offCourseAlerts.length ?? 0;
     String? status;
-    if (offCourseCount > 0) {
-      status =
-          '$offCourseCount rider${offCourseCount == 1 ? '' : 's'} '
-          'need attention';
-    } else if (widget.groupRiderCount case final count?) {
+    if (widget.groupRiderCount case final count?) {
       status = '$count rider${count == 1 ? '' : 's'}';
     }
     return GroupPipSnapshot(
@@ -5558,9 +5510,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
           ),
       ],
       status: status,
-      alert:
-          offCourseCount > 0 ||
-          overlays.any((marker) => marker.motorcycleStyle == null),
+      // A hazard overlay is the only thing left that raises the mini-map's
+      // alert state: off-course alerting went with the motorcycle domain.
+      alert: overlays.any((marker) => marker.motorcycleStyle == null),
     );
   }
 
@@ -9224,67 +9176,6 @@ class _QuickMessageInterruptOverlay extends StatelessWidget {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OffCourseBanner extends StatelessWidget {
-  const _OffCourseBanner({
-    required this.alerts,
-    required this.compact,
-    required this.distanceUnit,
-  });
-
-  final List<LeaderOffCourseAlert> alerts;
-  final bool compact;
-  final DistanceUnit distanceUnit;
-
-  @override
-  Widget build(BuildContext context) {
-    final first = alerts.first;
-    final distance = first.distanceFromRouteMeters;
-    final message = alerts.length == 1
-        ? '${first.displayName} is clearly off course'
-        : '${alerts.length} riders are clearly off course';
-    return Card(
-      key: const Key('leader-off-course-alert'),
-      // Darker than the #E2445C it replaces, which left its own white text at
-      // 4.03:1 - short of WCAG AA for body text, on the most urgent status
-      // surface on the map. #C42741 takes that to 5.65:1 without touching the
-      // hue, so the banner still reads as the same alert (#133).
-      color: const Color(0xFFC42741),
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 10 : 14,
-          vertical: compact ? 6 : 11,
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.warning_rounded, color: Colors.white),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    message,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  if (alerts.length == 1 && distance != null)
-                    Text(
-                      '${MeasurementFormatter(distanceUnit).distance(distance)} from the planned route',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

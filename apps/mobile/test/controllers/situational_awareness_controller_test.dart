@@ -7,9 +7,7 @@ import 'package:balloon_crumbs/domain/ride_event.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/domain/rider_location.dart';
-import 'package:balloon_crumbs/domain/route_alert.dart';
 import 'package:balloon_crumbs/services/external_hazard_provider.dart';
-import 'package:balloon_crumbs/services/route_deviation_detector.dart';
 import 'package:balloon_crumbs/services/situation_event_factory.dart';
 
 void main() {
@@ -32,26 +30,15 @@ void main() {
 
   tearDown(() => controller.dispose());
 
-  test('location and route assessment are persisted as ride events', () async {
+  test('a location is persisted as a ride event', () async {
     await controller.recordLocalLocation(_sample(latitude: 51.002, at: now));
 
     expect(controller.riderLocations, hasLength(1));
-    expect(
-      controller.routeAlerts.single.assessment.state,
-      RouteTrackingState.offRoute,
-    );
-    expect(
-      controller.routeAlerts.single.assessment.audience,
-      RouteAlertAudience.coordinators,
-    );
 
     final events = await store.eventsForRide(_session.rideId);
     expect(
       events.map((event) => event.type),
-      containsAll([
-        RideEventType.riderLocationUpdated,
-        RideEventType.routeDeviationChanged,
-      ]),
+      contains(RideEventType.riderLocationUpdated),
     );
   });
 
@@ -68,7 +55,6 @@ void main() {
         ],
         clock: () => now,
         idFactory: () => 'projected-${nextId++}',
-        routeConfig: const RouteDeviationConfig(samplesToConfirmOffRoute: 1),
         onEventStored: stored.add,
       );
       addTearDown(projecting.dispose);
@@ -78,10 +64,7 @@ void main() {
 
       expect(
         stored.map((event) => event.type),
-        containsAll([
-          RideEventType.riderLocationUpdated,
-          RideEventType.routeDeviationChanged,
-        ]),
+        contains(RideEventType.riderLocationUpdated),
       );
     },
   );
@@ -123,7 +106,7 @@ void main() {
     await longRide.initialize(restoredEvents: events);
 
     // This test previously asserted the opposite - that the trail was truncated
-    // to LeaderTrackExemption.defaultRecentPointLimit (600). That bound cost a
+    // to a 600-point recent-track limit. That bound cost a
     // tester the tail of a 6 h 4 m, 112 mile ride: at these rates 600 points is
     // the last 40 minutes, and everything earlier was deleted from memory, so it
     // could never be drawn, exported or recapped again.
@@ -315,14 +298,13 @@ void main() {
     expect(await store.eventsForRide(_session.rideId), hasLength(2));
   });
 
-  test('event replay restores active hazards and acknowledgements', () async {
+  test('event replay restores active hazards', () async {
     final hazard = await controller.reportHazard(
       type: HazardType.roadworks,
       severity: HazardSeverity.caution,
       position: const GeoPoint(latitude: 51, longitude: -1),
     );
     await controller.recordLocalLocation(_sample(latitude: 51.002, at: now));
-    await controller.acknowledgeAlert(_session.localRiderId);
 
     final restored = _controller(
       store: store,
@@ -332,7 +314,6 @@ void main() {
     await restored.initialize();
 
     expect(restored.activeHazards.single.id, hazard?.id);
-    expect(restored.alertFor(_session.localRiderId)?.acknowledged, isTrue);
     restored.dispose();
   });
 
@@ -384,231 +365,6 @@ void main() {
 
     expect(controller.localLocation?.role, RideRole.rider);
   });
-
-  test('refreshing staleness escalates a rider who stops reporting', () async {
-    await controller.recordLocalLocation(_sample(latitude: 51, at: now));
-    expect(
-      controller.alertFor(_session.localRiderId)?.assessment.state,
-      RouteTrackingState.onRoute,
-    );
-
-    now = now.add(const Duration(seconds: 91));
-    await controller.refreshStaleness();
-
-    final assessment = controller.alertFor(_session.localRiderId)?.assessment;
-    expect(assessment?.state, RouteTrackingState.gpsStale);
-    expect(assessment?.alertLevel, RouteAlertLevel.urgent);
-    expect(
-      (await store.eventsForRide(_session.rideId)).last.type,
-      RideEventType.routeDeviationChanged,
-    );
-  });
-
-  // This test previously asserted the opposite: that a leader is *never*
-  // flagged off route once their own trail exists. That was wrong, and it is why
-  // #102's rerouting never fired for a leader in the field. The leader's own
-  // trail was included in the segments the leader was compared against, and a
-  // leader is always at the end of their own trail, so the geometry answered
-  // "on route" from anywhere - Kingswood to Chippenham, 27 July 2026:
-  //
-  //   "There was no rerouting navigation when I went off course."
-  //
-  // A leader who leaves the plan has left the plan. Followers are still judged
-  // against where the leader actually went - the test below this one - because
-  // that is what the leader-follow exemption is for. The leader is judged
-  // against the plan, because nothing else can tell them they have left it.
-  test('the leader is flagged off-route against the planned route', () async {
-    await controller.recordLocalLocation(_sample(latitude: 51, at: now));
-    expect(
-      controller.alertFor(_session.localRiderId)?.assessment.state,
-      RouteTrackingState.onRoute,
-    );
-
-    now = now.add(const Duration(seconds: 5));
-    // The leader detours far from the planned route - e.g. a road closure.
-    await controller.recordLocalLocation(_sample(latitude: 52, at: now));
-
-    expect(
-      controller.alertFor(_session.localRiderId)?.assessment.state,
-      RouteTrackingState.offRoute,
-    );
-    expect(controller.leaderTrail, hasLength(2));
-  });
-
-  test("a follower on the leader's detour is not flagged off-route", () async {
-    await controller.recordLocalLocation(_sample(latitude: 51, at: now));
-    now = now.add(const Duration(seconds: 5));
-    await controller.recordLocalLocation(_sample(latitude: 52, at: now));
-
-    // A follower who took the same detour is judged against where the
-    // leader actually went, not the GPX the leader has since abandoned.
-    await controller.ingestRemoteEvent(
-      _remoteLocationEvent(
-        riderId: 'follower',
-        role: RideRole.rider,
-        latitude: 52,
-        now: now,
-      ),
-    );
-
-    expect(
-      controller.alertFor('follower')?.assessment.state,
-      RouteTrackingState.onRoute,
-    );
-  });
-
-  test(
-    'a follower on the leader\'s detour emits no off-course deviation event',
-    () async {
-      // This device is a follower, not the leader, so the write-time exemption
-      // is the only thing standing between it and a relayed off-route alert
-      // about itself. Nothing may be appended that tells the rest of the group
-      // this rider is lost.
-      final follower = SituationalAwarenessController(
-        store,
-        _session.copyWith(role: RideRole.rider),
-        route: const [
-          GeoPoint(latitude: 51, longitude: -1),
-          GeoPoint(latitude: 51, longitude: -0.99),
-        ],
-        clock: () => now,
-        idFactory: () => 'follower-${nextId++}',
-        routeConfig: const RouteDeviationConfig(samplesToConfirmOffRoute: 1),
-      );
-      addTearDown(follower.dispose);
-      await follower.initialize();
-
-      // The leader abandons the GPX and rides a degree north.
-      await follower.ingestRemoteEvent(
-        _remoteLocationEvent(
-          riderId: 'leader',
-          role: RideRole.lead,
-          latitude: 51,
-          now: now,
-        ),
-      );
-      now = now.add(const Duration(seconds: 5));
-      await follower.ingestRemoteEvent(
-        _remoteLocationEvent(
-          riderId: 'leader',
-          role: RideRole.lead,
-          latitude: 52,
-          now: now,
-        ),
-      );
-
-      // This rider follows them there.
-      now = now.add(const Duration(seconds: 5));
-      await follower.recordLocalLocation(_sample(latitude: 52, at: now));
-
-      expect(follower.isFollowingLeaderTrack(_session.localRiderId), isTrue);
-      expect(
-        follower.alertFor(_session.localRiderId)?.assessment.state,
-        RouteTrackingState.onRoute,
-      );
-      final deviations = (await store.eventsForRide(_session.rideId))
-          .where((event) => event.type == RideEventType.routeDeviationChanged)
-          .map(
-            (event) => RiderRouteAlert.fromJson(
-              Map<String, Object?>.from(event.payload['alert']! as Map),
-            ),
-          );
-      expect(
-        deviations.map((alert) => alert.assessment.state),
-        isNot(contains(RouteTrackingState.offRoute)),
-      );
-    },
-  );
-
-  test("another device's off-course alert is ignored for a rider following the "
-      'leader', () async {
-    await controller.recordLocalLocation(_sample(latitude: 51, at: now));
-    now = now.add(const Duration(seconds: 5));
-    // The leader abandons the GPX.
-    await controller.recordLocalLocation(_sample(latitude: 52, at: now));
-    await controller.ingestRemoteEvent(
-      _remoteLocationEvent(
-        riderId: 'follower',
-        role: RideRole.rider,
-        latitude: 52,
-        now: now,
-      ),
-    );
-    expect(controller.isFollowingLeaderTrack('follower'), isTrue);
-
-    // A device that had not yet seen the leader leave the GPX relays an
-    // off-route alert for that follower. It must not surface anywhere.
-    now = now.add(const Duration(seconds: 5));
-    await controller.ingestRemoteEvent(
-      _remoteDeviationEvent(riderId: 'follower', now: now),
-    );
-
-    expect(
-      controller.alertFor('follower')?.assessment.state,
-      RouteTrackingState.onRoute,
-    );
-    expect(
-      controller.alertFor('follower')?.assessment.alertLevel,
-      RouteAlertLevel.none,
-    );
-    expect(
-      controller.routeAlerts.map((alert) => alert.riderId),
-      isNot(contains('follower')),
-    );
-  });
-
-  test('a relayed off-course alert still surfaces for a rider who is not '
-      'following the leader', () async {
-    await controller.recordLocalLocation(_sample(latitude: 51, at: now));
-    now = now.add(const Duration(seconds: 5));
-    await controller.recordLocalLocation(_sample(latitude: 51, at: now));
-    await controller.ingestRemoteEvent(
-      _remoteLocationEvent(
-        riderId: 'stray',
-        role: RideRole.rider,
-        latitude: 53,
-        now: now,
-      ),
-    );
-    expect(controller.isFollowingLeaderTrack('stray'), isFalse);
-
-    now = now.add(const Duration(seconds: 5));
-    await controller.ingestRemoteEvent(
-      _remoteDeviationEvent(riderId: 'stray', now: now),
-    );
-
-    expect(
-      controller.alertFor('stray')?.assessment.state,
-      RouteTrackingState.offRoute,
-    );
-    expect(
-      controller.routeAlerts.map((alert) => alert.riderId),
-      contains('stray'),
-    );
-  });
-
-  test(
-    'a follower who genuinely separates from the leader is still flagged',
-    () async {
-      await controller.recordLocalLocation(_sample(latitude: 51, at: now));
-      now = now.add(const Duration(seconds: 5));
-      await controller.recordLocalLocation(_sample(latitude: 51, at: now));
-
-      await controller.ingestRemoteEvent(
-        _remoteLocationEvent(
-          riderId: 'stray',
-          role: RideRole.rider,
-          latitude: 53,
-          now: now,
-        ),
-      );
-
-      expect(
-        controller.alertFor('stray')?.assessment.state,
-        RouteTrackingState.offRoute,
-      );
-    },
-  );
 
   test(
     'refreshing the same provider incident does not invent confirmations',
@@ -707,7 +463,6 @@ SituationalAwarenessController _controller({
   externalProviders: const [WazeReadHazardProvider()],
   clock: clock,
   idFactory: idFactory,
-  routeConfig: const RouteDeviationConfig(samplesToConfirmOffRoute: 1),
 );
 
 final _session = RideSession(
@@ -749,35 +504,5 @@ RideEvent _remoteLocationEvent({
   return factory.create(
     type: RideEventType.riderLocationUpdated,
     payload: {'location': location.toJson()},
-  );
-}
-
-/// A deviation alert as another device would have relayed it: that device
-/// compared the rider against the planned GPX only.
-RideEvent _remoteDeviationEvent({
-  required String riderId,
-  required DateTime now,
-}) {
-  final factory = SituationEventFactory(
-    session: _session,
-    clock: () => now,
-    idFactory: () => '$riderId-deviation',
-  );
-  final alert = RiderRouteAlert(
-    riderId: riderId,
-    displayName: riderId,
-    assessment: RouteDeviationAssessment(
-      state: RouteTrackingState.offRoute,
-      alertLevel: RouteAlertLevel.urgent,
-      audience: RouteAlertAudience.coordinators,
-      evaluatedAt: now,
-      message: 'Rider is confirmed off route.',
-      distanceFromRouteMeters: 111000,
-      offRouteSince: now,
-    ),
-  );
-  return factory.create(
-    type: RideEventType.routeDeviationChanged,
-    payload: {'alert': alert.toJson()},
   );
 }

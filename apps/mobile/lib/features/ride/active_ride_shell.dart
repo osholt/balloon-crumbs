@@ -39,7 +39,6 @@ import '../../domain/ride_role.dart';
 import '../../domain/ride_session.dart';
 import '../../domain/rider_location.dart';
 import '../../domain/rider_color.dart';
-import '../../domain/route_alert.dart';
 import '../../domain/route_store.dart';
 import '../../internet/internet_relay_client.dart';
 import '../../internet/internet_relay_worker.dart';
@@ -63,7 +62,6 @@ import '../../services/external_hazard_provider.dart';
 import '../../services/fixed_speed_camera_catalogue.dart';
 import '../../services/fixed_speed_camera_provider.dart';
 import '../../services/gpx_import_source.dart';
-import '../../services/leader_ride_status.dart';
 import '../../services/measurement_formatter.dart';
 import '../../services/native_push_token_source.dart';
 import '../../services/position_report_policy.dart';
@@ -972,7 +970,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   final _carPlayRouteProgressTracker = RouteProgressTracker();
   final _carPlayJourneyProgressTracker = RouteJourneyProgressTracker();
   final _trailSimplifier = const TrailDisplaySimplifier();
-  final _leaderStatus = ValueNotifier<LeaderRideStatus?>(null);
   final _enforcementAlert = ValueNotifier<EnforcementAlert?>(null);
 
   /// The arrival being offered to the rider, or null when there is nothing to
@@ -1804,7 +1801,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       awarenessEventStore,
       session,
       route: routeSegments.expand((segment) => segment).toList(growable: false),
-      routeSegments: routeSegments,
       externalProviders: externalProviders,
       rideStarted: widget.rideController.rideStarted,
       rideStartedAt: widget.rideController.rideStartedAt,
@@ -2193,11 +2189,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                       ),
                     ))
           .map((location) {
-            final alert = awareness.alertFor(location.riderId);
-            final needsAttention =
-                alert != null &&
-                alert.assessment.alertLevel.index >=
-                    RouteAlertLevel.urgent.index;
             final isLead = location.role == RideRole.lead;
             // A position past its freshness threshold is demoted explicitly in
             // the label. The identity fill remains stable across surfaces.
@@ -2217,8 +2208,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             final raised = quickMessagesBySender[location.riderId];
             final roleSuffix = raised != null
                 ? raised.label
-                : needsAttention
-                ? 'check route'
                 : isLead
                 ? 'Lead'
                 : null;
@@ -2228,8 +2217,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               ?ageSuffix,
             ].join(' · ');
             // The roster, both maps and trails share this one identity colour.
-            // Role and alerts are already named in [label]; changing the fill
-            // made one rider look like different people across surfaces (#250).
+            // Role is already named in [label]; changing the fill made one
+            // rider look like different people across surfaces (#250).
             final baseColor = location.riderColor.color;
             return MapOverlayMarker(
               id: 'rider-${location.riderId}',
@@ -2260,25 +2249,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       current: _enforcementAlert.value,
     );
     _speakEnforcementWarning(previousEnforcementAlert, _enforcementAlert.value);
-    if (updateDerivedState && widget.rideController.rideStarted) {
-      final session = widget.rideController.session;
-      _leaderStatus.value = session == null
-          ? null
-          : const LeaderRideStatusCalculator().calculate(
-              localRole: session.role,
-              localRiderId: session.localRiderId,
-              riderLocations: visibleRiderLocations,
-              routeAlerts: awareness.routeAlerts
-                  .where((alert) => activeRiderIds.contains(alert.riderId))
-                  .toList(growable: false),
-              route: awareness.route,
-              // Issue #102: a rider inside the leader's own track corridor is
-              // following the leader, not off course, and must not be counted.
-              leaderTrail: awareness.leaderTrail,
-            );
-    } else if (!widget.rideController.rideStarted) {
-      _leaderStatus.value = null;
-    }
     _publishCarPlaySnapshot(
       awareness: awareness,
       visibleRiderLocations: visibleRiderLocations,
@@ -2288,7 +2258,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   /// Projects the ride onto CarPlay, including the back-marker.
   ///
-  /// The TEC is resolved through [LeaderRideStatusCalculator.resolveTecTarget]
+  /// The TEC is resolved through its own reducer
   /// rather than read off the rider list, for the same reason every other
   /// surface does: "nobody is TEC", "registered but never reported" and "last
   /// fix too old to trust" are three different answers and a car screen must
@@ -2352,9 +2322,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       bridge.publish(
         session: session,
         riderLocations: visibleRiderLocations,
-        routeAlerts: awareness.routeAlerts
-            .where((alert) => activeRiderIds.contains(alert.riderId))
-            .toList(growable: false),
         activeHazards: awareness.activeHazards,
         route: navigationRoute,
         routeName: navigationRoute?.name,
@@ -2614,7 +2581,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             displayName: rider.displayName,
             kind: RiderTrailRecorder.kindFor(
               isLeader: rider.role == RideRole.lead,
-              isOffRoute: rider.isOffRoute,
             ),
             // Ride Lab maintains its own ephemeral history; the same per-rider
             // cap is applied here so the simulator and a real ride agree.
@@ -2638,9 +2604,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       _publishRiderTrails(const []);
       return;
     }
-    final alerts = {
-      for (final alert in awareness.routeAlerts) alert.riderId: alert,
-    };
     _publishRiderTrails(
       _trailRecorder.update([
         for (final location in awareness.riderLocations)
@@ -2653,9 +2616,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               recordedAt: location.sample.recordedAt,
             ),
             isLeader: location.role == RideRole.lead,
-            isOffRoute: _isOffRouteState(
-              alerts[location.riderId]?.assessment.state,
-            ),
             isEligible:
                 widget.rideController
                     .participantFor(location.riderId)
@@ -2701,7 +2661,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             points: points,
             label: switch (trail.kind) {
               RiderTrailKind.leader => '${trail.displayName} leader trail',
-              RiderTrailKind.offRoute => '${trail.displayName} off-route trace',
               RiderTrailKind.rider => '${trail.displayName} trail',
               // RiderTrailRecorder only records where riders have been, so it
               // never produces a route-start connector; the map composes that
@@ -2736,11 +2695,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       kind: trace.kind,
     );
   }
-
-  static bool _isOffRouteState(RouteTrackingState? state) =>
-      state == RouteTrackingState.suspectedOffRoute ||
-      state == RouteTrackingState.offRoute ||
-      state == RouteTrackingState.recovering;
 
   /// One reported hazard as a map marker (#135).
   ///
@@ -2813,9 +2767,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   static bool _isSituationalEvent(RideEventType type) => switch (type) {
     RideEventType.riderLocationUpdated ||
     RideEventType.hazardReported ||
-    RideEventType.hazardCleared ||
-    RideEventType.routeDeviationChanged ||
-    RideEventType.routeAlertAcknowledged => true,
+    RideEventType.hazardCleared => true,
     _ => false,
   };
 
@@ -3308,7 +3260,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       navigationPosition: _mapNavigationPosition,
       overlayMarkers: _mapOverlays,
       riderTrails: _riderTrails,
-      leaderStatus: _leaderStatus,
       groupRiderCount: widget.rideController.liveParticipants.length,
       onOpenRoster: _openRoster,
       // Deliberately not `onOpenRideMenu`. The control that reaches the other
@@ -3485,19 +3436,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// Off route, turn-by-turn names junctions that are not coming, so it drops to
   /// alerts only — but a rider who chose silence stays silent, because an
   /// explicit choice outranks an automatic one (#415).
-  SpokenAudioMode get _spokenAudioMode {
-    final chosen = widget.spokenGuidance?.mode ?? SpokenAudioMode.silent;
-    // Read from the deviation alert rather than a rejoin guidance string: the
-    // string was only ever a proxy for "this rider is off route" (#415), and
-    // rejoin routing is gone.
-    final localRiderId = widget.rideController.session?.localRiderId;
-    final assessment = localRiderId == null
-        ? null
-        : _awarenessController?.alertFor(localRiderId)?.assessment;
-    return _isOffRouteState(assessment?.state)
-        ? spokenAudioModeOffRoute(chosen)
-        : chosen;
-  }
+  SpokenAudioMode get _spokenAudioMode =>
+      widget.spokenGuidance?.mode ?? SpokenAudioMode.silent;
 
   void _onSpokenGuidanceChanged() {
     unawaited(_warmNaturalVoiceIfNeeded());
@@ -4809,7 +4749,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _mapOverlays.dispose();
     _riderTrails.dispose();
     _quickMessageAlerts.dispose();
-    _leaderStatus.dispose();
     _enforcementAlert.dispose();
     _rideCompletionSuggestion.dispose();
     unawaited(_carPlayBridge?.dispose());

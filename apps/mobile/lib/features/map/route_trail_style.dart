@@ -67,7 +67,6 @@ class RouteLineStyle {
 /// | route ahead   | #3DDC84 |      4.11  |        9.54  |    10.27  |
 /// | travelled     | #FF7A1A |      2.81  |        6.52  |     7.02  |
 /// | leader trail  | #D3B8FF |      4.22  |        9.78  |    10.53  |
-/// | off route     | #FF5FD1 |      2.73  |        6.33  |     6.81  |
 /// | connector     | #00E5FF |      4.77  |       11.06  |    11.91  |
 ///
 /// "dark worst" is against the lightest surface of the dark basemap (the
@@ -149,14 +148,6 @@ class RouteTrailStyle {
     casingWidthPixels: 12,
   );
 
-  /// A rider flagged as suspected off route, off route, or recovering.
-  static const offRouteTrail = RouteLineStyle(
-    color: Color(0xFFFF5FD1),
-    widthPixels: 4,
-    casingWidthPixels: 8,
-    dashPixels: [9, 7],
-  );
-
   /// The road route to the start of the planned route (#133), which claimed this
   /// cyan and renders it dashed. Declared here so the palette stays one table and
   /// the widths and dash runs stay distinct from every other line.
@@ -183,7 +174,6 @@ class RouteTrailStyle {
   static RouteLineStyle forTrail(RiderTrailKind kind) => switch (kind) {
     RiderTrailKind.rider => travelled,
     RiderTrailKind.leader => leaderTrail,
-    RiderTrailKind.offRoute => offRouteTrail,
     RiderTrailKind.routeStartConnector => routeStartConnectorLine,
   };
 
@@ -238,7 +228,6 @@ class RouteTrailStyle {
     'route ahead': routeAhead,
     'travelled': travelled,
     'leader trail': leaderTrail,
-    'off route': offRouteTrail,
     'route start connector': routeStartConnectorLine,
   };
 

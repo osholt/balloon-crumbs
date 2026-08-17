@@ -323,67 +323,6 @@ def test_existing_ride_backfills_membership_projection_only_once(
         )
 
 
-def test_nested_off_course_alert_targets_coordinators_and_affected_rider(
-    client,
-    synchronize,
-    make_event,
-) -> None:
-    ride_id = "ride-push-off-course"
-    joined = [
-        make_event(
-            ride_id,
-            f"joined-{rider_id}",
-            device_id=rider_id,
-            event_type="riderJoined",
-            payload={"displayName": rider_id, "role": role},
-        )
-        for rider_id, role in [
-            ("observer", "rider"),
-            ("affected", "rider"),
-            ("lead", "lead"),
-            ("tec", "tailEndCharlie"),
-        ]
-    ]
-    assert synchronize(client, ride_id=ride_id, secret=SECRET, events=joined).status_code == 200
-    for rider_id, role in [
-        ("observer", "rider"),
-        ("affected", "rider"),
-        ("lead", "lead"),
-        ("tec", "tailEndCharlie"),
-    ]:
-        assert _register(client, ride_id, rider_id, role=role).status_code == 200
-    provider = _RecordingProvider()
-    client.app.state.push_dispatcher._providers["fcm"] = provider
-
-    alert = make_event(
-        ride_id,
-        "off-course-alert",
-        device_id="observer",
-        event_type="routeDeviationChanged",
-        payload={
-            "alert": {
-                "riderId": "affected",
-                "displayName": "Affected rider",
-                "assessment": {
-                    "state": "offRoute",
-                    "alertLevel": "urgent",
-                    "audience": "coordinators",
-                    "evaluatedAt": "2026-07-23T12:00:00Z",
-                    "message": "Off route",
-                },
-                "acknowledged": False,
-            }
-        },
-    )
-    assert synchronize(client, ride_id=ride_id, secret=SECRET, events=[alert]).status_code == 200
-
-    assert set(provider.tokens) == {
-        "fcm-token-affected-123456789",
-        "fcm-token-lead-123456789",
-        "fcm-token-tec-123456789",
-    }
-
-
 def test_preferences_filter_noncritical_but_not_critical_safety(
     client,
     synchronize,

@@ -600,7 +600,6 @@ void main() {
         'route ahead': 10.44,
         'travelled': 7.14,
         'leader trail': 10.71,
-        'off route': 6.93,
         'route start connector': 12.11,
       };
 
@@ -685,7 +684,7 @@ void main() {
       final light = worst(RouteTrailStyle.lightBasemapSurfaces.values);
 
       expect(light, closeTo(1.00, 0.01));
-      expect(dark, closeTo(1.50, 0.01));
+      expect(dark, closeTo(1.55, 0.01));
       expect(
         dark,
         greaterThan(light),

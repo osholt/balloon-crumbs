@@ -480,31 +480,6 @@ def classify_push_event(
             )
         return None
 
-    if event_type == "routeDeviationChanged":
-        alert = payload.get("alert")
-        if not isinstance(alert, dict):
-            return None
-        assessment = alert.get("assessment")
-        if not isinstance(assessment, dict):
-            return None
-        level = assessment.get("alertLevel")
-        if level not in {"urgent", "critical"}:
-            return None
-        affected = alert.get("riderId")
-        affected_ids = recipients | ({affected} if isinstance(affected, str) else set())
-        audience = assessment.get("audience")
-        return PushMessage(
-            event_id=event_id,
-            ride_id=ride_id,
-            category="safety",
-            title="Route attention needed",
-            body="A rider may be off course. Open the ride for verified details.",
-            critical=level == "critical",
-            recipient_ids=frozenset(affected_ids),
-            recipient_roles=coordinator_roles,
-            all_members=audience == "allRiders" and level == "critical",
-        )
-
     if event_type == "iceInfoShared":
         return PushMessage(
             event_id=event_id,

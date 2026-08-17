@@ -212,6 +212,27 @@ and its CarPlay card, the Ride Lab marker simulation, `route_rejoin_planner`,
 `rejoin_route_share`, `rejoinRouteShared` and the `rejoin-route-sharing-v1`
 capability on both client and relay.
 
+Deviation detection and off-route alerting followed in a second commit, because
+they are a subsystem of their own rather than a tail of the marker cut:
+`route_deviation_detector`, `route_alert.dart`, `leader_ride_status`,
+`leader_track_exemption`, `routeDeviationChanged` / `routeAlertAcknowledged`,
+the leader's off-course banner, the roster's off-course attention label, the
+CarPlay route-alert channel, the awareness screen's route-status card and
+riders-needing-attention list, `RiderTrailKind.offRoute` and its dashed pink
+line, and the relay's off-course push.
+
+Three things survived that cut too:
+
+- **The roster's Attention filter**, now meaning a rider whose position has gone
+  quiet rather than one off a planned line. That is the half of it a chase crew
+  still needs, and it is the same signal WP7's availability model is about.
+- **The leader trail**, which was an input to the off-course exemption but is
+  also the group's ground truth on the map and in the flight log.
+- **`ride_connectivity_summary`'s 90-second stale threshold**, which used to be
+  tied to the detector's coordinator-stale band. The comment now says so, and
+  says WP7 should hold its availability model against that number rather than
+  inventing another one.
+
 Four things were kept that a naive cut would have taken with it, each because
 the deleted feature was not their only reason to exist:
 
@@ -232,6 +253,13 @@ the deleted feature was not their only reason to exist:
   `originBearingForTravel` / `originBearing*`. Sending the vehicle's heading with
   a routing request (#444) is the router's problem, not rejoin's, and WP7's
   engine needs it.
+
+One deliberate behaviour change worth knowing: `_spokenAudioMode` used to drop
+to alerts-only while off route, because turn-by-turn for a route the rider is not
+on names junctions that are not coming (#415). Nothing computes "off route" any
+more, so the rider's chosen mode simply stands. If WP7's divergence model wants
+to quieten guidance when the crew stops trusting the landing zone, that is a new
+rule with a new input, not this one restored.
 
 Two notes for whoever reads the diff:
 

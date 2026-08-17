@@ -16,7 +16,6 @@ import 'package:balloon_crumbs/domain/imported_route.dart';
 import 'package:balloon_crumbs/domain/quick_message.dart';
 import 'package:balloon_crumbs/domain/recorded_route_store.dart';
 import 'package:balloon_crumbs/domain/route_store.dart';
-import 'package:balloon_crumbs/domain/route_alert.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/features/map/hazard_map_symbol.dart';
 import 'package:balloon_crumbs/features/map/ride_map.dart';
@@ -26,7 +25,6 @@ import 'package:balloon_crumbs/services/enforcement_alert_presentation.dart';
 import 'package:balloon_crumbs/services/ride_completion_detector.dart';
 import 'package:balloon_crumbs/services/gpx_import_source.dart';
 import 'package:balloon_crumbs/services/imported_track_matcher.dart';
-import 'package:balloon_crumbs/services/leader_ride_status.dart';
 import 'package:balloon_crumbs/services/map_style_repository.dart';
 import 'package:balloon_crumbs/services/navigation_camera.dart';
 import 'package:balloon_crumbs/services/offline_tile_cache.dart';
@@ -1751,19 +1749,6 @@ void main() {
       ),
     ]);
     addTearDown(overlays.dispose);
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        offCourseAlerts: [
-          LeaderOffCourseAlert(
-            riderId: 'alex',
-            displayName: 'Alex',
-            level: RouteAlertLevel.urgent,
-            distanceFromRouteMeters: 240,
-          ),
-        ],
-      ),
-    );
-    addTearDown(leaderStatus.dispose);
     final cache = OfflineTileCache(
       rootDirectory: directory,
       configuration: const BasemapConfiguration(),
@@ -1780,7 +1765,6 @@ void main() {
           routeImporter: RouteImporter(source: const _NoFileSource()),
           offlineTileCache: cache,
           overlayMarkers: overlays,
-          leaderStatus: leaderStatus,
           distanceUnit: DistanceUnit.miles,
           onRouteChanged: publishedRoutes.add,
           rideStarted: false,
@@ -1794,8 +1778,6 @@ void main() {
     expect(find.text('Import GPX'), findsOneWidget);
     expect(find.text('ROUTE-ONLY OFFLINE MAP'), findsOneWidget);
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
-    expect(find.textContaining('Alex is clearly off course'), findsOneWidget);
-    expect(find.textContaining('0.1 mi'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Use demo route'));
     await tester.tap(find.text('Use demo route'));
@@ -2353,15 +2335,6 @@ void main() {
       addTearDown(navigation.dispose);
       final traces = ValueNotifier<List<MapOverlayTrace>>([
         const MapOverlayTrace(
-          id: 'trail-alex',
-          label: 'Alex off-route trace',
-          kind: RiderTrailKind.offRoute,
-          points: [
-            GeoPoint(latitude: 53, longitude: -1.01),
-            GeoPoint(latitude: 53.001, longitude: -1.011),
-          ],
-        ),
-        const MapOverlayTrace(
           id: 'trail-blake',
           label: 'Blake leader trail',
           kind: RiderTrailKind.leader,
@@ -2583,22 +2556,12 @@ void main() {
         isNot(contains(RouteTrailStyle.travelled.color)),
         reason: 'completed planned route must not be painted behind the rider',
       );
-      // The leader's trail is the widest line and is drawn under the plan; an
-      // off-route trail is dashed and drawn over it.
+      // The leader's trail is the widest line and is drawn under the plan.
       final leader = lineWithColor(RouteTrailStyle.leaderTrail.color);
       expect(leader.strokeWidth, RouteTrailStyle.leaderTrail.widthPixels);
       expect(
         layer.polylines.indexOf(leader),
         lessThan(layer.polylines.indexOf(ahead)),
-      );
-      final offRoute = lineWithColor(RouteTrailStyle.offRouteTrail.color);
-      expect(
-        offRoute.pattern.segments,
-        RouteTrailStyle.offRouteTrail.dashPixels,
-      );
-      expect(
-        layer.polylines.indexOf(offRoute),
-        greaterThan(layer.polylines.indexOf(ahead)),
       );
 
       await tester.drag(find.byType(FlutterMap), const Offset(80, 0));
@@ -2963,19 +2926,6 @@ void main() {
       ),
     );
     addTearDown(navigation.dispose);
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        offCourseAlerts: [
-          LeaderOffCourseAlert(
-            riderId: 'rider-alex',
-            displayName: 'Alex',
-            level: RouteAlertLevel.urgent,
-            distanceFromRouteMeters: 420,
-          ),
-        ],
-      ),
-    );
-    addTearDown(leaderStatus.dispose);
     final riders = ValueNotifier<List<MapOverlayMarker>>([
       const MapOverlayMarker(
         id: 'rider-alex',
@@ -2998,7 +2948,6 @@ void main() {
     final overlayKeys = <String>[
       'route-progress-panel-position',
       'navigation-guidance-banner',
-      'leader-off-course-alert',
       'group-mini-map',
       'ride-menu-button',
       'emergency-alert-button',
@@ -3071,8 +3020,7 @@ void main() {
         for (final key in const [
           'ride-paused-banner',
           'route-progress-panel-position',
-          'leader-off-course-alert',
-          'group-mini-map',
+              'group-mini-map',
           'ride-menu-button',
           'emergency-alert-button',
           'leave-ride-button',
@@ -3244,7 +3192,6 @@ void main() {
           routeImporter: RouteImporter(source: const _NoFileSource()),
           offlineTileCache: cache,
           navigationPosition: navigation,
-          leaderStatus: leaderStatus,
           overlayMarkers: riders,
           groupRiderCount: 3,
           ridePaused: true,
@@ -4686,19 +4633,6 @@ void main() {
       ),
     );
     addTearDown(navigation.dispose);
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        offCourseAlerts: [
-          LeaderOffCourseAlert(
-            riderId: 'rider-alex',
-            displayName: 'Alex',
-            level: RouteAlertLevel.urgent,
-            distanceFromRouteMeters: 420,
-          ),
-        ],
-      ),
-    );
-    addTearDown(leaderStatus.dispose);
     final alerts = ValueNotifier<List<RideQuickMessageAlert>>(const []);
     addTearDown(alerts.dispose);
 
@@ -4740,7 +4674,6 @@ void main() {
         routeImporter: RouteImporter(source: const _NoFileSource()),
         offlineTileCache: cache,
         navigationPosition: navigation,
-        leaderStatus: leaderStatus,
         ridePaused: true,
         distanceUnit: DistanceUnit.miles,
         quickMessageAlerts: alerts,
@@ -4809,8 +4742,7 @@ void main() {
       );
       // Nothing it shares the band with is covered.
       for (final key in const [
-        'leader-off-course-alert',
-        'navigation-guidance-banner',
+          'navigation-guidance-banner',
         ...actionKeys,
       ]) {
         expect(

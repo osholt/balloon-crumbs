@@ -95,7 +95,6 @@ class RideParticipant {
     this.leftAt,
     this.rejoinedAfterLeavingAt,
     this.lastKnownLocation,
-    this.attentionLabel,
     this.positionFreshness,
     this.knownFromRelayOnly = false,
     this.positionAbsence = RidePositionAbsence.noPositionReported,
@@ -130,7 +129,6 @@ class RideParticipant {
   final RiderColor riderColor;
   final Set<RideTransportEvidence> transportEvidence;
   final bool isLocal;
-  final String? attentionLabel;
 
   /// How fresh this rider's newest position is, or null when live presence was
   /// not evaluated for this roster.
@@ -255,8 +253,6 @@ class RideParticipant {
     RiderColor? riderColor,
     Set<RideTransportEvidence>? transportEvidence,
     bool? isLocal,
-    String? attentionLabel,
-    bool clearAttention = false,
     PresenceFreshness? positionFreshness,
     bool? knownFromRelayOnly,
     RidePositionAbsence? positionAbsence,
@@ -276,9 +272,6 @@ class RideParticipant {
     riderColor: riderColor ?? this.riderColor,
     transportEvidence: transportEvidence ?? this.transportEvidence,
     isLocal: isLocal ?? this.isLocal,
-    attentionLabel: clearAttention
-        ? null
-        : (attentionLabel ?? this.attentionLabel),
     positionFreshness: positionFreshness ?? this.positionFreshness,
     knownFromRelayOnly: knownFromRelayOnly ?? this.knownFromRelayOnly,
     positionAbsence: positionAbsence ?? this.positionAbsence,
@@ -624,34 +617,6 @@ class RideMembershipReducer {
         transportEvidence: const {RideTransportEvidence.internetRelay},
         isLocal: false,
         knownFromRelayOnly: true,
-      );
-    }
-
-    for (final event in ordered) {
-      if (event.type != RideEventType.routeDeviationChanged &&
-          event.type != RideEventType.routeAlertAcknowledged) {
-        continue;
-      }
-      final alert = event.payload['alert'];
-      if (alert is! Map) continue;
-      final riderId = alert['riderId'];
-      final assessment = alert['assessment'];
-      final state = assessment is Map ? assessment['state'] : null;
-      final participant = riderId is String ? participants[riderId] : null;
-      if (participant == null) continue;
-      // A rider who has left is not off course, not being looked for, and not
-      // something the group can act on. Their record says they left; it must not
-      // also keep claiming an alert that stopped applying when they went.
-      if (participant.hasLeft) continue;
-      final label = switch (state) {
-        'offRoute' => 'Off course',
-        'suspectedOffRoute' => 'Route check',
-        'staleGps' => 'GPS stale',
-        _ => null,
-      };
-      participants[riderId as String] = participant.copyWith(
-        attentionLabel: label,
-        clearAttention: label == null,
       );
     }
 

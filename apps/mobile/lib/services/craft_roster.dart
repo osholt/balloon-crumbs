@@ -157,8 +157,6 @@ class CraftRosterReducer {
         case RideEventType.statusMessage:
         case RideEventType.hazardReported:
         case RideEventType.hazardCleared:
-        case RideEventType.routeDeviationChanged:
-        case RideEventType.routeAlertAcknowledged:
         case RideEventType.routeRevisionChunk:
         case RideEventType.routeRevisionPublished:
         case RideEventType.routeCleared:

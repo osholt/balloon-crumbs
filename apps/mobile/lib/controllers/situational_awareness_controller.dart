@@ -8,12 +8,9 @@ import '../domain/ride_event.dart';
 import '../domain/ride_role.dart';
 import '../domain/ride_session.dart';
 import '../domain/rider_location.dart';
-import '../domain/route_alert.dart';
 import '../relay/live_presence.dart';
 import '../services/external_hazard_provider.dart';
 import '../services/hazard_deduplicator.dart';
-import '../services/route_deviation_detector.dart';
-import '../services/leader_track_exemption.dart';
 import '../services/situation_event_factory.dart';
 
 class SituationalAwarenessController extends ChangeNotifier {
@@ -21,7 +18,6 @@ class SituationalAwarenessController extends ChangeNotifier {
     this._eventStore,
     this._session, {
     required List<GeoPoint> route,
-    List<List<GeoPoint>>? routeSegments,
     List<ExternalHazardProvider> externalProviders = const [],
     SituationClock? clock,
     SituationIdFactory? idFactory,
@@ -29,15 +25,9 @@ class SituationalAwarenessController extends ChangeNotifier {
     this.rideStartedAt,
     this.expiryPolicy = const HazardExpiryPolicy(),
     this.deduplicator = const HazardDeduplicator(),
-    this.routeConfig = const RouteDeviationConfig(),
     this.freshnessPolicy = const PresenceFreshnessPolicy(),
     this.onEventStored,
   }) : _route = List.unmodifiable(route),
-       _routeSegments = List.unmodifiable(
-         (routeSegments ?? [route]).map(
-           (segment) => List<GeoPoint>.unmodifiable(segment),
-         ),
-       ),
        _externalProviders = List.unmodifiable(externalProviders),
        _clock = clock ?? DateTime.now,
        _idFactory = idFactory ?? const Uuid().v7 {
@@ -51,7 +41,6 @@ class SituationalAwarenessController extends ChangeNotifier {
   final EventStore _eventStore;
   RideSession _session;
   final List<GeoPoint> _route;
-  final List<List<GeoPoint>> _routeSegments;
   final List<ExternalHazardProvider> _externalProviders;
   final SituationClock _clock;
   final SituationIdFactory _idFactory;
@@ -59,8 +48,6 @@ class SituationalAwarenessController extends ChangeNotifier {
   final DateTime? rideStartedAt;
   final HazardExpiryPolicy expiryPolicy;
   final HazardDeduplicator deduplicator;
-  final RouteDeviationConfig routeConfig;
-
   /// Documented age thresholds shared with the ephemeral presence channels, so
   /// the journal side and the presence side cannot disagree about whether a
   /// position is live, ageing or stale.
@@ -77,9 +64,6 @@ class SituationalAwarenessController extends ChangeNotifier {
   final Map<String, RiderLocation> _locations = {};
   final Map<String, RiderLocationEvidence> _locationEvidence = {};
   final Map<String, HazardReport> _hazards = {};
-  final Map<String, RiderRouteAlert> _alerts = {};
-  final Map<String, RouteDeviationDetector> _detectors = {};
-  final Map<String, bool> _followingLeaderTrack = {};
   final List<({DateTime recordedAt, GeoPoint position})> _leaderTrail = [];
   bool _busy = false;
   bool _refreshingStaleness = false;
@@ -90,9 +74,7 @@ class SituationalAwarenessController extends ChangeNotifier {
   List<GeoPoint> get route => _route;
 
   /// The current ride leader's own recorded path so far - the group's live
-  /// ground truth. Riders are judged against this (as well as the planned
-  /// route, if any) so a leader's deliberate on-route deviation, such as a
-  /// road-closure detour, doesn't read as the group having gone off course.
+  /// ground truth when the planned line stops matching the road.
   List<GeoPoint> get leaderTrail => _leaderTrailPoints;
 
   /// The same durable leader trail with its fix times retained, so map
@@ -136,19 +118,6 @@ class SituationalAwarenessController extends ChangeNotifier {
     return List.unmodifiable(values);
   }
 
-  List<RiderRouteAlert> get routeAlerts {
-    final values = _alerts.values
-        .map(_exemptIfFollowingLeaderTrack)
-        .where((alert) => alert.assessment.alertLevel != RouteAlertLevel.none)
-        .toList();
-    values.sort(
-      (first, second) => second.assessment.alertLevel.index.compareTo(
-        first.assessment.alertLevel.index,
-      ),
-    );
-    return List.unmodifiable(values);
-  }
-
   List<ExternalHazardProvider> get externalProviders => _externalProviders;
 
   RiderLocation? get localLocation => _locations[_session.localRiderId];
@@ -160,16 +129,6 @@ class SituationalAwarenessController extends ChangeNotifier {
 
   RiderLocationEvidence? locationEvidenceFor(String riderId) =>
       _locationEvidence[riderId];
-
-  RiderRouteAlert? alertFor(String riderId) {
-    final alert = _alerts[riderId];
-    return alert == null ? null : _exemptIfFollowingLeaderTrack(alert);
-  }
-
-  /// Whether [riderId]'s most recent fix was inside the ride leader's live
-  /// track corridor. Such a rider is on route by definition.
-  bool isFollowingLeaderTrack(String riderId) =>
-      _followingLeaderTrack[riderId] ?? false;
 
   void updateLocalSession(RideSession session) {
     if (session.rideId != _session.rideId ||
@@ -219,19 +178,13 @@ class SituationalAwarenessController extends ChangeNotifier {
       riderColor: _session.riderColor,
     );
     await _run(() async {
-      final previousAlert = _alerts[location.riderId]?.assessment;
-      final event = _eventFactory.create(
-        type: RideEventType.riderLocationUpdated,
-        payload: {'location': location.toJson()},
-        expiresAt: _clock().add(const Duration(minutes: 30)),
+      await _appendAndApply(
+        _eventFactory.create(
+          type: RideEventType.riderLocationUpdated,
+          payload: {'location': location.toJson()},
+          expiresAt: _clock().add(const Duration(minutes: 30)),
+        ),
       );
-      await _appendAndApply(event);
-      final currentAlert = _alerts[location.riderId]?.assessment;
-      if (previousAlert?.state != currentAlert?.state ||
-          previousAlert?.alertLevel != currentAlert?.alertLevel ||
-          previousAlert?.audience != currentAlert?.audience) {
-        await _persistAlertTransition(location.riderId);
-      }
     });
   }
 
@@ -299,26 +252,6 @@ class SituationalAwarenessController extends ChangeNotifier {
     });
   }
 
-  Future<void> acknowledgeAlert(String riderId) async {
-    final alert = _alerts[riderId];
-    if (alert == null || alert.acknowledged) {
-      return;
-    }
-    await _run(() async {
-      final acknowledgedAt = _clock();
-      final updated = alert.copyWithAcknowledgement(
-        acknowledgedBy: _session.localRiderId,
-        acknowledgedAt: acknowledgedAt,
-      );
-      final event = _eventFactory.create(
-        type: RideEventType.routeAlertAcknowledged,
-        payload: {'alert': updated.toJson()},
-        priority: EventPriority.important,
-      );
-      await _appendAndApply(event);
-    });
-  }
-
   Future<void> ingestRemoteEvent(RideEvent event) async {
     if (event.rideId != _session.rideId ||
         !_supportedSituationalEventTypes.contains(event.type)) {
@@ -379,17 +312,6 @@ class SituationalAwarenessController extends ChangeNotifier {
     _refreshingStaleness = true;
     try {
       _removeExpiredHazards();
-      final locations = List<RiderLocation>.of(_locations.values);
-      for (final location in locations) {
-        final previous = _alerts[location.riderId]?.assessment;
-        _evaluateLocation(location);
-        final current = _alerts[location.riderId]?.assessment;
-        if (previous?.state != current?.state ||
-            previous?.alertLevel != current?.alertLevel ||
-            previous?.audience != current?.audience) {
-          await _persistAlertTransition(location.riderId);
-        }
-      }
       notifyListeners();
     } finally {
       _refreshingStaleness = false;
@@ -399,21 +321,6 @@ class SituationalAwarenessController extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
-  }
-
-  Future<void> _persistAlertTransition(String riderId) async {
-    final alert = _alerts[riderId];
-    if (alert == null) {
-      return;
-    }
-    final event = _eventFactory.create(
-      type: RideEventType.routeDeviationChanged,
-      payload: {'alert': alert.toJson()},
-      priority: _priorityForAlert(alert.assessment.alertLevel),
-      expiresAt: _clock().add(const Duration(hours: 2)),
-    );
-    await _eventStore.append(event);
-    onEventStored?.call(event);
   }
 
   Future<void> _appendAndApply(RideEvent event) async {
@@ -464,19 +371,6 @@ class SituationalAwarenessController extends ChangeNotifier {
       case RideEventType.hazardCleared:
         _hazards.remove(event.payload['hazardId']);
         break;
-      case RideEventType.routeDeviationChanged:
-      case RideEventType.routeAlertAcknowledged:
-        final alert = RiderRouteAlert.fromJson(
-          _mapPayload(event.payload['alert']),
-        );
-        final current = _alerts[alert.riderId];
-        if (current == null ||
-            !alert.assessment.evaluatedAt.isBefore(
-              current.assessment.evaluatedAt,
-            )) {
-          _alerts[alert.riderId] = alert;
-        }
-        break;
       case RideEventType.routeRevisionChunk:
       case RideEventType.routeRevisionPublished:
       case RideEventType.routeCleared:
@@ -513,45 +407,13 @@ class SituationalAwarenessController extends ChangeNotifier {
     return startedAt == null || !event.createdAt.isBefore(startedAt);
   }
 
-  static bool _isRideActivityEvent(RideEventType type) => switch (type) {
-    RideEventType.riderLocationUpdated ||
-    RideEventType.routeDeviationChanged ||
-    RideEventType.routeAlertAcknowledged => true,
-    _ => false,
-  };
+  static bool _isRideActivityEvent(RideEventType type) =>
+      type == RideEventType.riderLocationUpdated;
 
   void _evaluateLocation(RiderLocation location) {
     if (location.role == RideRole.lead) {
       _recordLeaderTrailPoint(location.sample);
     }
-    // Per-role, and re-applied on every fix so a hand-over mid-ride moves both
-    // riders onto the right comparison without resetting their hysteresis.
-    final segments = _routeSegmentsFor();
-    final detector = _detectors.putIfAbsent(
-      location.riderId,
-      () => RouteDeviationDetector(
-        _route,
-        config: routeConfig,
-        routeSegments: segments,
-      ),
-    );
-    detector.updateRouteSegments(segments);
-    final assessment = _applyLeaderFollowExemption(
-      location,
-      detector,
-      detector.evaluate(location.sample, _clock()),
-    );
-    // Always replaced, not only when the state changes. The stored assessment is
-    // what the rider is told - "you are off route by X" - and what the rejoin
-    // planner reads, so keeping the one from the last state *transition* froze
-    // the distance and the timestamp for as long as a rider stayed off route
-    // (#162). Callers that need to know whether anything meaningful changed
-    // compare state, level and audience themselves.
-    _alerts[location.riderId] = RiderRouteAlert(
-      riderId: location.riderId,
-      displayName: location.displayName,
-      assessment: assessment,
-    );
   }
 
   /// Inserts in chronological order (by [LocationSample.recordedAt], not
@@ -575,7 +437,7 @@ class SituationalAwarenessController extends ChangeNotifier {
     _leaderTrailPointsCache = null;
     _leaderTrailSamplesCache = null;
     // A runaway guard, not a display policy. The trail used to be truncated to
-    // LeaderTrackExemption.defaultRecentPointLimit (600) here, which cost a
+    // a 600-point recent-track limit here, which cost a
     // tester the tail of a 6 h 4 m, 112 mile ride: 600 points is roughly the
     // last 40 minutes, so everything before that was deleted and could never be
     // drawn, exported or recapped again. This bound exists only so a pathological
@@ -607,94 +469,6 @@ class SituationalAwarenessController extends ChangeNotifier {
   /// without deleting any history.
   List<GeoPoint> get _leaderTrailPoints => _leaderTrailPointsCache ??=
       List.unmodifiable([for (final point in _leaderTrail) point.position]);
-
-  /// The most recent points only, for the "is this rider following the leader"
-  /// corridor check.
-  ///
-  /// [LeaderTrackExemption.isFollowingLeaderTrack] slices to its own limit
-  /// anyway, so passing the whole trail would be correct - but it would copy the
-  /// whole thing to throw most of it away. Slicing here keeps that call bounded
-  /// by the exemption's own rule regardless of how long the ride has run, which
-  /// is the performance property #165 actually needed.
-  List<GeoPoint> get _recentLeaderTrailPoints {
-    const limit = LeaderTrackExemption.defaultRecentPointLimit;
-    final from = _leaderTrail.length > limit ? _leaderTrail.length - limit : 0;
-    return [
-      for (var i = from; i < _leaderTrail.length; i += 1)
-        _leaderTrail[i].position,
-    ];
-  }
-
-  /// What each rider is compared against before exemptions.
-  ///
-  /// Every rider is compared against the planned route here. Followers get the
-  /// separate leader-track exemption in [_applyLeaderFollowExemption].
-  ///
-  /// Keeping the two questions separate avoids scanning the leader trail twice
-  /// per follower update, and avoids an older part of that growing trail
-  /// silently overriding [LeaderTrackExemption]'s deliberate "recent track"
-  /// rule (#165). The leader must also stay on this path: comparing them with
-  /// their own current endpoint would make them on-route anywhere (#162).
-  List<List<GeoPoint>> _routeSegmentsFor() => _routeSegments;
-
-  // ---------------------------------------------------------------------------
-  // Issue #102 - leader-follow exemption. Deliberately the only place this rule
-  // is decided, so the alert state, the relayed deviation event, the roster, the
-  // map and the leader's off-course count cannot disagree.
-  //
-  // A rider inside the corridor of the leader's ACTUAL recorded track is on
-  // route whatever the planned GPX says - including when the leader has
-  // abandoned the GPX themselves. Applied at both ends: when this device
-  // evaluates a fix, and when a deviation alert arrives from another device that
-  // had not yet seen the leader's trail.
-  // ---------------------------------------------------------------------------
-
-  RouteDeviationAssessment _applyLeaderFollowExemption(
-    RiderLocation location,
-    RouteDeviationDetector detector,
-    RouteDeviationAssessment assessment,
-  ) {
-    // The leader is always the end of their own trail, so exempting them says
-    // nothing; leave their verdict to the geometry.
-    final exempt =
-        location.role != RideRole.lead &&
-        LeaderTrackExemption.isFollowingLeaderTrack(
-          position: location.sample.position,
-          accuracyMeters: location.sample.accuracyMeters,
-          leaderTrack: _recentLeaderTrailPoints,
-          corridorMeters: routeConfig.leaderTrackCorridorMeters,
-        );
-    _followingLeaderTrack[location.riderId] = exempt;
-    // A stale or inaccurate fix is a GPS problem, not a route problem, and must
-    // keep reporting as one.
-    if (!exempt || assessment.state == RouteTrackingState.gpsStale) {
-      return assessment;
-    }
-    detector.resetOffRouteHysteresis();
-    return RouteDeviationDetector.followingLeaderTrackAssessment(
-      evaluatedAt: assessment.evaluatedAt,
-      distanceFromRouteMeters: assessment.distanceFromRouteMeters,
-    );
-  }
-
-  RiderRouteAlert _exemptIfFollowingLeaderTrack(RiderRouteAlert alert) {
-    if (!isFollowingLeaderTrack(alert.riderId) ||
-        alert.assessment.state == RouteTrackingState.gpsStale ||
-        alert.assessment.alertLevel == RouteAlertLevel.none) {
-      return alert;
-    }
-    return RiderRouteAlert(
-      riderId: alert.riderId,
-      displayName: alert.displayName,
-      assessment: RouteDeviationDetector.followingLeaderTrackAssessment(
-        evaluatedAt: alert.assessment.evaluatedAt,
-        distanceFromRouteMeters: alert.assessment.distanceFromRouteMeters,
-      ),
-      acknowledged: alert.acknowledged,
-      acknowledgedBy: alert.acknowledgedBy,
-      acknowledgedAt: alert.acknowledgedAt,
-    );
-  }
 
   void _removeExpiredHazards() {
     final now = _clock();
@@ -734,18 +508,9 @@ class SituationalAwarenessController extends ChangeNotifier {
         HazardSeverity.critical => EventPriority.critical,
       };
 
-  static EventPriority _priorityForAlert(RouteAlertLevel level) =>
-      switch (level) {
-        RouteAlertLevel.none || RouteAlertLevel.watch => EventPriority.routine,
-        RouteAlertLevel.urgent => EventPriority.important,
-        RouteAlertLevel.critical => EventPriority.critical,
-      };
-
   static const _supportedSituationalEventTypes = {
     RideEventType.riderLocationUpdated,
     RideEventType.hazardReported,
     RideEventType.hazardCleared,
-    RideEventType.routeDeviationChanged,
-    RideEventType.routeAlertAcknowledged,
   };
 }

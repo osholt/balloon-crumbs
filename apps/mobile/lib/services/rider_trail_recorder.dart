@@ -14,10 +14,6 @@ enum RiderTrailKind {
   /// and is rendered on every participant's map.
   leader,
 
-  /// A rider whose route alert says they are suspected off route, confirmed off
-  /// route, or recovering.
-  offRoute,
-
   /// The road route from where the rider is to the start of the planned route
   /// (#133). The one kind that is not recorded history: it is where the routing
   /// engine says to go next, which is why it is never produced by
@@ -55,7 +51,6 @@ class RiderTrailUpdate {
     required this.displayName,
     this.position,
     this.isLeader = false,
-    this.isOffRoute = false,
     this.isEligible = true,
     this.journalTrail,
   });
@@ -69,7 +64,6 @@ class RiderTrailUpdate {
   final bool isLeader;
 
   /// Whether the rider's route alert says they are off route. Styling only.
-  final bool isOffRoute;
 
   /// Whether the rider is eligible for live position sharing. An ineligible
   /// rider's history is dropped rather than retained unseen.
@@ -175,7 +169,7 @@ class RiderTrailRecorder {
         RiderTrail(
           riderId: rider.riderId,
           displayName: rider.displayName,
-          kind: kindFor(isLeader: rider.isLeader, isOffRoute: rider.isOffRoute),
+          kind: kindFor(isLeader: rider.isLeader),
           points: journal != null && journal.length > recorded.length
               ? boundedTrail(journal)
               : recorded,
@@ -216,16 +210,10 @@ class RiderTrailRecorder {
     ];
   }
 
-  /// The leader kind always wins: a leader cannot be off route by design, so
-  /// their trail must never be restyled as an excursion.
-  static RiderTrailKind kindFor({
-    required bool isLeader,
-    required bool isOffRoute,
-  }) => isLeader
-      ? RiderTrailKind.leader
-      : isOffRoute
-      ? RiderTrailKind.offRoute
-      : RiderTrailKind.rider;
+  /// The leader's trail is the group's ground truth, so it is styled apart from
+  /// every other craft's.
+  static RiderTrailKind kindFor({required bool isLeader}) =>
+      isLeader ? RiderTrailKind.leader : RiderTrailKind.rider;
 
   /// Records [point] for [riderId] and reports whether it extended the trail.
   ///

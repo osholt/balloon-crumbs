@@ -4,11 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart' as route_domain;
 import 'package:balloon_crumbs/domain/rider_location.dart';
-import 'package:balloon_crumbs/domain/route_alert.dart';
 import 'package:balloon_crumbs/relay/live_presence.dart';
 import 'package:balloon_crumbs/services/geo_calculations.dart';
 import 'package:balloon_crumbs/services/position_report_policy.dart';
-import 'package:balloon_crumbs/services/route_deviation_detector.dart';
 import 'package:balloon_crumbs/services/trail_display_simplifier.dart';
 
 /// Issue #166: position reports follow distance travelled, and presence follows
@@ -181,15 +179,14 @@ void main() {
 
     test('the keep-alive stays inside the thresholds it must not cross', () {
       const policy = PositionReportPolicy();
-      const deviation = RouteDeviationConfig();
       const freshness = PresenceFreshnessPolicy();
 
-      // A position older than `staleAfter` is reported as "no recent GPS
-      // position", and at `coordinatorStaleAfter` it escalates to the
-      // coordinators. A rider standing still with a working receiver must never
-      // produce either.
-      expect(policy.keepAliveAfter, lessThan(deviation.staleAfter));
-      expect(policy.keepAliveAfter, lessThan(deviation.coordinatorStaleAfter));
+      // The staleness thresholds this was also held against belonged to
+      // off-route alerting and went with it. WP7 rebuilds that availability
+      // model (`none` / `awaitingLocation` / `stale` / `tracking`); when it
+      // lands, the keep-alive has to stay inside its stale threshold too, for
+      // the same reason: a rider standing still with a working receiver must
+      // never be reported as having no position.
       // Under `liveWithin`, so a stationary rider's marker stays "Live" instead
       // of flickering to "Ageing" between keep-alives.
       expect(policy.keepAliveAfter, lessThan(freshness.liveWithin));
@@ -426,84 +423,6 @@ void main() {
     });
   });
 
-  group('off-course detection', () {
-    // The interaction, stated rather than assumed. `samplesToConfirmOffRoute` is
-    // 3, so confirmation used to take three fixes at whatever rate the platform
-    // delivered them — including three fixes of the same place in stopped
-    // traffic. It now takes three *reported* positions: slower in seconds at low
-    // speed, and a stronger piece of evidence, because the three samples are
-    // 18 m apart rather than 3 m apart.
-    test('a wrong turn is still confirmed, and the added latency is '
-        'measured', () {
-      final route = _straight(metres: 2000);
-      final path = _wrongTurnPath();
-
-      final before = _confirmOffRoute(route, _fixesAlong(path, speed: 13));
-      final after = _confirmOffRoute(
-        route,
-        _reportedSamples(_fixesAlong(path, speed: 13)),
-      );
-
-      // Measured at 13 m/s (about 30 mph): 33.9 s and 440 m before, 35.4 s and
-      // 454 m after. `enterOffRouteMeters` (120 m) dominates confirmation, not
-      // the sample rate, so the cost of the change is 1.5 s and 14 m.
-      expect(before.confirmed, isTrue);
-      expect(after.confirmed, isTrue);
-      expect(
-        after.confirmedAfter - before.confirmedAfter,
-        lessThan(const Duration(seconds: 2)),
-      );
-      expect(
-        after.confirmedAfterMeters - before.confirmedAfterMeters,
-        lessThan(20),
-      );
-    });
-
-    test('a stationary rider off the route is confirmed by keep-alives '
-        'alone', () {
-      final route = _straight(metres: 2000);
-      // Parked 300 m off the route and not moving: the only samples are
-      // keep-alives, and they still have to reach a verdict.
-      final fixes = _stationaryFixes(seconds: 120, east: 300);
-
-      final outcome = _confirmOffRoute(route, _reportedSamples(fixes));
-
-      // Nothing pretends the rider has stopped reporting: `gpsStale` never
-      // fires, because the keep-alive refreshes the position well inside the
-      // 30 s staleness window.
-      expect(outcome.confirmed, isTrue);
-      expect(outcome.sawGpsStale, isFalse);
-      // Three samples at 15 s. Slower than three 1 Hz fixes, and this is the
-      // trade: a parked rider off the route is flagged in tens of seconds rather
-      // than a few.
-      expect(outcome.confirmedAfter, const Duration(seconds: 30));
-    });
-
-    test('without the keep-alive a parked rider is reported as having no '
-        'GPS', () {
-      final route = _straight(metres: 2000);
-      final fixes = _stationaryFixes(seconds: 120, east: 300);
-
-      // The regression the keep-alive exists to prevent, kept as a test so the
-      // coupling between the keep-alive interval and `staleAfter` cannot be
-      // broken silently. Evaluated the way the ride shell does it — the newest
-      // reported position, re-assessed on a 15 s timer — because that is what
-      // produces the "No recent GPS position is available" alarm.
-      final withKeepAlive = _refreshStaleness(route, _reportedSamples(fixes));
-      final withoutKeepAlive = _refreshStaleness(
-        route,
-        _reportedSamples(
-          fixes,
-          policy: const PositionReportPolicy(
-            keepAliveAfter: Duration(hours: 1),
-          ),
-        ),
-      );
-
-      expect(withKeepAlive, isFalse);
-      expect(withoutKeepAlive, isTrue);
-    });
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -579,12 +498,6 @@ List<GeoPoint> _hairpins({required int count}) {
   }
   return points;
 }
-
-/// A rider who follows the route for 300 m and then turns 90 degrees off it.
-List<GeoPoint> _wrongTurnPath() => [
-  for (var north = 0; north <= 300; north += 1) _at(0, north.toDouble()),
-  for (var east = 1; east <= 400; east += 1) _at(east.toDouble(), 300),
-];
 
 /// The platform fix stream for [path]: one fix per [distanceFilter] metres of
 /// travel, timed at [speed] metres a second. This is how `DeviceLocationSource`
@@ -712,82 +625,3 @@ List<GeoPoint> _lastPositions(List<LocationSample> samples, int count) {
       : positions.sublist(positions.length - count);
 }
 
-class _OffRouteOutcome {
-  const _OffRouteOutcome({
-    required this.confirmed,
-    required this.confirmedAfter,
-    required this.confirmedAfterMeters,
-    required this.sawGpsStale,
-  });
-
-  final bool confirmed;
-  final Duration confirmedAfter;
-  final double confirmedAfterMeters;
-  final bool sawGpsStale;
-}
-
-/// Feeds [samples] to a detector and reports when it confirmed an off-route
-/// state, measured from the first sample. `now` is each sample's own timestamp,
-/// so the elapsed figures are the rider's clock and nothing else.
-_OffRouteOutcome _confirmOffRoute(
-  List<GeoPoint> route,
-  List<LocationSample> samples,
-) {
-  final detector = RouteDeviationDetector(route);
-  var sawGpsStale = false;
-  var travelled = 0.0;
-  Duration? confirmedAfter;
-  var confirmedAfterMeters = 0.0;
-  for (var index = 0; index < samples.length; index += 1) {
-    if (index > 0) {
-      travelled += GeoCalculations.distanceMeters(
-        samples[index - 1].position,
-        samples[index].position,
-      );
-    }
-    final assessment = detector.evaluate(
-      samples[index],
-      samples[index].recordedAt,
-    );
-    if (assessment.state == RouteTrackingState.gpsStale) sawGpsStale = true;
-    if (assessment.state == RouteTrackingState.offRoute &&
-        confirmedAfter == null) {
-      confirmedAfter = samples[index].recordedAt.difference(
-        samples.first.recordedAt,
-      );
-      confirmedAfterMeters = travelled;
-    }
-  }
-  return _OffRouteOutcome(
-    confirmed: confirmedAfter != null,
-    confirmedAfter: confirmedAfter ?? const Duration(days: 1),
-    confirmedAfterMeters: confirmedAfterMeters,
-    sawGpsStale: sawGpsStale,
-  );
-}
-
-/// Whether the ride shell's own staleness refresh would ever report `gpsStale`.
-///
-/// The shell re-assesses the newest held position every 15 s rather than only
-/// when a fix arrives, which is what turns an ageing position into a visible
-/// "No recent GPS position is available" and, at 90 s, a coordinator alert.
-bool _refreshStaleness(List<GeoPoint> route, List<LocationSample> reported) {
-  if (reported.isEmpty) return false;
-  final detector = RouteDeviationDetector(route);
-  final until = reported.first.recordedAt.add(const Duration(minutes: 2));
-  var now = reported.first.recordedAt;
-  var next = 0;
-  LocationSample? newest;
-  while (!now.isAfter(until)) {
-    while (next < reported.length && !reported[next].recordedAt.isAfter(now)) {
-      newest = reported[next];
-      next += 1;
-    }
-    if (newest != null &&
-        detector.evaluate(newest, now).state == RouteTrackingState.gpsStale) {
-      return true;
-    }
-    now = now.add(const Duration(seconds: 15));
-  }
-  return false;
-}

@@ -11,11 +11,9 @@ import 'package:balloon_crumbs/domain/distance_unit.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
 import 'package:balloon_crumbs/domain/quick_message.dart';
 import 'package:balloon_crumbs/domain/route_store.dart';
-import 'package:balloon_crumbs/domain/route_alert.dart';
 import 'package:balloon_crumbs/features/map/ride_map.dart';
 import 'package:balloon_crumbs/services/basemap_configuration.dart';
 import 'package:balloon_crumbs/services/gpx_import_source.dart';
-import 'package:balloon_crumbs/services/leader_ride_status.dart';
 import 'package:balloon_crumbs/services/offline_tile_cache.dart';
 import 'package:balloon_crumbs/services/received_quick_message.dart';
 import 'package:balloon_crumbs/services/route_importer.dart';
@@ -101,21 +99,6 @@ void main() {
           ),
         );
         addTearDown(navigation.dispose);
-        final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-          scenario.maximumOverlays
-              ? const LeaderRideStatus(
-                  offCourseAlerts: [
-                    LeaderOffCourseAlert(
-                      riderId: 'rider-alex',
-                      displayName: 'Alex',
-                      level: RouteAlertLevel.urgent,
-                      distanceFromRouteMeters: 420,
-                    ),
-                  ],
-                )
-              : null,
-        );
-        addTearDown(leaderStatus.dispose);
         final alerts = ValueNotifier<List<RideQuickMessageAlert>>(
           scenario.alerts,
         );
@@ -133,7 +116,6 @@ void main() {
                 routeImporter: RouteImporter(source: const _NoFileSource()),
                 offlineTileCache: cache,
                 navigationPosition: navigation,
-                leaderStatus: leaderStatus,
                 groupRiderCount: scenario.maximumOverlays ? 3 : null,
                 ridePaused: scenario.maximumOverlays,
                 distanceUnit: DistanceUnit.miles,

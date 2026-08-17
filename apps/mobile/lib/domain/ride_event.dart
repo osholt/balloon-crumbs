@@ -10,8 +10,6 @@ enum RideEventType {
   riderLocationUpdated,
   hazardReported,
   hazardCleared,
-  routeDeviationChanged,
-  routeAlertAcknowledged,
   routeRevisionChunk,
   routeRevisionPublished,
   routeCleared,

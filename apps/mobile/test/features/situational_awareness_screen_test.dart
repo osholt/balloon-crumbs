@@ -13,7 +13,6 @@ import 'package:balloon_crumbs/domain/rider_location.dart';
 import 'package:balloon_crumbs/features/situational_awareness/situational_awareness_screen.dart';
 import 'package:balloon_crumbs/services/device_location_source.dart';
 import 'package:balloon_crumbs/services/external_hazard_provider.dart';
-import 'package:balloon_crumbs/services/route_deviation_detector.dart';
 
 void main() {
   late DateTime now;
@@ -41,7 +40,6 @@ void main() {
       externalProviders: const [WazeReadHazardProvider()],
       clock: () => now,
       idFactory: () => 'id-${id++}',
-      routeConfig: const RouteDeviationConfig(samplesToConfirmOffRoute: 1),
     );
     await controller.initialize();
   });
@@ -79,22 +77,19 @@ void main() {
     expect(find.text(HazardType.debris.label), findsOneWidget);
   });
 
-  testWidgets('shows only actionable rider alerts, not provider diagnostics', (
+  testWidgets('provider diagnostics stay off the rider surface', (
     tester,
   ) async {
     await controller.recordLocalLocation(_sample(51.002));
     await tester.pumpWidget(_app(controller));
 
-    expect(find.text('1 route alert'), findsOneWidget);
-    expect(find.text('Acknowledge'), findsOneWidget);
+    // The route-alert half of this went with off-route alerting; the rule it
+    // also protected did not — an external provider's health is a diagnostic,
+    // not something to put in front of a rider.
     expect(find.text('Waze reports'), findsNothing);
     expect(find.text('EXTERNAL SOURCES'), findsNothing);
     expect(find.text('RIDER STATUS'), findsNothing);
-    expect(find.text('RIDERS NEEDING ATTENTION'), findsOneWidget);
-
-    await tester.tap(find.text('Acknowledge'));
-    await tester.pump();
-    expect(find.text('Seen'), findsOneWidget);
+    expect(find.text('RIDERS NEEDING ATTENTION'), findsNothing);
   });
 
   testWidgets('pre-start offers current position without promising a track', (

@@ -53,32 +53,6 @@ void main() {
     });
   });
 
-  group('going off route quietens navigation, not warnings', () {
-    test('a rider off route drops to alerts only', () {
-      // Turn-by-turn for a route the rider is not on names junctions that are
-      // not coming.
-      expect(
-        spokenAudioModeOffRoute(SpokenAudioMode.everything),
-        SpokenAudioMode.alertsOnly,
-      );
-    });
-
-    test('a rider who chose silence stays silent', () {
-      // An explicit choice outranks an automatic one — the same rule the mapped
-      // speed limit follows for a rider who turned it off.
-      expect(
-        spokenAudioModeOffRoute(SpokenAudioMode.silent),
-        SpokenAudioMode.silent,
-      );
-    });
-
-    test('alerts only is already there and stays', () {
-      expect(
-        spokenAudioModeOffRoute(SpokenAudioMode.alertsOnly),
-        SpokenAudioMode.alertsOnly,
-      );
-    });
-  });
 
   group('the control on the map says what it is', () {
     test('every mode is named in words', () {

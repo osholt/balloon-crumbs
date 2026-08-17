@@ -5,7 +5,6 @@ import 'package:balloon_crumbs/data/in_memory_event_store.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
-import 'package:balloon_crumbs/domain/route_alert.dart';
 import 'package:balloon_crumbs/services/ride_completion_detector.dart';
 
 void main() {
@@ -260,35 +259,6 @@ void main() {
     expect(leader.role, RideRole.lead);
     expect(follower.progress, lessThan(leader.progress));
   });
-
-  test(
-    'off-route scenario drives real alert hysteresis and recovery',
-    () async {
-      simulation.setAlexOffRoute(true);
-      await simulation.advance(const Duration(seconds: 1));
-      await simulation.advance(const Duration(seconds: 1));
-      await simulation.advance(const Duration(seconds: 1));
-
-      final alert = awareness.alertFor(
-        RideSimulationController.offRouteRiderId,
-      );
-      expect(alert?.assessment.state, RouteTrackingState.offRoute);
-      expect(alert?.assessment.alertLevel, RouteAlertLevel.urgent);
-      expect(alert?.assessment.distanceFromRouteMeters, greaterThan(120));
-
-      simulation.setAlexOffRoute(false);
-      await simulation.advance(const Duration(seconds: 1));
-      await simulation.advance(const Duration(seconds: 1));
-
-      expect(
-        awareness
-            .alertFor(RideSimulationController.offRouteRiderId)
-            ?.assessment
-            .state,
-        RouteTrackingState.onRoute,
-      );
-    },
-  );
 
   test(
     'off-route visual trail is local to the current simulation run',

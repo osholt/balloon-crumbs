@@ -582,8 +582,6 @@ class _EventRow extends StatelessWidget {
       RideEventType.riderLocationUpdated => 'Location updated',
       RideEventType.hazardReported => 'Hazard reported',
       RideEventType.hazardCleared => 'Hazard cleared',
-      RideEventType.routeDeviationChanged => 'Route status changed',
-      RideEventType.routeAlertAcknowledged => 'Route alert acknowledged',
       RideEventType.routeRevisionChunk => 'Route revision received',
       RideEventType.routeRevisionPublished => 'Group route updated',
       RideEventType.routeCleared => 'Group route cleared',
