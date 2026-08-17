@@ -14,7 +14,8 @@ Measured on `apps/mobile/lib` (~80,000 lines of Dart):
 | Road hazards | 702 | 36 | repurpose as ground notes |
 | Rejoin routing | 466 | 26 | delete, replaced by rendezvous |
 | Junction logic | 240 | 34 | delete with the marker system |
-| Speed-camera / enforcement alerts | 183 | 15 | delete |
+| Speed-camera / enforcement alerts | 183 | 15 | keep, retarget at the chase driver |
+| Speed-limit display | 17 | 9 | keep, retarget at the chase driver |
 | Road ratings ("twisty road" scoring) | 12 | 8 | delete |
 | Personal ride heatmap | 81 | 2 | delete |
 | `rider` as the domain noun | 3,889 | 169 | rename to crew/participant |
@@ -60,8 +61,9 @@ breaks immediately for ballooning in two directions at once: several phones in
 one basket become several "riders" sitting on top of each other, and the chase
 crew has no way to ask "where is *the balloon*".
 
-**Introduce a craft.** One flight has exactly one balloon and zero or more
-vehicles. Devices attach to a craft; a craft has one position, contributed by
+**Introduce a craft.** One flight has one balloon and zero or more vehicles
+today, and the model must not assume that number is one forever — see
+"Designed-for, not built-yet" below. Devices attach to a craft; a craft has one position, contributed by
 its devices. That single change answers both of the requirements that prompted
 this plan:
 
@@ -82,6 +84,30 @@ a tie-break; with hysteresis so the balloon's track does not visibly jump
 between two phones sitting side by side. A craft with no usable fix reports
 *unknown*, never a stale position dressed as current.
 
+### Designed-for, not built-yet: multiple balloons
+
+A club event has several balloons and a pool of vehicles, and a vehicle may
+switch which balloon it is chasing mid-flight as distances and winds change.
+That is a genuinely different product and it is **backlogged**, not being built
+now. But it constrains WP3 today, cheaply, and those constraints are worth
+paying for while the model is being written:
+
+- **A flight holds a set of crafts, not a balloon field plus a vehicle list.**
+  "The balloon" is a lookup over crafts of kind balloon, not a dedicated slot.
+  One balloon is then a cardinality the UI enforces, not an assumption baked
+  into every read model.
+- **A vehicle's chase assignment is its own journalled fact**, separate from
+  membership. A vehicle *belongs to the flight* and *is currently chasing craft
+  X*. With one balloon that assignment is implicit and invisible; with several it
+  becomes the interesting state, and reassignment is just a new event rather than
+  a schema change.
+- **Guidance takes a target craft as a parameter**, never reads a global balloon.
+
+That is roughly a day of extra care in WP3 and it avoids re-cutting the data
+model later. What is explicitly *not* being built: the assignment UI, the
+distance/wind optimiser that suggests which vehicle should switch, and per-balloon
+crew rosters.
+
 ## What gets deleted
 
 These are motorcycle-group-riding concepts with no ballooning equivalent.
@@ -94,14 +120,11 @@ roster, the relay and the map.
    deletion and it has already been partly forced: WP1 removed its "the back of
    the group is through" signal, so the marker currently waits for something
    that can never arrive.
-2. **Speed-camera and enforcement alerting** (183 hits). Road-riding feature,
-   legally sensitive, irrelevant to a chase crew and actively wrong to show a
-   pilot.
-3. **Rejoin routing** (466 hits). Routes a separated rider back onto a shared
+2. **Rejoin routing** (466 hits). Routes a separated rider back onto a shared
    GPX route. A chase vehicle is never "off route" — it is on a road network
    heading for a moving target. Replaced wholesale by rendezvous selection.
-4. **Road ratings** and **personal heatmap**. Scoring roads for fun.
-5. **Motorcycle iconography** — `motorcycle_icon.dart`, rider symbols, bike
+3. **Road ratings** and **personal heatmap**. Scoring roads for fun.
+4. **Motorcycle iconography** — `motorcycle_icon.dart`, rider symbols, bike
    styles — replaced by craft iconography (balloon, vehicle).
 
 ## What gets kept
@@ -120,6 +143,17 @@ Genuinely valuable, domain-neutral, and expensive to rebuild:
   more important in an aviation-adjacent context than they were for riding.
 - **Observer sharing** — a bounded read-only link is exactly what a balloon
   operation wants for family watching from home.
+- **Speed-limit display, speed-camera and enforcement alerts** — kept and
+  retargeted at the chase driver, who is doing exactly the road driving these
+  were built for. They must appear only in the chase-driver view: a pilot has no
+  use for a camera warning and showing one in the basket is noise.
+- **CarPlay and Android Auto** — kept for the chase driver, who is a better fit
+  for a head unit than a motorcyclist ever was. Currently inert: the entitlements
+  and the scene declaration were removed so the app could be signed and installed
+  without an Apple-approved CarPlay profile. Restoring it means re-adding both
+  entitlement keys, the `CPTemplateApplicationSceneSessionRoleApplication` scene
+  declaration, and a matching console profile — all three together, or the app
+  crashes on device while working in the simulator.
 - The **hazard machinery, repurposed**: the ability to drop a categorised,
   relayed, expiring point on a map is precisely what ground notes need (locked
   gate, impassable track, power lines, landowner contacted, crop in field). This
@@ -173,14 +207,70 @@ The feature the product is named after. Finishes WP2.
   track. Every number carries its age.
 - Reject impossible vertical jumps rather than smoothing them away.
 
-### WP6 — The pilot view
+### WP6 — The pilot view and the landing intent model
 
 Deliberately austere. Big type, few controls, works with gloves.
 
 - Height, climb rate, and "the crew can see you" / "nobody has your position".
-- Intended landing area, set with one gesture, relayed to every vehicle.
 - Start/end sharing, and a privacy stop.
-- No routing, no hazards, no chase detail — the pilot is flying.
+- No routing, no hazards, no camera alerts, no chase detail — the pilot is flying.
+
+#### Landing intent
+
+Three separate things, and conflating them is the failure mode:
+
+1. **Intended landing area** — the pilot draws an area on the map (not a point;
+   a balloon lands in a region, and a point implies a precision nobody has).
+   Editable at any time; each edit supersedes the last in the journal. Relayed to
+   every vehicle.
+2. **Committed to landing** — a single large button meaning "I am landing, near
+   where I am now". Available always, but the view should surface it prominently
+   once descent is detected, because that is when it is true and when a pilot has
+   least attention to spare.
+3. **Inferred landing** — what the app works out on its own.
+
+**The chase crew must never depend on the button.** A pilot with both hands on
+the burner will forget it, and a crew that has learned to wait for it will sit
+still while the balloon is on the ground. So the app infers the landing phase
+independently, from telemetry it already has after WP2: sustained descent over a
+window, falling height, collapsing ground speed, and finally a stationary fix.
+Guidance escalates on the *inference*; the button only raises confidence sooner.
+
+Every surface must show **which** it is looking at — declared or inferred — and
+never present one as the other. A declared landing with the balloon still at
+600 m climbing is a mis-tap, and the app should say so rather than send four
+vehicles to a field.
+
+**Staleness is the real hazard here.** An intended area drawn twenty minutes and
+eight kilometres ago is worse than no area, because the crew will trust it. Every
+presentation of the area carries its age and the balloon's current distance from
+it, and it degrades visibly once the balloon has drifted outside it.
+
+Acceptance:
+- [ ] Pilot draws, edits and clears an area; every vehicle sees the current one
+- [ ] Landing is inferred with the button never pressed, and guidance escalates
+- [ ] Pressing the button while high and climbing is shown as inconsistent, not obeyed
+- [ ] Every area display carries its age and distance from the balloon
+- [ ] An area the balloon has drifted out of is visibly degraded, not silently kept
+
+### WP6b — Landing-phase mapping
+
+A road map is the wrong map once the balloon is down in a field. The last few
+hundred metres are about field boundaries, tracks, gates and footpaths, and the
+road network stops being the useful layer.
+
+- A second basemap for the landing phase — Ordnance Survey style topographic
+  and/or aerial imagery — switched to automatically once the landing phase is
+  inferred, and switchable by hand at any time.
+- Field boundaries and access tracks matter more than road classification.
+- Offline caching of the landing-area tiles matters more here than anywhere else
+  in the app: landing fields are exactly where there is no signal.
+
+**Licensing gates this.** OS Open data (for example OS Open Zoomstack) is Open
+Government Licence and usable with attribution; the OS Leisure 1:25k raster that
+crews actually recognise is a paid OS Data Hub product with its own terms, and
+aerial imagery is licensed separately again. Decide the source before building
+the layer, and cache nothing before the licence is read.
 
 ### WP7 — Multiple chase vehicles and rendezvous
 
@@ -218,6 +308,38 @@ The end of a flight is the hardest part and the inherited app has nothing for it
 - Multi-craft: one balloon plus three vehicles, clock skew, reconnect.
 - Several devices in one basket, to exercise the WP3 election directly.
 
+### WP10b — Pilot aeronautical context and flight documentation
+
+Distinct from WP11's chase-crew weather layer: this is for the person in the
+basket, and it is the one place the app talks to an aviator about aviation.
+
+- Airspace the pilot cares about: controlled airspace, ATZs and MATZs, danger and
+  prohibited areas, gliding and parachute sites, and the temporary restrictions
+  that only exist on the day.
+- Notices to aviators, surfaced with their validity window, not as a static list.
+- Attaching a filed flight plan or notification to the flight so the crew — and
+  an observer — can see it alongside the track.
+
+**Two things I do not know and must not guess.** First, the exact regulatory
+mechanism for UK balloon flights: whether a given flight requires a filed flight
+plan at all, what notification is expected for particular airspace, and what
+form any of it takes. VFR balloon flying is not the same as an airliner filing
+an ICAO plan, and this plan should not pretend otherwise. Second, whether any
+of it can be *generated* rather than merely attached — that depends on whether
+the CAA or NATS offers a filing interface a third-party app may use, which needs
+checking rather than assuming.
+
+So this package starts as research, not code: confirm with the CAA and the BBAC
+what a UK balloon pilot is actually required and able to do, then decide whether
+the app attaches a document, links to an official service, or generates anything
+at all. **Generating a flight plan the pilot then relies on is a safety claim**,
+and it needs the regulatory position understood before a line is written.
+
+Airspace and notice data are subject to the same licensing gate as everything
+else in WP11 — and the currency requirement is stricter, because out-of-date
+airspace shown confidently to a pilot is worse than showing nothing. Any layer
+must display its effective date and refuse to present stale data as current.
+
 ### WP11 — Context: weather, wind, airspace
 
 Blocked on provider licensing (issues #13, #17) and should stay blocked until it
@@ -231,21 +353,25 @@ Security and privacy review, per-device authority replacing the inherited group
 HMAC, retention, battery and background testing, accessibility of the altitude
 representation without colour, mixed-device field matrix.
 
-## Decisions I need from you
+## Decisions taken
 
-1. **Speed-limit display** — delete with the rest of the road-riding features, or
-   keep it for the chase driver? It is genuinely useful to a driver and not
-   motorcycle-specific. My recommendation: keep the display, delete the camera
-   alerting.
-2. **CarPlay / Android Auto** — currently inert and unentitled. A chase driver is
-   the ideal CarPlay user, so this may be worth more here than it was for riding.
-   Revisit after WP8, not before.
-3. **Multiple balloons** — one club event, several balloons, shared crews. The
-   craft model in WP3 makes this cheap later, but designing for it now costs
-   time. Recommendation: build one-balloon, keep the model open.
-4. **Intended landing area** — how much should a pilot be able to say, and how
-   strongly should the app present it? It is a guess by a person who is flying,
-   and the crew will treat it as fact.
+1. **Speed limits, camera and enforcement alerts — kept**, retargeted at the
+   chase driver and confined to the chase-driver view.
+2. **CarPlay / Android Auto — kept** for the chase driver. Inert until the
+   entitlement is restored; see "What gets kept" for the three things that have
+   to go back together.
+3. **Multiple balloons — backlogged** (items 22, 23) but constraining WP3 now.
+4. **Landing intent — three separate things**, with the chase crew depending on
+   the inferred landing rather than the pilot's button. See WP6.
+5. **Landing-phase map — a second basemap**, OS topographic or aerial, switched
+   automatically once landing is inferred. Licence decided before it is built.
+
+Still open, and needing an answer before its package starts:
+
+- **Landing map source.** OS Open Zoomstack (OGL, free, attribution) versus the
+  paid OS Leisure 1:25k raster crews actually recognise, versus aerial imagery
+  licensed separately again.
+- **The UK flight plan / notification position**, which is research before code.
 
 ## Risks
 
