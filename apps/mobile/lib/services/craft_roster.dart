@@ -154,9 +154,6 @@ class CraftRosterReducer {
         case RideEventType.riderLeft:
         case RideEventType.roleChanged:
         case RideEventType.rideStarted:
-        case RideEventType.markerStarted:
-        case RideEventType.markerPass:
-        case RideEventType.markerEnded:
         case RideEventType.statusMessage:
         case RideEventType.hazardReported:
         case RideEventType.hazardCleared:
@@ -171,7 +168,6 @@ class CraftRosterReducer {
         case RideEventType.rideReopened:
         case RideEventType.iceInfoShared:
         case RideEventType.iceInfoViewed:
-        case RideEventType.rejoinRouteShared:
         case RideEventType.riderContactShared:
           break;
       }

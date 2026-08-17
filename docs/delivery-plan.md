@@ -195,9 +195,55 @@ plus the vocabulary rename (`ride` → `flight`, `rider` → `crew`) done **once
 into the shape WP3 established rather than twice.
 
 Acceptance:
-- [ ] No `marker`, `rejoin`, `road rating` or `heatmap` code remains
+- [x] No `marker`, `rejoin`, `road rating` or `heatmap` code remains
 - [ ] No user-facing string says rider, bike or ride
-- [ ] Test count drops honestly — deleted features lose their tests, nothing else does
+- [x] Test count drops honestly — deleted features lose their tests, nothing else does
+
+#### Landed: the marker system, route planning and rejoin routing are deleted
+
+Done in one cut, as the measurement below predicted it had to be. The measured
+148 analyzer errors were the marker files alone; the finished cut touched 60
+files and removed about 9,900 lines of the motorcycle domain.
+
+Deleted: the seven marker files, `RideRole.marker`, the three marker event
+types, `RideCoordinationMode.secondBikeDropOff`, decision-point extraction,
+route review, waypoint editing, route reshaping, the junction-marker map overlay
+and its CarPlay card, the Ride Lab marker simulation, `route_rejoin_planner`,
+`rejoin_route_share`, `rejoinRouteShared` and the `rejoin-route-sharing-v1`
+capability on both client and relay.
+
+Four things were kept that a naive cut would have taken with it, each because
+the deleted feature was not their only reason to exist:
+
+- **A route confirmation gate.** Route review was the only thing standing between
+  a candidate route and the authoritative group route, and the flows it guarded
+  survive: GPX import, destination planning, the demo route, and the traffic
+  alternative. `route_confirmation_sheet.dart` replaces it — name, distance,
+  duration, turn count, warnings, cancel or confirm. No map preview, no stop
+  editing, no reshaping; WP7 builds chase-plan sketching from a clean sheet.
+- **`routeLengthMeters` and `materialRouteChangeWarning`**, which lived in the
+  review screen and are now `services/route_length.dart`. The second is the
+  "this route is 40% longer than your current one" warning, which is exactly the
+  kind of thing a confirmation gate exists to say.
+- **`RiderTrailKind.rejoin`**, renamed `routeStartConnector`. The advisory rejoin
+  line was not its only user: the route-start connector (#133) draws in the same
+  channel and inherited its cyan dashed styling.
+- **`route_origin_bearing.dart`**, renamed off its `rejoin*` prefixes to
+  `originBearingForTravel` / `originBearing*`. Sending the vehicle's heading with
+  a routing request (#444) is the router's problem, not rejoin's, and WP7's
+  engine needs it.
+
+Two notes for whoever reads the diff:
+
+- `MarkerPlanReview` went with the marker system, and with it the
+  `tec:marker-review` GPX extension. An older file carrying that block still
+  imports; the block is simply ignored.
+- `tailEndCharlie` is still accepted by the relay's role schema and reducer.
+  WP1 deleted the role but deliberately kept parsing it so an older peer's sync
+  is not rejected wholesale; `marker` now degrades to `rider` by the same rule.
+
+The measurement that drove the sequencing is kept below, because it is the
+argument for why this was one cut rather than four.
 
 #### Measured: the marker cut is wider than the marker files
 
@@ -224,14 +270,6 @@ route-*planning* layer depends on it —
 `route_decision_point_extractor`, `route_reshape_planner`,
 `route_waypoint_editor` and the 1,385-line `route_review_screen` all consume
 `MarkerPlanPointKind`, `DecisionPointSource` and `RouteMarkerPlanAnalyzer`.
-
-So the cut is: marker system **plus** the decision-point extraction that exists
-only to place markers on a planned route. Route review and waypoint editing then
-need a decision of their own — a chase crew does not review a planned route
-before a flight the way a ride leader did, because the balloon has no route. My
-reading is that route review goes with the marker system and waypoint editing
-survives only if GPX-based chase planning survives, which WP7 should answer
-first.
 
 #### Decided: what replaces route planning for a chase crew
 
@@ -320,11 +358,11 @@ Two notes for whoever builds it:
 Two smaller deletions are genuinely self-contained and can land independently:
 road ratings and the personal heatmap.
 
-Migration note found in the same pass: `RideCoordinationMode.fromName` defaults
-to `secondBikeDropOff` for any unrecognised value, because that was the only mode
-before the choice existed. When it is deleted the fallback must become
-`keepTogether`, not `solo` — falling back to solo would silently strip a stored
-flight of its join code and its crew.
+Migration note found in the same pass, and now done: `RideCoordinationMode.fromName`
+defaulted to `secondBikeDropOff` for any unrecognised value, because that was the
+only mode before the choice existed. The fallback is now `keepTogether`, not
+`solo` — falling back to solo would silently strip a stored flight of its join
+code and its crew. `ride_coordination_mode_test.dart` holds it shut.
 
 ### WP5 — Altitude, the ground track, and the crumb trail
 

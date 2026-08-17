@@ -142,9 +142,6 @@ class RideRouteReducer {
           break;
         case RideEventType.riderLeft:
         case RideEventType.rideStarted:
-        case RideEventType.markerStarted:
-        case RideEventType.markerPass:
-        case RideEventType.markerEnded:
         case RideEventType.statusMessage:
         case RideEventType.riderLocationUpdated:
         case RideEventType.hazardReported:
@@ -157,7 +154,6 @@ class RideRouteReducer {
         case RideEventType.rideReopened:
         case RideEventType.iceInfoShared:
         case RideEventType.iceInfoViewed:
-        case RideEventType.rejoinRouteShared:
         case RideEventType.riderContactShared:
         case RideEventType.craftRegistered:
         case RideEventType.deviceAttachedToCraft:

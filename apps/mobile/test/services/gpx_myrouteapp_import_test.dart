@@ -18,7 +18,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
-import 'package:balloon_crumbs/features/map/route_review_screen.dart';
+import 'package:balloon_crumbs/services/route_length.dart';
 import 'package:balloon_crumbs/services/gpx_parser.dart';
 
 void main() {

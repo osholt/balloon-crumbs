@@ -65,7 +65,7 @@ void main() {
       expect(RideStartChoice.solo.coordinationMode, RideCoordinationMode.solo);
       expect(
         RideStartChoice.group.coordinationMode,
-        RideCoordinationMode.secondBikeDropOff,
+        RideCoordinationMode.keepTogether,
       );
     });
 

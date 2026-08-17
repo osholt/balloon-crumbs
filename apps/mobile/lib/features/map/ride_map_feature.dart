@@ -56,11 +56,10 @@ import '../../services/received_quick_message.dart';
 import '../../services/rider_trail_recorder.dart';
 import '../../services/road_routing.dart';
 import '../../services/route_geometry_enricher.dart';
+import '../../services/route_length.dart';
 import '../../services/route_importer.dart';
-import '../../services/route_marker_plan.dart';
 import '../../services/route_journey_progress.dart';
 import '../../services/route_progress.dart';
-import '../../services/route_reshape_planner.dart';
 import '../../services/speed_limit.dart';
 import '../../services/stored_route_library.dart';
 import '../../services/trail_direction_arrows.dart';
@@ -73,7 +72,7 @@ import 'maneuver_symbol.dart';
 import 'group_mini_map_framing.dart';
 import 'motorcycle_icon.dart';
 import 'navigation_export_sheet.dart';
-import 'route_review_screen.dart';
+import 'route_confirmation_sheet.dart';
 import 'route_progress_panel.dart';
 import 'route_trail_style.dart';
 import 'smooth_countdown.dart';
@@ -172,11 +171,9 @@ class RideMapFeature extends StatefulWidget {
     this.navigationPosition,
     this.overlayMarkers,
     this.riderTrails,
-    this.rejoinNavigationRoute,
     this.leaderStatus,
     this.groupRiderCount,
     this.onOpenRoster,
-    this.junctionMarkerOverlay,
     this.enforcementAlert,
     this.rideCompletionSuggestion,
     this.onEndRideForEveryone,
@@ -199,7 +196,6 @@ class RideMapFeature extends StatefulWidget {
     this.ridePaused = false,
     this.rideHasNoLeader = false,
     this.rideStarted = false,
-    this.markerFeaturesEnabled = true,
     this.onLeaveRide,
     this.onOpenRideMenu,
     this.onRouteChanged,
@@ -235,11 +231,9 @@ class RideMapFeature extends StatefulWidget {
     ValueListenable<MapNavigationPosition?>? navigationPosition,
     ValueListenable<List<MapOverlayMarker>>? overlayMarkers,
     ValueListenable<List<MapOverlayTrace>>? riderTrails,
-    ValueListenable<ImportedRoute?>? rejoinNavigationRoute,
     ValueListenable<LeaderRideStatus?>? leaderStatus,
     int? groupRiderCount,
     VoidCallback? onOpenRoster,
-    ValueListenable<MapJunctionMarkerOverlay?>? junctionMarkerOverlay,
     ValueListenable<EnforcementAlert?>? enforcementAlert,
     ValueListenable<RideCompletionAssessment?>? rideCompletionSuggestion,
     VoidCallback? onEndRideForEveryone,
@@ -263,7 +257,6 @@ class RideMapFeature extends StatefulWidget {
     bool ridePaused = false,
     bool rideHasNoLeader = false,
     bool rideStarted = false,
-    bool markerFeaturesEnabled = true,
     Future<void> Function()? onLeaveRide,
     Future<void> Function()? onOpenRideMenu,
     ValueChanged<ImportedRoute?>? onRouteChanged,
@@ -294,11 +287,9 @@ class RideMapFeature extends StatefulWidget {
     navigationPosition: navigationPosition,
     overlayMarkers: overlayMarkers,
     riderTrails: riderTrails,
-    rejoinNavigationRoute: rejoinNavigationRoute,
     leaderStatus: leaderStatus,
     groupRiderCount: groupRiderCount,
     onOpenRoster: onOpenRoster,
-    junctionMarkerOverlay: junctionMarkerOverlay,
     enforcementAlert: enforcementAlert,
     rideCompletionSuggestion: rideCompletionSuggestion,
     onEndRideForEveryone: onEndRideForEveryone,
@@ -321,7 +312,6 @@ class RideMapFeature extends StatefulWidget {
     ridePaused: ridePaused,
     rideHasNoLeader: rideHasNoLeader,
     rideStarted: rideStarted,
-    markerFeaturesEnabled: markerFeaturesEnabled,
     onLeaveRide: onLeaveRide,
     onOpenRideMenu: onOpenRideMenu,
     onRouteChanged: onRouteChanged,
@@ -354,14 +344,12 @@ class RideMapFeature extends StatefulWidget {
   final ValueListenable<MapNavigationPosition?>? navigationPosition;
   final ValueListenable<List<MapOverlayMarker>>? overlayMarkers;
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
-  final ValueListenable<ImportedRoute?>? rejoinNavigationRoute;
   final ValueListenable<LeaderRideStatus?>? leaderStatus;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
   final int? groupRiderCount;
   final VoidCallback? onOpenRoster;
-  final ValueListenable<MapJunctionMarkerOverlay?>? junctionMarkerOverlay;
   final ValueListenable<EnforcementAlert?>? enforcementAlert;
 
   /// The arrival the group has reached, offered rather than imposed (#380).
@@ -415,7 +403,6 @@ class RideMapFeature extends StatefulWidget {
   final bool ridePaused;
   final bool rideHasNoLeader;
   final bool rideStarted;
-  final bool markerFeaturesEnabled;
   final Future<void> Function()? onLeaveRide;
   final Future<void> Function()? onOpenRideMenu;
   final ValueChanged<ImportedRoute?>? onRouteChanged;
@@ -553,11 +540,9 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         navigationPosition: widget.navigationPosition,
         overlayMarkers: widget.overlayMarkers,
         riderTrails: widget.riderTrails,
-        rejoinNavigationRoute: widget.rejoinNavigationRoute,
         leaderStatus: widget.leaderStatus,
         groupRiderCount: widget.groupRiderCount,
         onOpenRoster: widget.onOpenRoster,
-        junctionMarkerOverlay: widget.junctionMarkerOverlay,
         enforcementAlert: widget.enforcementAlert,
         rideCompletionSuggestion: widget.rideCompletionSuggestion,
         onEndRideForEveryone: widget.onEndRideForEveryone,
@@ -581,7 +566,6 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         ridePaused: widget.ridePaused,
         rideHasNoLeader: widget.rideHasNoLeader,
         rideStarted: widget.rideStarted,
-        markerFeaturesEnabled: widget.markerFeaturesEnabled,
         onLeaveRide: widget.onLeaveRide,
         onOpenRideMenu: widget.onOpenRideMenu,
         canEditRoute: widget.canEditRoute,
@@ -639,11 +623,9 @@ class RideMapScreen extends StatefulWidget {
     this.navigationPosition,
     this.overlayMarkers,
     this.riderTrails,
-    this.rejoinNavigationRoute,
     this.leaderStatus,
     this.groupRiderCount,
     this.onOpenRoster,
-    this.junctionMarkerOverlay,
     this.enforcementAlert,
     this.rideCompletionSuggestion,
     this.onEndRideForEveryone,
@@ -669,7 +651,6 @@ class RideMapScreen extends StatefulWidget {
     // embedder says otherwise. RideMapFeature always passes the real lifecycle
     // value, including false during assembly.
     this.rideStarted = true,
-    this.markerFeaturesEnabled = true,
     this.onLeaveRide,
     this.onOpenRideMenu,
     this.canEditRoute = true,
@@ -722,14 +703,12 @@ class RideMapScreen extends StatefulWidget {
   final ValueListenable<MapNavigationPosition?>? navigationPosition;
   final ValueListenable<List<MapOverlayMarker>>? overlayMarkers;
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
-  final ValueListenable<ImportedRoute?>? rejoinNavigationRoute;
   final ValueListenable<LeaderRideStatus?>? leaderStatus;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
   final int? groupRiderCount;
   final VoidCallback? onOpenRoster;
-  final ValueListenable<MapJunctionMarkerOverlay?>? junctionMarkerOverlay;
   final ValueListenable<EnforcementAlert?>? enforcementAlert;
 
   /// The arrival the group has reached, offered rather than imposed (#380).
@@ -773,7 +752,6 @@ class RideMapScreen extends StatefulWidget {
   final bool ridePaused;
   final bool rideHasNoLeader;
   final bool rideStarted;
-  final bool markerFeaturesEnabled;
   final Future<void> Function()? onLeaveRide;
   final Future<void> Function()? onOpenRideMenu;
   final bool canEditRoute;
@@ -829,12 +807,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
   static const _waypointSource = 'balloon-crumbs-waypoints';
   static const _positionSource = 'balloon-crumbs-position';
   static const _overlaySource = 'balloon-crumbs-overlays';
-  static const _markerPlanSource = 'balloon-crumbs-marker-plan';
   static const _trailDirectionArrowImage = 'balloon-crumbs-trail-direction-arrow';
 
   /// How many of the direction arrows the planned route may claim before the
   /// live cues take the rest. Half the budget: enough to read the route's
-  /// direction along its whole length, while leaving the rejoin instruction and
+  /// direction along its whole length, while leaving the connector instruction and
   /// the group's trails the same room they had.
   static const _plannedRouteArrowReserve = 120;
   static const _trailDirectionArrowSampler = TrailDirectionArrowSampler();
@@ -846,7 +823,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   final RouteProgressTracker _routeProgressTracker = RouteProgressTracker();
   final RouteJourneyProgressTracker _routeJourneyProgressTracker =
       RouteJourneyProgressTracker();
-  final RouteProgressTracker _rejoinProgressTracker = RouteProgressTracker();
+  final RouteProgressTracker _connectorProgressTracker = RouteProgressTracker();
   final ValueNotifier<NavigationGuidanceAssessment> _navigationGuidance =
       ValueNotifier(const NavigationGuidanceAssessment.noRoute());
   final Map<int, Offset> _mapPointerOrigins = {};
@@ -935,8 +912,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
   bool _routingToStart = false;
   bool _navigationMode = false;
   bool _navigationCanvasActive = false;
-  bool _markerOverviewVisible = false;
-  bool _markerPlanVisible = false;
   bool _autoFollowSuppressed = false;
   bool _cameraFramingRefreshScheduled = false;
   bool _emergencyAlertSending = false;
@@ -1048,7 +1023,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   bool _mapLibreOverlaysDirty = false;
   bool _waitingRoutePromptDismissed = false;
   RouteProgressGeometry _progressGeometry = const RouteProgressGeometry.empty();
-  RouteProgressGeometry _rejoinProgressGeometry =
+  RouteProgressGeometry _connectorProgressGeometry =
       const RouteProgressGeometry.empty();
   TileDownloadProgress? _downloadProgress;
   TileDownloadCancellationToken? _downloadCancellation;
@@ -1058,11 +1033,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   BasemapConfiguration get _basemap => widget.offlineTileCache.configuration;
 
-  ImportedRoute? get _externalRejoinRoute =>
-      widget.rejoinNavigationRoute?.value;
-
-  ImportedRoute? get _rejoinRoute =>
-      _externalRejoinRoute ?? _routeStartConnector;
+  ImportedRoute? get _connectorRoute => _routeStartConnector;
 
   GeoPoint? get _plannedRouteStart => _route?.paths
       .where((path) => path.points.isNotEmpty)
@@ -1071,11 +1042,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       .first;
 
   double? get _routeStartOfferDistance {
-    if (!widget.rideStarted ||
-        _routeStartConnector != null ||
-        _externalRejoinRoute != null) {
-      return null;
-    }
+    if (!widget.rideStarted || _routeStartConnector != null) return null;
     final position = _effectivePosition;
     final start = _plannedRouteStart;
     final route = _route;
@@ -1089,81 +1056,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   RouteProgressGeometry get _navigationProgressGeometry =>
-      _rejoinRoute == null ? _progressGeometry : _rejoinProgressGeometry;
-
-  /// Route-derived: the marker plan is an analysis of the planned route.
-  RouteMarkerPlan get _markerPlan =>
-      !widget.markerFeaturesEnabled || _route == null
-      ? const RouteMarkerPlan(points: [])
-      : const RouteMarkerPlanAnalyzer().analyze(_route!);
-
-  /// The review action on the day: a green dot the group turns out not to need
-  /// is rejected here rather than argued with at the roadside (#179).
-  ///
-  /// Reviewing the whole plan at leisure belongs on the route review screen and,
-  /// in time, the web planner; this surface is for the one that is wrong now.
-  Future<void> _showMarkerPlanPoint(MarkerPlanPoint point) async {
-    final manual = point.source == MarkerPlanPointSource.manual;
-    final reject = await showModalBottomSheet<bool>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                point.label,
-                style: Theme.of(sheetContext).textTheme.titleMedium,
-              ),
-              if (point.detail case final detail?) ...[
-                const SizedBox(height: 6),
-                Text(detail, style: const TextStyle(color: Color(0xFF98A3B1))),
-              ],
-              if (widget.canEditRoute) ...[
-                const SizedBox(height: 14),
-                OutlinedButton.icon(
-                  key: const Key('reject-marker-plan-point'),
-                  onPressed: () => Navigator.of(sheetContext).pop(true),
-                  icon: const Icon(Icons.block_outlined),
-                  label: Text(
-                    manual
-                        ? 'Remove this added position'
-                        : 'Not needed — reject for this route',
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-    if (reject != true || !mounted) return;
-    await _rejectMarkerPlanPoint(point);
-  }
-
-  Future<void> _rejectMarkerPlanPoint(MarkerPlanPoint point) async {
-    final route = _route;
-    if (route == null || !widget.canEditRoute) return;
-    final updated = route.withMarkerReview(
-      point.source == MarkerPlanPointSource.manual
-          ? route.markerReview.restoring(point.id)
-          : route.markerReview.rejecting(point.toReviewPoint()),
-    );
-    await widget.routeStore.saveActiveRoute(updated);
-    if (!mounted) return;
-    setState(() => _route = updated);
-    await _syncMapLibreSources();
-    widget.onRouteChanged?.call(updated);
-    widget.onRouteCommitted?.call(updated);
-    _showMessage(
-      point.source == MarkerPlanPointSource.manual
-          ? '${point.label}: removed from the marker plan.'
-          : '${point.label}: rejected for this route.',
-    );
-  }
+      _connectorRoute == null ? _progressGeometry : _connectorProgressGeometry;
 
   DestinationRoutePlanner get _destinationRoutePlanner =>
       widget.destinationRoutePlanner ?? _defaultDestinationRoutePlanner;
@@ -1226,11 +1119,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
     widget.navigationPosition?.addListener(_onPositionChanged);
     widget.overlayMarkers?.addListener(_onOverlayDataChanged);
     widget.riderTrails?.addListener(_onOverlayDataChanged);
-    widget.rejoinNavigationRoute?.addListener(_onRejoinNavigationRouteChanged);
     widget.leaderStatus?.addListener(_onGroupPipDataChanged);
-    widget.junctionMarkerOverlay?.addListener(_onJunctionMarkerChanged);
-    _rejoinProgressGeometry = _rejoinProgressTracker.update(
-      _rejoinRoute,
+    _connectorProgressGeometry = _connectorProgressTracker.update(
+      _connectorRoute,
       _effectivePosition,
     );
     // The app-level AnimatedBuilder already listens to this shared controller.
@@ -1240,8 +1131,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
       if (mounted) _observeSpeedLimit(_navigationFix);
     });
     _watchBasemapViewLoad();
-    _markerOverviewVisible =
-        widget.junctionMarkerOverlay?.value?.isLocalMarker ?? false;
     _loadPersistedRoute();
     unawaited(_loadDiscoveryCatalogue());
     _maybeHandleChangeRouteRequest();
@@ -1269,24 +1158,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
       oldWidget.riderTrails?.removeListener(_onOverlayDataChanged);
       widget.riderTrails?.addListener(_onOverlayDataChanged);
     }
-    if (oldWidget.rejoinNavigationRoute != widget.rejoinNavigationRoute) {
-      oldWidget.rejoinNavigationRoute?.removeListener(
-        _onRejoinNavigationRouteChanged,
-      );
-      widget.rejoinNavigationRoute?.addListener(
-        _onRejoinNavigationRouteChanged,
-      );
-      _onRejoinNavigationRouteChanged();
-    }
     if (oldWidget.leaderStatus != widget.leaderStatus) {
       oldWidget.leaderStatus?.removeListener(_onGroupPipDataChanged);
       widget.leaderStatus?.addListener(_onGroupPipDataChanged);
       _onGroupPipDataChanged();
-    }
-    if (oldWidget.junctionMarkerOverlay != widget.junctionMarkerOverlay) {
-      oldWidget.junctionMarkerOverlay?.removeListener(_onJunctionMarkerChanged);
-      widget.junctionMarkerOverlay?.addListener(_onJunctionMarkerChanged);
-      _onJunctionMarkerChanged();
     }
     if (oldWidget.speedLimitDisplay != widget.speedLimitDisplay) {
       if (_ownsSpeedLimitDisplay) _speedLimitDisplay.dispose();
@@ -1332,11 +1207,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     widget.navigationPosition?.removeListener(_onPositionChanged);
     widget.overlayMarkers?.removeListener(_onOverlayDataChanged);
     widget.riderTrails?.removeListener(_onOverlayDataChanged);
-    widget.rejoinNavigationRoute?.removeListener(
-      _onRejoinNavigationRouteChanged,
-    );
     widget.leaderStatus?.removeListener(_onGroupPipDataChanged);
-    widget.junctionMarkerOverlay?.removeListener(_onJunctionMarkerChanged);
     _mapLibreController?.onFeatureTapped.remove(_onMapLibreFeatureTapped);
     _mapLibreController?.removeListener(_scheduleCameraFramingRefresh);
     _mapController.dispose();
@@ -1363,9 +1234,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
       setState(() {
         _route = route;
         _setRouteStartConnector(null);
-        _rejoinProgressTracker.reset();
-        _rejoinProgressGeometry = _rejoinProgressTracker.update(
-          _externalRejoinRoute,
+        _connectorProgressTracker.reset();
+        _connectorProgressGeometry = _connectorProgressTracker.update(
+          _connectorRoute,
           _effectivePosition,
         );
         _progressGeometry = _routeProgressTracker.update(
@@ -1375,7 +1246,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         // Riding without a GPX is a first-class mode (#124), so following the
         // rider is driven by position and heading alone. A route changes what is
         // drawn, never whether the camera tracks the bike.
-        _navigationMode = _isMoving && !_markerOverviewVisible;
+        _navigationMode = _isMoving;
         // A route load reframes the map, so any viewport follow mode had is gone.
         _releaseNavigationViewport();
         // Once we have a position, keep the map canvas at its navigation size.
@@ -1391,11 +1262,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
       if (_navigationMode) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) unawaited(_followNavigationCamera());
-        });
-      }
-      if (_markerOverviewVisible) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) unawaited(_showMarkerOverview());
         });
       }
       // A route loaded on a standing bike frames the whole route, not the rider,
@@ -1426,16 +1292,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
     _recordBottomChromeHeight();
     final landscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
-    final markerOverlay = widget.junctionMarkerOverlay?.value;
-    final localMarkerOverlay = markerOverlay?.isLocalMarker == true
-        ? markerOverlay
-        : null;
-    final markerOverviewActive = localMarkerOverlay != null;
     // Once navigation has started, retain the full map canvas through brief
     // traffic-light or GPS speed dips. Switching the AppBar in and out changes
     // the platform map's size and was the main source of visible flashing.
     // Not route-gated (#124): a ride with no GPX gets the same riding canvas.
-    final hideChrome = _navigationCanvasActive || markerOverviewActive;
+    final hideChrome = _navigationCanvasActive;
     // Notches, rounded corners and the home indicator are respected in every
     // orientation, with or without the AppBar. Scaffold already removes the
     // padding it consumed itself, so what is left is what the overlays owe.
@@ -1450,8 +1311,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     // The group mini-map owns its own ValueListenableBuilder below. This
     // avoids relying on a parent platform-map rebuild to notice rider updates,
     // which left the portrait mini-map absent in the live simulator.
-    final canShowGroupMiniMap =
-        widget.overlayMarkers != null && !markerOverviewActive;
+    final canShowGroupMiniMap = widget.overlayMarkers != null;
     final groupMiniMapWidth = landscape ? 196.0 : 150.0;
     final groupMiniMapHeight = landscape ? 116.0 : 104.0;
     final showRideMenu = hideChrome && widget.onOpenRideMenu != null;
@@ -1466,12 +1326,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
     // Leaving a ride is a ride-lifecycle action, not a route action (#124).
     final showLeaveRide = widget.rideStarted && widget.onLeaveRide != null;
     // "Follow me" is the way into the navigation viewport, and it is on screen
-    // whenever the camera is not locked into it (#141). The junction overview owns
-    // the whole screen while it is up, so nothing is offered underneath it.
-    final showFollowMe =
-        widget.rideStarted &&
-        !markerOverviewActive &&
-        !_navigationViewportLocked;
+    // whenever the camera is not locked into it (#141).
+    final showFollowMe = widget.rideStarted && !_navigationViewportLocked;
     return Scaffold(
       appBar: hideChrome
           ? null
@@ -1587,15 +1443,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
                         value: _MapAction.maneuverList,
                         child: Text('All turns for this route'),
                       ),
-                      if (widget.markerFeaturesEnabled)
-                        PopupMenuItem(
-                          value: _MapAction.markerPlan,
-                          child: Text(
-                            _markerPlanVisible
-                                ? 'Hide marker plan'
-                                : 'Show marker plan',
-                          ),
-                        ),
                     ],
                     if (!kIsWeb &&
                         defaultTargetPlatform == TargetPlatform.android)
@@ -1653,7 +1500,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   child: _buildRideChrome(
                     landscape: landscape,
                     hideChrome: hideChrome,
-                    markerOverviewActive: markerOverviewActive,
                     hasGuidance: hasGuidance,
                     routeStartOfferDistance: routeStartOfferDistance,
                     showRideMenu: showRideMenu,
@@ -1808,7 +1654,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
   Widget _buildRideChrome({
     required bool landscape,
     required bool hideChrome,
-    required bool markerOverviewActive,
     required bool hasGuidance,
     required double? routeStartOfferDistance,
     required bool showRideMenu,
@@ -1923,7 +1768,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
           : null;
       final routeProgressPanel =
           !widget.showRouteProgress ||
-              markerOverviewActive ||
               _route == null ||
               _progressGeometry.totalMeters <= 0
           ? null
@@ -1974,30 +1818,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
                       onDismiss: widget.onDismissRideCompletion,
                     ),
             );
-      final junctionCard = markerOverviewActive
-          ? ValueListenableBuilder<MapJunctionMarkerOverlay?>(
-              key: const Key('junction-marker-overlay-position'),
-              valueListenable: widget.junctionMarkerOverlay!,
-              builder: (context, overlay, _) {
-                if (overlay == null || !overlay.isLocalMarker) {
-                  return const SizedBox.shrink();
-                }
-                return LayoutBuilder(
-                  builder: (context, constraints) => Align(
-                    alignment: Alignment.bottomRight,
-                    child: _JunctionMarkerOverlay(
-                      overlay: overlay,
-                      compact: landscape,
-                      maxWidth: landscape
-                          ? math.min(250.0, constraints.maxWidth)
-                          : constraints.maxWidth,
-                      distanceUnit: widget.distanceUnit,
-                    ),
-                  ),
-                );
-              },
-            )
-          : null;
       // The ride menu is the one control #125 puts back in the upper band, and
       // deliberately: a single small corner button is where a rider reaches for
       // it and does not obstruct the road ahead. #104's rule against persistent
@@ -2171,7 +1991,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       // The speed sign owns its own slot at the edge of the band, clear of the
       // action row: portrait puts it under the actions and hard right, landscape
       // in the right-hand rail away from the centre column (#125).
-      final speedLimit = markerOverviewActive || !widget.rideStarted
+      final speedLimit = !widget.rideStarted
           ? null
           : KeyedSubtree(
               key: const Key('posted-speed-limit-position'),
@@ -2348,10 +2168,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                 child: _chromeRail(
                   key: const Key('map-landscape-right-rail'),
                   alignment: CrossAxisAlignment.end,
-                  // The card may now extend beneath the rider's horizontal
-                  // anchor. Its measured height is fed back into the camera so
-                  // the marker remains above it with the normal clearance.
-                  children: [?followMe, ?junctionCard, ?guidance],
+                  children: [?followMe, ?guidance],
                 ),
               ),
             ),
@@ -2465,7 +2282,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     Align(alignment: Alignment.centerLeft, child: followMe),
                   ?actionCluster,
                   ?completionSuggestion,
-                  ?junctionCard,
                 ],
               ),
             ),
@@ -2711,54 +2527,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
                         Icons.location_on,
                         color: Color(0xFFFFC857),
                         size: 36,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        if (_markerPlanVisible && _markerPlan.points.isNotEmpty)
-          MarkerLayer(
-            key: const Key('ride-marker-plan-layer'),
-            markers: _markerPlan.points
-                .take(500)
-                .map(
-                  (point) => Marker(
-                    point: _latLng(point.position),
-                    width: 38,
-                    height: 38,
-                    child: GestureDetector(
-                      key: Key('ride-marker-plan-${point.id}'),
-                      onTap: () => unawaited(_showMarkerPlanPoint(point)),
-                      child: Tooltip(
-                        message: point.label,
-                        child: Icon(
-                          point.source == MarkerPlanPointSource.manual
-                              ? Icons.add_location_alt_outlined
-                              : switch (point.kind) {
-                                  MarkerPlanPointKind.likelyMarker =>
-                                    Icons.person_pin_circle_outlined,
-                                  MarkerPlanPointKind.safetyReview =>
-                                    Icons.warning_amber_rounded,
-                                  MarkerPlanPointKind.musterPoint =>
-                                    Icons.groups_2_outlined,
-                                },
-                          color: switch (point.kind) {
-                            MarkerPlanPointKind.likelyMarker => const Color(
-                              0xFF6ED89A,
-                            ),
-                            MarkerPlanPointKind.safetyReview => const Color(
-                              0xFFFF8A4C,
-                            ),
-                            MarkerPlanPointKind.musterPoint => const Color(
-                              0xFF68A9FF,
-                            ),
-                          },
-                          size: 32,
-                          shadows: const [
-                            Shadow(color: Color(0xFF10151C), blurRadius: 4),
-                          ],
-                        ),
                       ),
                     ),
                   ),
@@ -3408,8 +3176,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
         position != null && !_navigationCanvasActive;
     if (refreshProgress) {
       _progressGeometry = _routeProgressTracker.update(_route, position);
-      _rejoinProgressGeometry = _rejoinProgressTracker.update(
-        _rejoinRoute,
+      _connectorProgressGeometry = _connectorProgressTracker.update(
+        _connectorRoute,
         position,
       );
       _updateNavigationGuidance(position);
@@ -3474,7 +3242,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   void _updateNavigationGuidance(GeoPoint? position) {
-    final navigationRoute = _rejoinRoute ?? _route;
+    final navigationRoute = _connectorRoute ?? _route;
     final next = _navigationGuidancePlanner.assess(
       route: navigationRoute,
       position: position,
@@ -3500,22 +3268,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     }
   }
 
-  void _onRejoinNavigationRouteChanged() {
-    if (_externalRejoinRoute != null && _routeStartConnector != null) {
-      setState(() {
-        _setRouteStartConnector(null);
-        _rejoinProgressTracker.reset();
-      });
-    }
-    _rejoinProgressGeometry = _rejoinProgressTracker.update(
-      _rejoinRoute,
-      _effectivePosition,
-    );
-    _updateNavigationGuidance(_effectivePosition);
-    _observeSpeedLimit(_navigationFix);
-    _scheduleMapLibreSync(progress: true, overlays: true);
-  }
-
   void _onOverlayDataChanged() {
     if (!mounted) return;
     // The mini-map listens to rider updates itself. Rebuilding the parent
@@ -3526,44 +3278,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   void _onGroupPipDataChanged() {
-    unawaited(_publishGroupPipSnapshot());
-  }
-
-  void _onJunctionMarkerChanged() {
-    if (!mounted) return;
-    final visible = widget.junctionMarkerOverlay?.value?.isLocalMarker ?? false;
-    if (visible == _markerOverviewVisible) return;
-    setState(() {
-      _markerOverviewVisible = visible;
-      if (visible) {
-        // The junction overview owns the camera while it is up, and takes the
-        // whole screen with it: nothing is offered underneath it (#125).
-        _navigationMode = false;
-        _autoFollowSuppressed = false;
-        _releaseNavigationViewport();
-      } else if (_effectivePosition != null) {
-        // Resuming needs a position, not a route (#124).
-        _navigationMode = true;
-        _navigationCanvasActive = true;
-        _autoFollowSuppressed = false;
-      }
-    });
-    if (visible) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_showMarkerOverview());
-      });
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          unawaited(
-            _followNavigationCamera(
-              force: true,
-              transitionDuration: const Duration(milliseconds: 700),
-            ),
-          );
-        }
-      });
-    }
     unawaited(_publishGroupPipSnapshot());
   }
 
@@ -3874,83 +3588,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
   void _showWholeRoute() {
     _stopFollowing(suppressAutomatic: _isMoving);
     _fitRoute();
-  }
-
-  Future<void> _showMarkerOverview() async {
-    final overlay = widget.junctionMarkerOverlay?.value;
-    if (overlay == null || !overlay.isLocalMarker) return;
-    final points = <GeoPoint>[overlay.markerPoint];
-    final localPosition = _effectivePosition;
-    if (localPosition != null) points.add(localPosition);
-    for (final rider in widget.overlayMarkers?.value ?? const []) {
-      if (!rider.id.startsWith('rider-')) continue;
-      if (_mapDistanceMeters(overlay.markerPoint, rider.point) <= 1600) {
-        points.add(rider.point);
-      }
-    }
-    final distinctPoints = <GeoPoint>[];
-    for (final point in points) {
-      if (distinctPoints.every((existing) => _pointsDiffer(existing, point))) {
-        distinctPoints.add(point);
-      }
-    }
-    final landscape =
-        MediaQuery.orientationOf(context) == Orientation.landscape;
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final safeInsets = MediaQuery.paddingOf(context);
-    final overlayWidth = landscape
-        ? math.min(312.0, screenWidth - safeInsets.horizontal - 24)
-        : screenWidth - safeInsets.horizontal - 24;
-    // The card lives in the lower-right corner. Reserve that area when fitting
-    // riders so no rider or route decision is hidden underneath it.
-    final rightPadding = landscape ? overlayWidth + 36.0 : 32.0;
-    final bottomPadding = landscape ? 228.0 : 276.0;
-    // A stationary marker view should be a genuine overview even when every
-    // rider is briefly at the same junction. These anchors prevent a close
-    // single-point camera from ignoring the reserved card area.
-    final cameraPoints = <GeoPoint>[
-      ...distinctPoints,
-      _pointAhead(overlay.markerPoint, 0, 360),
-      _pointAhead(overlay.markerPoint, 180, 360),
-    ];
-    if (_basemap.usesMapLibre) {
-      final controller = _mapLibreController;
-      if (controller == null) return;
-      final markerBounds = _mapLibreBounds(cameraPoints);
-      if (!_boundsAreUsable(markerBounds)) return;
-      await controller.animateCamera(
-        ml.CameraUpdate.newLatLngBounds(
-          markerBounds,
-          left: 36,
-          top: 36,
-          right: rightPadding,
-          bottom: bottomPadding,
-        ),
-        duration: const Duration(milliseconds: 700),
-      );
-      return;
-    }
-    try {
-      final fitted = CameraFit.bounds(
-        bounds: LatLngBounds.fromPoints(
-          cameraPoints.map(_latLng).toList(growable: false),
-        ),
-        padding: EdgeInsets.fromLTRB(36, 36, rightPadding, bottomPadding),
-        maxZoom: 14.2,
-      ).fit(_mapController.camera);
-      _mapController.moveAndRotateAnimatedRaw(
-        fitted.center,
-        fitted.zoom,
-        0,
-        offset: Offset.zero,
-        duration: const Duration(milliseconds: 700),
-        curve: Curves.easeInOutCubic,
-        hasGesture: false,
-        source: MapEventSource.mapController,
-      );
-    } on StateError {
-      // The marker can activate before FlutterMap finishes attaching.
-    }
   }
 
   Future<void> _followNavigationCamera({
@@ -4275,9 +3912,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
       // An off-route trail belongs on top of the plan: it is the deviation from
       // it.
       await _addTrailLayers(controller, RiderTrailKind.offRoute);
-      // The advisory rejoin route (#102) goes above everything else: it is the
-      // one line the affected rider is being asked to follow right now.
-      await _addTrailLayers(controller, RiderTrailKind.rejoin);
+      // The route-start connector (#133) goes above everything else: it is the
+      // one line the rider is being asked to follow right now.
+      await _addTrailLayers(controller, RiderTrailKind.routeStartConnector);
       await controller.addGeoJsonSource(
         _trailDirectionArrowSource,
         _trailDirectionArrowGeoJson(),
@@ -4307,29 +3944,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
           circleRadius: 7,
           circleColor: '#FFC857',
           circleStrokeWidth: 2,
-          circleStrokeColor: '#10151C',
-        ),
-      );
-      await controller.addGeoJsonSource(
-        _markerPlanSource,
-        _markerPlanGeoJson(),
-      );
-      await controller.addCircleLayer(
-        _markerPlanSource,
-        'balloon-crumbs-marker-plan-points',
-        const ml.CircleLayerProperties(
-          circleRadius: [
-            'case',
-            [
-              '==',
-              ['get', 'kind'],
-              'safety',
-            ],
-            9,
-            7,
-          ],
-          circleColor: ['get', 'color'],
-          circleStrokeWidth: 3,
           circleStrokeColor: '#10151C',
         ),
       );
@@ -4502,10 +4116,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
         _trailDirectionArrowGeoJson(),
       );
       await controller.setGeoJsonSource(_waypointSource, _waypointGeoJson());
-      await controller.setGeoJsonSource(
-        _markerPlanSource,
-        _markerPlanGeoJson(),
-      );
       await controller.setGeoJsonSource(_positionSource, _positionGeoJson());
       await controller.setGeoJsonSource(_overlaySource, _overlayGeoJson());
     } on Object catch (error) {
@@ -4571,10 +4181,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
           _riderTrailSource,
           _riderTrailGeoJson(),
         );
-        await controller.setGeoJsonSource(
-          _markerPlanSource,
-          _markerPlanGeoJson(),
-        );
         await controller.setGeoJsonSource(_overlaySource, _overlayGeoJson());
       }
       if (progress || overlays) {
@@ -4605,9 +4211,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   /// Every rider's travelled trail with enough geometry to draw. Rendering is
   /// deliberately independent of whether a route is loaded or matched (#100).
   List<MapOverlayTrace> get _visibleRiderTrails {
-    final connector = _externalRejoinRoute == null
-        ? _routeStartConnector
-        : null;
+    final connector = _routeStartConnector;
     return [
       ...(widget.riderTrails?.value ?? const <MapOverlayTrace>[]),
       if (connector != null)
@@ -4617,7 +4221,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               .expand((path) => path.points)
               .toList(growable: false),
           label: 'Route to planned start',
-          kind: RiderTrailKind.rejoin,
+          kind: RiderTrailKind.routeStartConnector,
         ),
     ].where((trace) => trace.points.length >= 2).toList(growable: false);
   }
@@ -4700,9 +4304,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   static int _arrowPriority(RiderTrailKind kind) => switch (kind) {
-    // The rejoin route is the local rider's own live instruction, so its
+    // The route-start connector is the rider's own live instruction, so its
     // direction arrows are the last thing the budget may drop.
-    RiderTrailKind.rejoin => 0,
+    RiderTrailKind.routeStartConnector => 0,
     RiderTrailKind.leader => 1,
     RiderTrailKind.offRoute => 2,
     RiderTrailKind.rider => 3,
@@ -4795,30 +4399,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
               ),
             ) ??
         const <MapGeoJsonPoint>[],
-  );
-
-  Map<String, dynamic> _markerPlanGeoJson() => MapGeoJson.points(
-    _markerPlanVisible
-        ? _markerPlan.points.map(
-            (point) => MapGeoJsonPoint(
-              id: point.id,
-              point: point.position,
-              properties: {
-                'label': point.label,
-                'kind': switch (point.kind) {
-                  MarkerPlanPointKind.likelyMarker => 'marker',
-                  MarkerPlanPointKind.safetyReview => 'safety',
-                  MarkerPlanPointKind.musterPoint => 'muster',
-                },
-                'color': switch (point.kind) {
-                  MarkerPlanPointKind.likelyMarker => '#6ED89A',
-                  MarkerPlanPointKind.safetyReview => '#FF8A4C',
-                  MarkerPlanPointKind.musterPoint => '#68A9FF',
-                },
-              },
-            ),
-          )
-        : const <MapGeoJsonPoint>[],
   );
 
   Map<String, dynamic> _positionGeoJson() {
@@ -4919,13 +4499,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
           .where((feature) => feature.id == id)
           .firstOrNull;
       if (feature != null) _showDiscoveryFeature(feature);
-      return;
-    }
-    if (layerId == 'balloon-crumbs-marker-plan-points') {
-      final point = _markerPlan.points
-          .where((item) => item.id == id)
-          .firstOrNull;
-      if (point != null) unawaited(_showMarkerPlanPoint(point));
       return;
     }
     if (layerId != 'balloon-crumbs-overlay-icons' &&
@@ -5056,21 +4629,15 @@ class _RideMapScreenState extends State<RideMapScreen> {
           distanceUnit: widget.distanceUnit,
           preferences: request.preferences,
         );
-        final review = await _reviewRoute(
+        final confirmed = await _confirmRoute(
           planned.route,
           distanceMeters: planned.distanceMeters,
           duration: planned.duration,
-          twistinessScore: planned.twistinessScore,
           warnings: planned.warnings,
-          canEditStops: true,
           previousRoute: previousCandidate,
         );
-        if (review.action == RouteReviewAction.edit) {
-          previousCandidate = review.route;
-          continue;
-        }
-        if (review.action != RouteReviewAction.confirm) return;
-        final route = await _commitRoute(review.route);
+        if (confirmed == null) return;
+        final route = await _commitRoute(confirmed);
         if (mounted) {
           final target = request.handoffTarget;
           if (target != null) await _exportRoute(target, route);
@@ -5177,27 +4744,28 @@ class _RideMapScreenState extends State<RideMapScreen> {
         warnings = [...warnings, ...match.reviewWarnings];
       }
     }
-    final review = await _reviewRoute(
+    final confirmed = await _confirmRoute(
       route,
       distanceMeters: distanceMeters,
       duration: duration,
       warnings: warnings,
       previousRoute: comparisonRoute,
-      comparisonRoute: comparisonRoute,
     );
-    if (review.action != RouteReviewAction.confirm) return null;
-    return _commitRoute(review.route);
+    if (confirmed == null) return null;
+    return _commitRoute(confirmed);
   }
 
-  Future<({RouteReviewAction action, ImportedRoute route})> _reviewRoute(
+  /// The route the leader confirmed, or null if they cancelled.
+  ///
+  /// Geometry enrichment still runs first: the numbers the sheet shows have to
+  /// be the numbers of the route that would actually be published, and an
+  /// enrichment that failed is itself one of the warnings worth reading.
+  Future<ImportedRoute?> _confirmRoute(
     ImportedRoute route, {
     double? distanceMeters,
     Duration? duration,
-    double? twistinessScore,
     List<String> warnings = const [],
-    bool canEditStops = false,
     ImportedRoute? previousRoute,
-    ImportedRoute? comparisonRoute,
   }) async {
     if (!widget.canEditRoute) {
       throw const FormatException(
@@ -5206,10 +4774,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
     }
     final enrichment = await _routeGeometryEnricher.enrich(route);
     final activeRoute = enrichment.route;
-    if (!mounted) {
-      return (action: RouteReviewAction.cancel, route: activeRoute);
-    }
-    final reviewWarnings = [
+    if (!mounted) return null;
+    final confirmationWarnings = [
       ...warnings,
       ?enrichment.warning,
       if (enrichment.attempted &&
@@ -5218,33 +4784,16 @@ class _RideMapScreenState extends State<RideMapScreen> {
         'Online road recalculation was unavailable. The original geometry is '
             'shown and remains usable offline.',
     ];
-    // The review screen is where suggested marking positions are accepted or
-    // rejected, so its decisions have to come back out with the route (#179).
-    var reviewedRoute = activeRoute;
-    var markerReview = activeRoute.markerReview;
-    final action = await RouteReviewScreen.show(
+    final action = await RouteConfirmationSheet.show(
       context,
       route: activeRoute,
       distanceUnit: widget.distanceUnit,
-      basemapConfiguration: _basemap,
       distanceMeters: distanceMeters,
       duration: duration,
-      twistinessScore: twistinessScore,
-      warnings: reviewWarnings,
+      warnings: confirmationWarnings,
       previousRoute: previousRoute ?? _route,
-      comparisonRoute: comparisonRoute,
-      canEditStops: canEditStops,
-      showMarkerPlan: widget.markerFeaturesEnabled,
-      onMarkerReviewChanged: (review) => markerReview = review,
-      onReshapeRoute: (candidate, shapingPoints) => RouteReshapePlanner(
-        routingService: _roadRoutingService,
-      ).reshape(candidate, shapingPoints),
-      onRouteChanged: (candidate) => reviewedRoute = candidate,
     );
-    return (
-      action: action,
-      route: reviewedRoute.withMarkerReview(markerReview),
-    );
+    return action == RouteConfirmationAction.confirm ? activeRoute : null;
   }
 
   bool _canGenerateNavigableRoute(ImportedRoute route) {
@@ -5299,9 +4848,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
     setState(() {
       _route = activeRoute;
       _setRouteStartConnector(null);
-      _rejoinProgressTracker.reset();
-      _rejoinProgressGeometry = _rejoinProgressTracker.update(
-        _externalRejoinRoute,
+      _connectorProgressTracker.reset();
+      _connectorProgressGeometry = _connectorProgressTracker.update(
+        _connectorRoute,
         _effectivePosition,
       );
       _progressGeometry = _routeProgressTracker.update(
@@ -5436,8 +4985,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
       if (!mounted) return;
       setState(() {
         _setRouteStartConnector(connector);
-        _rejoinProgressTracker.reset();
-        _rejoinProgressGeometry = _rejoinProgressTracker.update(
+        _connectorProgressTracker.reset();
+        _connectorProgressGeometry = _connectorProgressTracker.update(
           connector,
           _effectivePosition,
         );
@@ -5462,8 +5011,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
     }
     setState(() {
       _setRouteStartConnector(null);
-      _rejoinProgressTracker.reset();
-      _rejoinProgressGeometry = const RouteProgressGeometry.empty();
+      _connectorProgressTracker.reset();
+      _connectorProgressGeometry = const RouteProgressGeometry.empty();
     });
     _scheduleMapLibreSync(progress: true, overlays: true);
     _showMessage('Planned route reached. Following the main route.');
@@ -5878,9 +5427,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
         }
       case _MapAction.maneuverList:
         await _showManeuverList();
-      case _MapAction.markerPlan:
-        setState(() => _markerPlanVisible = !_markerPlanVisible);
-        _scheduleMapLibreSync(overlays: true);
       case _MapAction.groupPip:
         await _openGroupPip();
       case _MapAction.downloadOffline:
@@ -5893,15 +5439,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
           setState(() {
             _route = null;
             _setRouteStartConnector(null);
-            _rejoinProgressTracker.reset();
-            _rejoinProgressGeometry = _rejoinProgressTracker.update(
-              _externalRejoinRoute,
+            _connectorProgressTracker.reset();
+            _connectorProgressGeometry = _connectorProgressTracker.update(
+              _connectorRoute,
               _effectivePosition,
             );
             _progressGeometry = const RouteProgressGeometry.empty();
             _navigationMode = false;
             _navigationCanvasActive = false;
-            _markerPlanVisible = false;
             _initialCameraPositioned = false;
             _releaseNavigationViewport();
           });
@@ -5980,12 +5525,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
     final overlays = widget.overlayMarkers?.value ?? const <MapOverlayMarker>[];
     final currentPosition = _effectivePosition;
     final leaderStatus = widget.leaderStatus?.value;
-    final markerStatus = widget.junctionMarkerOverlay?.value;
     final offCourseCount = leaderStatus?.offCourseAlerts.length ?? 0;
     String? status;
-    if (markerStatus?.isLocalMarker == true) {
-      status = markerStatus!.instruction;
-    } else if (offCourseCount > 0) {
+    if (offCourseCount > 0) {
       status =
           '$offCourseCount rider${offCourseCount == 1 ? '' : 's'} '
           'need attention';
@@ -6302,7 +5844,6 @@ enum _MapAction {
   discoveryLayers,
   speedLimitDisplay,
   maneuverList,
-  markerPlan,
   groupPip,
   downloadOffline,
   removeRoute,
@@ -6347,33 +5888,6 @@ class MapNavigationPosition {
     headingDegrees,
     accuracyMeters,
   );
-}
-
-enum MapJunctionMarkerStage { waitingForRiders, backRiderApproaching, readyToRideOff }
-
-/// Presentation data for the automatic second-bike-drop view. It lives beside
-/// the map so a marker stop does not have to interrupt navigation with a tab
-/// change.
-class MapJunctionMarkerOverlay {
-  const MapJunctionMarkerOverlay({
-    required this.markerPoint,
-    required this.markerRiderName,
-    required this.isLocalMarker,
-    required this.ridersPassed,
-    required this.ridersExpected,
-    required this.instruction,
-    required this.stage,
-    this.backRiderDistanceMeters,
-  });
-
-  final GeoPoint markerPoint;
-  final String markerRiderName;
-  final bool isLocalMarker;
-  final int ridersPassed;
-  final int ridersExpected;
-  final double? backRiderDistanceMeters;
-  final String instruction;
-  final MapJunctionMarkerStage stage;
 }
 
 /// A ride role that should receive urgent assistance requests.
@@ -8094,170 +7608,6 @@ class _GroupMiniMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GroupMiniMapPainter oldDelegate) => true;
-}
-
-class _JunctionMarkerOverlay extends StatelessWidget {
-  const _JunctionMarkerOverlay({
-    required this.overlay,
-    required this.compact,
-    required this.maxWidth,
-    required this.distanceUnit,
-  });
-
-  final MapJunctionMarkerOverlay overlay;
-  final bool compact;
-  final double maxWidth;
-  final DistanceUnit distanceUnit;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (overlay.stage) {
-      MapJunctionMarkerStage.waitingForRiders => const Color(0xFFFFC857),
-      MapJunctionMarkerStage.backRiderApproaching => const Color(0xFFFFA24C),
-      MapJunctionMarkerStage.readyToRideOff => const Color(0xFF6ED89A),
-    };
-    final padding = compact
-        ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
-        : const EdgeInsets.fromLTRB(16, 13, 16, 12);
-    final tecDistance = overlay.backRiderDistanceMeters;
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      child: Card(
-        key: const Key('junction-marker-overlay'),
-        margin: EdgeInsets.zero,
-        color: const Color(0xEE121820),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: color.withValues(alpha: 0.9), width: 1.5),
-        ),
-        child: Padding(
-          padding: padding,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.alt_route, color: color),
-                  const SizedBox(width: 9),
-                  const Expanded(
-                    child: Text(
-                      'JUNCTION MARKER',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.7,
-                      ),
-                    ),
-                  ),
-                  _MarkerStatusPill(label: 'AUTO', color: color),
-                ],
-              ),
-              const SizedBox(height: 7),
-              Text(
-                overlay.isLocalMarker
-                    ? 'You are holding this junction.'
-                    : '${overlay.markerRiderName} is holding this junction.',
-                style: const TextStyle(
-                  color: Color(0xFFD8E0EA),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 9),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  _MarkerMetric(
-                    icon: Icons.groups_outlined,
-                    label:
-                        '${overlay.ridersPassed}/${overlay.ridersExpected} passed',
-                  ),
-                  if (tecDistance != null)
-                    _MarkerMetric(
-                      icon: Icons.shield_outlined,
-                      label:
-                          'TEC ${MeasurementFormatter(distanceUnit).distance(tecDistance)} away',
-                      color: const Color(0xFF68A9FF),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 9),
-              Text(
-                overlay.instruction,
-                style: TextStyle(color: color, fontWeight: FontWeight.w800),
-              ),
-              if (overlay.stage == MapJunctionMarkerStage.backRiderApproaching) ...[
-                const SizedBox(height: 7),
-                const Text(
-                  'GET READY TO RIDE OFF',
-                  key: Key('junction-marker-get-ready'),
-                  style: TextStyle(
-                    color: Color(0xFFFFC857),
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MarkerMetric extends StatelessWidget {
-  const _MarkerMetric({required this.icon, required this.label, this.color});
-
-  final IconData icon;
-  final String label;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-    decoration: BoxDecoration(
-      color: const Color(0xFF202A35),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: color ?? const Color(0xFFB7C2CF)),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-        ),
-      ],
-    ),
-  );
-}
-
-class _MarkerStatusPill extends StatelessWidget {
-  const _MarkerStatusPill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.17),
-      borderRadius: BorderRadius.circular(99),
-      border: Border.all(color: color.withValues(alpha: 0.7)),
-    ),
-    child: Text(
-      label,
-      style: TextStyle(
-        color: color,
-        fontWeight: FontWeight.w900,
-        fontSize: 10,
-        letterSpacing: 0.8,
-      ),
-    ),
-  );
 }
 
 class _SpeedLimitOptInChip extends StatelessWidget {

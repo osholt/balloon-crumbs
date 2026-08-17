@@ -48,7 +48,6 @@ void main() {
       guidanceTitle: 'turn right',
       guidanceDetail: '400 m · A27',
       groupStatus: '5 riders visible',
-      markerStatus: 'Marker at the next junction',
     );
 
     await publish();
@@ -82,8 +81,6 @@ void main() {
       'guidanceSecondsRemaining': null,
       'distanceUnit': null,
       'groupStatus': '5 riders visible',
-      'markerStatus': 'Marker at the next junction',
-      'marker': null,
       'rideStart': null,
       'speed': null,
       'basemap': null,
@@ -549,41 +546,6 @@ void main() {
     expect(rider['riderSymbol'], 'initials:v1:T0g:purple');
     expect(rider['motorcycleStyle'], 'cafeRacer');
     expect(rider['riderColor'], 'white');
-  });
-
-  test('publishes structured junction marker mode for the turn card', () async {
-    MethodCall? received;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      received = call;
-      return null;
-    });
-    final bridge = CarPlayBridge(channel: channel);
-    addTearDown(bridge.dispose);
-
-    await bridge.publish(
-      session: null,
-      riderLocations: const [],
-      routeAlerts: const [],
-      activeHazards: const [],
-      markerStatus: 'Wait for Hot Pursuit.',
-      marker: const CarPlayMarkerStatus(
-        stage: 'backRiderApproaching',
-        title: 'TEC approaching',
-        detail: '4/4 riders passed · TEC 0.2 mi away',
-        ridersPassed: 4,
-        ridersExpected: 4,
-        backRiderDistanceMeters: 322,
-      ),
-    );
-
-    expect((received!.arguments as Map)['marker'], {
-      'stage': 'backRiderApproaching',
-      'title': 'TEC approaching',
-      'detail': '4/4 riders passed · TEC 0.2 mi away',
-      'ridersPassed': 4,
-      'ridersExpected': 4,
-      'backRiderDistanceMeters': 322.0,
-    });
   });
 
   test(

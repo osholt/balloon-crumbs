@@ -6,9 +6,6 @@ enum RideEventType {
   riderLeft,
   roleChanged,
   rideStarted,
-  markerStarted,
-  markerPass,
-  markerEnded,
   statusMessage,
   riderLocationUpdated,
   hazardReported,
@@ -26,10 +23,6 @@ enum RideEventType {
 
   // Appended, never reordered: an older build recognises a type by name and
   // skips the ones it does not know (see `relay_event_compatibility.dart`).
-  /// One rider's advisory rejoin route, addressed to the ride leader
-  /// (issue #128 part 2). Also carries the cleared form that expires it.
-  rejoinRouteShared,
-
   /// A rider's **own** phone number, offered so the ride's coordination roles
   /// can ring or text them — and, when a coordination role shares, so a stopped
   /// rider can ring them (issue #188).

@@ -429,18 +429,6 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
       endedAt: ride.endedAt,
       generatedAt: ride.archivedAt,
       eventCount: ride.eventCount,
-      markerSessions: [
-        for (final (index, marker) in ride.markerSessions.indexed)
-          MarkerSessionSummary(
-            markerDeviceId: 'archived-marker-$index',
-            startedAt: marker.startedAt,
-            endedAt: marker.endedAt,
-            uniquePassCount: marker.uniquePassCount,
-            duration: (marker.endedAt ?? ride.endedAt)
-                .difference(marker.startedAt)
-                .abs(),
-          ),
-      ],
       riderCount: ride.riderCount,
       totalDistanceMeters: ride.totalDistanceMeters,
     );

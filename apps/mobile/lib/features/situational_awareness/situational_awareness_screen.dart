@@ -6,7 +6,6 @@ import '../../domain/hazard.dart';
 import '../../domain/route_alert.dart';
 import '../../services/device_location_source.dart';
 import '../../services/external_hazard_provider.dart';
-import '../map/route_trail_style.dart';
 
 class SituationalAwarenessScreen extends StatelessWidget {
   const SituationalAwarenessScreen({
@@ -588,19 +587,6 @@ class _RouteStatusCard extends StatelessWidget {
                         : 'The ride coordinator may need to respond.',
                     style: const TextStyle(color: Color(0xFF9CA7B5)),
                   ),
-                if (rejoinGuidance case final guidance?) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    guidance,
-                    key: const Key('rejoin-guidance-text'),
-                    // The same cyan the breadcrumb is drawn in, from the one
-                    // palette table, so the words and the line on the map read
-                    // as one thing.
-                    style: TextStyle(
-                      color: RouteTrailStyle.rejoinBreadcrumb.color,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

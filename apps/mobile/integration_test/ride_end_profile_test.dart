@@ -157,12 +157,12 @@ void main() {
         final initialize = await _timeAsync(controller.initialize);
         // What the dashboard and its menus read during build, twice - a
         // rebuild pays it again.
-        final marking = _time(() => controller.markingSummary);
-        final markingAgain = _time(() => controller.markingSummary);
+        final membership = _time(() => controller.liveView);
+        final membershipAgain = _time(() => controller.liveView);
         final clear = await _timeAsync(controller.clearEndedRide);
         debugPrint(
           'PROFILE #165 ${_pad(scale)}  initialize=${_ms(initialize)}  '
-          'markingSummary=${_ms(marking)} (again=${_ms(markingAgain)})  '
+          'liveView=${_ms(membership)} (again=${_ms(membershipAgain)})  '
           'clearEndedRide=${_ms(clear)}',
         );
         controller.dispose();

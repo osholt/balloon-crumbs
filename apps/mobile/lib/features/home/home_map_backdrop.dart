@@ -146,7 +146,6 @@ class _HomeMapBackdropState extends State<HomeMapBackdrop> {
             // No ride yet, so nothing may edit a ride's route from here and no
             // ride surface has anything to say.
             canEditRoute: false,
-            markerFeaturesEnabled: false,
           )
         else
           // Widget tests and plugin-less builds. Named so a test can assert the

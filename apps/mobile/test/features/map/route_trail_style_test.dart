@@ -20,7 +20,7 @@ void main() {
       'travelled': (2.81, 6.52, 7.02),
       'leader trail': (4.22, 9.78, 10.53),
       'off route': (2.73, 6.33, 6.81),
-      'rejoin breadcrumb': (4.77, 11.06, 11.91),
+      'route start connector': (4.77, 11.06, 11.91),
     };
 
     expect(RouteTrailStyle.allLines.keys, documented.keys);
@@ -167,25 +167,25 @@ void main() {
     expect(RouteTrailStyle.leaderTrail.isDashed, isFalse);
     expect(RouteTrailStyle.routeAhead.isDashed, isTrue);
     expect(RouteTrailStyle.offRouteTrail.isDashed, isTrue);
-    expect(RouteTrailStyle.rejoinBreadcrumb.isDashed, isTrue);
+    expect(RouteTrailStyle.routeStartConnectorLine.isDashed, isTrue);
   });
 
-  test('the route ahead cannot be mistaken for the rejoin breadcrumb', () {
-    // Off-route rerouting (#102) owns the cyan rejoin route and renders it
+  test('the route ahead cannot be mistaken for the route-start connector', () {
+    // The route-start connector (#133) owns the cyan line and renders it
     // dashed. Those are the two lines that both mean "go this way" and that
     // appear together, so they must differ by more than one attribute.
-    expect(RouteTrailStyle.rejoinBreadcrumb.color, const Color(0xFF00E5FF));
+    expect(RouteTrailStyle.routeStartConnectorLine.color, const Color(0xFF00E5FF));
     expect(
       RouteTrailStyle.routeAhead.color,
-      isNot(RouteTrailStyle.rejoinBreadcrumb.color),
+      isNot(RouteTrailStyle.routeStartConnectorLine.color),
     );
     expect(
       RouteTrailStyle.routeAhead.widthPixels,
-      greaterThan(RouteTrailStyle.rejoinBreadcrumb.widthPixels),
+      greaterThan(RouteTrailStyle.routeStartConnectorLine.widthPixels),
     );
     expect(
       RouteTrailStyle.routeAhead.dashPixels,
-      isNot(RouteTrailStyle.rejoinBreadcrumb.dashPixels),
+      isNot(RouteTrailStyle.routeStartConnectorLine.dashPixels),
     );
   });
 

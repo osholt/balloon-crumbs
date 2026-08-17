@@ -1,34 +1,6 @@
 import 'imported_route.dart';
 import 'ride_role.dart';
 
-class CompletedMarkerSession {
-  const CompletedMarkerSession({
-    required this.startedAt,
-    required this.endedAt,
-    required this.uniquePassCount,
-  });
-
-  final DateTime startedAt;
-  final DateTime? endedAt;
-  final int uniquePassCount;
-
-  Map<String, Object?> toJson() => {
-    'startedAt': startedAt.toUtc().toIso8601String(),
-    if (endedAt != null) 'endedAt': endedAt!.toUtc().toIso8601String(),
-    'uniquePassCount': uniquePassCount,
-  };
-
-  factory CompletedMarkerSession.fromJson(Map<String, Object?> json) =>
-      CompletedMarkerSession(
-        startedAt: DateTime.parse(json['startedAt']! as String).toUtc(),
-        endedAt: switch (json['endedAt']) {
-          final String value => DateTime.parse(value).toUtc(),
-          _ => null,
-        },
-        uniquePassCount: (json['uniquePassCount'] as num?)?.toInt() ?? 0,
-      );
-}
-
 /// A secret-free, immutable local record derived from a completed ride.
 ///
 /// Invitation credentials, rider identifiers, event payloads and other
@@ -46,7 +18,6 @@ class CompletedRide {
     required this.riderCount,
     required this.eventCount,
     required this.totalDistanceMeters,
-    required this.markerSessions,
     required this.plannedRoute,
     required this.traveledRoute,
   });
@@ -64,7 +35,6 @@ class CompletedRide {
   final int riderCount;
   final int eventCount;
   final double totalDistanceMeters;
-  final List<CompletedMarkerSession> markerSessions;
   final ImportedRoute? plannedRoute;
   final ImportedRoute? traveledRoute;
 
@@ -100,7 +70,6 @@ class CompletedRide {
     'riderCount': riderCount,
     'eventCount': eventCount,
     'totalDistanceMeters': totalDistanceMeters,
-    'markerSessions': markerSessions.map((value) => value.toJson()).toList(),
     if (plannedRoute != null) 'plannedRoute': plannedRoute!.toJson(),
     if (traveledRoute != null) 'traveledRoute': traveledRoute!.toJson(),
   };
@@ -124,18 +93,6 @@ class CompletedRide {
       eventCount: (json['eventCount'] as num?)?.toInt() ?? 0,
       totalDistanceMeters:
           (json['totalDistanceMeters'] as num?)?.toDouble() ?? 0,
-      markerSessions: switch (json['markerSessions']) {
-        final List values =>
-          values
-              .whereType<Map>()
-              .map(
-                (value) => CompletedMarkerSession.fromJson(
-                  Map<String, Object?>.from(value),
-                ),
-              )
-              .toList(growable: false),
-        _ => const [],
-      },
       plannedRoute: _optionalRoute(json['plannedRoute']),
       traveledRoute: _optionalRoute(json['traveledRoute']),
     );

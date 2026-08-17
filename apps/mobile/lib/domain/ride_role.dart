@@ -1,10 +1,9 @@
-enum RideRole { lead, rider, marker }
+enum RideRole { lead, rider }
 
 extension RideRoleLabel on RideRole {
   String get label => switch (this) {
     RideRole.lead => 'Lead',
     RideRole.rider => 'Rider',
-    RideRole.marker => 'Marker',
   };
 }
 
@@ -13,9 +12,10 @@ extension RideRoleLabel on RideRole {
 /// `RideRole.values.byName` throws on a name this build does not know, which is
 /// the wrong answer for a value that arrives from a peer's relayed state or
 /// from this phone's own stored session. The sweep-rider role `tailEndCharlie`
-/// was removed with the Tail End Charlie migration, so a peer on an older build
-/// still publishes it and an install that predates the removal still has it
-/// saved — both must degrade to an ordinary rider rather than fail to parse.
+/// and the junction-marker role `marker` were both removed with the motorcycle
+/// domain, so a peer on an older build still publishes them and an install that
+/// predates the removal still has one saved — all must degrade to an ordinary
+/// rider rather than fail to parse.
 ///
 /// The journal reducers already guard `byName` and drop an unknown role to
 /// null; this is for the callers that need a role rather than an absence.

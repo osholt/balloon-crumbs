@@ -601,7 +601,7 @@ void main() {
         'travelled': 7.14,
         'leader trail': 10.71,
         'off route': 6.93,
-        'rejoin breadcrumb': 12.11,
+        'route start connector': 12.11,
       };
 
       expect(RouteTrailStyle.allLines.keys, overGround.keys);

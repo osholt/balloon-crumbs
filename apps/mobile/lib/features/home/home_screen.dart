@@ -288,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
         riderSymbol: profile.riderSymbol,
         riderColor: profile.riderColor,
         coordinationMode: groupRide
-            ? RideCoordinationMode.secondBikeDropOff
+            ? RideCoordinationMode.keepTogether
             : RideCoordinationMode.solo,
         rideName: destination.label,
       );
@@ -953,7 +953,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
   final _codeFocusNode = FocusNode();
   final _codeFieldKey = GlobalKey();
   RideCoordinationMode _selectedCoordinationMode =
-      RideCoordinationMode.secondBikeDropOff;
+      RideCoordinationMode.keepTogether;
 
   /// Set once a created ride's code needs sharing before handing off to the
   /// map - the moment a leader most needs it, with people waiting nearby.
@@ -1048,46 +1048,18 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
                   selected: {_selectedCoordinationMode.isGroup},
                   onSelectionChanged: (selection) => setState(() {
                     _selectedCoordinationMode = selection.first
-                        ? RideCoordinationMode.secondBikeDropOff
+                        ? RideCoordinationMode.keepTogether
                         : RideCoordinationMode.solo;
                   }),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _selectedCoordinationMode == RideCoordinationMode.solo
-                      ? RideCoordinationMode.solo.description
-                      : 'Choose how this group will handle junctions.',
+                  _selectedCoordinationMode.description,
                   style: const TextStyle(
                     color: Color(0xFFABB5C1),
                     fontSize: 13,
                   ),
                 ),
-                if (_selectedCoordinationMode.isGroup) ...[
-                  const SizedBox(height: 12),
-                  RadioGroup<RideCoordinationMode>(
-                    groupValue: _selectedCoordinationMode,
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _selectedCoordinationMode = value);
-                      }
-                    },
-                    child: Column(
-                      children: [
-                        for (final mode in const [
-                          RideCoordinationMode.secondBikeDropOff,
-                          RideCoordinationMode.keepTogether,
-                        ])
-                          RadioListTile<RideCoordinationMode>(
-                            key: Key('ride-mode-${mode.name}'),
-                            contentPadding: EdgeInsets.zero,
-                            value: mode,
-                            title: Text(mode.label),
-                            subtitle: Text(mode.description),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _rideNameController,

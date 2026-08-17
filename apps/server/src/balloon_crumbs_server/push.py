@@ -476,7 +476,7 @@ def classify_push_event(
                 body="Open Balloon Crumbs for the latest group status.",
                 critical=False,
                 recipient_ids=recipients,
-                recipient_roles=frozenset({"lead", "tailEndCharlie", "marker"}),
+                recipient_roles=frozenset({"lead", "tailEndCharlie"}),
             )
         return None
 
@@ -515,17 +515,6 @@ def classify_push_event(
             critical=True,
             recipient_ids=recipients,
             all_members=not recipients,
-        )
-
-    if event_type in {"markerStarted", "markerEnded"}:
-        return PushMessage(
-            event_id=event_id,
-            ride_id=ride_id,
-            category="status",
-            title="Marker status changed",
-            body="Open Balloon Crumbs for the current marker status.",
-            critical=False,
-            recipient_roles=coordinator_roles,
         )
 
     if event_type in {"ridePaused", "rideResumed", "rideEnded"}:

@@ -70,10 +70,6 @@ abstract final class RelayProtocolCapabilities {
   static const trafficIncidents = 'traffic-incidents-v1';
   static const trafficReroutes = 'traffic-reroutes-v1';
 
-  /// A separated rider's advisory rejoin route, relayed to the ride leader only
-  /// (issue #128 part 2).
-  static const rejoinRouteSharing = 'rejoin-route-sharing-v1';
-
   /// A rider's own phone number, addressed to the ride's coordination roles
   /// (issue #188). Named so a client can say "the ride service cannot carry
   /// this" instead of appearing to have shared a number that went nowhere.
@@ -100,7 +96,6 @@ abstract final class RelayProtocolCapabilities {
     observerAccess,
     trafficIncidents,
     trafficReroutes,
-    rejoinRouteSharing,
     riderContactSharing,
     rideReopen,
   };

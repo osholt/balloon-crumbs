@@ -327,7 +327,6 @@ CompletedRide _completedRide({
   riderCount: 3,
   eventCount: 40,
   totalDistanceMeters: 42000,
-  markerSessions: const [],
   plannedRoute: plannedRoute,
   traveledRoute: traveledRoute,
 );

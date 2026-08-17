@@ -59,16 +59,12 @@ def project_membership_events(
             member.state = "joined"
         elif event.event_type == "roleChanged":
             member.role = safe_role(event.payload.get("role"))
-        elif event.event_type == "markerStarted":
-            member.role = "marker"
-        elif event.event_type == "markerEnded":
-            member.role = safe_role(event.payload.get("previousRole"))
         elif event.event_type == "riderLeft":
             member.state = "left"
 
 
 def safe_role(value: object) -> str:
-    if value in {"lead", "rider", "tailEndCharlie", "marker"}:
+    if value in {"lead", "rider", "tailEndCharlie"}:
         return str(value)
     return "rider"
 

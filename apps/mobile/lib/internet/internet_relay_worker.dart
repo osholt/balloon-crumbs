@@ -446,8 +446,6 @@ class InternetRelayWorker {
       RideEventType.routeRevisionChunk ||
       RideEventType.routeRevisionPublished ||
       RideEventType.routeCleared => RelayProtocolCapabilities.routeRevisions,
-      RideEventType.rejoinRouteShared =>
-        RelayProtocolCapabilities.rejoinRouteSharing,
       RideEventType.riderContactShared =>
         RelayProtocolCapabilities.riderContactSharing,
       RideEventType.rideReopened => RelayProtocolCapabilities.rideReopen,

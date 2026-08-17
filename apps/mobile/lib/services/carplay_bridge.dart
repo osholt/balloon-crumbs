@@ -317,8 +317,6 @@ class CarPlayBridge {
     double? guidanceDistanceMeters,
     DistanceUnit? distanceUnit,
     String? groupStatus,
-    String? markerStatus,
-    CarPlayMarkerStatus? marker,
     CarPlayRideStart? rideStart,
     CarPlaySurfaceMode surfaceMode = CarPlaySurfaceMode.activeRide,
     bool canPlanRoute = false,
@@ -398,8 +396,6 @@ class CarPlayBridge {
       ),
       'distanceUnit': distanceUnit?.name,
       'groupStatus': groupStatus,
-      'markerStatus': markerStatus,
-      'marker': marker?.toSnapshot(),
       'rideStart': rideStart?.toSnapshot(),
       'speed': !speedLimitEnabled
           ? null
@@ -709,35 +705,3 @@ class CarPlayRideStart {
   };
 }
 
-/// The phone's second-bike drop-off card, projected into CarPlay's turn card.
-///
-/// The free-form [instruction] remains in `markerStatus` for the status list
-/// and Android Auto. This structured form lets CarPlay preserve the phone's
-/// short headline and glanceable progress instead of treating marker mode as
-/// ordinary route navigation.
-class CarPlayMarkerStatus {
-  const CarPlayMarkerStatus({
-    required this.stage,
-    required this.title,
-    required this.detail,
-    required this.ridersPassed,
-    required this.ridersExpected,
-    this.backRiderDistanceMeters,
-  });
-
-  final String stage;
-  final String title;
-  final String detail;
-  final int ridersPassed;
-  final int ridersExpected;
-  final double? backRiderDistanceMeters;
-
-  Map<String, Object?> toSnapshot() => {
-    'stage': stage,
-    'title': title,
-    'detail': detail,
-    'ridersPassed': ridersPassed,
-    'ridersExpected': ridersExpected,
-    'backRiderDistanceMeters': backRiderDistanceMeters,
-  };
-}

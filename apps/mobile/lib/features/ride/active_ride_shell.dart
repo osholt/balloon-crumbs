@@ -10,7 +10,6 @@ import '../../controllers/distance_unit_controller.dart';
 import '../../controllers/foreground_location_controller.dart';
 import '../../controllers/internet_relay_controller.dart';
 import '../../controllers/map_style_mode_controller.dart';
-import '../../controllers/marker_assistance_controller.dart';
 import '../../controllers/nearby_relay_controller.dart';
 import '../../controllers/observer_access_controller.dart';
 import '../../controllers/pre_start_presence_controller.dart';
@@ -70,7 +69,6 @@ import '../../services/native_push_token_source.dart';
 import '../../services/position_report_policy.dart';
 import '../../services/received_quick_message.dart';
 import '../../services/navigation_guidance.dart';
-import '../../services/route_decision_point_extractor.dart';
 import '../../services/ride_completion_detector.dart';
 import '../../services/route_progress.dart';
 import '../../services/route_journey_progress.dart';
@@ -85,18 +83,16 @@ import '../../services/enforcement_alert_detector.dart';
 import '../../services/hazard_map_relevance.dart';
 import '../../services/relay_traffic_hazard_provider.dart';
 import '../../services/relay_traffic_reroute_provider.dart';
-import '../../services/rejoin_route_share.dart';
 import '../../services/rider_contact_share.dart';
 import '../../services/road_routing.dart';
 import '../../services/ride_connectivity_summary.dart';
-import '../../services/route_rejoin_planner.dart';
 import '../../services/trail_display_simplifier.dart';
 import '../map/hazard_map_symbol.dart';
 import '../map/maneuver_diagnostics.dart';
 import '../map/maneuver_list_screen.dart';
 import '../map/motorcycle_icon.dart';
 import '../map/ride_map.dart';
-import '../map/route_review_screen.dart';
+import '../map/route_confirmation_sheet.dart';
 import '../settings/emergency_info_sheet.dart';
 import '../settings/notification_preferences_sheet.dart';
 import '../settings/unit_settings_sheet.dart';
@@ -112,37 +108,6 @@ import 'ride_roster_sheet.dart';
 /// Whether a newly calculated route should wait before replacing the current
 /// junction instruction.
 ///
-/// Ride 392725 produced a reroute 47 m before a roundabout. Applying it changed
-/// the exit while the rider was already committed, then announced a second
-/// instruction at 0 m. A route can be calculated there, but it must not take
-/// over until the rider is clear.
-@visibleForTesting
-bool shouldDeferRejoinNavigation({
-  required bool hasRoutedPlan,
-  required double? distanceToCurrentManeuverMeters,
-  required double? metersSincePreviousManeuver,
-}) {
-  if (!hasRoutedPlan) return false;
-  final current = distanceToCurrentManeuverMeters;
-  if (current != null && current <= guidanceJunctionClearanceMeters) {
-    return true;
-  }
-  final since = metersSincePreviousManeuver;
-  return since != null && since < guidanceJunctionClearanceMeters;
-}
-
-/// Junctions the virtual second bike may mark during Ride Lab.
-///
-/// Navigation keeps a roundabout's paired exit step so it can derive the road
-/// taken and draw the correct symbol. A marker belongs at the entry only, so
-/// the simulation's junction list deliberately keeps decision steps alone.
-@visibleForTesting
-List<RoadRouteManeuver> simulationMarkerManeuvers(
-  List<RoadRouteManeuver> maneuvers,
-) => maneuvers
-    .where((maneuver) => maneuver.requiresSecondBikeDrop)
-    .toList(growable: false);
-
 /// The only thing an observer link publishes.
 ///
 /// Its argument list is the privacy boundary: an observer is a separate
@@ -1008,8 +973,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   final _carPlayJourneyProgressTracker = RouteJourneyProgressTracker();
   final _trailSimplifier = const TrailDisplaySimplifier();
   final _leaderStatus = ValueNotifier<LeaderRideStatus?>(null);
-
-  final _junctionMarkerOverlay = ValueNotifier<MapJunctionMarkerOverlay?>(null);
   final _enforcementAlert = ValueNotifier<EnforcementAlert?>(null);
 
   /// The arrival being offered to the rider, or null when there is nothing to
@@ -1094,34 +1057,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// to that widget's lifecycle. Both are monotonic and fed the same fixes, so
   /// they agree.
   final _completionProgressTracker = RouteProgressTracker();
-  late final ManagedRouteRejoinPlanner _managedRejoinPlanner;
-  late final RouteRejoinPlanner _rejoinPlanner;
-  Future<void> _rejoinChain = Future.value();
-  String? _rejoinGuidance;
-  bool _rejoinRecalculationAnnounced = false;
-  final _rejoinNavigationRoute = ValueNotifier<route_domain.ImportedRoute?>(
-    null,
-  );
-
-  /// Recorded travelled trails and, separately, the local rider's advisory
-  /// rejoin breadcrumb (#102). They share the map's one trail channel so the
-  /// rejoin route inherits the same palette table and layer ordering, but they
-  /// are composed apart because a rejoin route is not recorded history: it must
-  /// survive a trail refresh and be dropped the moment the rider is back on
-  /// route.
+  /// Recorded travelled trails, composed into the map's one trail channel.
   List<MapOverlayTrace> _recordedTrailTraces = const [];
-  MapOverlayTrace? _rejoinTrace;
-
-  /// Issue #128 part 2. Other riders' rejoin breadcrumbs, which only ever reach
-  /// the leader's own map: they are relayed addressed to the leader, and the
-  /// reducer drops anything this phone is not the recipient of. Held apart from
-  /// [_recordedTrailTraces] for the same reason the local rejoin route is —
-  /// they are intent, not recorded history.
-  List<MapOverlayTrace> _sharedRejoinTraces = const [];
-
-  /// Bounds how often the local rider's rejoin plan is relayed, independently of
-  /// how often #102 recomputes it locally.
-  final _rejoinRelayGate = RejoinRouteRelayGate();
 
   /// TEC requests this phone has already put in front of the rider, so an
   /// unanswered request does not reopen its dialog on every rebuild.
@@ -1140,7 +1077,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   late final http.Client _carPlayRoutingClient;
   late final DestinationRoutePlanner _carPlayDestinationPlanner;
   ForegroundLocationController? _locationController;
-  MarkerAssistanceController? _markerAssistanceController;
   NearbyRelayController? _relayController;
   InternetRelayController? _internetRelayController;
   ObserverAccessController? _observerAccessController;
@@ -1158,7 +1094,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   Timer? _stalenessTimer;
   Timer? _externalHazardTimer;
   Timer? _simulationAwarenessTimer;
-  Timer? _markerExitChromeTimer;
   int _observedNearbyPublishEventCount = -1;
   bool _nearbyPublishWorkPending = true;
   bool _nearbyPublishInFlight = false;
@@ -1176,8 +1111,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   Object? _changeRouteRequestToken;
   PickedGpxFile? _pendingSharedGpxFile;
   PendingInAppRoute? _pendingInAppRoute;
-  int _handledAutomaticMarkerActivation = 0;
-  int _handledAutomaticMarkerRideOffActivation = 0;
   DateTime? _lastSimulationNavigationUpdateAt;
   DateTime? _lastSimulationOverlayUpdateAt;
   LocationSample? _latestObserverLocationSample;
@@ -1192,7 +1125,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   bool _relayConfigured = false;
   bool _publishingRouteChange = false;
   bool _rideEndHandled = false;
-  bool _holdingNavigationChromeForMarkerExit = false;
   bool _autoEndingRide = false;
   bool _simulationPausedByRide = false;
   bool _trafficRerouting = false;
@@ -1233,14 +1165,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         if (kDebugMode) debugPrint('Could not enforce ride wake lock: $error');
       },
     )..start();
-    // Issue #102: advisory off-route rejoin routing. Uses the same documented
-    // OSRM configuration as the rest of the app; when it is unreachable the
-    // planner degrades to the plain "you are off route by X" message.
-    _managedRejoinPlanner = ManagedRouteRejoinPlanner.osrm(
-      routingBaseUrl: RoutingConfiguration.fromEnvironment().routingBaseUrl,
-      distanceUnit: widget.distanceUnits.value,
-    );
-    _rejoinPlanner = _managedRejoinPlanner.planner;
     final carPlayRouting = RoutingConfiguration.fromEnvironment();
     _carPlayRoutingClient = http.Client();
     _carPlayDestinationPlanner = DestinationRoutePlanner(
@@ -1750,18 +1674,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           '${formatter.distance(distanceDelta.abs())}; '
           '${durationDelta.isNegative ? 'saves' : 'adds'} '
           '${_trafficDurationLabel(durationDelta.abs())}.';
-      final action = await RouteReviewScreen.show(
+      final action = await RouteConfirmationSheet.show(
         context,
         route: preview.route,
         distanceUnit: widget.distanceUnits.value,
-        basemapConfiguration: BasemapConfiguration.fromEnvironment()
-            .forBrightness(
-              dark: widget.mapStyleMode.resolveDark(
-                MediaQuery.platformBrightnessOf(context),
-              ),
-              restrainedLightStyle:
-                  widget.mapStyleMode.dayStyle == DayMapStyle.restrained,
-            ),
         distanceMeters: preview.alternativeDistanceMeters,
         duration: preview.alternativeDuration,
         previousRoute: route,
@@ -1775,7 +1691,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           'The current group route remains authoritative until you confirm.',
         ],
       );
-      if (action != RouteReviewAction.confirm || !mounted) return;
+      if (action != RouteConfirmationAction.confirm || !mounted) return;
       final previousRevision =
           widget.rideController.authoritativeRouteState.revisionNumber;
       await _handleRouteChanged(preview.route);
@@ -1820,7 +1736,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         : '${route.id}:${route.importedAt.toUtc().toIso8601String()}:'
               // The marker review decides which decision points the live
               // detector may suggest, so rejecting one has to rebuild it (#179).
-              '${route.pathPointCount}:${route.markerReview.signature}';
+              '${route.pathPointCount}';
     final lifecycleFingerprint =
         widget.rideController.rideStartedAt?.toUtc().toIso8601String() ??
         'open';
@@ -1904,60 +1820,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // exactly the stale-reference bug TestControlRegistry exists to avoid.
     widget.testControlRegistry?.publish(controller);
 
-    MarkerAssistanceController? markerController;
-    if (widget.rideController.coordinationMode.usesSecondBikeDropOff) {
-      final markerRoute = _markerRouteFor(route);
-      final markerReview =
-          route?.markerReview ?? route_domain.MarkerPlanReview.empty;
-      final decisionPoints = const RouteDecisionPointExtractor().extract(
-        route: markerRoute,
-        explicitPoints:
-            route?.waypoints
-                .map(
-                  (waypoint) => ExplicitDecisionPoint(
-                    position: awareness_geo.GeoPoint(
-                      latitude: waypoint.point.latitude,
-                      longitude: waypoint.point.longitude,
-                    ),
-                    label: waypoint.name,
-                  ),
-                )
-                .toList(growable: false) ??
-            const [],
-        rejectedPositions: markerReview.rejected
-            .map(
-              (point) => awareness_geo.GeoPoint(
-                latitude: point.position.latitude,
-                longitude: point.position.longitude,
-              ),
-            )
-            .toList(growable: false),
-        addedPositions: markerReview.added
-            .map(
-              (point) => ExplicitDecisionPoint(
-                position: awareness_geo.GeoPoint(
-                  latitude: point.position.latitude,
-                  longitude: point.position.longitude,
-                ),
-                label: point.label,
-              ),
-            )
-            .toList(growable: false),
-      );
-      markerController = MarkerAssistanceController(
-        widget.rideController,
-        controller,
-        route: markerRoute,
-        decisionPoints: decisionPoints,
-      )..initialize();
-    }
-
     final previous = _awarenessController;
-    final previousMarker = _markerAssistanceController;
     previous?.removeListener(_onAwarenessChanged);
-    previousMarker?.dispose();
     _awarenessController = controller;
-    _markerAssistanceController = markerController;
     _routeFingerprint = effectiveFingerprint;
     // Replacing the awareness controller usually only means the route changed -
     // a leader reroute, say - and travelled history must survive that with no
@@ -1968,17 +1833,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       _trailRecorder.clear();
       _recordedTrailTraces = const [];
     }
-    // Issue #102: unlike travelled history, a rejoin plan is only valid for the
-    // route it was computed against, so a route change always discards it along
-    // with the last-matched progress behind it.
-    _rejoinTrace = null;
-    _rejoinGuidance = null;
-    _rejoinPlanner.reset();
-    // Issue #128: the relayed copy is discarded on the same trigger. A share
-    // already on the leader's map is retired by its own route revision no longer
-    // matching, so nothing is left drawn against a route it was not computed for.
-    _rejoinRelayGate.reset();
-    _sharedRejoinTraces = const [];
     _pushRiderTrails();
     controller.addListener(_onAwarenessChanged);
     if (session.role == RideRole.lead &&
@@ -2061,7 +1915,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         : '${route.id}:${route.importedAt.toUtc().toIso8601String()}:'
               // The marker review decides which decision points the live
               // detector may suggest, so rejecting one has to rebuild it (#179).
-              '${route.pathPointCount}:${route.markerReview.signature}';
+              '${route.pathPointCount}';
     final lifecycleFingerprint =
         widget.rideController.rideStartedAt?.toUtc().toIso8601String() ??
         'open';
@@ -2073,16 +1927,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final previous = _simulationController;
     _simulationController = null;
     _simulationRouteFingerprint = effectiveFingerprint;
-    _handledAutomaticMarkerActivation = 0;
-    _handledAutomaticMarkerRideOffActivation = 0;
-    _junctionMarkerOverlay.value = null;
     _lastSimulationNavigationUpdateAt = null;
     previous?.removeListener(_onSimulationVisualChanged);
     previous?.dispose();
 
     final awareness = _awarenessController;
     final session = widget.rideController.session;
-    final simulationRoute = _markerRouteFor(route);
+    final simulationRoute = _simulationRoutePoints(route);
     if (awareness == null ||
         session == null ||
         !session.isSimulation ||
@@ -2090,18 +1941,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       if (notify && mounted) setState(() {});
       return;
     }
-    final markerJunctions = await _simulationJunctions(route);
-    final derivedJunctions = const RouteDecisionPointExtractor()
-        .extract(route: simulationRoute)
-        .map((point) => point.position)
-        .toList(growable: false);
-
     final controller = RideSimulationController(
       awareness,
       session: session,
       route: simulationRoute,
-      markerJunctions: markerJunctions,
-      fallbackJunctions: derivedJunctions,
       riderCount: session.simulationRiderCount,
       rideStarted: widget.rideController.rideStarted,
     );
@@ -2121,54 +1964,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (notify) setState(() {});
   }
 
-  Future<List<awareness_geo.GeoPoint>> _simulationJunctions(
-    route_domain.ImportedRoute? route,
-  ) async {
-    if (route?.sourceFileName == 'demo_route.gpx') {
-      try {
-        return simulationMarkerManeuvers(
-              await const BundledDemoRouteLoader().loadManeuvers(),
-            )
-            .map(
-              (maneuver) => awareness_geo.GeoPoint(
-                latitude: maneuver.position.latitude,
-                longitude: maneuver.position.longitude,
-              ),
-            )
-            .toList(growable: false);
-      } on FormatException {
-        // Keep the demo usable if a local asset is damaged. GPX waypoints are
-        // a less detailed but still valid fallback for the simulation.
-      }
-    }
-    return route?.waypoints
-            .map(
-              (waypoint) => awareness_geo.GeoPoint(
-                latitude: waypoint.point.latitude,
-                longitude: waypoint.point.longitude,
-              ),
-            )
-            .toList(growable: false) ??
-        const <awareness_geo.GeoPoint>[];
-  }
-
   void _onSimulationVisualChanged() {
     if (!mounted || !_isSimulation) return;
-    final controller = _simulationController;
-    if (controller != null) _updateJunctionMarkerOverlay(controller);
-    if (controller != null &&
-        controller.automaticMarkerActivation >
-            _handledAutomaticMarkerActivation) {
-      _handledAutomaticMarkerActivation = controller.automaticMarkerActivation;
-      unawaited(_startAutomaticSimulationMarker(controller));
-    }
-    if (controller != null &&
-        controller.automaticMarkerRideOffActivation >
-            _handledAutomaticMarkerRideOffActivation) {
-      _handledAutomaticMarkerRideOffActivation =
-          controller.automaticMarkerRideOffActivation;
-      unawaited(_finishAutomaticSimulationMarker(controller));
-    }
     final now = DateTime.now();
     final updateNavigationPosition =
         _lastSimulationNavigationUpdateAt == null ||
@@ -2190,58 +1987,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       updateOverlayMarkers: updateOverlayMarkers,
       updateNavigationPosition: updateNavigationPosition,
     );
-  }
-
-  void _updateJunctionMarkerOverlay(RideSimulationController controller) {
-    final hadOverlay = _junctionMarkerOverlay.value != null;
-    // Junction guidance is an instruction for the rider holding the turn. The
-    // rest of the group keeps their normal navigation view and never receives
-    // the stationary marker camera transition.
-    if (!controller.automaticMarkerActive ||
-        !controller.automaticMarkerIsLocal) {
-      if (hadOverlay) {
-        _holdNavigationChromeAfterMarkerExit();
-        _junctionMarkerOverlay.value = null;
-        setState(() {});
-      }
-      return;
-    }
-    final marker = controller.riders
-        .where((rider) => rider.role == RideRole.marker)
-        .firstOrNull;
-    if (marker == null) return;
-    final stage = switch (controller.markerPhase) {
-      SimulationMarkerPhase.backRiderApproaching =>
-        MapJunctionMarkerStage.backRiderApproaching,
-      SimulationMarkerPhase.readyToRideOff =>
-        MapJunctionMarkerStage.readyToRideOff,
-      _ => MapJunctionMarkerStage.waitingForRiders,
-    };
-    _junctionMarkerOverlay.value = MapJunctionMarkerOverlay(
-      markerPoint: route_domain.GeoPoint(
-        latitude: marker.position.latitude,
-        longitude: marker.position.longitude,
-      ),
-      markerRiderName: controller.automaticMarkerIsLocal
-          ? 'You'
-          : (controller.automaticMarkerRiderName ?? 'Second bike'),
-      isLocalMarker: controller.automaticMarkerIsLocal,
-      ridersPassed: controller.ridersPassedMarker,
-      ridersExpected: controller.ridersExpectedToPass,
-      backRiderDistanceMeters: controller.backRiderDistanceToMarkerMeters,
-      instruction: controller.markerInstruction,
-      stage: stage,
-    );
-    if (!hadOverlay) setState(() {});
-  }
-
-  void _holdNavigationChromeAfterMarkerExit() {
-    _markerExitChromeTimer?.cancel();
-    _holdingNavigationChromeForMarkerExit = true;
-    _markerExitChromeTimer = Timer(const Duration(milliseconds: 900), () {
-      if (!mounted) return;
-      setState(() => _holdingNavigationChromeForMarkerExit = false);
-    });
   }
 
   void _onAwarenessChanged() {
@@ -2539,7 +2284,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       visibleRiderLocations: visibleRiderLocations,
       activeRiderIds: activeRiderIds,
     );
-    _updateSharedRejoinTraces();
   }
 
   /// Projects the ride onto CarPlay, including the back-marker.
@@ -2576,7 +2320,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final bridge = _carPlayBridge;
     if (bridge == null) return;
     final session = widget.rideController.session;
-    final navigationRoute = _rejoinNavigationRoute.value ?? _activeRoute;
+    final navigationRoute = _activeRoute;
     final routeProgress = _carPlayRouteProgressTracker.update(
       navigationRoute,
       _mapPosition.value,
@@ -2589,7 +2333,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           restrainedLightStyle:
               widget.mapStyleMode.dayStyle == DayMapStyle.restrained,
         );
-    final markerOverlay = _junctionMarkerOverlay.value;
     final navigationPosition = _mapNavigationPosition.value;
     final localSpeedIsAgeing =
         navigationPosition != null &&
@@ -2604,24 +2347,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 ? null
                 : navigationPosition?.speedMetersPerSecond,
             now: DateTime.now(),
-          );
-    final marker = markerOverlay == null
-        ? null
-        : CarPlayMarkerStatus(
-            stage: markerOverlay.stage.name,
-            title: switch (markerOverlay.stage) {
-              MapJunctionMarkerStage.waitingForRiders => 'Hold this junction',
-              MapJunctionMarkerStage.backRiderApproaching => 'TEC approaching',
-              MapJunctionMarkerStage.readyToRideOff => 'Ride off now',
-            },
-            detail: [
-              '${markerOverlay.ridersPassed}/${markerOverlay.ridersExpected} riders passed',
-              if (markerOverlay.backRiderDistanceMeters case final distance?)
-                'TEC ${MeasurementFormatter(widget.distanceUnits.value).distance(distance)} away',
-            ].join(' · '),
-            ridersPassed: markerOverlay.ridersPassed,
-            ridersExpected: markerOverlay.ridersExpected,
-            backRiderDistanceMeters: markerOverlay.backRiderDistanceMeters,
           );
     unawaited(
       bridge.publish(
@@ -2643,8 +2368,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         guidanceDistanceMeters: _latestNavigationGuidance?.distanceMeters,
         distanceUnit: widget.distanceUnits.value,
         groupStatus: '${visibleRiderLocations.length} riders visible',
-        markerStatus: markerOverlay?.instruction,
-        marker: marker,
         rideStart: _carPlayRideStart,
         surfaceMode: widget.rideController.rideEnded
             ? CarPlaySurfaceMode.endedRide
@@ -2784,8 +2507,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (_autoEndingRide ||
         !widget.rideController.rideStarted ||
         widget.rideController.rideEnded ||
-        widget.rideController.ridePaused ||
-        widget.rideController.markerActive) {
+        widget.rideController.ridePaused) {
       return;
     }
     final session = widget.rideController.session;
@@ -2952,208 +2674,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           ),
       ]),
     );
-    unawaited(_updateRejoinRoute(awareness));
-  }
-
-  /// Issue #102: keeps the local rider's advisory rejoin breadcrumb current.
-  ///
-  /// Only the local rider is planned for. The breadcrumb belongs to whoever is
-  /// off route and nothing here is relayed, so no other rider's rejoin route can
-  /// reach this map. Recompute frequency is bounded inside [RouteRejoinPlanner];
-  /// this only serialises the calls so a burst of location events cannot overlap
-  /// them.
-  Future<void> _updateRejoinRoute(SituationalAwarenessController awareness) {
-    _rejoinChain = _rejoinChain.then((_) async {
-      // Ride Lab drives a virtual group and the headless mode has no map, so
-      // neither may reach a real routing provider.
-      if (!mounted || _isSimulation || !widget.enableNativeServices) return;
-      final session = widget.rideController.session;
-      final local = awareness.localLocation;
-      final alert = session == null
-          ? null
-          : awareness.alertFor(session.localRiderId);
-      if (session == null || local == null || alert == null) {
-        _setRejoinPlan(null);
-        return;
-      }
-      final leader = _newestLocationFor(awareness, RideRole.lead);
-      _speakRejoinRecalculation(alert.assessment);
-      final plan = await _rejoinPlanner.update(
-        riderId: session.localRiderId,
-        sample: local.sample,
-        assessment: alert.assessment,
-        plannedRoute: awareness.route,
-        followingLeaderTrack: awareness.isFollowingLeaderTrack(
-          session.localRiderId,
-        ),
-        leaderPosition: leader?.sample.position,
-      );
-      if (!mounted) return;
-      final presentedPlan = plan.severity == RouteRejoinSeverity.onRoute
-          ? null
-          : plan;
-      if (!_shouldDeferRejoinNavigation(presentedPlan, local.sample.position)) {
-        _setRejoinPlan(presentedPlan);
-      }
-      await _relayRejoinPlanToLeader(plan, session);
-    });
-    return _rejoinChain;
-  }
-
-  bool _shouldDeferRejoinNavigation(
-    RouteRejoinPlan? plan,
-    awareness_geo.GeoPoint riderPosition,
-  ) {
-    final passed = _passedManeuverPosition;
-    final metersSincePrevious = passed == null
-        ? null
-        : GeoCalculations.distanceMeters(
-            riderPosition,
-            awareness_geo.GeoPoint(
-              latitude: passed.latitude,
-              longitude: passed.longitude,
-            ),
-          );
-    return shouldDeferRejoinNavigation(
-      hasRoutedPlan: plan?.hasBreadcrumb ?? false,
-      distanceToCurrentManeuverMeters:
-          _latestNavigationGuidance?.distanceMeters,
-      metersSincePreviousManeuver: metersSincePrevious,
-    );
-  }
-
-  /// Feeds the current gap into the trend tracker.
-  ///
-  /// The history is dropped when the role moves to a different rider: the
-  /// previous TEC's gap says nothing about the new one's, and carrying it over
-  /// Issue #128 part 2: relays the local rider's rejoin plan to the leader, and
-  /// to nobody else.
-  ///
-  /// The bound is [RejoinRouteRelayGate]'s, not #102's: one share per 120 s,
-  /// with a clear exempt so an expiry is prompt. The leader already learns that
-  /// this rider is off course, and how badly, from the unthrottled deviation
-  /// alert; this carries only the geometry.
-  Future<void> _relayRejoinPlanToLeader(
-    RouteRejoinPlan? plan,
-    RideSession session,
-  ) async {
-    if (_isSimulation) return;
-    final controller = widget.rideController;
-    // Nothing to address a leader-only event to, and a leader has their own plan
-    // already: in both cases the gate is still evaluated so a share already sent
-    // is cleared rather than left on the leader's map.
-    final hasLeaderRecipient =
-        controller.leaderRiderId != null &&
-        controller.leaderRiderId != session.localRiderId;
-    final decision = _rejoinRelayGate.evaluate(
-      plan: hasLeaderRecipient ? plan : null,
-      displayName: session.displayName,
-      routeRevisionNumber: controller.authoritativeRouteState.revisionNumber,
-      now: DateTime.now(),
-      rideEnded: controller.rideEnded,
-    );
-    final share = decision.share;
-    if (share == null) return;
-    final relayCanCarry =
-        _internetRelayController?.supportsCapability(
-          RelayProtocolCapabilities.rejoinRouteSharing,
-        ) ??
-        true;
-    final sent = await controller.shareRejoinRoute(
-      share,
-      relayCanCarryShare: relayCanCarry,
-    );
-    if (sent || !mounted) return;
-    // Only ever raised for a share, never for a clear: a clear that cannot be
-    // sent is covered by the share's own TTL expiring on the leader's phone.
-    if (decision.action == RejoinRouteRelayAction.share && !relayCanCarry) {
-      _rejoinRelayGate.reset();
-      if (_warnings.add(
-        PresenceLimitation.rejoinSharingUnsupportedByService.message,
-      )) {
-        setState(() {});
-      }
-    }
-  }
-
-  void _setRejoinPlan(RouteRejoinPlan? plan) {
-    if (plan == null) _rejoinRecalculationAnnounced = false;
-    final guidance = plan?.guidance;
-    final trace = plan?.hasBreadcrumb ?? false
-        ? MapOverlayTrace(
-            id: 'rejoin-${plan!.riderId}',
-            points: _routePoints(plan.breadcrumb),
-            label: 'Advisory rejoin route',
-            kind: RiderTrailKind.rejoin,
-          )
-        : null;
-    if (trace != _rejoinTrace) {
-      _rejoinTrace = trace;
-      _pushRiderTrails();
-    }
-    final navigationRoute = rejoinNavigationRoute(plan);
-    if (_rejoinNavigationRoute.value?.id != navigationRoute?.id) {
-      _rejoinNavigationRoute.value = navigationRoute;
-      // Only on a change, so a rider circling off route does not fill the log
-      // with the same line (#414). The bound in #128's relay gate exists for the
-      // same reason.
-      _diagnostics?.recordReroute(
-        reason: 'rejoin plan changed',
-        succeeded: navigationRoute != null,
-      );
-    }
-    if (guidance != _rejoinGuidance) {
-      setState(() => _rejoinGuidance = guidance);
-    }
-  }
-
-  /// Announces the state transition once, before the network route returns.
-  ///
-  /// A moving rider otherwise hears silence while the original turn prompts are
-  /// suppressed, which made the first eventual reroute instruction feel both
-  /// late and unexplained (#444).
-  void _speakRejoinRecalculation(RouteDeviationAssessment assessment) {
-    if (_rejoinRecalculationAnnounced ||
-        assessment.state != RouteTrackingState.offRoute) {
-      return;
-    }
-    _rejoinRecalculationAnnounced = true;
-    final speaker = _spokenGuidance;
-    final controller = widget.rideController;
-    if (speaker == null) return;
-    final episode =
-        assessment.offRouteSince?.microsecondsSinceEpoch ??
-        assessment.evaluatedAt.microsecondsSinceEpoch;
-    unawaited(
-      speaker.speakAlert(
-        key:
-            'rejoin-recalculating:${controller.session?.localRiderId}:$episode',
-        phrase: 'Off route. Recalculating directions.',
-        enabled: spokenAudioAllows(
-          widget.spokenGuidance?.mode ?? SpokenAudioMode.silent,
-          SpokenAudioClass.navigation,
-        ),
-        rideActive:
-            controller.rideStarted &&
-            !controller.rideEnded &&
-            !controller.ridePaused,
-      ),
-    );
-  }
-
-  static RiderLocation? _newestLocationFor(
-    SituationalAwarenessController awareness,
-    RideRole role,
-  ) {
-    RiderLocation? newest;
-    for (final location in awareness.riderLocations) {
-      if (location.role != role) continue;
-      if (newest == null ||
-          location.sample.recordedAt.isAfter(newest.sample.recordedAt)) {
-        newest = location;
-      }
-    }
-    return newest;
   }
 
   static List<route_domain.GeoPoint> _routePoints(
@@ -3184,8 +2704,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               RiderTrailKind.offRoute => '${trail.displayName} off-route trace',
               RiderTrailKind.rider => '${trail.displayName} trail',
               // RiderTrailRecorder only records where riders have been, so it
-              // never produces a rejoin route.
-              RiderTrailKind.rejoin => '${trail.displayName} rejoin route',
+              // never produces a route-start connector; the map composes that
+              // one itself.
+              RiderTrailKind.routeStartConnector =>
+                '${trail.displayName} route to start',
             },
             kind: trail.kind,
           ),
@@ -3193,21 +2715,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _pushRiderTrails();
   }
 
-  /// The rejoin breadcrumbs are appended last so they draw above the trails in
-  /// the flutter_map fallback, matching the MapLibre layer order. Shared
-  /// breadcrumbs from other riders sit under the local rider's own, which is the
-  /// only one that is guidance for this phone.
   /// Every trace is simplified for display here, once per change, rather than
   /// in a renderer or on every frame: this is the single point both map
   /// implementations read from, so the bound cannot apply to only one of them
   /// (#165).
   void _pushRiderTrails() {
     _riderTrails.value = List.unmodifiable([
-      for (final trace in [
-        ..._recordedTrailTraces,
-        ..._sharedRejoinTraces,
-        ?_rejoinTrace,
-      ])
+      for (final trace in _recordedTrailTraces)
         _simplifiedForDisplay(trace),
     ]);
   }
@@ -3221,48 +2735,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       label: trace.label,
       kind: trace.kind,
     );
-  }
-
-  /// Issue #128 part 2: refreshes the rejoin breadcrumbs other riders have
-  /// shared with this phone.
-  ///
-  /// Every gate lives in [SharedRejoinRouteReducer] — addressed to this rider,
-  /// authored by the rider it describes, matching the current route revision,
-  /// inside its own TTL, not cleared, not from someone who has left — so a share
-  /// vanishing on rejoin, on a route change and at ride end all fall out of one
-  /// rule set rather than three UI checks. Ride Lab has no relay, so it has
-  /// nothing to show.
-  void _updateSharedRejoinTraces() {
-    final shares = _isSimulation
-        ? const <String, SharedRejoinRoute>{}
-        : widget.rideController.sharedRejoinRoutes;
-    final traces = <MapOverlayTrace>[
-      for (final share in shares.values)
-        MapOverlayTrace(
-          id: 'shared-rejoin-${share.riderId}',
-          points: _routePoints(share.breadcrumb),
-          label: share.mapLabel,
-          kind: RiderTrailKind.rejoin,
-        ),
-    ]..sort((left, right) => left.id.compareTo(right.id));
-    if (_sameTraces(_sharedRejoinTraces, traces)) return;
-    _sharedRejoinTraces = List.unmodifiable(traces);
-    _pushRiderTrails();
-  }
-
-  static bool _sameTraces(
-    List<MapOverlayTrace> current,
-    List<MapOverlayTrace> next,
-  ) {
-    if (current.length != next.length) return false;
-    for (var index = 0; index < current.length; index += 1) {
-      if (current[index].id != next[index].id ||
-          current[index].label != next[index].label ||
-          current[index].points.length != next[index].points.length) {
-        return false;
-      }
-    }
-    return true;
   }
 
   static bool _isOffRouteState(RouteTrackingState? state) =>
@@ -3292,7 +2764,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
   }
 
-  static List<awareness_geo.GeoPoint> _markerRouteFor(
+  /// The route Ride Lab flies, as awareness points: the densest path in the
+  /// file, so a GPX carrying both a calculated track and its sparse waypoint
+  /// route drives the simulation from the detailed one.
+  static List<awareness_geo.GeoPoint> _simulationRoutePoints(
     route_domain.ImportedRoute? route,
   ) {
     if (route == null || route.paths.isEmpty) return const [];
@@ -3368,7 +2843,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         unawaited(_pushNotificationController?.refreshRegistration());
       }
       _publishObserverSnapshot();
-      _updateSharedRejoinTraces();
     }
     if (widget.rideController.rideEnded && !_rideEndHandled) {
       unawaited(_handleRideEnded());
@@ -3702,9 +3176,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             widget.rideController.rideStarted &&
             _selectedIndex == 0 &&
             _activeRoute != null &&
-            (navigationPosition != null ||
-                _junctionMarkerOverlay.value != null ||
-                _holdingNavigationChromeForMarkerExit);
+            navigationPosition != null;
         final destinations = [
           for (final destination in _rideDestinations)
             NavigationDestination(
@@ -3836,13 +3308,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       navigationPosition: _mapNavigationPosition,
       overlayMarkers: _mapOverlays,
       riderTrails: _riderTrails,
-      rejoinNavigationRoute: _rejoinNavigationRoute,
       leaderStatus: _leaderStatus,
       groupRiderCount: widget.rideController.liveParticipants.length,
       onOpenRoster: _openRoster,
       // Deliberately not `onOpenRideMenu`. The control that reaches the other
       // tabs is rendered by this shell instead — see _openRideMenu and #404.
-      junctionMarkerOverlay: _junctionMarkerOverlay,
       enforcementAlert: _enforcementAlert,
       rideCompletionSuggestion: _rideCompletionSuggestion,
       onEndRideForEveryone: _endRideFromCompletionSuggestion,
@@ -3868,8 +3338,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       ridePaused: widget.rideController.ridePaused,
       rideHasNoLeader: widget.rideController.rideHasNoLeader,
       rideStarted: widget.rideController.rideStarted,
-      markerFeaturesEnabled:
-          widget.rideController.coordinationMode.usesSecondBikeDropOff,
       onLeaveRide: _confirmLeaveRideFromMap,
       onRouteCommitted: _onRouteChanged,
       onNavigationGuidanceChanged: _onNavigationGuidanceChanged,
@@ -4019,7 +3487,16 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// explicit choice outranks an automatic one (#415).
   SpokenAudioMode get _spokenAudioMode {
     final chosen = widget.spokenGuidance?.mode ?? SpokenAudioMode.silent;
-    return _rejoinGuidance == null ? chosen : spokenAudioModeOffRoute(chosen);
+    // Read from the deviation alert rather than a rejoin guidance string: the
+    // string was only ever a proxy for "this rider is off route" (#415), and
+    // rejoin routing is gone.
+    final localRiderId = widget.rideController.session?.localRiderId;
+    final assessment = localRiderId == null
+        ? null
+        : _awarenessController?.alertFor(localRiderId)?.assessment;
+    return _isOffRouteState(assessment?.state)
+        ? spokenAudioModeOffRoute(chosen)
+        : chosen;
   }
 
   void _onSpokenGuidanceChanged() {
@@ -5121,75 +4598,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       onRestart: _restartSimulation,
       onExit: _leaveRide,
       onRoleChanged: _setSimulationRole,
-      onToggleMarker: _toggleSimulationMarker,
-      onRideOff: _rideOffSimulationMarker,
       onRiderCountChanged: _restartSimulationWithRiderCount,
-      markerPassCount: widget.rideController.markerPassCount,
     );
   }
 
   Future<void> _setSimulationRole(RideRole role) async {
     final controller = _simulationController;
-    if (controller == null || controller.markerMode) return;
+    if (controller == null) return;
     controller.setLocalRole(role);
     await widget.rideController.setRole(role);
-  }
-
-  Future<void> _toggleSimulationMarker() async {
-    final controller = _simulationController;
-    if (controller == null || controller.automaticMarkerActive) return;
-    if (controller.markerMode) {
-      await widget.rideController.endMarker();
-      controller.setMarkerMode(false);
-      final restoredRole = widget.rideController.session?.role;
-      if (restoredRole != null && restoredRole != RideRole.marker) {
-        controller.setLocalRole(restoredRole);
-      }
-      return;
-    }
-    await widget.rideController.startMarker(mode: 'simulation');
-    controller.setMarkerMode(true);
-  }
-
-  Future<void> _startAutomaticSimulationMarker(
-    RideSimulationController controller,
-  ) async {
-    if (!mounted ||
-        _simulationController != controller ||
-        !controller.automaticMarkerActive) {
-      return;
-    }
-    if (controller.automaticMarkerIsLocal &&
-        !widget.rideController.markerActive) {
-      await widget.rideController.startMarker(mode: 'simulation-auto-junction');
-      if (mounted &&
-          _simulationController == controller &&
-          !controller.markerMode &&
-          widget.rideController.markerActive) {
-        await widget.rideController.endMarker();
-      }
-    }
-  }
-
-  Future<void> _finishAutomaticSimulationMarker(
-    RideSimulationController controller,
-  ) async {
-    if (!mounted || _simulationController != controller) return;
-    if (controller.lastAutomaticMarkerRideOffWasLocal &&
-        widget.rideController.markerActive) {
-      await widget.rideController.endMarker();
-    }
-  }
-
-  Future<void> _rideOffSimulationMarker() async {
-    final controller = _simulationController;
-    if (controller == null || !controller.canRideOff) return;
-    if (controller.automaticMarkerIsLocal &&
-        widget.rideController.markerActive) {
-      await widget.rideController.endMarker();
-    }
-    controller.rideOff();
-    if (mounted) setState(() => _selectedIndex = 0);
   }
 
   Future<void> _restartSimulation() async {
@@ -5210,7 +4627,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     rideActions: _buildRideActions(),
     onOpenRoster: _openRoster,
     relayController: _relayController,
-    markerAssistanceController: _markerAssistanceController,
     internetRelayController: _internetRelayController,
     onSendQuickMessage: _sendLocalQuickMessage,
     localObserverAssistanceActive:
@@ -5308,9 +4724,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       onDismissTrafficAlternative: _trafficRerouteHazards.isEmpty
           ? null
           : _dismissTrafficAlternative,
-      // Issue #102: the affected rider's own rejoin guidance, including the
-      // honest "routing is unavailable" case.
-      rejoinGuidance: _rejoinGuidance,
     );
   }
 
@@ -5372,7 +4785,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _preStartPresenceController?.removeListener(_onPreStartPresenceChanged);
     unawaited(_spokenGuidance?.stop());
     _awarenessController?.removeListener(_onAwarenessChanged);
-    _markerAssistanceController?.dispose();
     if (_awarenessController case final awareness?) {
       widget.testControlRegistry?.withdraw(awareness);
     }
@@ -5382,7 +4794,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     unawaited(_pushOpenSubscription?.cancel());
     _stalenessTimer?.cancel();
     _externalHazardTimer?.cancel();
-    _markerExitChromeTimer?.cancel();
     _locationController?.removeListener(_onDeviceLocationChanged);
     _locationController?.dispose();
     unawaited(_relayController?.close());
@@ -5395,13 +4806,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _observerAccessController?.dispose();
     _mapPosition.dispose();
     _mapNavigationPosition.dispose();
-    _rejoinNavigationRoute.dispose();
-    _managedRejoinPlanner.dispose();
     _mapOverlays.dispose();
     _riderTrails.dispose();
     _quickMessageAlerts.dispose();
     _leaderStatus.dispose();
-    _junctionMarkerOverlay.dispose();
     _enforcementAlert.dispose();
     _rideCompletionSuggestion.dispose();
     unawaited(_carPlayBridge?.dispose());

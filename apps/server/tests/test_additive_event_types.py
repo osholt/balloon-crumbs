@@ -18,84 +18,14 @@ from balloon_crumbs_server.service import RelayService
 from .conftest import event, ride_token, sync_request
 
 SECRET = "0123456789abcdef0123456789abcdef"
-OBSERVER_SECRET = "observer-rejoin-secret-0123456789"
-
-REJOIN_CAPABILITY = "rejoin-route-sharing-v1"
-
-
-def test_compatibility_advertises_the_rejoin_capability(client) -> None:
-    capabilities = client.get("/api/v1/compatibility").json()["capabilities"]
-
-    assert REJOIN_CAPABILITY in capabilities
-    assert "tec-role-assignment-v1" not in capabilities
-    # Additive: nothing that was already advertised has gone.
-    assert {"live-presence-v2", "membership-v1", "route-revisions-v1"} <= set(capabilities)
-
-
-def test_rejoin_route_share_is_accepted_and_relayed(client, synchronize, make_event) -> None:
-    ride_id = "ride-rejoin-share"
-    share = make_event(
-        ride_id,
-        "event-rejoin-1",
-        event_type="rejoinRouteShared",
-        payload={
-            "share": {
-                "riderId": "device-a",
-                "displayName": "Bill",
-                "computedAt": "2026-07-26T11:00:00Z",
-                "expiresAt": "2026-07-26T11:10:00Z",
-                "routeRevision": 2,
-                "severity": "offRoute",
-                "status": "routed",
-                "breadcrumb": [[51.5, -0.1], [51.51, -0.09]],
-            },
-            "recipientRiderIds": ["device-b"],
-        },
-    )
-
-    uploaded = synchronize(client, ride_id=ride_id, secret=SECRET, events=[share])
-    assert uploaded.status_code == 200
-    assert uploaded.json()["acceptedEventIds"] == ["event-rejoin-1"]
-
-    downloaded = synchronize(client, ride_id=ride_id, secret=SECRET, device_id="device-b")
-    assert downloaded.status_code == 200
-    assert downloaded.json()["events"] == [share]
-
-
-def test_a_full_size_breadcrumb_is_within_the_event_size_limit(
-    client, synchronize, make_event
-) -> None:
-    ride_id = "ride-rejoin-big"
-    # The client caps a relayed breadcrumb at 60 points; 96 is its absolute
-    # decoder ceiling. Even the ceiling has to fit the relay's per-event limit.
-    share = make_event(
-        ride_id,
-        "event-rejoin-big",
-        event_type="rejoinRouteShared",
-        payload={
-            "share": {
-                "riderId": "device-a",
-                "displayName": "Bill",
-                "computedAt": "2026-07-26T11:00:00Z",
-                "expiresAt": "2026-07-26T11:10:00Z",
-                "routeRevision": 2,
-                "breadcrumb": [[51.50000 + index / 10000, -0.12345] for index in range(96)],
-            },
-            "recipientRiderIds": ["device-b"],
-        },
-    )
-
-    response = synchronize(client, ride_id=ride_id, secret=SECRET, events=[share])
-
-    assert response.status_code == 200
-    assert response.json()["acceptedEventIds"] == ["event-rejoin-big"]
+OBSERVER_SECRET = "observer-extra-field-secret-01234"
 
 
 def test_new_event_retention_is_capped_tightly(client, synchronize, make_event) -> None:
-    ride_id = "ride-rejoin-retention"
+    ride_id = "ride-craft-retention"
     before = datetime.now(UTC)
     events = [
-        make_event(ride_id, "event-rejoin-1", event_type="rejoinRouteShared"),
+        make_event(ride_id, "event-craft-1", event_type="craftChaseAssigned"),
         make_event(ride_id, "event-plain", event_type="statusMessage"),
     ]
 
@@ -108,16 +38,13 @@ def test_new_event_retention_is_capped_tightly(client, synchronize, make_event) 
             for row in session.scalars(select(StoredEvent).where(StoredEvent.ride_id == ride_id))
         }
 
-    # A rider's intended path is treated as perishably as where they actually
-    # are: the same 30-minute band as riderLocationUpdated.
-    assert stored["event-rejoin-1"] < before + timedelta(minutes=31)
-    assert stored["event-rejoin-1"] > before + timedelta(minutes=29)
+    # A chase assignment outlives a position report, because it is structure
+    # rather than a fix: the 24-hour band a ride's own shape gets.
+    assert stored["event-craft-1"] > before + timedelta(hours=23)
 
 
 def test_retention_table_matches_the_documented_bands() -> None:
     retention = RelayService._maximum_event_retention
-    assert retention("rejoinRouteShared") == timedelta(minutes=30)
-    assert retention("rejoinRouteShared") == retention("riderLocationUpdated")
     # Issue #188. A rider's own phone number gets exactly the cap an ICE share
     # gets, and is capped independently of whatever expiry a client asks for.
     assert retention("riderContactShared") == timedelta(hours=2)
@@ -174,11 +101,11 @@ def test_an_unknown_event_type_is_still_refused(client, synchronize, make_event)
     assert "type" in response.json()["error"].lower()
 
 
-def test_a_rejoin_share_is_not_a_field_an_observer_snapshot_can_carry(client) -> None:
+def test_an_unrecognised_field_is_not_something_a_snapshot_can_carry(client) -> None:
     """#36 observers get their own authorisation decision, so the observer channel
-    has no field a rejoin route could travel in - and adding one has to be a
-    deliberate change that fails this test first."""
-    ride_id = "ride-observer-rejoin"
+    carries only what its schema names - and widening it has to be a deliberate
+    change that fails this test first."""
+    ride_id = "ride-observer-extra-field"
     now = datetime.now(UTC)
     assert (
         sync_request(
@@ -221,7 +148,7 @@ def test_a_rejoin_share_is_not_a_field_an_observer_snapshot_can_carry(client) ->
         headers={"authorization": f"Bearer {body['publisherToken']}"},
         json={
             **snapshot,
-            "rejoinRoute": {"breadcrumb": [[51.5, -0.1], [51.51, -0.09]]},
+            "riderTrack": {"points": [[51.5, -0.1], [51.51, -0.09]]},
         },
     )
     # `extra="forbid"` on the publish schema: an unrecognised field is refused
@@ -234,8 +161,8 @@ def test_a_rejoin_share_is_not_a_field_an_observer_snapshot_can_carry(client) ->
     )
     assert observed.status_code == 200
     served = observed.json()
-    assert "rejoinRoute" not in served
-    assert "breadcrumb" not in str(served)
+    assert "riderTrack" not in served
+    assert "points" not in str(served)
 
 
 def test_craft_events_are_accepted_and_relayed(client, synchronize, make_event) -> None:

@@ -74,7 +74,7 @@ void main() {
     final legacy = solo.toJson()..remove('coordinationMode');
     expect(
       RideSession.fromJson(legacy).coordinationMode,
-      RideCoordinationMode.secondBikeDropOff,
+      RideCoordinationMode.keepTogether,
     );
   });
 

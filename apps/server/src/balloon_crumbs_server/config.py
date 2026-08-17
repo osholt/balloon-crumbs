@@ -97,9 +97,6 @@ class Settings(BaseSettings):
             # rider's answer. Both are ordinary journal events; the capability
             # exists so a client can name the limitation instead of appearing to
             # have asked somebody who was never asked.
-            # A separated rider's advisory rejoin route, addressed to the ride
-            # leader only.
-            "rejoin-route-sharing-v1",
             # A rider's own phone number, addressed to the ride's coordination
             # roles. Optional throughout and never inferred: a ride in which
             # nobody shares one carries no numbers at all. Named so a client can

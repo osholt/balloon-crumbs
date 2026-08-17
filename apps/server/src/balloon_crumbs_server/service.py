@@ -42,9 +42,6 @@ EVENT_TYPES = {
     "riderLeft",
     "roleChanged",
     "rideStarted",
-    "markerStarted",
-    "markerPass",
-    "markerEnded",
     "statusMessage",
     "riderLocationUpdated",
     "hazardReported",
@@ -62,7 +59,6 @@ EVENT_TYPES = {
     # Issue #128. Additive: an older client that does not know these names skips
     # them per event and keeps the rest of the batch, so the relay may carry
     # them for the clients that do.
-    "rejoinRouteShared",
     # Issue #188. A rider's own phone number, addressed to the ride's
     # coordination roles. Deliberately distinct from "iceInfoShared", which
     # carries a rider's next of kin.
@@ -1005,7 +1001,6 @@ class RelayService:
             # A rider's intended path: the same retention band as where they
             # actually are, capped here as well as on the client so a share
             # cannot outlive its usefulness even if a client asks it to.
-            "rejoinRouteShared": timedelta(minutes=30),
             # WP3. Craft structure outlives any single fix: expiring it sooner
             # than the positions would leave a replaying device with fixes and
             # no crafts to attach them to, so the balloon would vanish while its

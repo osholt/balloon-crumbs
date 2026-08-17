@@ -52,7 +52,7 @@ class PresencePositionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     displayName: str = Field(min_length=1, max_length=80)
-    role: Literal["lead", "rider", "tailEndCharlie", "marker"]
+    role: Literal["lead", "rider", "tailEndCharlie"]
     motorcycleStyle: str = Field(min_length=1, max_length=40)
     riderColor: str = Field(min_length=1, max_length=40)
     sample: PresenceLocationSample
@@ -137,7 +137,7 @@ class PushRegistrationRequest(BaseModel):
     platform: Literal["ios", "android"]
     provider: Literal["apns", "fcm"]
     token: str = Field(min_length=16, max_length=4096)
-    role: Literal["lead", "rider", "tailEndCharlie", "marker"]
+    role: Literal["lead", "rider", "tailEndCharlie"]
     preferences: PushPreferences = Field(default_factory=PushPreferences)
 
     @model_validator(mode="after")
@@ -155,7 +155,7 @@ class PushRegistrationResponse(BaseModel):
     installationId: str
     platform: Literal["ios", "android"]
     provider: Literal["apns", "fcm"]
-    role: Literal["lead", "rider", "tailEndCharlie", "marker"]
+    role: Literal["lead", "rider", "tailEndCharlie"]
     preferences: PushPreferences
     registeredAt: datetime
     updatedAt: datetime
@@ -411,7 +411,7 @@ class PublishObserverGroupParticipant(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     displayName: str = Field(min_length=1, max_length=80)
-    role: Literal["lead", "tailEndCharlie", "marker", "rider"]
+    role: Literal["lead", "rider", "tailEndCharlie"]
     color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     position: ObserverPosition | None
 

@@ -43,7 +43,6 @@ CompletedRide _ride() => CompletedRide(
   riderCount: 4,
   eventCount: 12,
   totalDistanceMeters: 42000,
-  markerSessions: const [],
   plannedRoute: null,
   traveledRoute: ImportedRoute(
     id: 'trail',

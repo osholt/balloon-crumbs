@@ -17,9 +17,9 @@ import 'package:balloon_crumbs/services/nearby_bridge.dart';
 /// The two were not merely worded differently. Only the ride menu's told the
 /// leader whether the ride could be resumed — including "this action cannot be
 /// undone for the group" when the relay cannot carry a reopen. Only the
-/// dashboard's showed the marking summary and offered to share it. So **whether
-/// a leader learned that ending the ride was irreversible depended on which
-/// button they happened to press.**
+/// dashboard's offered to share the summary first. So **whether a leader learned
+/// that ending the ride was irreversible depended on which button they happened
+/// to press.**
 void main() {
   group('the consequence is stated once, for both entry points', () {
     test('a reopenable ride says it can be resumed', () {
@@ -69,7 +69,7 @@ void main() {
     // of them wrong. `RideController.endRide` accepts `isLocalRideLeader`; the
     // shell's end-ride guard and the map's exit dialog both read
     // `session?.role == RideRole.lead`, which is a different thing.
-    Future<RideController> controllerFor({required bool marking}) async {
+    Future<RideController> controllerFor() async {
       var id = 0;
       final controller = RideController(
         InMemoryEventStore(),
@@ -83,44 +83,22 @@ void main() {
       await controller.initialize();
       await controller.createRide('Oliver');
       await controller.startRide();
-      if (marking) await controller.startMarker();
       return controller;
     }
 
     test('a leader may', () async {
-      final controller = await controllerFor(marking: false);
+      final controller = await controllerFor();
       addTearDown(controller.dispose);
 
       expect(controller.session?.role, RideRole.lead);
       expect(canEndRideForEveryone(controller), isTrue);
     });
 
-    test('a leader currently acting as the marker may', () async {
-      // The case the two wrong expressions refused. `endRide` would have
-      // accepted it, so refusing it meant the app offering an action and then
-      // doing nothing.
-      final controller = await controllerFor(marking: true);
-      addTearDown(controller.dispose);
-
-      expect(
-        controller.session?.role,
-        isNot(RideRole.lead),
-        reason: 'the precondition: marking changes the session role',
-      );
-      expect(canEndRideForEveryone(controller), isTrue);
-    });
-
     test('the decision matches what the controller will accept', () async {
       // If these ever diverge again, one surface offers what another refuses.
-      for (final marking in [false, true]) {
-        final controller = await controllerFor(marking: marking);
-        addTearDown(controller.dispose);
-        expect(
-          canEndRideForEveryone(controller),
-          controller.isLocalRideLeader,
-          reason: 'marking: $marking',
-        );
-      }
+      final controller = await controllerFor();
+      addTearDown(controller.dispose);
+      expect(canEndRideForEveryone(controller), controller.isLocalRideLeader);
     });
   });
 

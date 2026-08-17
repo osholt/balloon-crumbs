@@ -25,7 +25,7 @@ class RideSession {
     this.motorcycleStyle = motorcycleIconStyleDefault,
     this.riderSymbol = riderSymbolDefault,
     this.riderColor = riderColorDefault,
-    this.coordinationMode = RideCoordinationMode.secondBikeDropOff,
+    this.coordinationMode = RideCoordinationMode.keepTogether,
     this.rideName,
   }) : assert(
          !isSimulation ||

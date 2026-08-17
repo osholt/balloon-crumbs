@@ -18,11 +18,14 @@ enum RiderTrailKind {
   /// route, or recovering.
   offRoute,
 
-  /// The advisory rejoin route computed for an off-course rider (#102). The one
-  /// kind that is not recorded history: it is where the routing engine says to
-  /// go next, which is why it is never produced by [RiderTrailRecorder] and is
-  /// published alongside the recorded trails instead.
-  rejoin,
+  /// The road route from where the rider is to the start of the planned route
+  /// (#133). The one kind that is not recorded history: it is where the routing
+  /// engine says to go next, which is why it is never produced by
+  /// [RiderTrailRecorder] and is composed by the map instead.
+  ///
+  /// It inherited the advisory-rejoin line when rejoin routing was deleted, and
+  /// kept the styling: both answer "follow this to get back on plan".
+  routeStartConnector,
 }
 
 /// One rider's travelled path, ready to be rendered.

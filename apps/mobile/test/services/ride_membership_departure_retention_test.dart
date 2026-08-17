@@ -145,7 +145,7 @@ void main() {
         _location(
           deviceId: 'bill',
           displayName: 'Bill',
-          role: RideRole.marker,
+          role: RideRole.rider,
           at: startedAt.add(const Duration(minutes: 4)),
           latitude: 51.5,
           longitude: -2.5,
@@ -161,7 +161,6 @@ void main() {
     final bill = riderIn(participants, 'bill');
     expect(bill.state, RideMembershipState.left);
     expect(bill.displayName, 'Bill');
-    expect(bill.role, RideRole.marker);
     expect(bill.stateLabel, 'Left the ride at 14:06');
     expect(bill.lastKnownLocation?.sample.position.latitude, 51.5);
     expect(bill.isIncludedInLiveCount, isFalse);

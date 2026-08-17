@@ -42,7 +42,6 @@ class SystemCompletedRideSharer implements CompletedRideSharer {
       'Duration: ${_duration(ride.duration)}',
       'Distance: $distance',
       'Riders: ${ride.riderCount}',
-      'Marker sessions: ${ride.markerSessions.length}',
     ].join('\n');
     await SharePlus.instance.share(
       ShareParams(

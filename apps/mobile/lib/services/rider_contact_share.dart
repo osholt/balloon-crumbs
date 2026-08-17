@@ -12,7 +12,7 @@ import 'ride_lifecycle.dart';
 /// the leader is fine but somebody else has stopped. The two are separate
 /// fields, separate events and separate consents.
 ///
-/// Privacy, stated plainly, the same way [RideEventType.rejoinRouteShared]
+/// Privacy, stated plainly, the same way the relayed advisory events
 /// states it: the ride relay is ride-scoped rather than per-recipient
 /// encrypted, so "addressed to the leader and TEC" means the event names its
 /// intended recipients, the sharer only sends when a recipient is known, and

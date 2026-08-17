@@ -388,7 +388,6 @@ class _ParticipantTile extends StatelessWidget {
 
   static String _roleLabel(RideRole role) => switch (role) {
     RideRole.lead => 'Lead',
-    RideRole.marker => 'Marker',
     RideRole.rider => 'Rider',
   };
 

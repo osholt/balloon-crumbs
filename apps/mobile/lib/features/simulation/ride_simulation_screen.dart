@@ -16,10 +16,7 @@ class RideSimulationScreen extends StatelessWidget {
     required this.onRestart,
     required this.onExit,
     required this.onRoleChanged,
-    required this.onToggleMarker,
-    required this.onRideOff,
     required this.onRiderCountChanged,
-    this.markerPassCount = 0,
   });
 
   final RideSimulationController controller;
@@ -27,10 +24,7 @@ class RideSimulationScreen extends StatelessWidget {
   final Future<void> Function() onRestart;
   final Future<void> Function() onExit;
   final Future<void> Function(RideRole role) onRoleChanged;
-  final Future<void> Function() onToggleMarker;
-  final Future<void> Function() onRideOff;
   final Future<void> Function(int riderCount) onRiderCountChanged;
-  final int markerPassCount;
 
   @override
   Widget build(BuildContext context) {
@@ -62,10 +56,7 @@ class RideSimulationScreen extends StatelessWidget {
             final controls = _SimulationControls(
               controller: controller,
               onRoleChanged: onRoleChanged,
-              onToggleMarker: onToggleMarker,
-              onRideOff: onRideOff,
               onRiderCountChanged: onRiderCountChanged,
-              markerPassCount: markerPassCount,
             );
             final fleet = _FleetCard(
               controller: controller,
@@ -99,18 +90,12 @@ class _SimulationControls extends StatelessWidget {
   const _SimulationControls({
     required this.controller,
     required this.onRoleChanged,
-    required this.onToggleMarker,
-    required this.onRideOff,
     required this.onRiderCountChanged,
-    required this.markerPassCount,
   });
 
   final RideSimulationController controller;
   final Future<void> Function(RideRole role) onRoleChanged;
-  final Future<void> Function() onToggleMarker;
-  final Future<void> Function() onRideOff;
   final Future<void> Function(int riderCount) onRiderCountChanged;
-  final int markerPassCount;
 
   @override
   Widget build(BuildContext context) {
@@ -146,18 +131,11 @@ class _SimulationControls extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              '${controller.riderCount} virtual bikes use the real navigation, '
-              'TEC and off-course logic. Device GPS, internet relay and nearby '
+              '${controller.riderCount} virtual craft use the real navigation '
+              'and off-course logic. Device GPS, internet relay and nearby '
               'radios are off.',
               style: const TextStyle(color: Color(0xFFADB7C4), height: 1.35),
             ),
-            if (controller.automaticMarkerActive) ...[
-              const SizedBox(height: 14),
-              _AutomaticMarkerViewport(
-                controller: controller,
-                onRideOff: onRideOff,
-              ),
-            ],
             const SizedBox(height: 14),
             Text(
               'YOUR VIEW',
@@ -184,12 +162,8 @@ class _SimulationControls extends StatelessWidget {
                 ),
               ],
               selected: {controller.localRole},
-              onSelectionChanged:
-                  controller.markerMode &&
-                      (!controller.automaticMarkerActive ||
-                          controller.automaticMarkerIsLocal)
-                  ? null
-                  : (selection) => unawaited(onRoleChanged(selection.single)),
+              onSelectionChanged: (selection) =>
+                  unawaited(onRoleChanged(selection.single)),
             ),
             const SizedBox(height: 14),
             LinearProgressIndicator(value: controller.progress),
@@ -305,33 +279,6 @@ class _SimulationControls extends StatelessWidget {
               label: const Text('Drop roadworks 450 m ahead'),
             ),
             const SizedBox(height: 8),
-            if (!controller.automaticMarkerActive)
-              FilledButton.tonalIcon(
-                key: const Key('simulation-marker-mode'),
-                onPressed: () => unawaited(onToggleMarker()),
-                icon: Icon(
-                  controller.markerMode ? Icons.stop_circle : Icons.pin_drop,
-                ),
-                label: Text(
-                  controller.markerMode
-                      ? 'Finish marker mode'
-                      : 'Simulate marker mode',
-                ),
-              ),
-            if (controller.markerMode && !controller.automaticMarkerActive) ...[
-              const SizedBox(height: 8),
-              Text(
-                'MARKER ACTIVE · $markerPassCount passed',
-                key: const Key('simulation-marker-status'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFFFFC857),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
             const Text(
               'Open the Map tab to watch the production UI respond.',
               textAlign: TextAlign.center,
@@ -348,105 +295,6 @@ class _SimulationControls extends StatelessWidget {
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
-  }
-}
-
-class _AutomaticMarkerViewport extends StatelessWidget {
-  const _AutomaticMarkerViewport({
-    required this.controller,
-    required this.onRideOff,
-  });
-
-  final RideSimulationController controller;
-  final Future<void> Function() onRideOff;
-
-  @override
-  Widget build(BuildContext context) {
-    final phase = controller.markerPhase;
-    final color = switch (phase) {
-      SimulationMarkerPhase.waitingForRiders => const Color(0xFFFFC857),
-      SimulationMarkerPhase.backRiderApproaching => const Color(0xFFFFA24C),
-      SimulationMarkerPhase.readyToRideOff => const Color(0xFF6ED89A),
-      SimulationMarkerPhase.riding => const Color(0xFF8F9BAA),
-    };
-    final tecDistance = controller.backRiderDistanceToMarkerMeters;
-    return Container(
-      key: const Key('simulation-auto-marker-viewport'),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.7)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.alt_route, color: color),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'JUNCTION MARKER',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-              _Pill(label: 'AUTO', color: color),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (!controller.automaticMarkerIsLocal)
-            Text(
-              '${controller.automaticMarkerRiderName ?? 'Second bike'} is '
-              'marking this junction.',
-              style: const TextStyle(color: Color(0xFFB9C4D1), fontSize: 12),
-            ),
-          if (!controller.automaticMarkerIsLocal) const SizedBox(height: 6),
-          Text(
-            'Riders passed: ${controller.ridersPassedMarker}/'
-            '${controller.ridersExpectedToPass}',
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          if (tecDistance != null && !controller.canRideOff)
-            Text(
-              'TEC ${tecDistance.round()} m away',
-              style: const TextStyle(color: Color(0xFFB9C4D1), fontSize: 12),
-            ),
-          const SizedBox(height: 6),
-          Text(
-            controller.markerInstruction,
-            style: TextStyle(color: color, fontWeight: FontWeight.w800),
-          ),
-          if (phase == SimulationMarkerPhase.backRiderApproaching) ...[
-            const SizedBox(height: 10),
-            const Text(
-              'GET READY TO RIDE OFF',
-              key: Key('simulation-get-ready-to-ride-off'),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFFFFC857),
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.7,
-              ),
-            ),
-          ],
-          if (controller.canRideOff) ...[
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              key: const Key('simulation-ride-off'),
-              onPressed: () => unawaited(onRideOff()),
-              icon: const Icon(Icons.play_arrow),
-              label: Text(
-                controller.automaticMarkerIsLocal
-                    ? 'Ride off and return to navigation'
-                    : 'Send ${controller.automaticMarkerRiderName ?? 'second bike'} '
-                          'back to navigation',
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
   }
 }
 

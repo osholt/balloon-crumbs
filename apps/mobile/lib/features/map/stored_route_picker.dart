@@ -6,7 +6,7 @@ import '../../services/measurement_formatter.dart';
 import '../../services/approximate_place_index.dart';
 import '../../services/stored_route_library.dart';
 import '../ride/route_sketch.dart';
-import 'route_review_screen.dart' show routeLengthMeters;
+import '../../services/route_length.dart' show routeLengthMeters;
 
 /// Picks a route out of the geometry already on this phone.
 ///

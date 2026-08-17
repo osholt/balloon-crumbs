@@ -58,7 +58,7 @@ void main() {
     await tester.tap(find.byKey(const Key('use-stored-route')));
     await _followOriginalTrack(tester);
 
-    expect(find.text('Review route'), findsOneWidget);
+    expect(find.text('Use this route?'), findsOneWidget);
     expect(find.textContaining('tidied recording'), findsOneWidget);
     await _confirmReview(tester);
 
@@ -142,7 +142,7 @@ void main() {
     await tester.tap(find.byKey(const Key('use-stored-route')));
     await _followOriginalTrack(tester);
 
-    expect(find.text('Review route'), findsOneWidget);
+    expect(find.text('Use this route?'), findsOneWidget);
     expect(find.textContaining('Reversed'), findsWidgets);
     await _confirmReview(tester);
 
@@ -187,7 +187,10 @@ void main() {
 
       expect(find.text('Add turn directions?'), findsOneWidget);
       await tester.tap(find.byKey(const Key('generate-navigable-route')));
-      await tester.pumpAndSettle();
+      // The import spinner keeps running underneath the confirmation sheet, so
+      // pump through the sheet's transition rather than settling.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
 
       expect(matcher.originals, hasLength(1));
       final reversed = matcher.originals.single;
@@ -195,11 +198,7 @@ void main() {
       expect(reversed.paths[1].points.length, greaterThanOrEqualTo(2));
       expect(reversed.paths[1].points.first.latitude, closeTo(51.47, 1e-9));
       expect(reversed.paths[1].points.last.latitude, closeTo(51.45, 1e-9));
-      expect(find.text('Review route'), findsOneWidget);
-      expect(
-        find.byKey(const Key('route-review-original-line')),
-        findsOneWidget,
-      );
+      expect(find.text('Use this route?'), findsOneWidget);
 
       await _confirmReview(tester);
       expect(store.savedRoutes.single.maneuvers, isNotEmpty);
@@ -337,11 +336,11 @@ final _testPlaces = ApproximatePlaceIndex.fromJson(
 
 Future<void> _confirmReview(WidgetTester tester) async {
   await tester.scrollUntilVisible(
-    find.byKey(const Key('confirm-reviewed-route')),
+    find.byKey(const Key('confirm-route-confirmation')),
     250,
     scrollable: find.byType(Scrollable).last,
   );
-  await tester.tap(find.byKey(const Key('confirm-reviewed-route')));
+  await tester.tap(find.byKey(const Key('confirm-route-confirmation')));
   await tester.pumpAndSettle();
 }
 
@@ -353,7 +352,11 @@ Future<void> _followOriginalTrack(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 300));
   expect(find.text('Add turn directions?'), findsOneWidget);
   await tester.tap(find.byKey(const Key('follow-original-track')));
-  await tester.pumpAndSettle();
+  // Same reason as above: the import spinner keeps running underneath the
+  // confirmation sheet, so pump through the sheet's transition rather than
+  // settling.
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 /// Two hundred metres of riding, a wait at a junction where the fix wanders,
@@ -416,7 +419,6 @@ CompletedRide _completedRide({
   riderCount: 3,
   eventCount: 40,
   totalDistanceMeters: 42000,
-  markerSessions: const [],
   plannedRoute: null,
   traveledRoute: traveledRoute,
 );

@@ -1,8 +1,6 @@
 export 'ride_map_feature.dart'
     show
         MapNavigationPosition,
-        MapJunctionMarkerOverlay,
-        MapJunctionMarkerStage,
         MapEmergencyContact,
         GroupMiniMapRenderer,
         MapOverlayMarker,

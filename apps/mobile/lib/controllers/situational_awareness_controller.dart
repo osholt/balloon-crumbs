@@ -485,9 +485,6 @@ class SituationalAwarenessController extends ChangeNotifier {
       case RideEventType.riderLeft:
       case RideEventType.roleChanged:
       case RideEventType.rideStarted:
-      case RideEventType.markerStarted:
-      case RideEventType.markerPass:
-      case RideEventType.markerEnded:
       case RideEventType.statusMessage:
       case RideEventType.ridePaused:
       case RideEventType.rideResumed:
@@ -495,11 +492,9 @@ class SituationalAwarenessController extends ChangeNotifier {
       case RideEventType.rideReopened:
       case RideEventType.iceInfoShared:
       case RideEventType.iceInfoViewed:
-      // Leader-issued TEC requests and relayed rejoin routes (#128) are
-      // reconciled by their own reducers from the durable journal, not by this
-      // controller. They are listed rather than defaulted so a future event
-      // type still has to be considered here.
-      case RideEventType.rejoinRouteShared:
+      // Shared rider contact details are reconciled by their own reducer from
+      // the durable journal, not by this controller. Listed rather than
+      // defaulted so a future event type still has to be considered here.
       case RideEventType.riderContactShared:
       case RideEventType.craftRegistered:
       case RideEventType.deviceAttachedToCraft:
