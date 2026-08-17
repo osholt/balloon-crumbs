@@ -81,12 +81,6 @@ abstract final class RelayProtocolCapabilities {
 
   /// Anonymous rider verdicts on catalogued roads (issue #159).
   ///
-  /// Not an event type, so it is not in the worker's event-to-capability map: it
-  /// is a standalone unauthenticated endpoint. It is negotiated through the same
-  /// compatibility document so a relay that does not accept ratings produces a
-  /// named limitation and the answers stay durable on the phone, instead of the
-  /// rider being thanked for something that went nowhere.
-  static const roadRatings = 'road-ratings-v1';
 
   /// The leader un-ending a ride that ended by mistake (#206, #207).
   ///
@@ -108,7 +102,6 @@ abstract final class RelayProtocolCapabilities {
     trafficReroutes,
     rejoinRouteSharing,
     riderContactSharing,
-    roadRatings,
     rideReopen,
   };
 }

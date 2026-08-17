@@ -123,7 +123,12 @@ roster, the relay and the map.
 2. **Rejoin routing** (466 hits). Routes a separated rider back onto a shared
    GPX route. A chase vehicle is never "off route" — it is on a road network
    heading for a moving target. Replaced wholesale by rendezvous selection.
-3. **Road ratings** and **personal heatmap**. Scoring roads for fun.
+3. **Road ratings** and **personal heatmap** — **done**. Scoring roads for fun.
+   The client feature and its relay capability are gone; the server's
+   `/api/v1/discovery/road-ratings` endpoints and their `road-ratings-v1`
+   advertisement remain and should go with the next server pass, since removing
+   public API surface deserves its own change rather than riding along with a
+   client deletion.
 4. **Motorcycle iconography** — `motorcycle_icon.dart`, rider symbols, bike
    styles — replaced by craft iconography (balloon, vehicle).
 
@@ -190,9 +195,56 @@ plus the vocabulary rename (`ride` → `flight`, `rider` → `crew`) done **once
 into the shape WP3 established rather than twice.
 
 Acceptance:
-- [ ] No `marker`, `enforcement`, `rejoin`, `road rating` or `heatmap` code remains
+- [ ] No `marker`, `rejoin`, `road rating` or `heatmap` code remains
 - [ ] No user-facing string says rider, bike or ride
 - [ ] Test count drops honestly — deleted features lose their tests, nothing else does
+
+#### Measured: the marker cut is wider than the marker files
+
+A trial deletion was made and reverted; the tree is green. Removing the seven
+marker files, `RideRole.marker`, the three marker event types and
+`RideCoordinationMode.secondBikeDropOff` produces **148 analyzer errors**:
+
+| File | Errors |
+|---|---:|
+| `features/map/ride_map_feature.dart` | 22 |
+| `features/map/route_review_screen.dart` | 20 |
+| `controllers/ride_controller.dart` | 16 |
+| `features/ride/ride_dashboard.dart` | 11 |
+| `services/route_decision_point_extractor.dart` | 10 |
+| `features/ride/active_ride_shell.dart` | 9 |
+| `controllers/ride_simulation_controller.dart` | 6 |
+| `services/route_reshape_planner.dart` | 5 |
+| `features/home/home_screen.dart` | 5 |
+| others (tests, reducers) | 44 |
+
+Almost all are references to deleted symbols, so mechanical. **The finding that
+matters is which files they are in.** `route_marker_plan.dart` is not a leaf: the
+route-*planning* layer depends on it —
+`route_decision_point_extractor`, `route_reshape_planner`,
+`route_waypoint_editor` and the 1,385-line `route_review_screen` all consume
+`MarkerPlanPointKind`, `DecisionPointSource` and `RouteMarkerPlanAnalyzer`.
+
+So the cut is: marker system **plus** the decision-point extraction that exists
+only to place markers on a planned route. Route review and waypoint editing then
+need a decision of their own — a chase crew does not review a planned route
+before a flight the way a ride leader did, because the balloon has no route. My
+reading is that route review goes with the marker system and waypoint editing
+survives only if GPX-based chase planning survives, which WP7 should answer
+first.
+
+Sequencing that follows from this: **do WP7's rendezvous design before the marker
+deletion**, or the deletion will strip route planning with nothing decided about
+what replaces it.
+
+Two smaller deletions are genuinely self-contained and can land independently:
+road ratings and the personal heatmap.
+
+Migration note found in the same pass: `RideCoordinationMode.fromName` defaults
+to `secondBikeDropOff` for any unrecognised value, because that was the only mode
+before the choice existed. When it is deleted the fallback must become
+`keepTogether`, not `solo` — falling back to solo would silently strip a stored
+flight of its join code and its crew.
 
 ### WP5 — Altitude, the ground track, and the crumb trail
 

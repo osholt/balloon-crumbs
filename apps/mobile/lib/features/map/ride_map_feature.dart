@@ -14,7 +14,6 @@ import 'package:vector_map_tiles/vector_map_tiles.dart' as vmt;
 
 import '../../controllers/speed_limit_display_controller.dart';
 import '../../controllers/shared_route_controller.dart';
-import '../../controllers/personal_ride_heatmap_controller.dart';
 import '../../data/json_file_completed_ride_store.dart';
 import '../../data/json_file_recorded_route_store.dart';
 import '../../data/json_file_route_store.dart';
@@ -220,7 +219,6 @@ class RideMapFeature extends StatefulWidget {
     this.mapLibreOfflineManager,
     this.mapStyleString,
     this.completedRideStore,
-    this.personalRideHeatmap,
     this.distanceUnit = DistanceUnit.kilometres,
     this.speedLimitDisplay,
     this.showRouteProgress = true,
@@ -280,7 +278,6 @@ class RideMapFeature extends StatefulWidget {
     Future<GeoPoint?> Function()? acquireCurrentPosition,
     RouteStore? routeStore,
     CompletedRideStore? completedRideStore,
-    PersonalRideHeatmapController? personalRideHeatmap,
     bool canEditRoute = true,
     DistanceUnit distanceUnit = DistanceUnit.kilometres,
     SpeedLimitDisplayController? speedLimitDisplay,
@@ -339,7 +336,6 @@ class RideMapFeature extends StatefulWidget {
     acquireCurrentPosition: acquireCurrentPosition,
     routeStore: routeStore,
     completedRideStore: completedRideStore,
-    personalRideHeatmap: personalRideHeatmap,
     canEditRoute: canEditRoute,
     distanceUnit: distanceUnit,
     speedLimitDisplay: speedLimitDisplay,
@@ -439,7 +435,6 @@ class RideMapFeature extends StatefulWidget {
   final MapLibreOfflineManager? mapLibreOfflineManager;
   final String? mapStyleString;
   final CompletedRideStore? completedRideStore;
-  final PersonalRideHeatmapController? personalRideHeatmap;
   final DistanceUnit distanceUnit;
   final SpeedLimitDisplayController? speedLimitDisplay;
   final bool showRouteProgress;
@@ -553,7 +548,6 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         mapStyleString: dependencies.mapStyleString,
         mapStyleOutcome: dependencies.mapStyleOutcome,
         completedRideStore: widget.completedRideStore,
-        personalRideHeatmap: widget.personalRideHeatmap,
         disposeOfflineTileCache: widget.offlineTileCache == null,
         currentPosition: widget.currentPosition,
         navigationPosition: widget.navigationPosition,
@@ -696,7 +690,6 @@ class RideMapScreen extends StatefulWidget {
     this.demoRouteLoader,
     this.recordedRouteStore,
     this.completedRideStore,
-    this.personalRideHeatmap,
     this.storedRouteLibrary,
     this.distanceUnit = DistanceUnit.kilometres,
     this.speedLimitDisplay,
@@ -810,7 +803,6 @@ class RideMapScreen extends StatefulWidget {
   /// archive stops being offered immediately.
   final RecordedRouteStore? recordedRouteStore;
   final CompletedRideStore? completedRideStore;
-  final PersonalRideHeatmapController? personalRideHeatmap;
 
   /// A fully assembled library, for tests that want to fix the identity and
   /// timestamp of the route it produces.
@@ -830,8 +822,6 @@ class RideMapScreen extends StatefulWidget {
 }
 
 class _RideMapScreenState extends State<RideMapScreen> {
-  static const _personalHeatmapSource = 'balloon-crumbs-personal-heatmap';
-  static const _personalHeatmapLayer = 'balloon-crumbs-personal-heatmap-layer';
   static const _remainingRouteSource = 'balloon-crumbs-route-remaining';
   static const _riderTrailSource = 'balloon-crumbs-rider-trails';
   static const _casingHex = RouteTrailStyle.casingHex;
@@ -869,8 +859,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
   late final ImportedTrackMatcher _defaultImportedTrackMatcher;
   late SpeedLimitDisplayController _speedLimitDisplay;
   late bool _ownsSpeedLimitDisplay;
-  PersonalRideHeatmapController? _personalRideHeatmap;
-  bool _ownsPersonalRideHeatmap = false;
   late final GroupPipBridge _groupPipBridge;
   ml.MapLibreMapController? _mapLibreController;
   late final MapLibreOfflineManager _mapLibreOfflineManager;
@@ -1255,7 +1243,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     _markerOverviewVisible =
         widget.junctionMarkerOverlay?.value?.isLocalMarker ?? false;
     _loadPersistedRoute();
-    unawaited(_openPersonalRideHeatmap());
     unawaited(_loadDiscoveryCatalogue());
     _maybeHandleChangeRouteRequest();
   }
@@ -1363,8 +1350,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     _riderSpeed.dispose();
     _mapBearing.dispose();
     if (_ownsSpeedLimitDisplay) _speedLimitDisplay.dispose();
-    _personalRideHeatmap?.removeListener(_onPersonalRideHeatmapChanged);
-    if (_ownsPersonalRideHeatmap) _personalRideHeatmap?.dispose();
     unawaited(_groupPipBridge.dispose());
     _routingClient.close();
     if (widget.disposeOfflineTileCache) widget.offlineTileCache.dispose();
@@ -1434,66 +1419,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     } on Object catch (error) {
       if (kDebugMode) debugPrint('Could not load discovery catalogue: $error');
     }
-  }
-
-  Future<void> _openPersonalRideHeatmap() async {
-    try {
-      final supplied = widget.personalRideHeatmap;
-      final store = widget.completedRideStore;
-      // Direct RideMapScreen embedders and focused tests do not implicitly open
-      // platform storage. Production supplies the app's archive explicitly.
-      if (supplied == null && store == null) return;
-      final controller =
-          supplied ?? await PersonalRideHeatmapController.load(store: store!);
-      if (!mounted) {
-        if (supplied == null) controller.dispose();
-        return;
-      }
-      _ownsPersonalRideHeatmap = supplied == null;
-      _personalRideHeatmap = controller;
-      controller.addListener(_onPersonalRideHeatmapChanged);
-      setState(() {});
-      _scheduleMapLibreSync(overlays: true);
-    } on Object catch (error) {
-      if (kDebugMode) {
-        debugPrint('Could not read personal ride heatmap: $error');
-      }
-    }
-  }
-
-  void _onPersonalRideHeatmapChanged() {
-    if (!mounted) return;
-    setState(() {});
-    _scheduleMapLibreSync(overlays: true);
-  }
-
-  PersonalRideHeatmap get _visiblePersonalHeatmap {
-    final controller = _personalRideHeatmap;
-    return controller?.visible == true
-        ? controller!.heatmap
-        : PersonalRideHeatmap.empty;
-  }
-
-  Future<void> _togglePersonalRideHeatmap() async {
-    final controller = _personalRideHeatmap;
-    if (controller == null) {
-      _showMessage('The saved-ride layer is still loading.');
-      return;
-    }
-    try {
-      await controller.setVisible(!controller.visible);
-    } on Object catch (error) {
-      _showMessage('Could not read saved ride coverage: $error');
-      return;
-    }
-    if (!mounted || !controller.visible) return;
-    final cells = controller.heatmap.cells.length;
-    _showMessage(
-      cells == 0
-          ? 'Personal rides is on. No travelled tracks are saved yet.'
-          : 'Personal rides is on · $cells covered area${cells == 1 ? '' : 's'}.'
-                '${controller.heatmap.truncated ? ' The oldest coverage was capped for performance.' : ''}',
-    );
   }
 
   @override
@@ -1637,21 +1562,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     const PopupMenuItem(
                       value: _MapAction.discoveryLayers,
                       child: Text('Motorcycle discovery layers'),
-                    ),
-                    PopupMenuItem(
-                      key: const Key('personal-rides-heatmap-toggle'),
-                      value: _MapAction.personalRideHeatmap,
-                      child: Row(
-                        children: [
-                          Icon(
-                            _personalRideHeatmap?.visible == true
-                                ? Icons.check_box
-                                : Icons.check_box_outline_blank,
-                          ),
-                          const SizedBox(width: 10),
-                          const Expanded(child: Text('Personal rides heatmap')),
-                        ],
-                      ),
                     ),
                     PopupMenuItem(
                       value: _MapAction.speedLimitDisplay,
@@ -2691,22 +2601,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
             tileProvider: LicensedCachingTileProvider(
               cache: widget.offlineTileCache,
             ),
-          ),
-        if (_visiblePersonalHeatmap.cells.isNotEmpty)
-          CircleLayer(
-            key: const Key('personal-rides-heatmap-layer'),
-            circles: [
-              for (final cell in _visiblePersonalHeatmap.cells)
-                CircleMarker(
-                  point: _latLng(cell.centre),
-                  radius: 7 + 5 * cell.weight,
-                  color: Color.lerp(
-                    const Color(0xFF7C3AED),
-                    const Color(0xFFF97316),
-                    cell.weight,
-                  )!.withValues(alpha: 0.16 + 0.24 * cell.weight),
-                ),
-            ],
           ),
         if (_visibleDiscoveryFeatures.any((feature) => !feature.isPoint))
           PolylineLayer(
@@ -4297,43 +4191,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     try {
       await _registerMarkerImages(controller);
       await controller.addGeoJsonSource(
-        _personalHeatmapSource,
-        _visiblePersonalHeatmap.toGeoJson(),
-      );
-      await controller.addHeatmapLayer(
-        _personalHeatmapSource,
-        _personalHeatmapLayer,
-        const ml.HeatmapLayerProperties(
-          heatmapRadius: [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            5,
-            4,
-            12,
-            10,
-            17,
-            18,
-          ],
-          heatmapWeight: ['get', 'weight'],
-          heatmapIntensity: 0.85,
-          heatmapColor: [
-            'interpolate',
-            ['linear'],
-            ['heatmap-density'],
-            0,
-            'rgba(124,58,237,0)',
-            0.25,
-            '#7C3AED',
-            0.65,
-            '#C2410C',
-            1,
-            '#F97316',
-          ],
-          heatmapOpacity: 0.48,
-        ),
-      );
-      await controller.addGeoJsonSource(
         _discoveryLineSource,
         _discoveryLineGeoJson(),
       );
@@ -4625,10 +4482,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     try {
       await _ensureRiderSymbolImages(controller);
       await controller.setGeoJsonSource(
-        _personalHeatmapSource,
-        _visiblePersonalHeatmap.toGeoJson(),
-      );
-      await controller.setGeoJsonSource(
         _discoveryLineSource,
         _discoveryLineGeoJson(),
       );
@@ -4706,10 +4559,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
         await controller.setGeoJsonSource(_positionSource, _positionGeoJson());
       }
       if (overlays) {
-        await controller.setGeoJsonSource(
-          _personalHeatmapSource,
-          _visiblePersonalHeatmap.toGeoJson(),
-        );
         await controller.setGeoJsonSource(
           _discoveryLineSource,
           _discoveryLineGeoJson(),
@@ -6021,8 +5870,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
         await _loadDemoRoute();
       case _MapAction.discoveryLayers:
         await _showDiscoveryLayersSheet();
-      case _MapAction.personalRideHeatmap:
-        await _togglePersonalRideHeatmap();
       case _MapAction.speedLimitDisplay:
         if (_speedLimitDisplay.enabled) {
           await _speedLimitDisplay.setEnabled(false);
@@ -6453,7 +6300,6 @@ enum _MapAction {
   importGpx,
   loadDemo,
   discoveryLayers,
-  personalRideHeatmap,
   speedLimitDisplay,
   maneuverList,
   markerPlan,
