@@ -1,222 +1,261 @@
 # Delivery Plan
 
-Engineering plan for turning the inherited Tail End Charlie baseline into
-Balloon Crumbs. [PLAN.md](../PLAN.md) states the product requirements; this
-document states the order of work against the code that actually exists.
+How Balloon Crumbs becomes useful to a balloon pilot and a retrieve crew, from
+the Tail End Charlie baseline it was scaffolded from. [PLAN.md](../PLAN.md) is
+the product requirement; this is the engineering order of work.
 
-## Survey findings
+## Where the code actually is
 
-Measured on the scaffold commit, `apps/mobile/lib` (80,180 lines of Dart) and
-`apps/mobile/test` (62,856 lines):
+Measured on `apps/mobile/lib` (~80,000 lines of Dart):
 
-| Signal | Count | Reading |
-|---|---:|---|
-| `altitude` / `elevation` (telemetry sense) | **0** | The headline feature has no foundation |
-| `pilot` | **0** | No balloon role exists |
-| `burner` | **0** | No balloon domain exists |
-| `rider` | 3,889 across 169 files | The domain language is motorcycling |
-| `marker` | 1,231 across 61 files | Drop-off marker system, motorcycle-only |
-| `hazard` | 704 across 37 files | Road hazard/traffic, partly reusable |
-| `enforcement` | 183 across 15 files | Speed-camera alerts, motorcycle-only |
-| `tailEndCharlie` | 106 across 40 files | Sweep-rider role, deleted in WP1 |
+| Motorcycle concept | Hits | Files | Verdict |
+|---|---:|---:|---|
+| Drop-off marker system | 1,201 | 61 | delete |
+| Road hazards | 702 | 36 | repurpose as ground notes |
+| Rejoin routing | 466 | 26 | delete, replaced by rendezvous |
+| Junction logic | 240 | 34 | delete with the marker system |
+| Speed-camera / enforcement alerts | 183 | 15 | delete |
+| Road ratings ("twisty road" scoring) | 12 | 8 | delete |
+| Personal ride heatmap | 81 | 2 | delete |
+| `rider` as the domain noun | 3,889 | 169 | rename to crew/participant |
 
-The load-bearing conclusion: `LocationSample` in
-[rider_location.dart](../apps/mobile/lib/domain/rider_location.dart) carries
-position, time, accuracy, speed and heading — **but no altitude, no altitude
-source, and no vertical trend**. `RiderLocation` carries a `MotorcycleIconStyle`.
-Every balloon feature in PLAN.md depends on changing this type, and 169 files
-touch its surrounding vocabulary.
+Against that, the balloon domain is close to empty: before WP2, `altitude`
+appeared **zero** times and `pilot` still does. This is a domain-layer rewrite
+with infrastructure reuse, not an adaptation — and the motorcycle code is
+currently the larger half of the app.
 
-This is therefore a **domain-layer rewrite with selective infrastructure reuse**,
-not a rename-and-adapt exercise. Planning it as the latter is what would put a
-motorcycle safety model underneath an aviation-adjacent product.
+### Already done
 
-## Reuse boundary
+- **WP1** — the Tail End Charlie sweep role is deleted, on both client and relay.
+- **WP2 (part)** — `LocationSample` carries altitude, altitude source, vertical
+  accuracy and vertical speed; capture gates on vertical accuracy so a missing
+  altitude is never presented as a measured zero; Ride Lab flies a real climb /
+  cruise / descent profile.
+- The product, bundle identifiers, packages and icon are renamed.
 
-**Keep — domain-neutral infrastructure, genuinely valuable:**
+## Who the app is for
 
-- SQLite event journal, idempotency, deduplication, replay
-- Six-digit session codes, QR bootstrap, anonymous membership lifecycle
-- Nearby transport bridge (iOS/Android) and the bounded HTTPS relay + server
-- Location capture plumbing, background delivery, permission flows
-- Map rendering, tiles, style repository, offline fallback
-- GPX import/export, diagnostics recorder, simulation harness, CI
+Three jobs, and the current app serves none of them. Every work package below
+should be readable as "which of these got better".
 
-**Replace — same shape, wrong domain:**
+**The pilot.** Flies with gloves on, one hand on the burner, in noise and cold,
+often solo in the basket. Cannot type, cannot read a paragraph, must not be
+asked to make a decision to keep the app working. Wants: publish where I am and
+whether I am climbing, see that the crew has me, tell them roughly where I intend
+to land, and nothing else.
 
-- `LocationSample` → balloon-capable telemetry sample (WP2)
-- `RideRole` → `FlightRole` (WP3)
-- Trail renderer → altitude-coloured ground track (WP4)
-- Route/rejoin planner → moving rendezvous selector (WP6)
+**The balloon crew.** One or more people in the basket, and frequently *they*
+hold the phone because the pilot is flying. This is why the app cannot assume
+one device per craft, and cannot assume the pilot's device is the one reporting.
 
-**Delete — motorcycle concepts with no balloon meaning:**
+**The chase crew.** One to four vehicles on the road, each with a driver who must
+not touch the phone while moving, plus passengers who can. Wants: where is the
+balloon now, where will it be, which road gets me there, which of us goes where,
+and at the end — how do we reach a field with a trailer.
 
-- Tail End Charlie sweep role (WP1, agreed)
-- Drop-off marker system — a second bike holding a junction (needs decision)
-- Speed-camera / enforcement alerts (needs decision)
-- Overtake, junction-passing, and bike-specific iconography (needs decision)
+## The architectural decision this all rests on
 
-Deleting rather than adapting is deliberate: a balloon does not have a back
-marker, and carrying the concept forward would keep its assumptions alive in the
-roster, relay, CarPlay bridge, and server capability negotiation.
+The inherited model has a flat list of `rider`s, each with its own position. That
+breaks immediately for ballooning in two directions at once: several phones in
+one basket become several "riders" sitting on top of each other, and the chase
+crew has no way to ask "where is *the balloon*".
+
+**Introduce a craft.** One flight has exactly one balloon and zero or more
+vehicles. Devices attach to a craft; a craft has one position, contributed by
+its devices. That single change answers both of the requirements that prompted
+this plan:
+
+- Several crew in the basket → several devices on the balloon craft → **one**
+  balloon track, and the crew all see the same thing.
+- Several chase vehicles → several vehicle crafts → one track each, individually
+  addressable ("Vehicle 2, take the B4039").
+
+It also stops the pilot's phone dying from being the single point of telemetry:
+any device on the craft can carry the stream.
+
+**Which device speaks for a craft** must be resolved deterministically from the
+journal, so every peer computes the same answer without negotiation — the same
+discipline the deleted TEC resolution used, and the reason it was worth studying
+before deleting it. Proposed rule, in order: freshest fix inside a quality
+threshold, then the device the pilot marked as primary, then lowest device id as
+a tie-break; with hysteresis so the balloon's track does not visibly jump
+between two phones sitting side by side. A craft with no usable fix reports
+*unknown*, never a stale position dressed as current.
+
+## What gets deleted
+
+These are motorcycle-group-riding concepts with no ballooning equivalent.
+Deleting beats translating: a renamed concept keeps its assumptions alive in the
+roster, the relay and the map.
+
+1. **The drop-off marker system** (1,201 hits, 61 files, 7 dedicated files plus
+   junction logic). A second bike holds a junction until the group passes. There
+   is no junction and no group to hold it for. This is the single biggest
+   deletion and it has already been partly forced: WP1 removed its "the back of
+   the group is through" signal, so the marker currently waits for something
+   that can never arrive.
+2. **Speed-camera and enforcement alerting** (183 hits). Road-riding feature,
+   legally sensitive, irrelevant to a chase crew and actively wrong to show a
+   pilot.
+3. **Rejoin routing** (466 hits). Routes a separated rider back onto a shared
+   GPX route. A chase vehicle is never "off route" — it is on a road network
+   heading for a moving target. Replaced wholesale by rendezvous selection.
+4. **Road ratings** and **personal heatmap**. Scoring roads for fun.
+5. **Motorcycle iconography** — `motorcycle_icon.dart`, rider symbols, bike
+   styles — replaced by craft iconography (balloon, vehicle).
+
+## What gets kept
+
+Genuinely valuable, domain-neutral, and expensive to rebuild:
+
+- The **SQLite event journal** with idempotency, dedup and replay. This is the
+  best thing in the inherited codebase and the reason offline-first works at a
+  rural landing site with no signal.
+- **Six-digit codes and QR bootstrap**, anonymous membership lifecycle.
+- The **nearby transport** and the **bounded HTTPS relay plus server**.
+- **Location capture**, background delivery, permission flows, battery discipline.
+- **Map rendering**, tiles, style repository, offline fallback.
+- **GPX** import/export, diagnostics recorder, the simulator harness, CI.
+- **Quick messages** (crew comms) and **emergency contact sharing** — arguably
+  more important in an aviation-adjacent context than they were for riding.
+- **Observer sharing** — a bounded read-only link is exactly what a balloon
+  operation wants for family watching from home.
+- The **hazard machinery, repurposed**: the ability to drop a categorised,
+  relayed, expiring point on a map is precisely what ground notes need (locked
+  gate, impassable track, power lines, landowner contacted, crop in field). This
+  is reuse of ~700 hits of working code, not a rewrite.
 
 ## Work packages
 
-Ordered. Each lands with tests green and `flutter analyze` clean.
+Ordered by dependency. Each lands with the analyzer clean and both suites green.
 
-### WP1 — Delete the Tail End Charlie role *(backlog #1, done)*
+### WP3 — The craft model, flight roles and pilot authority
 
-`RideRole.tailEndCharlie` and everything reachable from it is gone: the role
-assignment service, gap-trend service, CarPlay TEC status, the leader
-request/accept/decline event types, the roster request flow, the "No Hot
-Pursuit" start warning, the leader's gap card, the CarPlay and Android Auto
-surfaces, and the `tec-role-assignment-v1` relay capability on both client and
-server.
+The keystone. Nothing else is honest until this exists.
 
-Acceptance:
-- [x] No `tailEndCharlie`, `tec`, or `Hot Pursuit` identifier remains in `lib/`
-- [x] Full Flutter suite (1810) and server suite (145) green; analyzer clean
-- [x] Server compatibility tests updated for the removed capability
-- [x] No dead branches left behind in the roster or CarPlay bridges
-
-#### Decisions taken during the cut
-
-**Rejoin routing falls back to the ride leader.** `route_rejoin_planner.dart`
-sent a massively off-course rider to the back-marker when its fix was
-trustworthy. The file's own documentation already named the leader as the
-fallback for every other case, so with no back-marker the leader is now the only
-target. `RouteRejoinTarget.tailEndCharlie` is gone.
-
-**The marker system lost its "back of the group is through" signal.**
-`marker_statistics.dart` set `tecPassedAt` when a rider whose role was
-`tailEndCharlie` passed the marker; that is how a marker knew it could ride off.
-With the role gone the field could never be set again, so leaving it in place
-would have meant a marker silently waiting forever for a signal that no longer
-exists. `tecPassedAt`, `tecPassageCount` and `tecPassedCurrentMarker` were
-removed, and the marker surfaces now report verified passes only. **This is a
-behaviour change to the drop-off marker system**, and it strengthens the case
-for deleting that system outright — see Decisions needed.
-
-**The simulator's back rider is now identified by id, not by role.** Ride Lab
-modelled the marker interaction as "wait for the TEC". The concept it actually
-needs is "the last rider in the group", so `tecRiderId` became `backRiderId` and
-the marker phases were renamed to match. The TEC viewpoint was dropped from the
-Ride Lab perspective picker.
-
-**An unknown role name degrades instead of throwing.** `RideRole.values.byName`
-throws on a name this build does not know. The journal reducers already guarded
-it, but `RiderLocation.fromJson`, `RideSession.fromJson`,
-`CompletedRide.fromJson` and the marker-assistance controller did not — so a
-peer on an older build, or an install that predates this change, would have
-failed to parse rather than degrade. Those four now use `rideRoleFromName`,
-covered by `test/domain/ride_role_compatibility_test.dart`.
-
-#### Deliberately left in place
-
-- **`tec:` in `gpx_exporter.dart`** is the GPX XML namespace prefix for this
-  app's route extensions. It is a file format that already-exported GPX files
-  carry, not the role, and renaming it would orphan them.
-- **Dead TEC rendering in `CarPlaySceneDelegate.swift`** (`CarPlayTecBadge`, the
-  `isTec` rider flag). Dart no longer publishes `tec`, `tecRequest` or `isTec`,
-  so these read as absent/false and draw nothing. Removing them means editing
-  CarPlay layout code that cannot be exercised by the Dart test suite, so it is
-  left for a pass that can be verified in a car or the CarPlay simulator.
-
-### WP2 — Balloon-capable telemetry *(prerequisite for the product; in progress)*
-
-Extend the position sample with `altitudeMeters`, `altitudeSource`
-(`gnss` / `barometric` / `unknown`), `altitudeAccuracyMeters`, and
-`verticalSpeedMetersPerSecond`. Capture real altitude on both platforms. Reject
-impossible jumps. Never interpolate missing altitude into measured data.
-
-Wire compatibility: additive optional fields with a schema version bump, so an
-older peer degrades to no-altitude rather than failing to parse.
+- `Craft { id, kind: balloon | vehicle, label }`; one balloon per flight.
+- `FlightRole { pilot, balloonCrew, chaseDriver, chaseCrew, observer }`, held by
+  a device, attached to a craft.
+- Deterministic per-craft telemetry election with hysteresis (above).
+- Pilot authority: only the pilot can start/end the flight and set the balloon's
+  primary device; a pilot handover is explicit and journalled.
+- Craft-level read models replace rider-level ones on every surface.
 
 Acceptance:
-- [x] JSON round-trip preserves source and accuracy; no conversion erases them
-- [x] Measurement time stays distinct from receipt time
-- [x] Missing altitude is representable, never silently zero
-- [ ] Missing altitude is *visually* distinct (needs the WP4 renderer)
-- [ ] Simulator emits ascent, level flight, descent, and GNSS loss
+- [ ] Three phones in one basket produce one balloon track, not three
+- [ ] Handing the phone between two crew does not make the balloon's track jump
+- [ ] Four vehicles are individually identifiable and addressable at every zoom
+- [ ] A craft with no usable fix reports unknown; no surface shows a stale fix as live
+- [ ] A restarted phone rejoins its craft in its role without a ghost member
 
-#### Landed so far
+### WP4 — Delete the motorcycle domain
 
-`LocationSample` now carries `altitudeMeters`, `altitudeSource`
-(`gnss` / `barometric` / `unknown`), `altitudeAccuracyMeters` and
-`verticalSpeedMetersPerSecond`, with the constructor refusing a source or an
-accuracy that has no reading behind it. The wire form is additive and writes no
-altitude keys at all when there is no reading, so an absent altitude never
-reaches a peer as an explicit null that later reads as a measurement. An
-unrecognised `altitudeSource` degrades to `unknown` rather than throwing, on the
-same reasoning as `rideRoleFromName`.
+Best done immediately after WP3, while the new model is fresh and before more
+code is written on top of the old one. Everything in "What gets deleted",
+plus the vocabulary rename (`ride` → `flight`, `rider` → `crew`) done **once**,
+into the shape WP3 established rather than twice.
 
-**The trap this had to avoid:** both platforms report `altitude == 0.0` when
-they have none, and a balloon in the launch field genuinely reports `0.0`. The
-reading cannot separate the two. `DeviceLocationSource` therefore gates on the
-*vertical accuracy* — CoreLocation documents a non-positive `verticalAccuracy`
-as "altitude invalid", and Android only reports one when it has it — so a fix
-without a positive vertical accuracy carries no altitude rather than a
-measurement of ground level. Covered by
-`test/domain/location_sample_altitude_test.dart`.
+Acceptance:
+- [ ] No `marker`, `enforcement`, `rejoin`, `road rating` or `heatmap` code remains
+- [ ] No user-facing string says rider, bike or ride
+- [ ] Test count drops honestly — deleted features lose their tests, nothing else does
 
-#### Still to do in WP2
+### WP5 — Altitude, the ground track, and the crumb trail
 
-- Feed altitude into the recorded track so flight GPX gets `<ele>`. The
-  travelled track is stored as an `ImportedRoute`, whose points already have
-  `elevationMeters` and whose exporter already writes `<ele>` — the gap is the
-  conversion from `LocationSample` into that type. This is the second half of
-  issue #16.
-- Altitude source and accuracy in the GPX extension namespace (stock GPX 1.1
-  has nowhere to put either).
-- Reject impossible vertical jumps.
-- Simulator ascent/descent/GNSS-loss profiles.
+The feature the product is named after. Finishes WP2.
 
-### WP3 — Flight roles and pilot authority *(backlog #2)*
+- Altitude into the recorded track so flight GPX carries `<ele>` (issue #16);
+  altitude source and accuracy in the GPX extension namespace.
+- Ground track coloured by altitude, with a documented palette, a non-colour cue
+  and a legend that tracks metric/imperial.
+- A segment may only be coloured when both endpoints have valid altitude.
+- Telemetry card: height, climb/descent rate, fix age, source, ground speed,
+  track. Every number carries its age.
+- Reject impossible vertical jumps rather than smoothing them away.
 
-Replace `RideRole` with `FlightRole { pilot, balloonCrew, chaseDriver, chaseCrew,
-observer }`. Establish one authoritative balloon telemetry stream and resolve the
-blocking question of which device speaks for the balloon when several phones are
-in the basket. Role-specific view gating.
+### WP6 — The pilot view
 
-### WP4 — Altitude-coloured ground track *(backlog #3 — the "crumbs")*
+Deliberately austere. Big type, few controls, works with gloves.
 
-Per-segment altitude styling with a documented palette, a non-colour cue, a
-legend that tracks metric/imperial, and a colouring policy that requires valid
-altitude at both segment endpoints.
+- Height, climb rate, and "the crew can see you" / "nobody has your position".
+- Intended landing area, set with one gesture, relayed to every vehicle.
+- Start/end sharing, and a privacy stop.
+- No routing, no hazards, no chase detail — the pilot is flying.
 
-### WP5 — Multiple chase vehicles and viewpoints *(backlog #4)*
+### WP7 — Multiple chase vehicles and rendezvous
 
-### WP6 — Safe moving rendezvous and road routing *(backlog #5)*
+Where the chase crew gets its value.
 
-### WP7 — Voice guidance for a moving target *(backlog #6)*
+- Bounded prediction of where the balloon will be, with age and uncertainty
+  shown, never presented as certainty.
+- Road-accessible rendezvous candidates on the legal network, with hysteresis so
+  the target does not churn.
+- **Vehicle assignment**: with several vehicles, the app should help them spread
+  rather than all converge on one gate — suggest one ahead of the projected
+  track, one trailing, and never route two vehicles to the same point without
+  saying so.
+- Explicit separation of balloon position, predicted area, and road target.
+- Losing balloon fixes freezes the last target and says so.
 
-### WP8 — Simulator and replay matrix *(backlog #7)*
+### WP8 — Voice-first chase guidance
 
-## Decisions needed
+- Spoken manoeuvres, recalculation, loss of fix, arrival.
+- Mute and stop in one action; nothing requires a driver to look.
+- Announcements when the balloon's state changes materially (started descending).
 
-1. **Marker system, enforcement alerts, speed limits** — delete or keep? They are
-   1,400+ lines of motorcycle-specific behaviour with no balloon equivalent.
-   Recommendation: delete in a WP1 follow-up, before WP2 changes the telemetry
-   type underneath them.
-2. **Bundle identifiers and internal package names — done.** The bundle ID is
-   `dev.osholt.ballooncrumbs`, the Dart package `balloon_crumbs`, the Python
-   package `balloon_crumbs_server`, and the relay env prefix
-   `BALLOON_CRUMBS_`. iOS signing moved to automatic, because a new bundle ID
-   has no manual profile and Apple will not issue one automatically for the
-   CarPlay entitlements the project used to declare.
-3. **CarPlay entitlements are removed** so the app can be signed and installed
-   without an Apple-approved CarPlay profile. The CarPlay code is untouched and
-   inert. Restoring it means re-adding
-   `com.apple.developer.carplay-driving-task` and
-   `com.apple.developer.carplay-maps` to both entitlements files and creating a
-   matching profile in the developer console — which is backlog item 12's
-   problem, not something a local build can solve.
+### WP9 — Ground notes and the retrieve
+
+The end of a flight is the hardest part and the inherited app has nothing for it.
+
+- Repurposed hazard machinery: gates, tracks, power lines, crop, landowner
+  contacted, permission refused.
+- Landing site: who is there, who has the trailer, what access exists.
+- Explicitly **never** asserts that access is permitted or safe.
+
+### WP10 — Simulator and replay matrix
+
+- Balloon profiles: climb, level, descent, GNSS loss, barometric vs GNSS.
+- Multi-craft: one balloon plus three vehicles, clock skew, reconnect.
+- Several devices in one basket, to exercise the WP3 election directly.
+
+### WP11 — Context: weather, wind, airspace
+
+Blocked on provider licensing (issues #13, #17) and should stay blocked until it
+is resolved. Wind at altitude is the single most valuable addition for a chase
+crew — it is what makes prediction credible — which is exactly why the licence
+question deserves a real answer rather than a quick integration.
+
+### WP12 — Release evidence
+
+Security and privacy review, per-device authority replacing the inherited group
+HMAC, retention, battery and background testing, accessibility of the altitude
+representation without colour, mixed-device field matrix.
+
+## Decisions I need from you
+
+1. **Speed-limit display** — delete with the rest of the road-riding features, or
+   keep it for the chase driver? It is genuinely useful to a driver and not
+   motorcycle-specific. My recommendation: keep the display, delete the camera
+   alerting.
+2. **CarPlay / Android Auto** — currently inert and unentitled. A chase driver is
+   the ideal CarPlay user, so this may be worth more here than it was for riding.
+   Revisit after WP8, not before.
+3. **Multiple balloons** — one club event, several balloons, shared crews. The
+   craft model in WP3 makes this cheap later, but designing for it now costs
+   time. Recommendation: build one-balloon, keep the model open.
+4. **Intended landing area** — how much should a pilot be able to say, and how
+   strongly should the app present it? It is a guess by a person who is flying,
+   and the crew will treat it as fact.
 
 ## Risks
 
-- **Scale.** 80k lines of Dart written for a different sport. Every work package
-  must land green, or the baseline stops being a usable reference.
-- **Safety framing.** The inherited copy speaks to riders about road hazards. Any
-  string surfacing to a pilot or driver must be re-reviewed, not translated.
-- **Provider licensing.** Weather, wind, airspace, and NOTAM data remain blocked
-  on the licence review in PLAN.md; no dataset should be cached before it.
+- **Scale.** 80,000 lines written for a different sport. Every package must land
+  green or the baseline stops being a usable reference.
+- **Safety framing.** The inherited copy talks to riders about road hazards.
+  Every string that reaches a pilot or a driver needs rewriting, not translating.
+  This is the risk most likely to be underestimated.
+- **The pilot is flying an aircraft.** Anything that asks for attention in the
+  basket is worse than nothing. The pilot view should be judged by how little it
+  asks.
+- **Provider licensing** gates the highest-value feature (wind), and no dataset
+  should be cached before its licence is reviewed.

@@ -94,6 +94,9 @@ flight.
 
 - Create, join, resume, leave, and end a flight with a six-digit code or QR.
 - Roles: pilot, balloon crew, chase driver, chase crew, and observer.
+- One flight has one balloon craft and zero or more vehicle crafts. Devices
+  attach to a craft, and a craft has one position however many devices are on it:
+  several crew in the basket must produce one balloon track, not one each.
 - One balloon identity with one or more active chasers; duplicate display names
   do not merge devices.
 - The pilot explicitly starts and ends location sharing.
@@ -209,8 +212,13 @@ Lagging indicators:
 
 ## Open questions
 
-- **Blocking — product/safety:** Which person/device is authoritative for balloon
-  telemetry when several phones are in the basket?
+- **Resolved — product/safety:** Which device is authoritative for balloon
+  telemetry when several phones are in the basket. Devices attach to a craft and
+  the craft's reporting device is elected deterministically from the journal, so
+  every peer computes the same answer: freshest fix within a quality threshold,
+  then the pilot's nominated primary, then lowest device id, with hysteresis so
+  the track does not jump between two phones side by side. A craft with no usable
+  fix reports unknown. See WP3 in docs/delivery-plan.md.
 - **Blocking — engineering/licensing:** Which road-routing, map, weather, wind,
   airspace, and NOTAM providers permit caching and redistribution in this app?
 - **Blocking — product:** What prediction horizon and recalculation cadence are
