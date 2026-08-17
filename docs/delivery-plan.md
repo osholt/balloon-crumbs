@@ -233,9 +233,89 @@ reading is that route review goes with the marker system and waypoint editing
 survives only if GPX-based chase planning survives, which WP7 should answer
 first.
 
-Sequencing that follows from this: **do WP7's rendezvous design before the marker
-deletion**, or the deletion will strip route planning with nothing decided about
-what replaces it.
+#### Decided: what replaces route planning for a chase crew
+
+The blocker above is a product question, so here is the answer rather than a
+deferral.
+
+The inherited model is: a leader plans a GPX route in advance, riders follow it,
+markers are placed at its decision points, and anyone who leaves it is flagged
+off-route. **Every one of those four assumptions fails for a balloon chase.** The
+balloon has no route — it goes where the wind takes it. The crew's route is
+computed continuously toward a target that is moving and not on a road. A chase
+vehicle is never "off route"; it is en route to a rendezvous that changed thirty
+seconds ago.
+
+So pre-planned-route-following is not the chase crew's tool, and the following
+goes with the marker system:
+
+- **Decision-point extraction** — exists solely to find junctions worth placing a
+  marker at.
+- **Route review** (1,385 lines) — the pre-flight "check the route and place your
+  markers" flow.
+- **Deviation detection and off-route alerting** — measures distance from a
+  planned line that will not exist.
+- **Waypoint editing and route reshaping** — editing a route the group will
+  follow. WP7 rebuilds whatever chase-plan sketching turns out to be worth
+  having, rather than inheriting an editor built for a different job.
+
+What survives, and why:
+
+- **GPX import/export** stays. It is how crews exchange landing-field access,
+  gate locations and previous flight tracks, and how a flight log leaves the app.
+  Importing a *track* is useful; following a *route* is not.
+- **The road router** stays and becomes WP7's engine.
+- **The map, tiles and offline cache** stay — they were never route-specific.
+
+Sequencing, now unblocked: the marker deletion may proceed on this decision, and
+should take decision-point extraction, route review, deviation detection and
+waypoint editing with it in one cut. That is a bigger single change than the 148
+errors measured above, so it wants a session of its own with nothing else in it.
+
+WP7 then starts from a clean sheet: a target that moves, a road network, and
+hysteresis — not a planned line with riders scattered around it.
+
+#### What the chase crew is actually routed to
+
+Not the balloon's current position, and not a pre-planned line. **The primary
+routing target is the pilot's intended landing zone** — a real place, on the
+ground, reachable by road, which the crew can be sent to long before the balloon
+gets there. That is the difference between arriving with the balloon and arriving
+twenty minutes after it.
+
+But the intended zone is a guess by someone who is flying, so it cannot be the
+only input. Alongside the route, the crew needs the **gap to the balloon** —
+distance, bearing, and whether it is opening or closing — and, crucially, whether
+the balloon is **diverging from the zone it said it was heading for**. When those
+disagree, the crew decides; the app does not silently re-route them on a stale
+intention, and it does not hide the disagreement to look confident.
+
+This is decision support, not automation. Three things on screen at once:
+
+1. the road route to the intended landing zone;
+2. the gap to the balloon and its trend;
+3. the divergence between the two — "the balloon is 4 km north of where it is
+   heading, and pulling away".
+
+**The mini-map carries this.** A crew cannot read three numbers while moving, but
+they can read one small picture showing balloon, intended zone, and their own
+vehicle in relation to both. The inherited balloon/chase mini-map is already in
+PLAN.md's requirements and it becomes load-bearing here rather than decorative:
+it is the surface on which "we should stop trusting the landing zone" becomes
+obvious.
+
+Two notes for whoever builds it:
+
+- The **availability model from the deleted TEC gap card is the right shape** and
+  worth rebuilding for the balloon: `none` / `awaitingLocation` / `stale` /
+  `tracking`, branched on explicitly so "nobody is reporting" can never render as
+  a zero gap, and a stale fix can never render as a live one. The code was deleted
+  in WP1 and is in git history; the model is what matters, and `CraftFixAbsence`
+  in `craft_telemetry_election.dart` already starts it.
+- Divergence must be measured against the **age** of the intended zone, not just
+  its position. A zone set two minutes ago that the balloon is drifting from means
+  something different from one set twenty-five minutes and nine kilometres ago —
+  the second is stale intention rather than a balloon going off plan.
 
 Two smaller deletions are genuinely self-contained and can land independently:
 road ratings and the personal heatmap.
