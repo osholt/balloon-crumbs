@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
 
+import '../domain/craft.dart';
+import '../services/craft_roster.dart';
 import '../domain/event_store.dart';
 import '../domain/geo_point.dart' as awareness_geo;
 import '../domain/ice_share.dart';
@@ -988,6 +990,156 @@ class RideController extends ChangeNotifier {
   /// holding lead, and after the end there is nothing left to lead.
   bool get rideHasNoLeader =>
       rideStarted && !rideEnded && leaderRiderId == null;
+
+  // ---------------------------------------------------------------------------
+  // WP3 — crafts. One flight holds one balloon and zero or more vehicles;
+  // devices attach to a craft, and a craft reports one position however many
+  // phones are aboard it. See docs/delivery-plan.md.
+  // ---------------------------------------------------------------------------
+
+  /// The device that last spoke for each craft, so the election's hysteresis has
+  /// an incumbent to hold onto between frames. Without it, two phones side by
+  /// side in a basket trade the balloon back and forth and the track stutters.
+  Map<String, String> _craftReporters = const {};
+
+  /// Reconciles the craft roster from the journal.
+  ///
+  /// Deliberately a method rather than a getter: it carries the elected
+  /// reporters forward, and hiding that behind property syntax would make a
+  /// state change look like a read. Call it once per frame and pass the result
+  /// around rather than calling it per widget.
+  CraftRoster resolveCraftRoster() {
+    final roster = const CraftRosterReducer().fromEvents(
+      events: _events,
+      now: _clock(),
+      previousReporters: _craftReporters,
+    );
+    _craftReporters = CraftRosterReducer.reportersOf(roster);
+    return roster;
+  }
+
+  /// The craft this device is aboard, if it has been attached to one.
+  CraftState? get localCraft {
+    final localRiderId = _session?.localRiderId;
+    if (localRiderId == null) return null;
+    return resolveCraftRoster().forDevice(localRiderId);
+  }
+
+  /// Whether this device may start or end the flight, nominate a craft's
+  /// reporting device, or declare a landing.
+  ///
+  /// Transitional: authority still comes from the inherited leader role. WP4
+  /// replaces this with [FlightRole.hasFlightAuthority] once the session carries
+  /// a flight role rather than a ride role. The seam is here so every caller
+  /// changes in one place.
+  bool get hasFlightAuthority => isLocalRideLeader;
+
+  /// Registers a balloon or vehicle in this flight.
+  ///
+  /// Idempotent by craft id: re-registering updates the label rather than
+  /// creating a second craft, so two devices racing to register the balloon
+  /// converge instead of putting two aircraft on the map.
+  Future<bool> registerCraft({
+    required String craftId,
+    required CraftKind kind,
+    required String label,
+  }) async {
+    if (_session == null || craftId.isEmpty) return false;
+    // Only the pilot introduces the balloon. A vehicle can register itself:
+    // a chase crew joining mid-flight should not need the pilot to act while
+    // they are flying.
+    if (kind == CraftKind.balloon && !hasFlightAuthority) return false;
+    await _run(() async {
+      await _record(
+        type: RideEventType.craftRegistered,
+        priority: EventPriority.important,
+        payload: {'craftId': craftId, 'kind': kind.name, 'label': label},
+      );
+    });
+    return _errorMessage == null;
+  }
+
+  /// Says this device is aboard [craftId].
+  ///
+  /// Re-sent on a move, so the latest wins: stepping out of the basket into a
+  /// vehicle is one event rather than a leave and a join.
+  Future<bool> attachLocalDeviceToCraft(String craftId) async {
+    final activeSession = _session;
+    if (activeSession == null) return false;
+    if (resolveCraftRoster().byId(craftId) == null) return false;
+    await _run(() async {
+      await _record(
+        type: RideEventType.deviceAttachedToCraft,
+        priority: EventPriority.important,
+        payload: {
+          'deviceId': activeSession.localRiderId,
+          'craftId': craftId,
+          'craftLabel': resolveCraftRoster().byId(craftId)?.craft.label,
+        },
+      );
+    });
+    return _errorMessage == null;
+  }
+
+  /// Nominates which device aboard [craftId] should normally report its
+  /// position. A preference the election honours while that device is usable,
+  /// never an override that can leave a craft silent.
+  Future<bool> nominateCraftPrimaryDevice({
+    required String craftId,
+    required String deviceId,
+  }) async {
+    if (_session == null || !hasFlightAuthority) return false;
+    final craft = resolveCraftRoster().byId(craftId);
+    // Nominating a device that is not aboard would silently do nothing at
+    // election time, which is worse than refusing.
+    if (craft == null || !craft.deviceIds.contains(deviceId)) return false;
+    await _run(() async {
+      await _record(
+        type: RideEventType.craftPrimaryDeviceNominated,
+        priority: EventPriority.important,
+        payload: {
+          'craftId': craftId,
+          'deviceId': deviceId,
+          'craftLabel': craft.craft.label,
+        },
+      );
+    });
+    return _errorMessage == null;
+  }
+
+  /// Points a vehicle at the craft it is chasing.
+  ///
+  /// Redundant while there is one balloon, and the thing that makes several
+  /// balloons a new event rather than a schema change (backlog 22, 23).
+  Future<bool> assignChase({
+    required String vehicleCraftId,
+    required String? targetCraftId,
+  }) async {
+    if (_session == null) return false;
+    final roster = resolveCraftRoster();
+    final vehicle = roster.byId(vehicleCraftId);
+    if (vehicle == null || vehicle.isBalloon) return false;
+    if (targetCraftId != null) {
+      final target = roster.byId(targetCraftId);
+      // A vehicle chases an aircraft, not another vehicle, and never itself.
+      if (target == null || !target.isBalloon) return false;
+    }
+    await _run(() async {
+      await _record(
+        type: RideEventType.craftChaseAssigned,
+        priority: EventPriority.important,
+        payload: {
+          'craftId': vehicleCraftId,
+          'chasing': targetCraftId,
+          'vehicleLabel': vehicle.craft.label,
+          'targetLabel': targetCraftId == null
+              ? null
+              : roster.byId(targetCraftId)?.craft.label,
+        },
+      );
+    });
+    return _errorMessage == null;
+  }
 
 
   // ---------------------------------------------------------------------------
