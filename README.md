@@ -54,8 +54,6 @@ docs/                        Product, architecture, source, and backlog notes
 
 ## Local verification
 
-The inherited internal Dart/Python names remain `balloon_crumbs` for now.
-
 ```bash
 cd apps/mobile
 flutter pub get
