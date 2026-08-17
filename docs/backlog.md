@@ -10,6 +10,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 2 | P0 | Balloon-capable telemetry: altitude, source, vertical speed | WP2 | 1 |
 | 3 | P0 | Craft model, flight roles, and pilot authority | WP3 | 2 |
 | 4 | P0 | Delete the motorcycle domain and rename the vocabulary | WP4 | 3 |
+| 4a | P0 | Replace the 15 motorcycle map markers with craft icons (#18) | WP4 | 3 |
 | 5 | P0 | Altitude-coloured ground track and telemetry card | WP5 | 2, 3 |
 | 6 | P0 | Pilot view, drawn landing area, and inferred landing phase | WP6 | 3, 5 |
 | 7 | P0 | Multiple chase vehicles, rendezvous, and vehicle assignment | WP7 | 3, 5 |
