@@ -1,13 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/services/enforcement_alert_detector.dart';
-import 'package:ride_relay/services/external_hazard_provider.dart';
-import 'package:ride_relay/services/fixed_speed_camera_catalogue.dart';
-import 'package:ride_relay/services/fixed_speed_camera_provider.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/features/map/hazard_map_symbol.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/services/enforcement_alert_detector.dart';
+import 'package:balloon_crumbs/services/external_hazard_provider.dart';
+import 'package:balloon_crumbs/services/fixed_speed_camera_catalogue.dart';
+import 'package:balloon_crumbs/services/fixed_speed_camera_provider.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/features/map/hazard_map_symbol.dart';
 
 String _catalogueJson(List<Map<String, Object?>> cameras) => jsonEncode({
   'type': 'FeatureCollection',

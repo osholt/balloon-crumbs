@@ -15,8 +15,8 @@ import 'road_rating.dart';
 class RoadRatingStore {
   RoadRatingStore._(this._preferences, this._pending, this._asked);
 
-  static const pendingKey = 'ride-relay-road-ratings-v1';
-  static const askedKey = 'ride-relay-road-ratings-asked-v1';
+  static const pendingKey = 'balloon-crumbs-road-ratings-v1';
+  static const askedKey = 'balloon-crumbs-road-ratings-asked-v1';
 
   /// A cap on the queue, so a relay that is down for a month cannot grow it
   /// without bound. The oldest entry is dropped first.

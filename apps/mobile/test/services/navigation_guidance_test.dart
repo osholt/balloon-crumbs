@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/navigation_guidance.dart';
-import 'package:ride_relay/services/road_routing.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/navigation_guidance.dart';
+import 'package:balloon_crumbs/services/road_routing.dart';
 
 import 'osrm_maneuver_fixtures.dart';
 

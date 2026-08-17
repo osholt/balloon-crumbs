@@ -554,7 +554,7 @@ class HttpObserverAccessClient implements ObserverAccessApi {
     final digest = Hmac(
       sha256,
       utf8.encode(session.inviteSecret),
-    ).convert(utf8.encode('ride-relay-internet-token-v1\n${session.rideId}'));
+    ).convert(utf8.encode('balloon-crumbs-internet-token-v1\n${session.rideId}'));
     return 'rr1_${base64Url.encode(digest.bytes).replaceAll('=', '')}';
   }
 

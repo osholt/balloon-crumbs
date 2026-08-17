@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/discovery_road_facts.dart';
-import 'package:ride_relay/services/motorcycle_discovery.dart';
+import 'package:balloon_crumbs/services/discovery_road_facts.dart';
+import 'package:balloon_crumbs/services/motorcycle_discovery.dart';
 
 /// #160's acceptance criteria, one test each: every speed-limit provenance
 /// state, the absent-data wording, and the visible difference between a pending

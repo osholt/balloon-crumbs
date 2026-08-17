@@ -1,16 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/situational_awareness_controller.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/domain/route_alert.dart';
-import 'package:ride_relay/services/external_hazard_provider.dart';
-import 'package:ride_relay/services/route_deviation_detector.dart';
-import 'package:ride_relay/services/situation_event_factory.dart';
+import 'package:balloon_crumbs/controllers/situational_awareness_controller.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/domain/route_alert.dart';
+import 'package:balloon_crumbs/services/external_hazard_provider.dart';
+import 'package:balloon_crumbs/services/route_deviation_detector.dart';
+import 'package:balloon_crumbs/services/situation_event_factory.dart';
 
 void main() {
   late InMemoryEventStore store;

@@ -120,7 +120,7 @@ class CarPlayBridge {
     @visibleForTesting
     this._minimumPublishInterval = const Duration(seconds: 1),
   }) : _channel =
-           channel ?? const MethodChannel('me.osholt.ride_relay/carplay'),
+           channel ?? const MethodChannel('me.osholt.balloon_crumbs/carplay'),
        _clock = clock ?? DateTime.now {
     _methodHandlerOwner = this;
     _channel.setMethodCallHandler(_handleMethodCall);

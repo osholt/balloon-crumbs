@@ -60,7 +60,7 @@ class RecommendationTest(unittest.TestCase):
     def test_the_rule_matches_the_relay(self):
         relay = (
             pathlib.Path(__file__).resolve().parents[3]
-            / "apps/server/src/ride_relay_server/discovery.py"
+            / "apps/server/src/balloon_crumbs_server/discovery.py"
         ).read_text()
         self.assertIn(
             f"ROAD_RATING_MINIMUM_RESPONSES = {road_ratings.MINIMUM_RESPONSES}",

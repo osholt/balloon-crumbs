@@ -2,20 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/geo_point.dart' as presence;
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/domain/rider_color.dart';
-import 'package:ride_relay/features/map/motorcycle_icon.dart';
-import 'package:ride_relay/services/basemap_configuration.dart';
-import 'package:ride_relay/services/carplay_bridge.dart';
-import 'package:ride_relay/services/navigation_camera.dart';
-import 'package:ride_relay/services/route_progress.dart';
-import 'package:ride_relay/services/route_journey_progress.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart' as presence;
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/domain/rider_color.dart';
+import 'package:balloon_crumbs/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/services/basemap_configuration.dart';
+import 'package:balloon_crumbs/services/carplay_bridge.dart';
+import 'package:balloon_crumbs/services/navigation_camera.dart';
+import 'package:balloon_crumbs/services/route_progress.dart';
+import 'package:balloon_crumbs/services/route_journey_progress.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

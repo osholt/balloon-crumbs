@@ -1,16 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/imported_route.dart' as route_domain;
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/rider_color.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/features/map/motorcycle_icon.dart';
-import 'package:ride_relay/features/ride/active_ride_shell.dart';
-import 'package:ride_relay/services/rejoin_route_share.dart';
-import 'package:ride_relay/services/ride_membership.dart';
-import 'package:ride_relay/services/rider_contact_share.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' as route_domain;
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_color.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/features/ride/active_ride_shell.dart';
+import 'package:balloon_crumbs/services/rejoin_route_share.dart';
+import 'package:balloon_crumbs/services/ride_membership.dart';
+import 'package:balloon_crumbs/services/rider_contact_share.dart';
 
 void main() {
   test('observer snapshot uses only the local device GPS sample', () {

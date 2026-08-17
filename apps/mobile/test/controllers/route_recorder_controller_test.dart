@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/route_recorder_controller.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/imported_route.dart' show RoutePathKind;
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/services/device_location_source.dart';
+import 'package:balloon_crumbs/controllers/route_recorder_controller.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' show RoutePathKind;
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/services/device_location_source.dart';
 
 void main() {
   test(

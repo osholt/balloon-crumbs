@@ -44,15 +44,13 @@ categories.
 The rename covered the product surface only. Two things were deliberately left
 alone:
 
-1. **Bundle identifiers.** `dev.osholt.hotpursuit` is still the iOS bundle ID,
-   the Android `applicationId`, and the Play package. Changing it creates a new
-   app identity: new provisioning profiles, a new Play listing, and a broken
-   TestFlight/closed-alpha track. The Apple provisioning profile names
-   (`Hot Pursuit CarPlay Navigation Development` / `… App Store`) are portal
-   artifacts that must be recreated in the Apple Developer console first.
+1. **Bundle identifiers — done.** `dev.osholt.ballooncrumbs` is now the iOS
+   bundle ID, the Android `applicationId` and the Play package. The internal
+   Dart package is `balloon_crumbs`, the Python package `balloon_crumbs_server`,
+   and the relay env prefix `BALLOON_CRUMBS_`. This is a new app identity: the
+   old TestFlight and Play tracks do not carry over, and a tester on the old
+   build has a separate app rather than an update.
 
-2. **The sweep-rider role name.** `RideRole.tailEndCharlie` renders as
-   `Hot Pursuit` in ~60 strings. That is the inherited motorcycle back-marker
-   role, not the product, so it was not renamed to `Balloon Crumbs`. Ballooning
-   has no equivalent role, so this is balloon-domain migration work — see
-   [backlog.md](backlog.md).
+2. **The sweep-rider role — done.** `RideRole.tailEndCharlie` was deleted
+   outright rather than renamed: ballooning has no back marker. See WP1 in
+   [delivery-plan.md](delivery-plan.md).

@@ -198,10 +198,19 @@ altitude at both segment endpoints.
    1,400+ lines of motorcycle-specific behaviour with no balloon equivalent.
    Recommendation: delete in a WP1 follow-up, before WP2 changes the telemetry
    type underneath them.
-2. **Bundle identifiers** — `dev.osholt.hotpursuit` still embeds the old name.
-   Changing it needs new Apple provisioning profiles and a new Play listing.
-3. **Internal package names** — `ride_relay` (Dart and Python). Cheap to defer,
-   increasingly confusing to keep.
+2. **Bundle identifiers and internal package names — done.** The bundle ID is
+   `dev.osholt.ballooncrumbs`, the Dart package `balloon_crumbs`, the Python
+   package `balloon_crumbs_server`, and the relay env prefix
+   `BALLOON_CRUMBS_`. iOS signing moved to automatic, because a new bundle ID
+   has no manual profile and Apple will not issue one automatically for the
+   CarPlay entitlements the project used to declare.
+3. **CarPlay entitlements are removed** so the app can be signed and installed
+   without an Apple-approved CarPlay profile. The CarPlay code is untouched and
+   inert. Restoring it means re-adding
+   `com.apple.developer.carplay-driving-task` and
+   `com.apple.developer.carplay-maps` to both entitlements files and creating a
+   matching profile in the developer console — which is backlog item 12's
+   problem, not something a local build can solve.
 
 ## Risks
 

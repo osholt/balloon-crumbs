@@ -5,7 +5,7 @@
 // whole section as faulty, which is the cost of shipping an unformatted enum.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/external_hazard_provider.dart';
+import 'package:balloon_crumbs/services/external_hazard_provider.dart';
 
 void main() {
   /// Words a rider reads: one capitalised word, then lower-case words. A

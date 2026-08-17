@@ -1,8 +1,8 @@
 // Which catalogued roads a finished ride actually crossed (#159).
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart' show GeoPoint;
-import 'package:ride_relay/services/motorcycle_discovery.dart';
-import 'package:ride_relay/services/ridden_road_matcher.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' show GeoPoint;
+import 'package:balloon_crumbs/services/motorcycle_discovery.dart';
+import 'package:balloon_crumbs/services/ridden_road_matcher.dart';
 
 /// A straight west-to-east line of [count] points starting at [longitude],
 /// spaced roughly 100 m apart at this latitude, matching the catalogue's own

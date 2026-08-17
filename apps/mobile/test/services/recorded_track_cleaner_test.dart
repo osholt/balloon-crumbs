@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart' show GeoPoint;
-import 'package:ride_relay/services/recorded_track_cleaner.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' show GeoPoint;
+import 'package:balloon_crumbs/services/recorded_track_cleaner.dart';
 
 void main() {
   const cleaner = RecordedTrackCleaner();

@@ -1,15 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/ride_controller.dart';
-import 'package:ride_relay/controllers/test_control_controller.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/data/in_memory_session_store.dart';
-import 'package:ride_relay/domain/completed_ride_store.dart';
-import 'package:ride_relay/services/nearby_bridge.dart';
-import 'package:ride_relay/services/test_control_registry.dart';
-import 'package:ride_relay/services/test_control_server.dart';
-import 'package:ride_relay/services/ride_screen_awake.dart';
-import 'package:ride_relay/services/test_control_configuration.dart';
-import 'package:ride_relay/services/test_control_session.dart';
+import 'package:balloon_crumbs/controllers/ride_controller.dart';
+import 'package:balloon_crumbs/controllers/test_control_controller.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/data/in_memory_session_store.dart';
+import 'package:balloon_crumbs/domain/completed_ride_store.dart';
+import 'package:balloon_crumbs/services/nearby_bridge.dart';
+import 'package:balloon_crumbs/services/test_control_registry.dart';
+import 'package:balloon_crumbs/services/test_control_server.dart';
+import 'package:balloon_crumbs/services/ride_screen_awake.dart';
+import 'package:balloon_crumbs/services/test_control_configuration.dart';
+import 'package:balloon_crumbs/services/test_control_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Regression cover for the two things that made a two-phone run impossible to
@@ -19,7 +19,7 @@ void main() {
 
   final withoutDefine = TestControlConfiguration.enabled
       ? null
-      : 'needs --dart-define=RIDE_RELAY_TEST_CONTROL=true';
+      : 'needs --dart-define=BALLOON_CRUMBS_TEST_CONTROL=true';
 
   group('idle clock', () {
     late TestControlController control;

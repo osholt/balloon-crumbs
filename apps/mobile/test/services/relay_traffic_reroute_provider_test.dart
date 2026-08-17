@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:ride_relay/domain/geo_point.dart' as awareness;
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/services/relay_traffic_reroute_provider.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart' as awareness;
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/services/relay_traffic_reroute_provider.dart';
 
 void main() {
   final configuration = InternetRelayConfiguration(

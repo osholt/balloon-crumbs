@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/route_recorder_controller.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/recorded_route_store.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/features/ride/route_recorder_screen.dart';
-import 'package:ride_relay/services/device_location_source.dart';
+import 'package:balloon_crumbs/controllers/route_recorder_controller.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/recorded_route_store.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/features/ride/route_recorder_screen.dart';
+import 'package:balloon_crumbs/services/device_location_source.dart';
 
 void main() {
   testWidgets('records, reviews, names, and saves a route', (tester) async {

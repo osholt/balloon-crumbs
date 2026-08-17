@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/completed_rides_controller.dart';
-import 'package:ride_relay/controllers/personal_ride_heatmap_controller.dart';
-import 'package:ride_relay/domain/completed_ride.dart';
-import 'package:ride_relay/domain/completed_ride_store.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/domain/ride_role.dart';
+import 'package:balloon_crumbs/controllers/completed_rides_controller.dart';
+import 'package:balloon_crumbs/controllers/personal_ride_heatmap_controller.dart';
+import 'package:balloon_crumbs/domain/completed_ride.dart';
+import 'package:balloon_crumbs/domain/completed_ride_store.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

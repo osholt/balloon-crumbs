@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/ride_diagnostics_controller.dart';
-import 'package:ride_relay/features/settings/ride_diagnostics_section.dart';
-import 'package:ride_relay/services/ride_diagnostics_configuration.dart';
+import 'package:balloon_crumbs/controllers/ride_diagnostics_controller.dart';
+import 'package:balloon_crumbs/features/settings/ride_diagnostics_section.dart';
+import 'package:balloon_crumbs/services/ride_diagnostics_configuration.dart';
 
 /// The Settings sheet is opened from two places — the home screen and the ride
 /// menu — and they pass their arguments separately.

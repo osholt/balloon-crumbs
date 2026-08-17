@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/marker_assistance.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/services/marker_statistics.dart';
+import 'package:balloon_crumbs/domain/marker_assistance.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/services/marker_statistics.dart';
 
 void main() {
   final start = DateTime.utc(2026, 7, 16, 12);

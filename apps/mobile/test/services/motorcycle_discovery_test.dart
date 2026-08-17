@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/motorcycle_discovery.dart';
+import 'package:balloon_crumbs/services/motorcycle_discovery.dart';
 
 void main() {
   test('parses, attributes, and bounds discovery features', () {

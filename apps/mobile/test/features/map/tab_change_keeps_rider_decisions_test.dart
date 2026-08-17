@@ -24,16 +24,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/domain/geo_point.dart' as awareness_geo;
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/domain/route_store.dart';
-import 'package:ride_relay/features/map/ride_map.dart';
-import 'package:ride_relay/services/basemap_configuration.dart';
-import 'package:ride_relay/services/enforcement_alert_detector.dart';
-import 'package:ride_relay/services/gpx_import_source.dart';
-import 'package:ride_relay/services/offline_tile_cache.dart';
-import 'package:ride_relay/services/route_importer.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart' as awareness_geo;
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/domain/route_store.dart';
+import 'package:balloon_crumbs/features/map/ride_map.dart';
+import 'package:balloon_crumbs/services/basemap_configuration.dart';
+import 'package:balloon_crumbs/services/enforcement_alert_detector.dart';
+import 'package:balloon_crumbs/services/gpx_import_source.dart';
+import 'package:balloon_crumbs/services/offline_tile_cache.dart';
+import 'package:balloon_crumbs/services/route_importer.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/features/map/route_trail_style.dart';
-import 'package:ride_relay/services/rider_trail_recorder.dart';
+import 'package:balloon_crumbs/features/map/route_trail_style.dart';
+import 'package:balloon_crumbs/services/rider_trail_recorder.dart';
 
 /// Measured cover for #107. These assertions are the numeric part of the fix:
 /// they cannot prove sunlight or visor legibility, which needs a photograph from

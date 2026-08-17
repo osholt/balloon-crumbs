@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/discovery_suggestion_queue.dart';
-import 'package:ride_relay/services/motorcycle_discovery.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/discovery_suggestion_queue.dart';
+import 'package:balloon_crumbs/services/motorcycle_discovery.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -26,7 +26,7 @@ void main() {
     final preferences = await SharedPreferences.getInstance();
     final stored =
         jsonDecode(
-              preferences.getString('ride-relay-discovery-suggestions-v1')!,
+              preferences.getString('balloon-crumbs-discovery-suggestions-v1')!,
             )
             as List;
     expect(stored.single['geometry']['type'], 'Point');

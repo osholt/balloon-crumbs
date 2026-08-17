@@ -5,13 +5,13 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:ride_relay/controllers/road_rating_controller.dart';
-import 'package:ride_relay/domain/imported_route.dart' show GeoPoint;
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/internet/road_rating_client.dart';
-import 'package:ride_relay/services/motorcycle_discovery.dart';
-import 'package:ride_relay/services/road_rating.dart';
-import 'package:ride_relay/services/road_rating_store.dart';
+import 'package:balloon_crumbs/controllers/road_rating_controller.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' show GeoPoint;
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/internet/road_rating_client.dart';
+import 'package:balloon_crumbs/services/motorcycle_discovery.dart';
+import 'package:balloon_crumbs/services/road_rating.dart';
+import 'package:balloon_crumbs/services/road_rating_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _catalogueVersion = 'uk-osm-2026-07-23-v1';

@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/features/map/smooth_countdown.dart';
+import 'package:balloon_crumbs/features/map/smooth_countdown.dart';
 
 void main() {
   group('the distance counts down rather than stepping (#449)', () {

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/biker_place_catalogue.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/biker_place_catalogue.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

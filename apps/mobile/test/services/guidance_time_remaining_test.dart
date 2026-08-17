@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/guidance_time_remaining.dart';
+import 'package:balloon_crumbs/services/guidance_time_remaining.dart';
 
 void main() {
   group('the car gets a real time to the turn, or none (#452)', () {

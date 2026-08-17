@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/navigation_camera.dart';
+import 'package:balloon_crumbs/services/navigation_camera.dart';
 
 const _portraitHeight = 844.0;
 const _landscapeHeight = 390.0;

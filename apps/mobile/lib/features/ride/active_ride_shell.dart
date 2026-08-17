@@ -284,7 +284,7 @@ List<ObserverPublishedRoutePoint> _boundedObserverRoutePoints(
 
 /// Owns the active-ride feature lifecycle and keeps each feature independently
 /// testable. Native permissions are requested only by the installed app, not by
-/// widget tests that construct [RideRelayApp].
+/// widget tests that construct [BalloonCrumbsApp].
 class ActiveRideShell extends StatefulWidget {
   const ActiveRideShell({
     super.key,
@@ -3737,7 +3737,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                         (landscape ? 12 : portraitRideMenuTopOffset),
                     child: FloatingActionButton.small(
                       key: const Key('ride-menu-button'),
-                      heroTag: 'ride-relay-shell-menu',
+                      heroTag: 'balloon-crumbs-shell-menu',
                       tooltip: 'Ride actions',
                       onPressed: _openRideMenu,
                       backgroundColor: const Color(0xE6252E39),

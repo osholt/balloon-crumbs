@@ -21,7 +21,7 @@ Voice guidance <- road route, staleness, and recalculation events
 ## Domain migration
 
 The inherited implementation calls a session a `ride` and uses Dart/Python
-packages named `ride_relay`. Keep those internal names until the core domain
+packages named `balloon_crumbs`. Keep those internal names until the core domain
 boundaries are covered by tests; a broad rename is not a product feature.
 
 Target concepts:

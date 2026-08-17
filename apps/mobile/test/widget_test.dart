@@ -2,29 +2,29 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/app/ride_relay_app.dart';
-import 'package:ride_relay/controllers/distance_unit_controller.dart';
-import 'package:ride_relay/controllers/completed_rides_controller.dart';
-import 'package:ride_relay/controllers/map_style_mode_controller.dart';
-import 'package:ride_relay/controllers/ride_code_preference_controller.dart';
-import 'package:ride_relay/controllers/ride_controller.dart';
-import 'package:ride_relay/controllers/rider_profile_controller.dart';
-import 'package:ride_relay/controllers/shared_route_controller.dart';
-import 'package:ride_relay/controllers/speed_limit_display_controller.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/data/in_memory_session_store.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/domain/map_style_mode.dart';
-import 'package:ride_relay/domain/completed_ride_store.dart';
-import 'package:ride_relay/domain/recorded_route_store.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_coordination_mode.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/features/home/home_map_backdrop.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/internet/plan_directory.dart';
-import 'package:ride_relay/services/nearby_bridge.dart';
+import 'package:balloon_crumbs/app/balloon_crumbs_app.dart';
+import 'package:balloon_crumbs/controllers/distance_unit_controller.dart';
+import 'package:balloon_crumbs/controllers/completed_rides_controller.dart';
+import 'package:balloon_crumbs/controllers/map_style_mode_controller.dart';
+import 'package:balloon_crumbs/controllers/ride_code_preference_controller.dart';
+import 'package:balloon_crumbs/controllers/ride_controller.dart';
+import 'package:balloon_crumbs/controllers/rider_profile_controller.dart';
+import 'package:balloon_crumbs/controllers/shared_route_controller.dart';
+import 'package:balloon_crumbs/controllers/speed_limit_display_controller.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/data/in_memory_session_store.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/map_style_mode.dart';
+import 'package:balloon_crumbs/domain/completed_ride_store.dart';
+import 'package:balloon_crumbs/domain/recorded_route_store.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_coordination_mode.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/features/home/home_map_backdrop.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/internet/plan_directory.dart';
+import 'package:balloon_crumbs/services/nearby_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -432,7 +432,7 @@ void main() {
     );
     addTearDown(distanceUnits.dispose);
     await tester.pumpWidget(
-      RideRelayApp(
+      BalloonCrumbsApp(
         controller: controller,
         distanceUnits: distanceUnits,
         mapStyleMode: _mapStyleMode,
@@ -901,13 +901,13 @@ final _rideFormScrollable = find
     )
     .first;
 
-RideRelayApp _app(
+BalloonCrumbsApp _app(
   RideController controller, {
   RideCodePreferenceController? rideCodePreference,
   PlanDirectory? planDirectory,
   Future<void> Function()? initializeController,
   Duration startupFallbackAfter = const Duration(seconds: 2),
-}) => RideRelayApp(
+}) => BalloonCrumbsApp(
   controller: controller,
   distanceUnits: DistanceUnitController.forLocale(const Locale('en', 'GB')),
   mapStyleMode: _mapStyleMode,

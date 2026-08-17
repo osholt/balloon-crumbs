@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/gpx_exporter.dart';
-import 'package:ride_relay/services/gpx_parser.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/gpx_exporter.dart';
+import 'package:balloon_crumbs/services/gpx_parser.dart';
 
 void main() {
   test('exports valid GPX 1.1 tracks, routes, and waypoints', () {

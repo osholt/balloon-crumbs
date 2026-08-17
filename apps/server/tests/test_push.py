@@ -4,9 +4,15 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, select
 
-from ride_relay_server.crypto import sha256
-from ride_relay_server.models import PushDelivery, PushRegistration, Ride, RideMember, StoredEvent
-from ride_relay_server.push import PushMessage, PushProviderResult
+from balloon_crumbs_server.crypto import sha256
+from balloon_crumbs_server.models import (
+    PushDelivery,
+    PushRegistration,
+    Ride,
+    RideMember,
+    StoredEvent,
+)
+from balloon_crumbs_server.push import PushMessage, PushProviderResult
 
 from .conftest import ride_token
 
@@ -51,7 +57,7 @@ class _EventDecryptCounter:
 def _headers(ride_id: str, installation_id: str) -> dict[str, str]:
     return {
         "authorization": f"Bearer {ride_token(ride_id, SECRET)}",
-        "x-ride-relay-device": installation_id,
+        "x-balloon-crumbs-device": installation_id,
     }
 
 
@@ -169,7 +175,7 @@ def test_urgent_alert_targets_current_coordinators_once(
     with factory() as session:
         assert session.scalar(select(func.count(PushDelivery.id))) == 2
     metrics = client.get("/metrics")
-    assert 'ride_relay_push_deliveries_total{outcome="delivered"} 2.0' in metrics.text
+    assert 'balloon_crumbs_push_deliveries_total{outcome="delivered"} 2.0' in metrics.text
 
 
 def test_push_membership_projection_does_not_decrypt_large_event_history(

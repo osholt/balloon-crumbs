@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
-import 'app/ride_relay_app.dart';
+import 'app/balloon_crumbs_app.dart';
 import 'controllers/distance_unit_controller.dart';
 import 'controllers/completed_rides_controller.dart';
 import 'controllers/map_style_mode_controller.dart';
@@ -117,7 +117,7 @@ Future<void> main() async {
   TestControlSession(testControl, testControlServer).start();
 
   runApp(
-    RideRelayApp(
+    BalloonCrumbsApp(
       controller: controller,
       distanceUnits: distanceUnits,
       mapStyleMode: mapStyleMode,

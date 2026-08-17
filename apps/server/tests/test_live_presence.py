@@ -12,8 +12,8 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 
-from ride_relay_server.models import PreStartPosition, Ride
-from ride_relay_server.schemas import PresenceSyncRequest
+from balloon_crumbs_server.models import PreStartPosition, Ride
+from balloon_crumbs_server.schemas import PresenceSyncRequest
 
 from .conftest import event, ride_token
 
@@ -49,7 +49,7 @@ def _presence(
 ):
     headers = {
         "authorization": f"Bearer {ride_token(ride_id, SECRET)}",
-        "x-ride-relay-device": device_id,
+        "x-balloon-crumbs-device": device_id,
         "x-tailendcharlie-protocol": protocol,
         "x-tailendcharlie-capabilities": ",".join(
             capabilities if capabilities is not None else LIVE
@@ -454,7 +454,7 @@ def test_presence_rejects_a_client_newer_than_the_service(client, synchronize) -
         json={"protocolVersion": 1, "deviceId": "rider-a"},
         headers={
             "authorization": f"Bearer {ride_token(ride_id, SECRET)}",
-            "x-ride-relay-device": "rider-a",
+            "x-balloon-crumbs-device": "rider-a",
             "x-tailendcharlie-protocol": "2",
             "x-tailendcharlie-capabilities": ",".join(LIVE),
         },

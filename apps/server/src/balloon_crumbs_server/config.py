@@ -9,14 +9,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="RIDE_RELAY_",
+        env_prefix="BALLOON_CRUMBS_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
     environment: str = "production"
-    database_url: str = "postgresql+psycopg://ride_relay@db/ride_relay"
+    database_url: str = "postgresql+psycopg://balloon_crumbs@db/balloon_crumbs"
     data_encryption_key: SecretStr
     cursor_signing_key: SecretStr
     trusted_hosts: list[str] = Field(default_factory=lambda: ["*"])

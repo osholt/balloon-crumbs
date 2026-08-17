@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/distance_unit_controller.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
+import 'package:balloon_crumbs/controllers/distance_unit_controller.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/features/map/maneuver_symbol.dart';
-import 'package:ride_relay/services/navigation_guidance.dart';
-import 'package:ride_relay/services/road_routing.dart';
+import 'package:balloon_crumbs/features/map/maneuver_symbol.dart';
+import 'package:balloon_crumbs/services/navigation_guidance.dart';
+import 'package:balloon_crumbs/services/road_routing.dart';
 
 void main() {
   // The 10 August ride, twice: "2nd exit, straight on" and "3rd exit, right"

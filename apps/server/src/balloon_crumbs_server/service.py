@@ -650,7 +650,7 @@ class RelayService:
         expected = "rr1_" + base64url(
             hmac.new(
                 invite_secret.encode(),
-                f"ride-relay-internet-token-v1\n{ride_id}".encode(),
+                f"balloon-crumbs-internet-token-v1\n{ride_id}".encode(),
                 "sha256",
             ).digest()
         )

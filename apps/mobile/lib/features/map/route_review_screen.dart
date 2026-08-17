@@ -684,7 +684,7 @@ class _RouteReviewScreenState extends State<RouteReviewScreen> {
                           if (basemapConfiguration.usesLegacyRaster)
                             TileLayer(
                               urlTemplate: basemapConfiguration.urlTemplate,
-                              userAgentPackageName: 'me.osholt.ride_relay',
+                              userAgentPackageName: 'me.osholt.balloon_crumbs',
                               maxNativeZoom:
                                   basemapConfiguration.maximumNativeZoom,
                             ),

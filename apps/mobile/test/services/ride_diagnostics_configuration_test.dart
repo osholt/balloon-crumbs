@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/ride_diagnostics_configuration.dart';
+import 'package:balloon_crumbs/services/ride_diagnostics_configuration.dart';
 
 /// The define-**off** half of the ride-diagnostics coverage, following the shape
 /// `test_control_server_test.dart` established: the default suite runs without the
@@ -19,7 +19,7 @@ void main() {
     // Skipped in an instrumented build. A named reason so a skipped run says
     // why, following test_control_server_test.dart.
     skip: RideDiagnosticsConfiguration.enabled
-        ? 'asserts the define-off build; run without RIDE_RELAY_RIDE_DIAGNOSTICS'
+        ? 'asserts the define-off build; run without BALLOON_CRUMBS_RIDE_DIAGNOSTICS'
         : null,
   );
 

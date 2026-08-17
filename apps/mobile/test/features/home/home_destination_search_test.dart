@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart' show GeoPoint;
-import 'package:ride_relay/domain/ride_coordination_mode.dart';
-import 'package:ride_relay/features/home/home_destination_search.dart';
-import 'package:ride_relay/services/road_routing.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' show GeoPoint;
+import 'package:balloon_crumbs/domain/ride_coordination_mode.dart';
+import 'package:balloon_crumbs/features/home/home_destination_search.dart';
+import 'package:balloon_crumbs/services/road_routing.dart';
 
 void main() {
   group('search for a destination, then arrange the ride (#431)', () {

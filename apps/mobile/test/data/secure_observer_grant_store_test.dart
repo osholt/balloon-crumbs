@@ -1,7 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/data/secure_observer_grant_store.dart';
-import 'package:ride_relay/internet/observer_access_client.dart';
+import 'package:balloon_crumbs/data/secure_observer_grant_store.dart';
+import 'package:balloon_crumbs/internet/observer_access_client.dart';
 
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
@@ -36,7 +36,7 @@ void main() {
       const store = SecureObserverGrantStore();
       await const FlutterSecureStorage().write(
         key:
-            'ride_relay_observer_grants_v1_'
+            'balloon_crumbs_observer_grants_v1_'
             '2889292830075b00868126d7de25feee3df92afdc08e4d3f2d8bbbb61b5b6863',
         value: '{"schemaVersion":1,"credentials":[{"bad":true}]}',
       );

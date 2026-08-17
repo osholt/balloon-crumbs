@@ -153,7 +153,7 @@ class OfflineTileCache {
       } else {
         final response = await _httpClient.get(
           Uri.parse(tileUrl(tile)),
-          headers: const {'User-Agent': 'me.osholt.ride_relay'},
+          headers: const {'User-Agent': 'me.osholt.balloon_crumbs'},
         );
         if (response.statusCode < 200 || response.statusCode >= 300) {
           throw OfflineTileDownloadException(

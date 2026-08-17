@@ -147,7 +147,7 @@ Optionally fetch rider ratings first (see below). `publish_catalogue.py` reads
 a run without an export behaves exactly as before:
 
 ```bash
-curl -sS -H "Authorization: Bearer $RIDE_RELAY_DISCOVERY_ADMIN_TOKEN" \
+curl -sS -H "Authorization: Bearer $BALLOON_CRUMBS_DISCOVERY_ADMIN_TOKEN" \
   https://<relay>/api/v1/admin/discovery/road-ratings \
   > "$DISCOVERY_WORK_DIR/road-ratings.json"
 ```
@@ -176,7 +176,7 @@ a road and neither may twenty: a negative verdict produces a flag for a human,
 and a road leaves the catalogue only through an `editorial-overlay.json` verdict.
 
 The thresholds are defined in `ROAD_RATING_*` in
-`apps/server/src/ride_relay_server/discovery.py` and mirrored in
+`apps/server/src/balloon_crumbs_server/discovery.py` and mirrored in
 `road_ratings.py`; `tests/test_road_ratings.py` fails if the two disagree, and
 `road_ratings.index` refuses an export the relay aggregated under a different
 rule rather than applying this one to those numbers. Ratings are matched on

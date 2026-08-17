@@ -23,7 +23,7 @@ Deliberately not copied:
 Safety changes made at scaffold time:
 
 - the public brand is `Balloon Crumbs`;
-- provisional development IDs use `dev.osholt.hotpursuit`;
+- provisional development IDs use `dev.osholt.ballooncrumbs`;
 - copied domains use `balloon-crumbs.invalid` / `relay.balloon-crumbs.invalid`; and
 - no GitHub secret, provider key, signing key, or production endpoint is present.
 

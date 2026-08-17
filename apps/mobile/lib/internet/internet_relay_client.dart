@@ -24,7 +24,7 @@ class InternetRelayConfiguration {
   });
 
   factory InternetRelayConfiguration.fromEnvironment() {
-    const value = String.fromEnvironment('RIDE_RELAY_API_BASE_URL');
+    const value = String.fromEnvironment('BALLOON_CRUMBS_API_BASE_URL');
     if (value.trim().isEmpty) {
       return const InternetRelayConfiguration(baseUri: null);
     }
@@ -125,8 +125,8 @@ class RelayClientDescriptor {
 
   /// The build's real identity.
   ///
-  /// When a build channel does not inject `RIDE_RELAY_APP_VERSION` /
-  /// `RIDE_RELAY_APP_BUILD` the descriptor reports [unknownVersion] instead of
+  /// When a build channel does not inject `BALLOON_CRUMBS_APP_VERSION` /
+  /// `BALLOON_CRUMBS_APP_BUILD` the descriptor reports [unknownVersion] instead of
   /// a plausible-looking constant. A wrong version is worse than an absent one:
   /// it makes every version-conditional diagnostic silently misleading.
   factory RelayClientDescriptor.current() => RelayClientDescriptor(
@@ -141,11 +141,11 @@ class RelayClientDescriptor {
   static const unknownVersion = 'unknown';
 
   static const _rawAppVersion = String.fromEnvironment(
-    'RIDE_RELAY_APP_VERSION',
+    'BALLOON_CRUMBS_APP_VERSION',
   );
-  static const _rawAppBuild = String.fromEnvironment('RIDE_RELAY_APP_BUILD');
+  static const _rawAppBuild = String.fromEnvironment('BALLOON_CRUMBS_APP_BUILD');
   static const _rawDistributionTrack = String.fromEnvironment(
-    'RIDE_RELAY_DISTRIBUTION_TRACK',
+    'BALLOON_CRUMBS_DISTRIBUTION_TRACK',
   );
 
   static String get _declaredAppVersion =>
@@ -495,7 +495,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
         ..headers['accept'] = 'application/json'
         ..headers.addAll(_clientDescriptor.headers)
         ..headers.addAll(
-          joinToken == null ? {} : {'x-ride-relay-join-token': joinToken},
+          joinToken == null ? {} : {'x-balloon-crumbs-join-token': joinToken},
         ),
     );
     final body = await _readBoundedResponse(response);
@@ -800,7 +800,7 @@ class HttpInternetRelayClient
         'authorization': 'Bearer ${_rideBearerToken(session)}',
         'content-type': 'application/json',
         'idempotency-key': _idempotencyKey(bodyBytes),
-        'x-ride-relay-device': session.localRiderId,
+        'x-balloon-crumbs-device': session.localRiderId,
         ..._clientDescriptor.headers,
       })
       ..bodyBytes = bodyBytes;
@@ -1111,7 +1111,7 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
         'accept': 'application/json',
         'authorization': 'Bearer ${_rideBearerToken(session)}',
         'content-type': 'application/json',
-        'x-ride-relay-device': session.localRiderId,
+        'x-balloon-crumbs-device': session.localRiderId,
         ..._clientDescriptor.headers,
       })
       ..bodyBytes = bodyBytes;
@@ -1461,6 +1461,6 @@ String _rideBearerToken(RideSession session) {
   final digest = Hmac(
     sha256,
     utf8.encode(session.inviteSecret),
-  ).convert(utf8.encode('ride-relay-internet-token-v1\n${session.rideId}'));
+  ).convert(utf8.encode('balloon-crumbs-internet-token-v1\n${session.rideId}'));
   return 'rr1_${base64Url.encode(digest.bytes).replaceAll('=', '')}';
 }

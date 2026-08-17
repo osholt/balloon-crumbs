@@ -2,9 +2,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/features/map/discovery_road_sheet.dart';
-import 'package:ride_relay/services/discovery_road_facts.dart';
-import 'package:ride_relay/services/motorcycle_discovery.dart';
+import 'package:balloon_crumbs/features/map/discovery_road_sheet.dart';
+import 'package:balloon_crumbs/services/discovery_road_facts.dart';
+import 'package:balloon_crumbs/services/motorcycle_discovery.dart';
 
 /// #160's app-side acceptance criteria: selecting a discovery road shows speed
 /// limit, enforcement, busy periods and description, an unmapped limit reads

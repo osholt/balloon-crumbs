@@ -75,7 +75,7 @@
             </intent-filter>
         </service>
         <service
-            android:name=".RideRelayMessagingService"
+            android:name=".BalloonCrumbsMessagingService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />

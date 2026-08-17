@@ -1,4 +1,4 @@
-name: ride_relay
+name: balloon_crumbs
 description: "Offline-first hot-air-balloon chase coordination for iOS and Android."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.

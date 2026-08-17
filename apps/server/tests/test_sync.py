@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 
-from ride_relay_server.models import IdempotencyReplay, Ride, StoredEvent
-from ride_relay_server.service import purge_expired
+from balloon_crumbs_server.models import IdempotencyReplay, Ride, StoredEvent
+from balloon_crumbs_server.service import purge_expired
 
 from .conftest import ride_token
 
@@ -13,7 +13,14 @@ SECRET = "0123456789abcdef0123456789abcdef"
 
 
 def test_token_matches_mobile_golden_vector() -> None:
-    assert ride_token("ride/alpha", SECRET) == ("rr1_uXTs1vSdBpQTOadPV9VW51wrlt2Cf6E-aaolArBPAac")
+    # Mirrored in apps/mobile/test/internet/ride_token_golden_test.dart. The
+    # context string carries the product name and changed once, when the bundle
+    # identifier changed with it and made this a new app no older install
+    # upgrades into. It is protocol now: renaming it again invalidates every
+    # issued token.
+    assert ride_token("ride/alpha", SECRET) == (
+        "rr1_btMeW7x2Dq6V6dJzP7BhE8cBxFLSjeMxzoSjBrEfceE"
+    )
 
 
 def test_first_sync_claims_ride_and_another_device_receives_event(

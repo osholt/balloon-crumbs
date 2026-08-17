@@ -1,4 +1,4 @@
-package me.osholt.ride_relay
+package me.osholt.balloon_crumbs
 
 import android.content.Intent
 import android.content.pm.ApplicationInfo

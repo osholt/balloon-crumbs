@@ -137,7 +137,7 @@ class ValhallaSpeedLimitConfiguration {
 
   factory ValhallaSpeedLimitConfiguration.fromEnvironment() {
     const raw = String.fromEnvironment(
-      'RIDE_RELAY_SPEED_LIMIT_URL',
+      'BALLOON_CRUMBS_SPEED_LIMIT_URL',
       defaultValue: 'https://valhalla1.openstreetmap.de/trace_attributes',
     );
     final parsed = Uri.tryParse(raw.trim());

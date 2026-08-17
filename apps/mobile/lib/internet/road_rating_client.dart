@@ -17,7 +17,7 @@ class RoadRatingConfiguration {
   const RoadRatingConfiguration(this.apiOrigin);
 
   factory RoadRatingConfiguration.fromEnvironment() {
-    const value = String.fromEnvironment('RIDE_RELAY_DISCOVERY_API_URL');
+    const value = String.fromEnvironment('BALLOON_CRUMBS_DISCOVERY_API_URL');
     return RoadRatingConfiguration(
       value.trim().isEmpty ? null : Uri.tryParse(value.trim()),
     );

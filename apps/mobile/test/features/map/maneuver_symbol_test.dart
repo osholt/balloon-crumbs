@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/features/map/maneuver_symbol.dart';
-import 'package:ride_relay/services/navigation_guidance.dart';
-import 'package:ride_relay/services/roundabout_exit_bucket.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/features/map/maneuver_symbol.dart';
+import 'package:balloon_crumbs/services/navigation_guidance.dart';
+import 'package:balloon_crumbs/services/roundabout_exit_bucket.dart';
 
 /// Every manoeuvre type the routing engine documents, plus one it does not, so
 /// an unrecognised type still produces an instruction that matches its symbol.

@@ -830,17 +830,17 @@ class RideMapScreen extends StatefulWidget {
 }
 
 class _RideMapScreenState extends State<RideMapScreen> {
-  static const _personalHeatmapSource = 'ride-relay-personal-heatmap';
-  static const _personalHeatmapLayer = 'ride-relay-personal-heatmap-layer';
-  static const _remainingRouteSource = 'ride-relay-route-remaining';
-  static const _riderTrailSource = 'ride-relay-rider-trails';
+  static const _personalHeatmapSource = 'balloon-crumbs-personal-heatmap';
+  static const _personalHeatmapLayer = 'balloon-crumbs-personal-heatmap-layer';
+  static const _remainingRouteSource = 'balloon-crumbs-route-remaining';
+  static const _riderTrailSource = 'balloon-crumbs-rider-trails';
   static const _casingHex = RouteTrailStyle.casingHex;
-  static const _trailDirectionArrowSource = 'ride-relay-trail-direction-arrows';
-  static const _waypointSource = 'ride-relay-waypoints';
-  static const _positionSource = 'ride-relay-position';
-  static const _overlaySource = 'ride-relay-overlays';
-  static const _markerPlanSource = 'ride-relay-marker-plan';
-  static const _trailDirectionArrowImage = 'ride-relay-trail-direction-arrow';
+  static const _trailDirectionArrowSource = 'balloon-crumbs-trail-direction-arrows';
+  static const _waypointSource = 'balloon-crumbs-waypoints';
+  static const _positionSource = 'balloon-crumbs-position';
+  static const _overlaySource = 'balloon-crumbs-overlays';
+  static const _markerPlanSource = 'balloon-crumbs-marker-plan';
+  static const _trailDirectionArrowImage = 'balloon-crumbs-trail-direction-arrow';
 
   /// How many of the direction arrows the planned route may claim before the
   /// live cues take the rest. Half the budget: enough to read the route's
@@ -849,8 +849,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
   static const _plannedRouteArrowReserve = 120;
   static const _trailDirectionArrowSampler = TrailDirectionArrowSampler();
   static const _navigationGuidancePlanner = NavigationGuidancePlanner();
-  static const _discoveryLineSource = 'ride-relay-discovery-lines';
-  static const _discoveryPointSource = 'ride-relay-discovery-points';
+  static const _discoveryLineSource = 'balloon-crumbs-discovery-lines';
+  static const _discoveryPointSource = 'balloon-crumbs-discovery-points';
 
   final MapControllerImpl _mapController = MapControllerImpl();
   final RouteProgressTracker _routeProgressTracker = RouteProgressTracker();
@@ -2095,7 +2095,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       final rideMenu = showRideMenu
           ? FloatingActionButton.small(
               key: const Key('ride-menu-button'),
-              heroTag: 'ride-relay-menu',
+              heroTag: 'balloon-crumbs-menu',
               tooltip: 'Ride actions',
               onPressed: widget.onOpenRideMenu,
               backgroundColor: const Color(0xE6252E39),
@@ -2142,7 +2142,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           : FloatingActionButton.extended(
               key: const Key('emergency-alert-button'),
               extendedPadding: actionPadding,
-              heroTag: 'ride-relay-emergency-alert',
+              heroTag: 'balloon-crumbs-emergency-alert',
               tooltip: 'Alert leader and TEC',
               onPressed: _emergencyAlertSending ? null : _triggerEmergencyAlert,
               backgroundColor: const Color(0xFFD9304F),
@@ -2178,7 +2178,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           ? FloatingActionButton.extended(
               key: const Key('leave-ride-button'),
               extendedPadding: actionPadding,
-              heroTag: 'ride-relay-leave',
+              heroTag: 'balloon-crumbs-leave',
               tooltip: 'Stop sharing and leave this ride',
               onPressed: widget.onLeaveRide,
               backgroundColor: const Color(0xFF545F6E),
@@ -2318,7 +2318,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               // with them put two heroes of the same tag on screen whenever this
               // control was up, which is most of a ride now that it is the way
               // into the navigation viewport (#141).
-              heroTag: 'ride-relay-follow-me',
+              heroTag: 'balloon-crumbs-follow-me',
               tooltip: 'Follow my location',
               onPressed: _toggleNavigationMode,
               backgroundColor: const Color(0xE6252E39),
@@ -2686,7 +2686,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         if (_basemap.usesLegacyRaster)
           TileLayer(
             urlTemplate: _basemap.urlTemplate,
-            userAgentPackageName: 'me.osholt.ride_relay',
+            userAgentPackageName: 'me.osholt.balloon_crumbs',
             maxNativeZoom: _basemap.maximumNativeZoom,
             tileProvider: LicensedCachingTileProvider(
               cache: widget.offlineTileCache,
@@ -4214,7 +4214,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           );
   }
 
-  static const _hazardIconImage = 'ride-relay-hazard-warning';
+  static const _hazardIconImage = 'balloon-crumbs-hazard-warning';
   bool _markerImagesRegistered = false;
   final Set<String> _registeredRiderSymbolImages = {};
 
@@ -4346,7 +4346,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       // not caught up.
       await controller.addLineLayer(
         _discoveryLineSource,
-        'ride-relay-discovery-line-casing',
+        'balloon-crumbs-discovery-line-casing',
         const ml.LineLayerProperties(
           lineColor: RouteTrailStyle.casingHex,
           lineWidth: 7,
@@ -4357,7 +4357,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await controller.addLineLayer(
         _discoveryLineSource,
-        'ride-relay-discovery-lines',
+        'balloon-crumbs-discovery-lines',
         const ml.LineLayerProperties(
           lineColor: ['get', 'color'],
           lineWidth: 4,
@@ -4371,7 +4371,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await controller.addCircleLayer(
         _discoveryPointSource,
-        'ride-relay-discovery-points',
+        'balloon-crumbs-discovery-points',
         const ml.CircleLayerProperties(
           circleRadius: 7,
           circleColor: ['get', 'color'],
@@ -4393,7 +4393,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await controller.addLineLayer(
         _remainingRouteSource,
-        'ride-relay-route-remaining-border',
+        'balloon-crumbs-route-remaining-border',
         ml.LineLayerProperties(
           lineColor: _casingHex,
           lineWidth: RouteTrailStyle.routeAhead.casingWidthPixels,
@@ -4405,7 +4405,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await controller.addLineLayer(
         _remainingRouteSource,
-        'ride-relay-route-remaining',
+        'balloon-crumbs-route-remaining',
         ml.LineLayerProperties(
           lineColor: _hexColor(RouteTrailStyle.routeAhead.color),
           lineWidth: RouteTrailStyle.routeAhead.widthPixels,
@@ -4427,7 +4427,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await controller.addSymbolLayer(
         _trailDirectionArrowSource,
-        'ride-relay-trail-direction-arrows',
+        'balloon-crumbs-trail-direction-arrows',
         const ml.SymbolLayerProperties(
           iconImage: _trailDirectionArrowImage,
           iconColor: ['get', 'color'],
@@ -4445,7 +4445,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await controller.addGeoJsonSource(_waypointSource, _waypointGeoJson());
       await controller.addCircleLayer(
         _waypointSource,
-        'ride-relay-waypoint-circles',
+        'balloon-crumbs-waypoint-circles',
         const ml.CircleLayerProperties(
           circleRadius: 7,
           circleColor: '#FFC857',
@@ -4459,7 +4459,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await controller.addCircleLayer(
         _markerPlanSource,
-        'ride-relay-marker-plan-points',
+        'balloon-crumbs-marker-plan-points',
         const ml.CircleLayerProperties(
           circleRadius: [
             'case',
@@ -4479,7 +4479,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await controller.addGeoJsonSource(_positionSource, _positionGeoJson());
       await controller.addCircleLayer(
         _positionSource,
-        'ride-relay-position-badge',
+        'balloon-crumbs-position-badge',
         ml.CircleLayerProperties(
           circleRadius: _localBadgeRadius,
           circleColor: _hexColor(widget.localBadgeColor),
@@ -4492,7 +4492,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await controller.addSymbolLayer(
         _positionSource,
-        'ride-relay-position-icon',
+        'balloon-crumbs-position-icon',
         ml.SymbolLayerProperties(
           iconImage: widget.localRiderSymbol.imageName(
             widget.localDisplayName,
@@ -4520,7 +4520,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       // enforcement plate.
       await controller.addCircleLayer(
         _overlaySource,
-        'ride-relay-overlay-badges',
+        'balloon-crumbs-overlay-badges',
         ml.CircleLayerProperties(
           circleRadius: _riderBadgeRadius,
           circleColor: ['get', 'color'],
@@ -4532,7 +4532,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await controller.addSymbolLayer(
         _overlaySource,
-        'ride-relay-overlay-icons',
+        'balloon-crumbs-overlay-icons',
         ml.SymbolLayerProperties(
           iconImage: ['get', 'iconImage'],
           // As above: the badge carries the colour, the glyph carries the shape,
@@ -4593,7 +4593,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     ];
     await controller.addLineLayer(
       _riderTrailSource,
-      'ride-relay-trail-${kind.name}-casing',
+      'balloon-crumbs-trail-${kind.name}-casing',
       ml.LineLayerProperties(
         lineColor: _casingHex,
         lineWidth: style.casingWidthPixels,
@@ -4606,7 +4606,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     );
     await controller.addLineLayer(
       _riderTrailSource,
-      'ride-relay-trail-${kind.name}-line',
+      'balloon-crumbs-trail-${kind.name}-line',
       ml.LineLayerProperties(
         lineColor: _hexColor(style.color),
         lineWidth: style.widthPixels,
@@ -4982,7 +4982,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   /// Layer holding the reported-hazard badges (#135).
-  static const _hazardSymbolLayer = 'ride-relay-hazard-symbols';
+  static const _hazardSymbolLayer = 'balloon-crumbs-hazard-symbols';
 
   /// Which overlay features each of the two badge families draws.
   ///
@@ -5064,24 +5064,24 @@ class _RideMapScreenState extends State<RideMapScreen> {
     String layerId,
     ml.Annotation? annotation,
   ) {
-    if (layerId == 'ride-relay-discovery-lines' ||
-        layerId == 'ride-relay-discovery-points') {
+    if (layerId == 'balloon-crumbs-discovery-lines' ||
+        layerId == 'balloon-crumbs-discovery-points') {
       final feature = _discoveryCatalogue.features
           .where((feature) => feature.id == id)
           .firstOrNull;
       if (feature != null) _showDiscoveryFeature(feature);
       return;
     }
-    if (layerId == 'ride-relay-marker-plan-points') {
+    if (layerId == 'balloon-crumbs-marker-plan-points') {
       final point = _markerPlan.points
           .where((item) => item.id == id)
           .firstOrNull;
       if (point != null) unawaited(_showMarkerPlanPoint(point));
       return;
     }
-    if (layerId != 'ride-relay-overlay-icons' &&
+    if (layerId != 'balloon-crumbs-overlay-icons' &&
         layerId != _hazardSymbolLayer &&
-        layerId != 'ride-relay-waypoint-circles') {
+        layerId != 'balloon-crumbs-waypoint-circles') {
       return;
     }
     final overlay = (widget.overlayMarkers?.value ?? const <MapOverlayMarker>[])
@@ -7204,8 +7204,8 @@ typedef _MiniMapSnapshot = ({
 });
 
 class _GroupMiniMapState extends State<_GroupMiniMap> {
-  static const _routeSource = 'ride-relay-mini-route';
-  static const _riderSource = 'ride-relay-mini-riders';
+  static const _routeSource = 'balloon-crumbs-mini-route';
+  static const _riderSource = 'balloon-crumbs-mini-riders';
 
   /// Radius of a rider's badge on the group overview, which is smaller than the
   /// main map's because the whole map is.
@@ -7266,7 +7266,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
             widget.mapStyleUrl.trim().isNotEmpty
         ? vmt.StyleReader(
             uri: widget.mapStyleUrl,
-            httpHeaders: const {'User-Agent': 'me.osholt.ride_relay'},
+            httpHeaders: const {'User-Agent': 'me.osholt.balloon_crumbs'},
           ).read().timeout(const Duration(seconds: 7))
         : null;
   }
@@ -7630,7 +7630,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
       await controller.addGeoJsonSource(_routeSource, _routeGeoJson(snapshot));
       await controller.addLineLayer(
         _routeSource,
-        'ride-relay-mini-route-border',
+        'balloon-crumbs-mini-route-border',
         ml.LineLayerProperties(
           lineColor: RouteTrailStyle.casingHex,
           lineWidth: RouteTrailStyle.miniMapRoute.casingWidthPixels,
@@ -7641,7 +7641,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
       );
       await controller.addLineLayer(
         _routeSource,
-        'ride-relay-mini-route-line',
+        'balloon-crumbs-mini-route-line',
         ml.LineLayerProperties(
           lineColor: _hexColor(RouteTrailStyle.miniMapRoute.color),
           lineWidth: RouteTrailStyle.miniMapRoute.widthPixels,
@@ -7653,7 +7653,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
       await controller.addGeoJsonSource(_riderSource, _riderGeoJson(snapshot));
       await controller.addCircleLayer(
         _riderSource,
-        'ride-relay-mini-rider-circles',
+        'balloon-crumbs-mini-rider-circles',
         const ml.CircleLayerProperties(
           circleRadius: _miniBadgeRadius,
           circleColor: ['get', 'color'],
@@ -7664,7 +7664,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
       );
       await controller.addSymbolLayer(
         _riderSource,
-        'ride-relay-mini-rider-symbols',
+        'balloon-crumbs-mini-rider-symbols',
         ml.SymbolLayerProperties(
           iconImage: ['get', 'iconImage'],
           iconColor: RouteTrailStyle.markerGlyphHex,

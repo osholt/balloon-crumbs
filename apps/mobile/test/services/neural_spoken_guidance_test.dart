@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/neural_spoken_guidance.dart';
-import 'package:ride_relay/services/spoken_guidance.dart';
+import 'package:balloon_crumbs/services/neural_spoken_guidance.dart';
+import 'package:balloon_crumbs/services/spoken_guidance.dart';
 
 void main() {
   test('a neural utterance that starts in time is used whole', () async {

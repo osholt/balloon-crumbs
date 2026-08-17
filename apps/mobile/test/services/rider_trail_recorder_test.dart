@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/situational_awareness_controller.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/rider_trail_recorder.dart';
+import 'package:balloon_crumbs/controllers/situational_awareness_controller.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/rider_trail_recorder.dart';
 
 /// Regression cover for #100: a rider's travelled trail is recorded from
 /// position history alone, so it survives leaving the planned route, having no

@@ -17,9 +17,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/features/map/route_review_screen.dart';
-import 'package:ride_relay/services/gpx_parser.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/features/map/route_review_screen.dart';
+import 'package:balloon_crumbs/services/gpx_parser.dart';
 
 void main() {
   const parser = GpxParser();

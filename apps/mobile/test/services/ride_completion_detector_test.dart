@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/imported_route.dart' as route_domain;
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/services/ride_completion_detector.dart';
-import 'package:ride_relay/services/route_progress.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' as route_domain;
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/services/ride_completion_detector.dart';
+import 'package:balloon_crumbs/services/route_progress.dart';
 
 void main() {
   const detector = RideCompletionDetector();

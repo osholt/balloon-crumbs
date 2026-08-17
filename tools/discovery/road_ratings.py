@@ -6,7 +6,7 @@ promotion decision the publisher can act on.
 
 Fetching
 --------
-    curl -sS -H "Authorization: Bearer $RIDE_RELAY_DISCOVERY_ADMIN_TOKEN" \\
+    curl -sS -H "Authorization: Bearer $BALLOON_CRUMBS_DISCOVERY_ADMIN_TOKEN" \\
       https://<relay>/api/v1/admin/discovery/road-ratings \\
       > "$DISCOVERY_WORK_DIR/road-ratings.json"
 
@@ -25,7 +25,7 @@ The rule
 `insufficient`       not enough answers, or no clear majority either way.
 
 These constants mirror ROAD_RATING_* in
-apps/server/src/ride_relay_server/discovery.py. The relay's own export carries the
+apps/server/src/balloon_crumbs_server/discovery.py. The relay's own export carries the
 thresholds it used, and `load` refuses an export whose thresholds disagree with
 these, rather than silently applying a different rule to the numbers.
 

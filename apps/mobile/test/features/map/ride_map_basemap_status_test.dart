@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/domain/route_store.dart';
-import 'package:ride_relay/features/map/ride_map.dart';
-import 'package:ride_relay/services/basemap_configuration.dart';
-import 'package:ride_relay/services/gpx_import_source.dart';
-import 'package:ride_relay/services/map_style_repository.dart';
-import 'package:ride_relay/services/offline_tile_cache.dart';
-import 'package:ride_relay/services/route_importer.dart';
+import 'package:balloon_crumbs/domain/route_store.dart';
+import 'package:balloon_crumbs/features/map/ride_map.dart';
+import 'package:balloon_crumbs/services/basemap_configuration.dart';
+import 'package:balloon_crumbs/services/gpx_import_source.dart';
+import 'package:balloon_crumbs/services/map_style_repository.dart';
+import 'package:balloon_crumbs/services/offline_tile_cache.dart';
+import 'package:balloon_crumbs/services/route_importer.dart';
 
 /// The live ride map used to have no basemap failure handling at all, while the
 /// recap screen had `_mapFailed`. A failed style and a working map of empty
@@ -169,7 +169,7 @@ void main() {
 }
 
 const _mapLibre = BasemapConfiguration(
-  styleUrl: 'https://maps.example.test/styles/ride-relay.json',
+  styleUrl: 'https://maps.example.test/styles/balloon-crumbs.json',
   attribution: 'OpenFreeMap contributors',
 );
 

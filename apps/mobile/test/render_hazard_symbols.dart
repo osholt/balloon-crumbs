@@ -20,9 +20,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/features/map/hazard_map_symbol.dart';
-import 'package:ride_relay/features/map/route_trail_style.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/features/map/hazard_map_symbol.dart';
+import 'package:balloon_crumbs/features/map/route_trail_style.dart';
 
 const _outputDirectory = 'build/hazard-render';
 

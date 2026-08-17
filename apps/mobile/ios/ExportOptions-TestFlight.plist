@@ -6,7 +6,7 @@
   <string>app-store-connect</string>
   <key>provisioningProfiles</key>
   <dict>
-    <key>dev.osholt.hotpursuit</key>
+    <key>dev.osholt.ballooncrumbs</key>
     <string>Hot Pursuit CarPlay Navigation App Store</string>
   </dict>
   <key>signingCertificate</key>

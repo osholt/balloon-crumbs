@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/internet/observer_access_client.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/internet/observer_access_client.dart';
 
 void main() {
   final session = RideSession(
@@ -74,7 +74,7 @@ void main() {
       'https://relay.example/api/v1/rides/ride-observer/observer-grants',
     );
     expect(captured.headers['authorization'], startsWith('Bearer rr1_'));
-    expect(captured.headers, isNot(contains('x-ride-relay-device')));
+    expect(captured.headers, isNot(contains('x-balloon-crumbs-device')));
     expect(jsonDecode(captured.body), {
       'label': 'Home contact',
       'durationMinutes': 240,

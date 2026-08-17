@@ -24,8 +24,8 @@ import '../features/ride/active_ride_shell.dart';
 import '../internet/plan_directory.dart';
 import '../services/test_control_registry.dart';
 
-class RideRelayApp extends StatelessWidget {
-  const RideRelayApp({
+class BalloonCrumbsApp extends StatelessWidget {
+  const BalloonCrumbsApp({
     super.key,
     required this.controller,
     required this.distanceUnits,
@@ -278,7 +278,7 @@ class RideRelayApp extends StatelessWidget {
 class _RideRestoreGate extends StatefulWidget {
   const _RideRestoreGate({required this.app});
 
-  final RideRelayApp app;
+  final BalloonCrumbsApp app;
 
   @override
   State<_RideRestoreGate> createState() => _RideRestoreGateState();

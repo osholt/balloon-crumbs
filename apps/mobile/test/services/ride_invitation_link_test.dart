@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/join_invite.dart';
-import 'package:ride_relay/services/ride_invitation_link.dart';
+import 'package:balloon_crumbs/domain/join_invite.dart';
+import 'package:balloon_crumbs/services/ride_invitation_link.dart';
 
 void main() {
   const code = '123456';

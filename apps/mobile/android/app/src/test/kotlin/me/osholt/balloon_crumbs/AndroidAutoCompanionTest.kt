@@ -1,4 +1,4 @@
-package me.osholt.ride_relay
+package me.osholt.balloon_crumbs
 
 import org.junit.After
 import org.junit.Assert.assertEquals

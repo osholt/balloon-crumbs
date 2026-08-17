@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart' as imported_route;
-import 'package:ride_relay/domain/route_store.dart';
-import 'package:ride_relay/features/ride/active_ride_shell.dart';
-import 'package:ride_relay/services/road_routing.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' as imported_route;
+import 'package:balloon_crumbs/domain/route_store.dart';
+import 'package:balloon_crumbs/features/ride/active_ride_shell.dart';
+import 'package:balloon_crumbs/services/road_routing.dart';
 
 void main() {
   test('Ride Lab marks one point for a paired roundabout', () {

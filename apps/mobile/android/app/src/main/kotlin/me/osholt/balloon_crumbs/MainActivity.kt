@@ -1,4 +1,4 @@
-package me.osholt.ride_relay
+package me.osholt.balloon_crumbs
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -36,13 +36,13 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     companion object {
-        private const val METHOD_CHANNEL = "me.osholt.ride_relay/nearby"
-        private const val EVENT_CHANNEL = "me.osholt.ride_relay/nearby_events"
-        private const val GPX_METHOD_CHANNEL = "me.osholt.ride_relay/gpx_import"
-        private const val PLANNER_LINK_METHOD_CHANNEL = "me.osholt.ride_relay/planner_link"
-        private const val PUSH_METHOD_CHANNEL = "me.osholt.ride_relay/push"
-        private const val PROJECTED_RIDE_METHOD_CHANNEL = "me.osholt.ride_relay/carplay"
-        private const val GROUP_PIP_METHOD_CHANNEL = "me.osholt.ride_relay/group_pip"
+        private const val METHOD_CHANNEL = "me.osholt.balloon_crumbs/nearby"
+        private const val EVENT_CHANNEL = "me.osholt.balloon_crumbs/nearby_events"
+        private const val GPX_METHOD_CHANNEL = "me.osholt.balloon_crumbs/gpx_import"
+        private const val PLANNER_LINK_METHOD_CHANNEL = "me.osholt.balloon_crumbs/planner_link"
+        private const val PUSH_METHOD_CHANNEL = "me.osholt.balloon_crumbs/push"
+        private const val PROJECTED_RIDE_METHOD_CHANNEL = "me.osholt.balloon_crumbs/carplay"
+        private const val GROUP_PIP_METHOD_CHANNEL = "me.osholt.balloon_crumbs/group_pip"
         private const val PERMISSION_REQUEST = 7102
         private const val PUSH_PERMISSION_REQUEST = 7103
         private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
@@ -61,7 +61,7 @@ class MainActivity : FlutterActivity() {
     private var permissionResult: MethodChannel.Result? = null
     private var pushPermissionResult: MethodChannel.Result? = null
     private var endpointName = "Balloon Crumbs"
-    private var serviceId = "me.osholt.ride_relay.relay.v1"
+    private var serviceId = "me.osholt.balloon_crumbs.relay.v1"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

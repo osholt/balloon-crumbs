@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/features/settings/about_build_sheet.dart';
-import 'package:ride_relay/services/build_identity.dart';
+import 'package:balloon_crumbs/features/settings/about_build_sheet.dart';
+import 'package:balloon_crumbs/services/build_identity.dart';
 
 void main() {
   const identity = BuildIdentity(

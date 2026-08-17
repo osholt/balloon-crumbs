@@ -10,16 +10,16 @@
 // bug whose tests never exercised the path the device took.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/situational_awareness_controller.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/imported_route.dart' as route_domain;
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/domain/route_alert.dart';
-import 'package:ride_relay/services/road_routing.dart';
-import 'package:ride_relay/services/route_rejoin_planner.dart';
+import 'package:balloon_crumbs/controllers/situational_awareness_controller.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' as route_domain;
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/domain/route_alert.dart';
+import 'package:balloon_crumbs/services/road_routing.dart';
+import 'package:balloon_crumbs/services/route_rejoin_planner.dart';
 
 void main() {
   for (final role in [RideRole.lead, RideRole.rider]) {

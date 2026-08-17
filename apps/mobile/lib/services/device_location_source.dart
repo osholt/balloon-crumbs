@@ -61,7 +61,7 @@ class GeolocatorDeviceLocationPlatform implements DeviceLocationPlatform {
   const GeolocatorDeviceLocationPlatform();
 
   static const _backgroundPermissionChannel = MethodChannel(
-    'me.osholt.ride_relay/background_location',
+    'me.osholt.balloon_crumbs/background_location',
   );
 
   @override

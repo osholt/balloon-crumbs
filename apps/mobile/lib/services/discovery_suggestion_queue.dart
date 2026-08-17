@@ -101,7 +101,7 @@ class DiscoverySuggestionDraft {
 class DiscoverySuggestionQueue {
   DiscoverySuggestionQueue._(this._preferences, this._drafts);
 
-  static const _key = 'ride-relay-discovery-suggestions-v1';
+  static const _key = 'balloon-crumbs-discovery-suggestions-v1';
   static const _maximumDrafts = 25;
   static const _uuid = Uuid();
 
@@ -210,7 +210,7 @@ class DiscoverySuggestionConfiguration {
   const DiscoverySuggestionConfiguration(this.apiOrigin);
 
   factory DiscoverySuggestionConfiguration.fromEnvironment() {
-    const value = String.fromEnvironment('RIDE_RELAY_DISCOVERY_API_URL');
+    const value = String.fromEnvironment('BALLOON_CRUMBS_DISCOVERY_API_URL');
     return DiscoverySuggestionConfiguration(
       value.trim().isEmpty ? null : Uri.parse(value),
     );
