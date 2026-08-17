@@ -501,6 +501,10 @@ class SituationalAwarenessController extends ChangeNotifier {
       // type still has to be considered here.
       case RideEventType.rejoinRouteShared:
       case RideEventType.riderContactShared:
+      case RideEventType.craftRegistered:
+      case RideEventType.deviceAttachedToCraft:
+      case RideEventType.craftPrimaryDeviceNominated:
+      case RideEventType.craftChaseAssigned:
         break;
     }
     if (!replaying) {

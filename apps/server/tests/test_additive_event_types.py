@@ -236,3 +236,67 @@ def test_a_rejoin_share_is_not_a_field_an_observer_snapshot_can_carry(client) ->
     served = observed.json()
     assert "rejoinRoute" not in served
     assert "breadcrumb" not in str(served)
+
+
+def test_craft_events_are_accepted_and_relayed(client, synchronize, make_event) -> None:
+    """WP3. A device that knows crafts must be able to tell its peers.
+
+    Craft structure is what lets several phones in one basket resolve to one
+    balloon track, so if the relay refuses these the whole model degrades to the
+    flat rider list on every device that was not present for the registration.
+    """
+    ride_id = "ride-crafts"
+    shared = [
+        make_event(
+            ride_id,
+            "event-craft-balloon",
+            event_type="craftRegistered",
+            payload={"craftId": "balloon", "kind": "balloon", "label": "Balloon"},
+        ),
+        make_event(
+            ride_id,
+            "event-craft-vehicle",
+            event_type="craftRegistered",
+            payload={"craftId": "v1", "kind": "vehicle", "label": "Land Rover"},
+        ),
+        make_event(
+            ride_id,
+            "event-attach",
+            event_type="deviceAttachedToCraft",
+            payload={"deviceId": "device-b", "craftId": "balloon"},
+        ),
+        make_event(
+            ride_id,
+            "event-primary",
+            event_type="craftPrimaryDeviceNominated",
+            payload={"craftId": "balloon", "deviceId": "device-b"},
+        ),
+        make_event(
+            ride_id,
+            "event-chase",
+            event_type="craftChaseAssigned",
+            payload={"craftId": "v1", "chasing": "balloon"},
+        ),
+    ]
+
+    uploaded = synchronize(client, ride_id=ride_id, secret=SECRET, events=shared)
+    assert uploaded.status_code == 200
+    assert uploaded.json()["acceptedEventIds"] == [event["id"] for event in shared]
+
+    downloaded = synchronize(client, ride_id=ride_id, secret=SECRET, device_id="device-b")
+    assert downloaded.status_code == 200
+    assert downloaded.json()["events"] == shared
+
+
+def test_craft_structure_outlives_a_position_report() -> None:
+    """Expiring craft structure before positions would leave a replaying device
+    with fixes and no crafts to attach them to: the balloon would disappear while
+    its track stayed on the map."""
+    retention = RelayService._maximum_event_retention
+    for event_type in (
+        "craftRegistered",
+        "deviceAttachedToCraft",
+        "craftPrimaryDeviceNominated",
+        "craftChaseAssigned",
+    ):
+        assert retention(event_type) > retention("riderLocationUpdated")

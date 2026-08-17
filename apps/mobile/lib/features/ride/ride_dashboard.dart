@@ -694,6 +694,18 @@ class _EventRow extends StatelessWidget {
       RideEventType.rideReopened => 'Ride reopened by the leader',
       RideEventType.iceInfoShared => 'Emergency contact shared',
       RideEventType.iceInfoViewed => 'Emergency contact viewed',
+      // WP3. Named by craft label rather than id: a log a crew reads at the end
+      // of a flight should say "Vehicle 2 joined", not a device identifier.
+      RideEventType.craftRegistered =>
+        '${event.payload['label'] ?? 'A craft'} joined the flight',
+      RideEventType.deviceAttachedToCraft =>
+        'A device moved to ${event.payload['craftLabel'] ?? 'another craft'}',
+      RideEventType.craftPrimaryDeviceNominated =>
+        'Primary reporting device set for '
+            '${event.payload['craftLabel'] ?? 'a craft'}',
+      RideEventType.craftChaseAssigned =>
+        '${event.payload['vehicleLabel'] ?? 'A vehicle'} is now chasing '
+            '${event.payload['targetLabel'] ?? 'the balloon'}',
       RideEventType.rejoinRouteShared =>
         (event.payload['share'] as Map?)?['cleared'] == true
             ? 'Rejoin route cleared'

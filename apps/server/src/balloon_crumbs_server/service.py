@@ -67,6 +67,14 @@ EVENT_TYPES = {
     # coordination roles. Deliberately distinct from "iceInfoShared", which
     # carries a rider's next of kin.
     "riderContactShared",
+    # WP3. Which craft — balloon or vehicle — a device is aboard, who reports for
+    # it, and which craft a vehicle is chasing. Additive, so an older client skips
+    # them and sees the flat participant list it already understands: it loses
+    # craft grouping rather than the flight.
+    "craftRegistered",
+    "deviceAttachedToCraft",
+    "craftPrimaryDeviceNominated",
+    "craftChaseAssigned",
     # Issues #206/#207. The leader saying a ride that ended has not finished
     # after all. Deliberately not "rideResumed", which is the other half of
     # "ridePaused"; conflating them would make a pause look like a resurrection.
@@ -998,6 +1006,14 @@ class RelayService:
             # actually are, capped here as well as on the client so a share
             # cannot outlive its usefulness even if a client asks it to.
             "rejoinRouteShared": timedelta(minutes=30),
+            # WP3. Craft structure outlives any single fix: expiring it sooner
+            # than the positions would leave a replaying device with fixes and
+            # no crafts to attach them to, so the balloon would vanish while its
+            # track remained. Flight-scoped, so it shares the default band.
+            "craftRegistered": timedelta(hours=72),
+            "deviceAttachedToCraft": timedelta(hours=72),
+            "craftPrimaryDeviceNominated": timedelta(hours=72),
+            "craftChaseAssigned": timedelta(hours=72),
             # Who was asked to cover the back of the group, and what they said.
             # Ride-scoped coordination, not history worth keeping for days.
         }.get(event_type, timedelta(hours=72))

@@ -72,6 +72,10 @@ class RideLifecycleReducer {
         case RideEventType.iceInfoViewed:
         case RideEventType.rejoinRouteShared:
         case RideEventType.riderContactShared:
+        case RideEventType.craftRegistered:
+        case RideEventType.deviceAttachedToCraft:
+        case RideEventType.craftPrimaryDeviceNominated:
+        case RideEventType.craftChaseAssigned:
           break;
       }
     }
