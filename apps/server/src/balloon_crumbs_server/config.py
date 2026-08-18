@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 from functools import lru_cache
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,30 +30,21 @@ class Settings(BaseSettings):
     join_code_lookup_rate_limit_requests: int = Field(default=30, ge=1, le=1000)
     join_code_lookup_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
     join_code_global_rate_limit_requests: int = Field(default=20, ge=1, le=1000)
-    discovery_suggestion_rate_limit_requests: int = Field(default=10, ge=1, le=1000)
-    discovery_suggestion_rate_limit_window_seconds: int = Field(
-        default=3600,
-        ge=60,
-        le=24 * 3600,
-    )
-    # Road ratings are one small request each, deliberately unauthenticated and
-    # spread over hours by the client, so a genuine rider needs a handful an hour
-    # at most. The cap is what stands between the tally and ballot stuffing from
-    # one source, since there is no submitter identity to deduplicate on.
-    discovery_rating_rate_limit_requests: int = Field(default=30, ge=1, le=1000)
-    discovery_rating_rate_limit_window_seconds: int = Field(
-        default=3600,
-        ge=60,
-        le=24 * 3600,
-    )
-    discovery_admin_token: SecretStr | None = None
-    discovery_admin_name: str = Field(default="discovery-admin", min_length=1, max_length=120)
-    discovery_rejected_retention_days: int = Field(default=90, ge=7, le=365)
-    discovery_allowed_origins: list[str] = Field(
+    # Browser origins allowed to call the relay. Named `discovery_*` while the
+    # discovery web surface was the only cross-origin caller; the observer page is
+    # served from the marketing site, so it outlived discovery and this is not a
+    # discovery setting any more. The old environment name is still accepted so a
+    # deployment does not silently fall back to the placeholder defaults and break
+    # the observer's CORS on its next restart.
+    web_allowed_origins: list[str] = Field(
         default_factory=lambda: [
             "https://balloon-crumbs.invalid",
             "https://www.balloon-crumbs.invalid",
-        ]
+        ],
+        validation_alias=AliasChoices(
+            "BALLOON_CRUMBS_WEB_ALLOWED_ORIGINS",
+            "BALLOON_CRUMBS_DISCOVERY_ALLOWED_ORIGINS",
+        ),
     )
     maximum_request_bytes: int = Field(default=64 * 1024, ge=1024, le=1024 * 1024)
     maximum_response_bytes: int = Field(default=128 * 1024, ge=4096, le=2 * 1024 * 1024)
@@ -102,11 +93,6 @@ class Settings(BaseSettings):
             # nobody shares one carries no numbers at all. Named so a client can
             # report the limitation instead of appearing to have shared.
             "rider-contact-sharing-v1",
-            # Anonymous rider verdicts on catalogued roads. Not an event type:
-            # a standalone unauthenticated endpoint, negotiated here so a client
-            # facing an older relay names the limitation and keeps the rider's
-            # answer on the phone instead of losing it.
-            "road-ratings-v1",
             # The leader un-ending a ride that ended by mistake. Named so a
             # client facing an older relay hides the action rather than putting
             # its leader back on the map while every other rider still sees a
@@ -173,19 +159,6 @@ class Settings(BaseSettings):
             raise ValueError("must be a base64url-encoded 32-byte key") from error
         if len(decoded) != 32:
             raise ValueError("must decode to exactly 32 bytes")
-        return value
-
-    @field_validator("discovery_admin_token", mode="before")
-    @classmethod
-    def validate_discovery_admin_token(
-        cls,
-        value: object,
-    ) -> object:
-        if value is None or value == "":
-            return None
-        raw_value = value.get_secret_value() if isinstance(value, SecretStr) else str(value)
-        if len(raw_value) < 32:
-            raise ValueError("must contain at least 32 characters when configured")
         return value
 
     @field_validator(

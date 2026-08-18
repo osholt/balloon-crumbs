@@ -299,8 +299,21 @@ class ObserverGrant(Base):
     ride: Mapped[Ride] = relationship(back_populates="observer_grants")
 
 
+# The four discovery tables below outlive the feature that wrote to them.
+#
+# Every discovery endpoint has been withdrawn and the client no longer calls any
+# of them (see tests/test_discovery_withdrawn.py), but the tables are still in
+# every deployed database and one of them holds user-contributed suggestions and
+# their moderation history. Dropping them is destructive and irreversible, so it
+# is a separate migration with a separate decision about whether anything needs
+# exporting first — not a side effect of withdrawing an API.
+#
+# These classes are kept so the schema that exists is still described in code.
+# Nothing reads or writes them.
+
+
 class DiscoverySuggestion(Base):
-    """Private rider input; never queried by the public layer endpoint."""
+    """Private rider input. Retained schema only; no endpoint reaches it."""
 
     __tablename__ = "discovery_suggestions"
     __table_args__ = (
