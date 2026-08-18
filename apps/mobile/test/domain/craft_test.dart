@@ -21,22 +21,25 @@ void main() {
       expect(crafts.where((c) => !c.isBalloon), hasLength(2));
     });
 
-    test('a chase assignment is its own fact, reassignable without a schema change', () {
-      const vehicle = Craft(
-        id: 'v1',
-        kind: CraftKind.vehicle,
-        label: 'Land Rover',
-        chasing: 'b1',
-      );
+    test(
+      'a chase assignment is its own fact, reassignable without a schema change',
+      () {
+        const vehicle = Craft(
+          id: 'v1',
+          kind: CraftKind.vehicle,
+          label: 'Land Rover',
+          chasing: 'b1',
+        );
 
-      // With one balloon this is implicit. With several, reassigning a vehicle
-      // mid-flight is just a new value rather than a new data model.
-      final switched = vehicle.copyWith(chasing: 'b2');
-      expect(switched.chasing, 'b2');
-      expect(vehicle.chasing, 'b1', reason: 'crafts are immutable');
+        // With one balloon this is implicit. With several, reassigning a vehicle
+        // mid-flight is just a new value rather than a new data model.
+        final switched = vehicle.copyWith(chasing: 'b2');
+        expect(switched.chasing, 'b2');
+        expect(vehicle.chasing, 'b1', reason: 'crafts are immutable');
 
-      expect(vehicle.copyWith(clearChasing: true).chasing, isNull);
-    });
+        expect(vehicle.copyWith(clearChasing: true).chasing, isNull);
+      },
+    );
 
     test('only a vehicle chases, and nothing chases itself', () {
       expect(
@@ -73,7 +76,11 @@ void main() {
     });
 
     test('a balloon writes no assignment field at all', () {
-      const balloon = Craft(id: 'b1', kind: CraftKind.balloon, label: 'Balloon');
+      const balloon = Craft(
+        id: 'b1',
+        kind: CraftKind.balloon,
+        label: 'Balloon',
+      );
 
       expect(balloon.toJson().containsKey('chasing'), isFalse);
       expect(Craft.fromJson(balloon.toJson()), balloon);
@@ -121,7 +128,8 @@ void main() {
         expect(
           role.seesRoadFurniture,
           role == FlightRole.chaseDriver,
-          reason: '${role.name} should${role == FlightRole.chaseDriver ? '' : ' not'} see road furniture',
+          reason:
+              '${role.name} should${role == FlightRole.chaseDriver ? '' : ' not'} see road furniture',
         );
       }
     });

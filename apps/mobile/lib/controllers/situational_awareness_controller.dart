@@ -48,6 +48,7 @@ class SituationalAwarenessController extends ChangeNotifier {
   final DateTime? rideStartedAt;
   final HazardExpiryPolicy expiryPolicy;
   final HazardDeduplicator deduplicator;
+
   /// Documented age thresholds shared with the ephemeral presence channels, so
   /// the journal side and the presence side cannot disagree about whether a
   /// position is live, ageing or stale.

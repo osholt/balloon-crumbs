@@ -53,7 +53,6 @@ void main() {
     });
   });
 
-
   group('the control on the map says what it is', () {
     test('every mode is named in words', () {
       // #306: no feature reachable only through an unlabelled icon, and a rider

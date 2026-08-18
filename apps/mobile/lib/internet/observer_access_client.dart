@@ -551,10 +551,9 @@ class HttpObserverAccessClient implements ObserverAccessApi {
         'Observer access requires an authenticated ride.',
       );
     }
-    final digest = Hmac(
-      sha256,
-      utf8.encode(session.inviteSecret),
-    ).convert(utf8.encode('balloon-crumbs-internet-token-v1\n${session.rideId}'));
+    final digest = Hmac(sha256, utf8.encode(session.inviteSecret)).convert(
+      utf8.encode('balloon-crumbs-internet-token-v1\n${session.rideId}'),
+    );
     return 'rr1_${base64Url.encode(digest.bytes).replaceAll('=', '')}';
   }
 

@@ -291,11 +291,15 @@ void main() {
 
   test('can delay TEC and inject a synthetic roadworks hazard', () async {
     final normalTecSpeed = simulation.riders
-        .singleWhere((rider) => rider.id == RideSimulationController.backRiderId)
+        .singleWhere(
+          (rider) => rider.id == RideSimulationController.backRiderId,
+        )
         .speedMetersPerSecond;
     simulation.setBackRiderDelayed(true);
     final delayedTecSpeed = simulation.riders
-        .singleWhere((rider) => rider.id == RideSimulationController.backRiderId)
+        .singleWhere(
+          (rider) => rider.id == RideSimulationController.backRiderId,
+        )
         .speedMetersPerSecond;
     expect(delayedTecSpeed, lessThan(normalTecSpeed));
 

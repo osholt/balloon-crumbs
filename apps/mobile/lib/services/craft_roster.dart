@@ -83,9 +83,7 @@ class CraftRoster {
 /// same roster on every device, which is what lets two phones agree about where
 /// the balloon is without exchanging a word about it.
 class CraftRosterReducer {
-  const CraftRosterReducer({
-    this.election = const CraftTelemetryElection(),
-  });
+  const CraftRosterReducer({this.election = const CraftTelemetryElection()});
 
   final CraftTelemetryElection election;
 
@@ -215,10 +213,7 @@ class CraftRosterReducer {
       return a.craft.label.compareTo(b.craft.label);
     });
 
-    return CraftRoster(
-      crafts: List.unmodifiable(states),
-      evaluatedAt: now,
-    );
+    return CraftRoster(crafts: List.unmodifiable(states), evaluatedAt: now);
   }
 
   /// The reporters this roster elected, to feed back as the next call's

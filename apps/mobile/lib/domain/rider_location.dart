@@ -182,9 +182,7 @@ class RiderLocation {
       Map<String, Object?>.from(json['sample']! as Map),
     ),
     receivedAt: DateTime.parse(json['receivedAt']! as String).toLocal(),
-    motorcycleStyle: craftIconStyleFromName(
-      json['motorcycleStyle'] as String?,
-    ),
+    motorcycleStyle: craftIconStyleFromName(json['motorcycleStyle'] as String?),
     riderSymbol: RiderSymbol.fromWireValue(json['motorcycleStyle'] as String?),
     riderColor: riderColorFromName(json['riderColor'] as String?),
   );

@@ -10,7 +10,9 @@ abstract interface class IncomingPlannerLinkSource {
 class PlannerLinkChannel implements IncomingPlannerLinkSource {
   const PlannerLinkChannel();
 
-  static const _channel = MethodChannel('me.osholt.balloon_crumbs/planner_link');
+  static const _channel = MethodChannel(
+    'me.osholt.balloon_crumbs/planner_link',
+  );
 
   @override
   Future<String?> consumePending() async {

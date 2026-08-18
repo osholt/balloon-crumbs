@@ -3020,7 +3020,7 @@ void main() {
         for (final key in const [
           'ride-paused-banner',
           'route-progress-panel-position',
-              'group-mini-map',
+          'group-mini-map',
           'ride-menu-button',
           'emergency-alert-button',
           'leave-ride-button',
@@ -4741,10 +4741,7 @@ void main() {
         reason: 'the alert must stack inside the band in $orientation',
       );
       // Nothing it shares the band with is covered.
-      for (final key in const [
-          'navigation-guidance-banner',
-        ...actionKeys,
-      ]) {
+      for (final key in const ['navigation-guidance-banner', ...actionKeys]) {
         expect(
           alert.deflate(0.5).overlaps(tester.getRect(find.byKey(Key(key)))),
           isFalse,

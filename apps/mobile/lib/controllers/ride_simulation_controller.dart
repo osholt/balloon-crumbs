@@ -152,8 +152,7 @@ class RideSimulationController extends ChangeNotifier {
     // choices. Lead/TEC roles still override to their reserved colour when
     // rendered, so this only ever shows for plain riders.
     CraftIconStyle demoStyleFor(int index) =>
-        CraftIconStyle.values[(index + 1) %
-            CraftIconStyle.values.length];
+        CraftIconStyle.values[(index + 1) % CraftIconStyle.values.length];
     RiderColor demoColorFor(int index) =>
         RiderColor.values[(index + 1) % RiderColor.values.length];
     _SimulatedAgent rider({

@@ -173,9 +173,7 @@ void main() {
 
 Widget _app(SituationalAwarenessController controller) => MaterialApp(
   theme: ThemeData.dark(useMaterial3: true),
-  home: SituationalAwarenessScreen(
-    controller: controller,
-  ),
+  home: SituationalAwarenessScreen(controller: controller),
 );
 
 LocationSample _sample(double latitude) => LocationSample(

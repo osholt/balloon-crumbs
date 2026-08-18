@@ -565,4 +565,3 @@ Color _severityColor(HazardSeverity severity) => switch (severity) {
   HazardSeverity.serious => const Color(0xFFFF9D4D),
   HazardSeverity.critical => const Color(0xFFFF715B),
 };
-

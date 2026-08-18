@@ -792,11 +792,13 @@ class _RideMapScreenState extends State<RideMapScreen> {
   static const _remainingRouteSource = 'balloon-crumbs-route-remaining';
   static const _riderTrailSource = 'balloon-crumbs-rider-trails';
   static const _casingHex = RouteTrailStyle.casingHex;
-  static const _trailDirectionArrowSource = 'balloon-crumbs-trail-direction-arrows';
+  static const _trailDirectionArrowSource =
+      'balloon-crumbs-trail-direction-arrows';
   static const _waypointSource = 'balloon-crumbs-waypoints';
   static const _positionSource = 'balloon-crumbs-position';
   static const _overlaySource = 'balloon-crumbs-overlays';
-  static const _trailDirectionArrowImage = 'balloon-crumbs-trail-direction-arrow';
+  static const _trailDirectionArrowImage =
+      'balloon-crumbs-trail-direction-arrow';
 
   /// How many of the direction arrows the planned route may claim before the
   /// live cues take the rest. Half the budget: enough to read the route's

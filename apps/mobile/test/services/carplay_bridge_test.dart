@@ -245,7 +245,7 @@ void main() {
       Future<void> publish({CarPlayRideStart? rideStart}) => bridge.publish(
         session: null,
         riderLocations: const [],
-          activeHazards: const [],
+        activeHazards: const [],
         rideStart: rideStart,
       );
 
@@ -331,7 +331,7 @@ void main() {
       await bridge.publish(
         session: null,
         riderLocations: const [],
-          activeHazards: const [],
+        activeHazards: const [],
         route: route,
         routeName: route.name,
         followRider: true,
@@ -564,7 +564,7 @@ void main() {
           riderColor: RiderColor.orange,
         ),
         riderLocations: const [],
-          activeHazards: const [],
+        activeHazards: const [],
         basemap: const BasemapConfiguration(
           styleUrl: 'https://tiles.example.com/day',
         ),
@@ -691,7 +691,7 @@ void main() {
       await bridge.publish(
         session: null,
         riderLocations: const [],
-          activeHazards: const [],
+        activeHazards: const [],
         basemap: const BasemapConfiguration(
           styleUrl: 'https://tiles.example.com/day',
         ),

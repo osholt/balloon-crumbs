@@ -25,13 +25,7 @@ import 'route_trail_style.dart';
 /// ought to be the craft. Issue #18 moves the icon onto `Craft` once anything
 /// creates one — see "the craft model has no creation path" in
 /// `docs/delivery-plan.md`.
-enum CraftIconStyle {
-  balloon,
-  fourByFour,
-  pickup,
-  van,
-  trailer,
-}
+enum CraftIconStyle { balloon, fourByFour, pickup, van, trailer }
 
 extension CraftIconStyleData on CraftIconStyle {
   static const Map<CraftIconStyle, String> _fileNames = {

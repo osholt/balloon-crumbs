@@ -45,7 +45,9 @@ void main() {
     addTearDown(controller.dispose);
     expect(controller.pending, isNull);
 
-    source.values.add('https://balloon-crumbs.invalid/planner.html?code=AB12CD34');
+    source.values.add(
+      'https://balloon-crumbs.invalid/planner.html?code=AB12CD34',
+    );
     await controller.refreshForTesting();
 
     expect(directory.codes, ['AB12CD34']);

@@ -202,7 +202,9 @@ class GeolocatorDeviceLocationPlatform implements DeviceLocationPlatform {
       // The platform fix reports height from the positioning solution. A
       // barometric source would arrive from a separate sensor path and set its
       // own value; nothing here may claim one it did not read.
-      altitudeSource: hasAltitude ? AltitudeSource.gnss : AltitudeSource.unknown,
+      altitudeSource: hasAltitude
+          ? AltitudeSource.gnss
+          : AltitudeSource.unknown,
       altitudeAccuracyMeters: hasAltitude ? position.altitudeAccuracy : null,
     );
   }

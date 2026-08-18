@@ -39,68 +39,77 @@ void main() {
     expect(controller.localCraft, isNull);
   });
 
-  test('the pilot registers the balloon and attaches this device to it', () async {
-    expect(
+  test(
+    'the pilot registers the balloon and attaches this device to it',
+    () async {
+      expect(
+        await controller.registerCraft(
+          craftId: 'balloon',
+          kind: CraftKind.balloon,
+          label: 'Balloon',
+        ),
+        isTrue,
+      );
+      expect(await controller.attachLocalDeviceToCraft('balloon'), isTrue);
+
+      final roster = controller.resolveCraftRoster();
+      expect(roster.balloons, hasLength(1));
+      expect(roster.balloon!.craft.label, 'Balloon');
+      expect(controller.localCraft?.id, 'balloon');
+      // No fix has been reported yet, and the roster says which kind of nothing
+      // that is rather than inventing a position.
+      expect(roster.balloon!.fix.hasFix, isFalse);
+    },
+  );
+
+  test(
+    're-registering a craft id updates it rather than duplicating it',
+    () async {
+      // Two devices can race to introduce the balloon. They must converge, not
+      // put two aircraft on the map.
       await controller.registerCraft(
         craftId: 'balloon',
         kind: CraftKind.balloon,
         label: 'Balloon',
-      ),
-      isTrue,
-    );
-    expect(await controller.attachLocalDeviceToCraft('balloon'), isTrue);
+      );
+      await controller.registerCraft(
+        craftId: 'balloon',
+        kind: CraftKind.balloon,
+        label: 'G-ABCD',
+      );
 
-    final roster = controller.resolveCraftRoster();
-    expect(roster.balloons, hasLength(1));
-    expect(roster.balloon!.craft.label, 'Balloon');
-    expect(controller.localCraft?.id, 'balloon');
-    // No fix has been reported yet, and the roster says which kind of nothing
-    // that is rather than inventing a position.
-    expect(roster.balloon!.fix.hasFix, isFalse);
-  });
+      final roster = controller.resolveCraftRoster();
+      expect(roster.balloons, hasLength(1));
+      expect(roster.balloon!.craft.label, 'G-ABCD');
+    },
+  );
 
-  test('re-registering a craft id updates it rather than duplicating it', () async {
-    // Two devices can race to introduce the balloon. They must converge, not
-    // put two aircraft on the map.
-    await controller.registerCraft(
-      craftId: 'balloon',
-      kind: CraftKind.balloon,
-      label: 'Balloon',
-    );
-    await controller.registerCraft(
-      craftId: 'balloon',
-      kind: CraftKind.balloon,
-      label: 'G-ABCD',
-    );
+  test(
+    'moving a device between crafts is one event, not a leave and a join',
+    () async {
+      await controller.registerCraft(
+        craftId: 'balloon',
+        kind: CraftKind.balloon,
+        label: 'Balloon',
+      );
+      await controller.registerCraft(
+        craftId: 'v1',
+        kind: CraftKind.vehicle,
+        label: 'Land Rover',
+      );
 
-    final roster = controller.resolveCraftRoster();
-    expect(roster.balloons, hasLength(1));
-    expect(roster.balloon!.craft.label, 'G-ABCD');
-  });
+      await controller.attachLocalDeviceToCraft('balloon');
+      expect(controller.localCraft?.id, 'balloon');
 
-  test('moving a device between crafts is one event, not a leave and a join', () async {
-    await controller.registerCraft(
-      craftId: 'balloon',
-      kind: CraftKind.balloon,
-      label: 'Balloon',
-    );
-    await controller.registerCraft(
-      craftId: 'v1',
-      kind: CraftKind.vehicle,
-      label: 'Land Rover',
-    );
-
-    await controller.attachLocalDeviceToCraft('balloon');
-    expect(controller.localCraft?.id, 'balloon');
-
-    await controller.attachLocalDeviceToCraft('v1');
-    expect(controller.localCraft?.id, 'v1');
-    expect(
-      controller.resolveCraftRoster().balloon!.crewCount,
-      0,
-      reason: 'the device is aboard one craft at a time',
-    );
-  });
+      await controller.attachLocalDeviceToCraft('v1');
+      expect(controller.localCraft?.id, 'v1');
+      expect(
+        controller.resolveCraftRoster().balloon!.crewCount,
+        0,
+        reason: 'the device is aboard one craft at a time',
+      );
+    },
+  );
 
   test('attaching to a craft nobody registered is refused', () {
     // Better to refuse than to write an event that reconciles to nothing.
@@ -125,21 +134,24 @@ void main() {
       expect(controller.resolveCraftRoster().balloons, isEmpty);
     });
 
-    test('a chase vehicle can register itself without the pilot acting', () async {
-      await controller.setRole(RideRole.rider);
+    test(
+      'a chase vehicle can register itself without the pilot acting',
+      () async {
+        await controller.setRole(RideRole.rider);
 
-      // A crew joining mid-flight must not need the pilot to press something
-      // while they are flying.
-      expect(
-        await controller.registerCraft(
-          craftId: 'v2',
-          kind: CraftKind.vehicle,
-          label: 'Vehicle 2',
-        ),
-        isTrue,
-      );
-      expect(controller.resolveCraftRoster().vehicles, hasLength(1));
-    });
+        // A crew joining mid-flight must not need the pilot to press something
+        // while they are flying.
+        expect(
+          await controller.registerCraft(
+            craftId: 'v2',
+            kind: CraftKind.vehicle,
+            label: 'Vehicle 2',
+          ),
+          isTrue,
+        );
+        expect(controller.resolveCraftRoster().vehicles, hasLength(1));
+      },
+    );
 
     test('only the pilot nominates a craft reporting device', () async {
       await controller.registerCraft(
@@ -213,7 +225,10 @@ void main() {
         ),
         isTrue,
       );
-      expect(controller.resolveCraftRoster().byId('v1')!.craft.chasing, 'balloon');
+      expect(
+        controller.resolveCraftRoster().byId('v1')!.craft.chasing,
+        'balloon',
+      );
 
       expect(
         await controller.assignChase(vehicleCraftId: 'v1', targetCraftId: null),

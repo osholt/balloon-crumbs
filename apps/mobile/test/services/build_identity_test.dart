@@ -23,7 +23,9 @@ void main() {
       // plausible-looking constant. An unstamped build must now say it does not
       // know. `flutter test --dart-define=BALLOON_CRUMBS_APP_VERSION=9.9.9
       // --dart-define=BALLOON_CRUMBS_APP_BUILD=4242` proves the stamped path.
-      const stampedVersion = String.fromEnvironment('BALLOON_CRUMBS_APP_VERSION');
+      const stampedVersion = String.fromEnvironment(
+        'BALLOON_CRUMBS_APP_VERSION',
+      );
       const stampedBuild = String.fromEnvironment('BALLOON_CRUMBS_APP_BUILD');
       final identity = BuildIdentity.fromEnvironment();
 

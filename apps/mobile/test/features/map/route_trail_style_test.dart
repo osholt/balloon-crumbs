@@ -172,7 +172,10 @@ void main() {
     // The route-start connector (#133) owns the cyan line and renders it
     // dashed. Those are the two lines that both mean "go this way" and that
     // appear together, so they must differ by more than one attribute.
-    expect(RouteTrailStyle.routeStartConnectorLine.color, const Color(0xFF00E5FF));
+    expect(
+      RouteTrailStyle.routeStartConnectorLine.color,
+      const Color(0xFF00E5FF),
+    );
     expect(
       RouteTrailStyle.routeAhead.color,
       isNot(RouteTrailStyle.routeStartConnectorLine.color),

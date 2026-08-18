@@ -341,8 +341,7 @@ class CarPlayBridge {
     // agree to something that is no longer on offer.
     final rideStartKey = rideStart?.projectionKey;
     final rideStartChanged = rideStartKey != _publishedRideStartKey;
-    final surfaceKey =
-        '${surfaceMode.name}|$canPlanRoute|$canFreeRoam';
+    final surfaceKey = '${surfaceMode.name}|$canPlanRoute|$canFreeRoam';
     final surfaceChanged = surfaceKey != _publishedSurfaceKey;
     if (!rideStartChanged &&
         !surfaceChanged &&
@@ -679,4 +678,3 @@ class CarPlayRideStart {
     'unavailableReason': unavailableReason,
   };
 }
-

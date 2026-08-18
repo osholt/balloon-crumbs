@@ -1048,7 +1048,6 @@ class RideController extends ChangeNotifier {
     return _errorMessage == null;
   }
 
-
   /// Raises a quick message into the ride.
   ///
   /// [position] is where the sender is standing. It is relayed with the message

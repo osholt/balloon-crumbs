@@ -158,8 +158,7 @@ class CraftTelemetryElection {
 
     // Hold the craft with the incumbent unless the challenger is meaningfully
     // fresher, so two phones in one basket do not trade it back and forth.
-    final gain =
-        incumbent.sample.ageAt(now) - challenger.sample.ageAt(now);
+    final gain = incumbent.sample.ageAt(now) - challenger.sample.ageAt(now);
     return gain >= hysteresis ? challenger : incumbent;
   }
 

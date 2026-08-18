@@ -36,7 +36,9 @@ void main() {
   late Directory directory;
 
   setUp(() async {
-    directory = await Directory.systemTemp.createTemp('balloon-crumbs-style-test');
+    directory = await Directory.systemTemp.createTemp(
+      'balloon-crumbs-style-test',
+    );
   });
 
   tearDown(() async {

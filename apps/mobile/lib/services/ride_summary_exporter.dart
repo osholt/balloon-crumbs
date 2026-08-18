@@ -289,7 +289,6 @@ class RideSummaryExporter {
       left.isBefore(right) ? left : right;
 }
 
-
 abstract interface class RideSummarySharer {
   Future<void> share(
     RideSession session,

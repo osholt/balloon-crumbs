@@ -322,7 +322,6 @@ class ImportedRoute {
   /// first moving GPS fix and after an app restart (#413).
   final Duration? plannedDuration;
 
-
   /// The route character this route was planned for, when it was planned rather
   /// than recorded or imported from a tool that records none.
   ///

@@ -357,9 +357,7 @@ void main() {
   });
 
   test('updated local role is used by subsequent location beacons', () async {
-    controller.updateLocalSession(
-      _session.copyWith(role: RideRole.rider),
-    );
+    controller.updateLocalSession(_session.copyWith(role: RideRole.rider));
 
     await controller.recordLocalLocation(_sample(latitude: 51, at: now));
 

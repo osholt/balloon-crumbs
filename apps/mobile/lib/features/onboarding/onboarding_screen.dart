@@ -20,8 +20,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final TextEditingController _nameController = TextEditingController(
     text: widget.riderProfile.displayName,
   );
-  late CraftIconStyle _motorcycleStyle =
-      widget.riderProfile.motorcycleStyle;
+  late CraftIconStyle _motorcycleStyle = widget.riderProfile.motorcycleStyle;
   late RiderSymbol _riderSymbol = widget.riderProfile.riderSymbol;
   late RiderColor _riderColor = widget.riderProfile.riderColor;
   int _step = 0;

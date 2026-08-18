@@ -193,7 +193,10 @@ class RiderContactRecipients {
     if (localRole == RideRole.lead) {
       return const RiderContactRecipients.rideGroup();
     }
-    return RiderContactRecipients.addressed([?leaderRiderId, ...coordinationRiderIds]);
+    return RiderContactRecipients.addressed([
+      ?leaderRiderId,
+      ...coordinationRiderIds,
+    ]);
   }
 }
 

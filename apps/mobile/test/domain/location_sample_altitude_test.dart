@@ -28,14 +28,17 @@ void main() {
   );
 
   group('an absent altitude is not a zero altitude', () {
-    test('a fix with no altitude says so rather than reporting ground level', () {
-      final fix = sample();
+    test(
+      'a fix with no altitude says so rather than reporting ground level',
+      () {
+        final fix = sample();
 
-      expect(fix.hasAltitude, isFalse);
-      expect(fix.altitudeMeters, isNull);
-      expect(fix.altitudeSource, AltitudeSource.unknown);
-      expect(fix.altitudeAccuracyMeters, isNull);
-    });
+        expect(fix.hasAltitude, isFalse);
+        expect(fix.altitudeMeters, isNull);
+        expect(fix.altitudeSource, AltitudeSource.unknown);
+        expect(fix.altitudeAccuracyMeters, isNull);
+      },
+    );
 
     test('a balloon measured at ground level still has an altitude', () {
       final fix = sample(
@@ -138,7 +141,10 @@ void main() {
   });
 
   test('measurement time stays distinct from receipt time', () {
-    final fix = sample(altitudeMeters: 400, altitudeSource: AltitudeSource.gnss);
+    final fix = sample(
+      altitudeMeters: 400,
+      altitudeSource: AltitudeSource.gnss,
+    );
     final location = RiderLocation(
       riderId: 'pilot',
       displayName: 'Oliver',

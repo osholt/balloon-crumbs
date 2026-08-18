@@ -18,9 +18,7 @@ def test_token_matches_mobile_golden_vector() -> None:
     # identifier changed with it and made this a new app no older install
     # upgrades into. It is protocol now: renaming it again invalidates every
     # issued token.
-    assert ride_token("ride/alpha", SECRET) == (
-        "rr1_btMeW7x2Dq6V6dJzP7BhE8cBxFLSjeMxzoSjBrEfceE"
-    )
+    assert ride_token("ride/alpha", SECRET) == ("rr1_btMeW7x2Dq6V6dJzP7BhE8cBxFLSjeMxzoSjBrEfceE")
 
 
 def test_first_sync_claims_ride_and_another_device_receives_event(

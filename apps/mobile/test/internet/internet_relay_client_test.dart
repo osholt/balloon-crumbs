@@ -266,7 +266,10 @@ void main() {
 
       expect(result.disposition, RelayCompatibilityDisposition.updateRequired);
       expect(result.canSynchronize, isFalse);
-      expect(result.updateUri, Uri.parse('https://balloon-crumbs.invalid/update'));
+      expect(
+        result.updateUri,
+        Uri.parse('https://balloon-crumbs.invalid/update'),
+      );
       client.close();
     });
 

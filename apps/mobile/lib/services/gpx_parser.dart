@@ -227,7 +227,6 @@ RoutePreferences? _routePreferences(XmlElement metadata) {
   });
 }
 
-
 /// Drops a route path that describes the same journey as a track path.
 ///
 /// MyRoute-app exports one `<trk>` of calculated road geometry *and* one `<rte>`

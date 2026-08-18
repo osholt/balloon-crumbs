@@ -110,9 +110,7 @@ class RideSession {
     joinedAt: DateTime.parse(json['joinedAt']! as String).toLocal(),
     isSimulation: json['isSimulation'] as bool? ?? false,
     simulationRiderCount: _simulationRiderCount(json['simulationRiderCount']),
-    motorcycleStyle: craftIconStyleFromName(
-      json['motorcycleStyle'] as String?,
-    ),
+    motorcycleStyle: craftIconStyleFromName(json['motorcycleStyle'] as String?),
     riderSymbol: RiderSymbol.fromStorageValue(json['riderSymbol'] as String?),
     riderColor: riderColorFromName(json['riderColor'] as String?),
     coordinationMode: RideCoordinationMode.fromName(

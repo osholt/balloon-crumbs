@@ -1423,7 +1423,6 @@ void main() {
   });
 }
 
-
 RideEvent _signedEvent({
   required RideSession session,
   required String id,

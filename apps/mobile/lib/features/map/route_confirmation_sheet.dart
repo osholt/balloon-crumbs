@@ -111,10 +111,7 @@ class RouteConfirmationSheet extends StatelessWidget {
                   label: formatter.distance(effectiveDistance),
                 ),
                 if (duration case final duration?)
-                  _Fact(
-                    icon: Icons.schedule,
-                    label: _durationLabel(duration),
-                  ),
+                  _Fact(icon: Icons.schedule, label: _durationLabel(duration)),
                 _Fact(
                   icon: Icons.turn_right,
                   label: maneuverCount == 1 ? '1 turn' : '$maneuverCount turns',

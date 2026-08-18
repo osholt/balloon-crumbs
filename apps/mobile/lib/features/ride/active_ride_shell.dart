@@ -496,9 +496,7 @@ class _RideActionsPanel extends StatelessWidget {
             key: const Key('ride-actions-alerts'),
             leading: const Icon(Icons.warning_amber_outlined),
             title: const Text('Alerts and reports'),
-            subtitle: const Text(
-              'Road alerts and traffic alternatives',
-            ),
+            subtitle: const Text('Road alerts and traffic alternatives'),
             trailing: const Icon(Icons.chevron_right),
             onTap: onAlertsAndReports,
           ),
@@ -867,7 +865,6 @@ List<RideDestination> rideDestinations({required bool simulation}) {
 
 enum _StartRideDecision { cancel, chooseRoute, start }
 
-
 @visibleForTesting
 enum RideExitDecision { cancel, leave, endForEveryone }
 
@@ -1054,6 +1051,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// to that widget's lifecycle. Both are monotonic and fed the same fixes, so
   /// they agree.
   final _completionProgressTracker = RouteProgressTracker();
+
   /// Recorded travelled trails, composed into the map's one trail channel.
   List<MapOverlayTrace> _recordedTrailTraces = const [];
 
@@ -2466,7 +2464,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _updateMapOverlays(updateNavigationPosition: false);
   }
 
-
   Future<void> _maybeAutomaticallyEndRide(
     SituationalAwarenessController awareness,
     route_domain.GeoPoint? localPosition,
@@ -2573,22 +2570,19 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   /// Ride Lab drives the same trail model as a real ride, so the simulator can
   /// no longer show a leader track the live path never builds (#100).
-  void _updateSimulationRiderTrails(List<SimulatedRiderSnapshot> riders) =>
-      _publishRiderTrails([
-        for (final rider in riders)
-          RiderTrail(
-            riderId: rider.id,
-            displayName: rider.displayName,
-            kind: RiderTrailRecorder.kindFor(
-              isLeader: rider.role == RideRole.lead,
-            ),
-            // Ride Lab maintains its own ephemeral history; the same per-rider
-            // cap is applied here so the simulator and a real ride agree.
-            points: _trailRecorder.boundedTrail(
-              _routePoints(rider.travelTrail),
-            ),
-          ),
-      ]);
+  void _updateSimulationRiderTrails(
+    List<SimulatedRiderSnapshot> riders,
+  ) => _publishRiderTrails([
+    for (final rider in riders)
+      RiderTrail(
+        riderId: rider.id,
+        displayName: rider.displayName,
+        kind: RiderTrailRecorder.kindFor(isLeader: rider.role == RideRole.lead),
+        // Ride Lab maintains its own ephemeral history; the same per-rider
+        // cap is applied here so the simulator and a real ride agree.
+        points: _trailRecorder.boundedTrail(_routePoints(rider.travelTrail)),
+      ),
+  ]);
 
   /// Records and publishes every eligible rider's travelled trail from position
   /// history alone.
@@ -2680,8 +2674,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// (#165).
   void _pushRiderTrails() {
     _riderTrails.value = List.unmodifiable([
-      for (final trace in _recordedTrailTraces)
-        _simplifiedForDisplay(trace),
+      for (final trace in _recordedTrailTraces) _simplifiedForDisplay(trace),
     ]);
   }
 

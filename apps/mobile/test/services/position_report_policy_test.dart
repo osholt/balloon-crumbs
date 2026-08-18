@@ -422,7 +422,6 @@ void main() {
       );
     });
   });
-
 }
 
 // ---------------------------------------------------------------------------
@@ -624,4 +623,3 @@ List<GeoPoint> _lastPositions(List<LocationSample> samples, int count) {
       ? positions
       : positions.sublist(positions.length - count);
 }
-

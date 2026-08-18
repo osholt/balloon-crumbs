@@ -132,7 +132,11 @@ void main() {
         for (final n in [1, 2, 3, 4]) ...[
           registerCraft('v$n', CraftKind.vehicle, 'Vehicle $n'),
           attach('driver-$n', 'v$n'),
-          report('driver-$n', age: const Duration(seconds: 4), longitude: -2.5 - n / 100),
+          report(
+            'driver-$n',
+            age: const Duration(seconds: 4),
+            longitude: -2.5 - n / 100,
+          ),
         ],
       ],
       now: start,
@@ -170,7 +174,11 @@ void main() {
       );
 
       final balloon = roster.balloon!;
-      expect(balloon.fix.hasFix, isFalse, reason: 'never show a stale fix as live');
+      expect(
+        balloon.fix.hasFix,
+        isFalse,
+        reason: 'never show a stale fix as live',
+      );
       expect(balloon.fix.absence, CraftFixAbsence.allUnusable);
       expect(balloon.crewCount, 1, reason: 'the crew are still aboard');
     });
@@ -253,10 +261,7 @@ void main() {
       ];
 
       final forwards = reducer.fromEvents(events: events, now: start);
-      final shuffled = reducer.fromEvents(
-        events: events.reversed,
-        now: start,
-      );
+      final shuffled = reducer.fromEvents(events: events.reversed, now: start);
 
       expect(forwards.balloon!.fix.deviceId, shuffled.balloon!.fix.deviceId);
       expect(forwards.balloon!.deviceIds, shuffled.balloon!.deviceIds);
@@ -267,8 +272,16 @@ void main() {
         events: [
           registerCraft('balloon', CraftKind.balloon, 'Balloon'),
           attach('crew-phone', 'balloon'),
-          report('crew-phone', age: const Duration(seconds: 2), longitude: -2.60),
-          report('crew-phone', age: const Duration(seconds: 30), longitude: -2.50),
+          report(
+            'crew-phone',
+            age: const Duration(seconds: 2),
+            longitude: -2.60,
+          ),
+          report(
+            'crew-phone',
+            age: const Duration(seconds: 30),
+            longitude: -2.50,
+          ),
         ],
         now: start,
       );
@@ -300,7 +313,9 @@ void main() {
           event(
             RideEventType.riderLocationUpdated,
             deviceId: 'crew-phone',
-            payload: const {'sample': {'nonsense': true}},
+            payload: const {
+              'sample': {'nonsense': true},
+            },
           ),
           report('driver-1', age: const Duration(seconds: 3)),
         ],

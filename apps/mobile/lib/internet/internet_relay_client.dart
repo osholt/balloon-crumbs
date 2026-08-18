@@ -131,7 +131,9 @@ class RelayClientDescriptor {
   static const _rawAppVersion = String.fromEnvironment(
     'BALLOON_CRUMBS_APP_VERSION',
   );
-  static const _rawAppBuild = String.fromEnvironment('BALLOON_CRUMBS_APP_BUILD');
+  static const _rawAppBuild = String.fromEnvironment(
+    'BALLOON_CRUMBS_APP_BUILD',
+  );
   static const _rawDistributionTrack = String.fromEnvironment(
     'BALLOON_CRUMBS_DISTRIBUTION_TRACK',
   );

@@ -18,7 +18,10 @@ void main() {
       // defect this is about."
       for (final speed in [0.0, 0.5, 2.9]) {
         expect(
-          originBearingForTravel(headingDegrees: 270, speedMetersPerSecond: speed),
+          originBearingForTravel(
+            headingDegrees: 270,
+            speedMetersPerSecond: speed,
+          ),
           isNull,
           reason: '$speed m/s',
         );
@@ -95,6 +98,5 @@ void main() {
       expect(source, contains("'bearings':"));
       expect(source, contains('originBearingDegrees: originBearingDegrees'));
     });
-
   });
 }

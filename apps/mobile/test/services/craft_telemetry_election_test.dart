@@ -75,20 +75,23 @@ void main() {
       expect(result.deviceId, 'nominated');
     });
 
-    test('a nominated primary with a dead receiver does not silence the craft', () {
-      // The pilot's choice is a preference, not an override. A nominated phone
-      // that has stopped reporting must not keep the balloon dark while another
-      // phone in the same basket has a good fix.
-      final result = election.elect(
-        candidates: [
-          device('nominated', age: const Duration(minutes: 5), primary: true),
-          device('crew-phone', age: const Duration(seconds: 2)),
-        ],
-        now: now,
-      );
+    test(
+      'a nominated primary with a dead receiver does not silence the craft',
+      () {
+        // The pilot's choice is a preference, not an override. A nominated phone
+        // that has stopped reporting must not keep the balloon dark while another
+        // phone in the same basket has a good fix.
+        final result = election.elect(
+          candidates: [
+            device('nominated', age: const Duration(minutes: 5), primary: true),
+            device('crew-phone', age: const Duration(seconds: 2)),
+          ],
+          now: now,
+        );
 
-      expect(result.deviceId, 'crew-phone');
-    });
+        expect(result.deviceId, 'crew-phone');
+      },
+    );
   });
 
   group('an absent fix says which kind of absent', () {
@@ -123,21 +126,24 @@ void main() {
   });
 
   group('hysteresis stops the balloon stuttering between two phones', () {
-    test('the incumbent keeps the craft against a marginally fresher rival', () {
-      // Two phones side by side, reporting a few seconds apart. Without
-      // hysteresis the balloon's track would jump between positions metres
-      // apart every cycle, which reads as the balloon jinking.
-      final result = election.elect(
-        candidates: [
-          device('phone-a', age: const Duration(seconds: 8)),
-          device('phone-b', age: const Duration(seconds: 2)),
-        ],
-        now: now,
-        incumbentDeviceId: 'phone-a',
-      );
+    test(
+      'the incumbent keeps the craft against a marginally fresher rival',
+      () {
+        // Two phones side by side, reporting a few seconds apart. Without
+        // hysteresis the balloon's track would jump between positions metres
+        // apart every cycle, which reads as the balloon jinking.
+        final result = election.elect(
+          candidates: [
+            device('phone-a', age: const Duration(seconds: 8)),
+            device('phone-b', age: const Duration(seconds: 2)),
+          ],
+          now: now,
+          incumbentDeviceId: 'phone-a',
+        );
 
-      expect(result.deviceId, 'phone-a');
-    });
+        expect(result.deviceId, 'phone-a');
+      },
+    );
 
     test('a meaningfully fresher rival does take over', () {
       final result = election.elect(

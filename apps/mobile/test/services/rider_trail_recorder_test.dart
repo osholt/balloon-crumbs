@@ -283,14 +283,8 @@ void main() {
   });
 
   test('the leader trail is styled apart from every other craft', () {
-    expect(
-      RiderTrailRecorder.kindFor(isLeader: true),
-      RiderTrailKind.leader,
-    );
-    expect(
-      RiderTrailRecorder.kindFor(isLeader: false),
-      RiderTrailKind.rider,
-    );
+    expect(RiderTrailRecorder.kindFor(isLeader: true), RiderTrailKind.leader);
+    expect(RiderTrailRecorder.kindFor(isLeader: false), RiderTrailKind.rider);
   });
 }
 

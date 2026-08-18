@@ -16,10 +16,21 @@ void main() {
     // balloon: putting a chase vehicle's marker on the aircraft would be worse
     // than showing the wrong vehicle.
     const retiredBikeNames = [
-      'adventureTourer', 'roadster', 'dualSport', 'sportNaked',
-      'cruiserClassic', 'standardTwin', 'cafeRacer', 'dirtBike',
-      'fullTourer', 'cruiserBagger', 'scrambler', 'sportTouring',
-      'scooter', 'sidecarRig', 'streetFighter',
+      'adventureTourer',
+      'roadster',
+      'dualSport',
+      'sportNaked',
+      'cruiserClassic',
+      'standardTwin',
+      'cafeRacer',
+      'dirtBike',
+      'fullTourer',
+      'cruiserBagger',
+      'scrambler',
+      'sportTouring',
+      'scooter',
+      'sidecarRig',
+      'streetFighter',
     ];
 
     test('degrade to the default craft rather than failing to parse', () {
@@ -94,9 +105,7 @@ void main() {
     expect(custom.initialsFor('Different Name'), 'OH');
     expect(RiderSymbol.fromStorageValue(custom.storageValue), custom);
     expect(
-      RiderSymbol.fromWireValue(
-        custom.wireValue(CraftIconStyle.van),
-      ),
+      RiderSymbol.fromWireValue(custom.wireValue(CraftIconStyle.van)),
       custom,
     );
     expect(

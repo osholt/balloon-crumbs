@@ -17,9 +17,10 @@ void main() {
     const secret = '0123456789abcdef0123456789abcdef';
     const rideId = 'ride/alpha';
 
-    final digest = Hmac(sha256, utf8.encode(secret)).convert(
-      utf8.encode('balloon-crumbs-internet-token-v1\n$rideId'),
-    );
+    final digest = Hmac(
+      sha256,
+      utf8.encode(secret),
+    ).convert(utf8.encode('balloon-crumbs-internet-token-v1\n$rideId'));
     final token = 'rr1_${base64Url.encode(digest.bytes).replaceAll('=', '')}';
 
     expect(token, 'rr1_btMeW7x2Dq6V6dJzP7BhE8cBxFLSjeMxzoSjBrEfceE');

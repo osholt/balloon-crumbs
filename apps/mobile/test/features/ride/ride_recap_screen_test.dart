@@ -30,7 +30,7 @@ void main() {
     endedAt: DateTime.utc(2026, 7, 27, 11),
     generatedAt: DateTime.utc(2026, 7, 27, 11),
     eventCount: 40,
-      riderCount: 3,
+    riderCount: 3,
     totalDistanceMeters: 37670,
   );
 
