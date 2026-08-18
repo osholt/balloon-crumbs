@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import (
-    AnyHttpUrl,
     BaseModel,
     ConfigDict,
     Field,
@@ -229,97 +228,6 @@ class TrafficRerouteRequest(BaseModel):
         if len(set(cleaned)) != len(cleaned):
             raise ValueError("Incident IDs must be unique")
         return cleaned
-
-
-DiscoveryCategory = Literal[
-    "twisty_highlight",
-    "mountain_pass",
-    "good_biking_road",
-    "biker_stop",
-]
-
-
-class DiscoveryGeometry(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    type: Literal["Point", "LineString"]
-    coordinates: Any
-
-    @model_validator(mode="after")
-    def validate_coordinates(self) -> DiscoveryGeometry:
-        points = [self.coordinates] if self.type == "Point" else self.coordinates
-        if not isinstance(points, list) or not points or len(points) > 200:
-            raise ValueError("Geometry must contain between 1 and 200 points")
-        if self.type == "LineString" and len(points) < 2:
-            raise ValueError("LineString geometry requires at least two points")
-        for point in points:
-            if (
-                not isinstance(point, list)
-                or len(point) != 2
-                or not all(isinstance(value, int | float) for value in point)
-                or not -180 <= point[0] <= 180
-                or not -90 <= point[1] <= 90
-            ):
-                raise ValueError("Invalid GeoJSON coordinate")
-        return self
-
-
-class DiscoverySuggestionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    clientSubmissionId: str = Field(min_length=1, max_length=128)
-    category: DiscoveryCategory
-    action: Literal["add", "correct", "remove"] = "add"
-    targetFeatureId: str | None = Field(default=None, min_length=1, max_length=128)
-    name: str = Field(min_length=1, max_length=120)
-    reason: str = Field(min_length=5, max_length=500)
-    evidenceUrl: AnyHttpUrl | None = None
-    geometry: DiscoveryGeometry
-    createdAt: datetime
-
-    @model_validator(mode="after")
-    def require_target_for_revision(self) -> DiscoverySuggestionRequest:
-        if self.action != "add" and not self.targetFeatureId:
-            raise ValueError("Corrections and removals require a target feature")
-        return self
-
-
-class DiscoveryModerationRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    action: Literal["approve", "reject", "request_changes", "supersede"]
-    reason: str = Field(min_length=3, max_length=500)
-
-
-class RoadRatingRequest(BaseModel):
-    """One anonymous rider verdict on a catalogued road (#159).
-
-    This is the whole of it. ``extra="forbid"`` is load-bearing, not tidiness: it
-    means the relay structurally cannot accept a rider ID, device ID, ride ID,
-    installation ID, position or client timestamp, however a future client is
-    written. A build that tried to attach one gets HTTP 400 instead of quietly
-    handing the relay something it could attribute.
-
-    There is no ``createdAt`` for the same reason. A client-supplied time of
-    rating is a correlation handle against the ride journal, so the relay records
-    only the day it received the answer.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    featureId: str = Field(min_length=1, max_length=128)
-
-    # The stable re-match key across OSM extracts. Optional because the
-    # catalogue's own IDs are content hashes that move with each extract, and an
-    # older published asset may not carry one.
-    sourceFeatureId: str | None = Field(default=None, min_length=1, max_length=128)
-    category: DiscoveryCategory
-    verdict: Literal["worth_including", "not_worth_including"]
-    catalogueVersion: str = Field(
-        min_length=1,
-        max_length=64,
-        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-    )
 
 
 class CreatePlanRequest(BaseModel):
