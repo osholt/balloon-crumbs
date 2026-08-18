@@ -123,12 +123,27 @@ roster, the relay and the map.
 2. **Rejoin routing** (466 hits). Routes a separated rider back onto a shared
    GPX route. A chase vehicle is never "off route" — it is on a road network
    heading for a moving target. Replaced wholesale by rendezvous selection.
-3. **Road ratings** and **personal heatmap** — **done**. Scoring roads for fun.
-   The client feature and its relay capability are gone; the server's
-   `/api/v1/discovery/road-ratings` endpoints and their `road-ratings-v1`
-   advertisement remain and should go with the next server pass, since removing
-   public API surface deserves its own change rather than riding along with a
-   client deletion.
+3. **Road ratings**, **personal heatmap** and the **discovery layers** —
+   **done on the client**. Scoring roads for fun, curated motorcycling roads
+   (`twistyHighlight`, `mountainPass`, `goodBikingRoad`) and a scraped
+   bike-and-brew place list. Deleting the discovery layers also removed **13.8 MB
+   of bundled assets** — a 13.7 MB catalogue of 1,100 good biking roads, 944
+   twisty highlights and 37 mountain passes, plus 141 KB of biker cafés — which
+   was the largest thing in the bundle and was read on every map open.
+
+   `route_twistiness` deliberately stays: it is the engine behind `RouteStyle`'s
+   twisty bias, and that bias is a person's choice which WP7 has to rule on.
+   Deleting the engine while leaving the choice on screen is worse than doing
+   both or neither.
+
+   **The server side remains and is now unreachable rather than gone**: five
+   routes (`/api/v1/discovery/features`, `/suggestions`, `/road-ratings`, and two
+   `/api/v1/admin/discovery/...` endpoints), four tables
+   (`discovery_suggestions`, `discovery_moderation_events`, `discovery_features`,
+   `discovery_road_ratings`), moderation events, an admin token and its rate
+   limits, plus the `road-ratings-v1` advertisement. Withdrawing public API
+   surface and dropping tables deserves its own change with its own migration,
+   which is why it did not ride along with the client deletion.
 4. **Motorcycle iconography** — `motorcycle_icon.dart`, rider symbols, bike
    styles — replaced by craft iconography (balloon, vehicle).
 
