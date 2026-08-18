@@ -145,6 +145,13 @@ void main() {
       reason: 'the documented default is to avoid them',
     );
 
+    // Scrolling to the byway switch above pushes this one out of view, so it is
+    // brought back rather than tapped blind.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('avoid-motorways-switch')),
+      -250,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.tap(find.byKey(const Key('avoid-motorways-switch')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(

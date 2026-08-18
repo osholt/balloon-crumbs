@@ -188,8 +188,8 @@ class _DestinationRouteSheetState extends State<DestinationRouteSheet> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'The same preferences as the web planner, so a route planned '
-              'here and one planned on the website mean the same thing.',
+              'The same options as the web planner. The route itself can '
+              'differ: this plans for a chase vehicle.',
               style: TextStyle(color: Color(0xFF98A3B1), fontSize: 12),
             ),
             const SizedBox(height: 10),
@@ -254,9 +254,10 @@ class _DestinationRouteSheetState extends State<DestinationRouteSheet> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Avoid unsurfaced byways'),
               subtitle: const Text(
-                'On by default. A byway open to all traffic is legal to ride '
+                'On by default. A byway open to all traffic is legal to drive '
                 'but often unsurfaced. Turn this off to allow ways '
-                'OpenStreetMap tags as unsurfaced or as a track.',
+                'OpenStreetMap tags as unsurfaced or as a track — which is how '
+                'a landing field down a farm track is reached.',
               ),
               value: _preferences.bywaySurface.avoidsUnsurfaced,
               onChanged: (value) => setState(
