@@ -136,14 +136,30 @@ roster, the relay and the map.
    Deleting the engine while leaving the choice on screen is worse than doing
    both or neither.
 
-   **The server side remains and is now unreachable rather than gone**: five
-   routes (`/api/v1/discovery/features`, `/suggestions`, `/road-ratings`, and two
-   `/api/v1/admin/discovery/...` endpoints), four tables
-   (`discovery_suggestions`, `discovery_moderation_events`, `discovery_features`,
-   `discovery_road_ratings`), moderation events, an admin token and its rate
-   limits, plus the `road-ratings-v1` advertisement. Withdrawing public API
-   surface and dropping tables deserves its own change with its own migration,
-   which is why it did not ride along with the client deletion.
+   **The server side is now gone too, in two deliberate halves.** First the
+   reversible one: five routes (`/api/v1/discovery/features`, `/suggestions`,
+   `/road-ratings`, and two `/api/v1/admin/discovery/...` endpoints), the
+   moderation queue, an admin token and its rate limits, and the
+   `road-ratings-v1` advertisement. Then the irreversible one, migration 0011:
+   the four tables (`discovery_suggestions`, `discovery_moderation_events`,
+   `discovery_features`, `discovery_road_ratings`) and the wire schemas that
+   described their request bodies.
+
+   The split was the point. Withdrawing an API can be undone by reverting a
+   commit; dropping the rows it wrote cannot, and two of those tables held
+   user-contributed text with the moderation reasoning behind each decision.
+   Deleting that as a side effect of a client change would have been the wrong
+   shape of change even with the same end state. Confirmed with the owner that
+   no deployed Balloon Crumbs database held anything worth exporting; the drop
+   also cannot reach Tail End Charlie's data, because every Compose project runs
+   its own Postgres in its own namespaced volume and the only `external: true`
+   in `deploy/` is the proxy network rather than storage.
+
+   `downgrade` rebuilds all four tables with their original indexes, unique
+   constraint and foreign keys, verified against a throwaway Postgres 17 with
+   rows planted so the drop met real referential integrity. It restores zero
+   rows, which is stated rather than implied: structure is recoverable from the
+   migration, data only from a backup taken before it ran.
 4. **Motorcycle iconography** — `motorcycle_icon.dart`, rider symbols, bike
    styles — replaced by craft iconography (balloon, vehicle).
 
