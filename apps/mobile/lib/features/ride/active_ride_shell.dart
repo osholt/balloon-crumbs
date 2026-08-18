@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../controllers/chase_vehicle_controller.dart';
+import '../../domain/chase_vehicle.dart';
 import '../../controllers/distance_unit_controller.dart';
 import '../../controllers/foreground_location_controller.dart';
 import '../../controllers/internet_relay_controller.dart';
@@ -258,6 +260,7 @@ class ActiveRideShell extends StatefulWidget {
     required this.riderProfile,
     required this.sharedRoutes,
     required this.speedLimitDisplay,
+    this.chaseVehicle,
     this.routeProgressDisplay,
     this.completedRideStore,
     this.screenWakeLock = const WakelockPlusScreenWakeLock(),
@@ -300,6 +303,7 @@ class ActiveRideShell extends StatefulWidget {
   final RiderProfileController riderProfile;
   final SharedRouteController sharedRoutes;
   final SpeedLimitDisplayController speedLimitDisplay;
+  final ChaseVehicleController? chaseVehicle;
   final RouteProgressDisplayController? routeProgressDisplay;
   final CompletedRideStore? completedRideStore;
   final ScreenWakeLock screenWakeLock;
@@ -3319,6 +3323,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       canEditRoute: _isSimulation || widget.rideController.isLocalRideLeader,
       distanceUnit: widget.distanceUnits.value,
       speedLimitDisplay: widget.speedLimitDisplay,
+      chaseVehicle: widget.chaseVehicle?.vehicle ?? ChaseVehicle.unspecified,
       showRouteProgress: widget.routeProgressDisplay?.enabled ?? true,
       darkMapStyle: widget.mapStyleMode.resolveDark(
         MediaQuery.platformBrightnessOf(context),
@@ -4574,6 +4579,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       mapStyleMode: widget.mapStyleMode,
       riderProfile: widget.riderProfile,
       speedLimitDisplay: widget.speedLimitDisplay,
+      chaseVehicle: widget.chaseVehicle,
       routeProgressDisplay: widget.routeProgressDisplay,
       currentRideActive: true,
       lastRelaySync: _internetRelayController?.status.lastSuccessfulSync,

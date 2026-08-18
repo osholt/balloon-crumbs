@@ -22,24 +22,35 @@ class DestinationPlanRequest {
   final List<String> stopQueries;
   final NavigationTarget? handoffTarget;
 
-  /// The route character asked for, using the same preferences as the web
-  /// planner so the two agree about what a route with them means.
+  /// The road preferences and the vehicle they have to suit.
   final RoutePreferences preferences;
 }
 
 class DestinationRouteSheet extends StatefulWidget {
-  const DestinationRouteSheet({super.key, this.initialRequest});
+  const DestinationRouteSheet({
+    super.key,
+    this.initialRequest,
+    this.vehicle = ChaseVehicle.unspecified,
+  });
 
   final DestinationPlanRequest? initialRequest;
+
+  /// The crew's stored vehicle. Shown rather than editable here, and stamped
+  /// onto the route: it is a standing fact about the vehicle, not a decision
+  /// about this journey, so it is edited once in Settings instead of being
+  /// re-confirmed by somebody who is about to start driving.
+  final ChaseVehicle vehicle;
 
   static Future<DestinationPlanRequest?> show(
     BuildContext context, {
     DestinationPlanRequest? initialRequest,
+    ChaseVehicle vehicle = ChaseVehicle.unspecified,
   }) => showModalBottomSheet<DestinationPlanRequest>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (_) => DestinationRouteSheet(initialRequest: initialRequest),
+    builder: (_) =>
+        DestinationRouteSheet(initialRequest: initialRequest, vehicle: vehicle),
   );
 
   @override
@@ -65,7 +76,12 @@ class _DestinationRouteSheetState extends State<DestinationRouteSheet> {
           const <TextEditingController>[],
     );
     _handoff = _handoffFromTarget(initial?.handoffTarget);
-    _preferences = initial?.preferences ?? RoutePreferences.defaults;
+    // The stored vehicle wins over anything carried in the request being
+    // re-shown after a failed attempt: Settings is where it is decided, so a
+    // stale copy must not outlive an edit made between attempts.
+    _preferences = (initial?.preferences ?? RoutePreferences.defaults).copyWith(
+      vehicle: widget.vehicle,
+    );
   }
 
   @override
@@ -187,10 +203,15 @@ class _DestinationRouteSheetState extends State<DestinationRouteSheet> {
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 4),
-            const Text(
-              'The same options as the web planner. The route itself can '
-              'differ: this plans for a chase vehicle.',
-              style: TextStyle(color: Color(0xFF98A3B1), fontSize: 12),
+            Text(
+              switch (widget.vehicle.appliedNotes) {
+                [] =>
+                  'Planned for a car. Add your vehicle in Settings to avoid low '
+                      'bridges and weight limits.',
+                final notes => 'Planned for ${notes.join(', ')}.',
+              },
+              key: const Key('route-vehicle-summary'),
+              style: const TextStyle(color: Color(0xFF98A3B1), fontSize: 12),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<RouteStyle>(

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../controllers/chase_vehicle_controller.dart';
 import '../../controllers/distance_unit_controller.dart';
 import '../../controllers/completed_rides_controller.dart';
 import '../../controllers/map_style_mode_controller.dart';
@@ -51,6 +52,7 @@ class HomeScreen extends StatefulWidget {
     required this.riderProfile,
     required this.sharedRoutes,
     required this.speedLimitDisplay,
+    this.chaseVehicle,
     this.routeProgressDisplay,
     required this.recordedRoutes,
     required this.completedRides,
@@ -73,6 +75,7 @@ class HomeScreen extends StatefulWidget {
   final RiderProfileController riderProfile;
   final SharedRouteController sharedRoutes;
   final SpeedLimitDisplayController speedLimitDisplay;
+  final ChaseVehicleController? chaseVehicle;
   final RouteProgressDisplayController? routeProgressDisplay;
   final RecordedRouteStore recordedRoutes;
   final CompletedRidesController completedRides;
@@ -407,6 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           widget.mapStyleMode,
                           widget.riderProfile,
                           speedLimitDisplay: widget.speedLimitDisplay,
+                          chaseVehicle: widget.chaseVehicle,
                           routeProgressDisplay: widget.routeProgressDisplay,
                           testControl: widget.testControl,
                           spokenGuidance: widget.spokenGuidance,

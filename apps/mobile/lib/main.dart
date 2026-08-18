@@ -14,6 +14,7 @@ import 'controllers/ride_invitation_link_controller.dart';
 import 'controllers/route_progress_display_controller.dart';
 import 'controllers/rider_profile_controller.dart';
 import 'controllers/shared_route_controller.dart';
+import 'controllers/chase_vehicle_controller.dart';
 import 'controllers/speed_limit_display_controller.dart';
 import 'controllers/spoken_guidance_controller.dart';
 import 'controllers/test_control_controller.dart';
@@ -60,6 +61,7 @@ Future<void> main() async {
     spokenGuidance,
     rideInvitationLinks,
     routeProgressDisplay,
+    chaseVehicle,
   ) = await (
     (
       RiderProfileController.load(),
@@ -77,6 +79,10 @@ Future<void> main() async {
     SpokenGuidanceController.load(),
     RideInvitationLinkController.load(),
     RouteProgressDisplayController.load(),
+    // In the nested group rather than the first: that one is at the nine-future
+    // limit the #209 note describes, and this must not become a tenth serial
+    // await on the path to first paint.
+    ChaseVehicleController.load(),
   ).wait;
 
   final completedRides = await CompletedRidesController.load(
@@ -119,6 +125,7 @@ Future<void> main() async {
       riderProfile: riderProfile,
       sharedRoutes: sharedRoutes,
       speedLimitDisplay: speedLimitDisplay,
+      chaseVehicle: chaseVehicle,
       routeProgressDisplay: routeProgressDisplay,
       recordedRoutes: recordedRoutes,
       completedRides: completedRides,

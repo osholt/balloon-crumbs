@@ -1,43 +1,64 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/domain/route_preferences.dart';
+import 'package:flutter_test/flutter_test.dart';
 
-/// These fixtures are the web planner's own numbers, copied from
-/// `apps/website/planner-core.mjs`. If either side changes, one of the two test
-/// suites fails, which is what stops the app and the planner disagreeing about
-/// what a preference means (#182).
 void main() {
-  group('route styles match the web planner contract', () {
-    test('api values and detour limits are the planner values', () {
+  group('route styles', () {
+    test('the twisty ladder is gone, and two chase options remain', () {
+      // The inherited ladder bought bends with time: +25%, +50%, +75%. A crew
+      // trying to be under a balloon when it lands has no use for any of it.
       expect(RouteStyle.values.map((style) => style.apiValue), [
-        'quickest',
-        'balanced',
-        'twisty',
-        'very-twisty',
+        'direct',
+        'major-roads',
       ]);
-      expect(RouteStyle.quickest.detourLimit, 1);
-      expect(RouteStyle.flowing.detourLimit, 1.25);
-      expect(RouteStyle.twisty.detourLimit, 1.5);
-      expect(RouteStyle.veryTwisty.detourLimit, 1.75);
     });
 
-    test('only the quickest style declines alternatives', () {
-      expect(RouteStyle.quickest.prefersBends, isFalse);
-      expect(RouteStyle.flowing.prefersBends, isTrue);
-      expect(RouteStyle.twisty.prefersBends, isTrue);
-      expect(RouteStyle.veryTwisty.prefersBends, isTrue);
+    test('detour tolerance belongs to the trailer, not to the style', () {
+      // The bug this replaced: tolerance hung off the style, the default style
+      // allowed 0%, so a crew who ticked "towing" got a preference that could
+      // never once change their route. Nothing failed — the field was still
+      // there and still being read.
+      expect(RoutePreferences.towingDetourLimit, 1.15);
     });
 
-    test('an unknown stored style falls back to quickest', () {
-      expect(RouteStyle.fromApiValue('flowing'), isNull);
+    test('every retired motorcycle style degrades to direct', () {
+      // The trap in this change. These four are sitting in stored routes, and a
+      // route stored as `twisty` asked for a 50% detour in exchange for
+      // corners. There is no honest translation of that into a chase
+      // preference, so none is invented — but it must not throw or read as
+      // null either, because then the route will not open.
+      for (final retired in ['quickest', 'balanced', 'twisty', 'very-twisty']) {
+        expect(
+          RouteStyle.fromApiValue(retired),
+          RouteStyle.direct,
+          reason: retired,
+        );
+        expect(
+          RoutePreferences.fromJson({'style': retired}).style,
+          RouteStyle.direct,
+          reason: retired,
+        );
+      }
+    });
+
+    test('a style this build has never heard of also degrades to direct', () {
+      expect(RouteStyle.fromApiValue('scenic'), isNull);
+      expect(RouteStyle.fromApiValue(null), isNull);
       expect(
-        RoutePreferences.fromJson(const {'style': 'flowing'}).style,
-        RouteStyle.quickest,
+        RoutePreferences.fromJson(const {'style': 'scenic'}).style,
+        RouteStyle.direct,
       );
+      expect(RoutePreferences.fromJson(const {}).style, RouteStyle.direct);
+    });
+
+    test('preferring major roads shuts living streets out', () {
+      // Where a long vehicle gets stuck and where children play.
+      expect(RouteStyle.majorRoads.livingStreetPreference, 0);
+      expect(RouteStyle.direct.livingStreetPreference, 0.5);
     });
   });
 
   group('byway default', () {
-    test('unsurfaced byways are avoided unless a rider says otherwise', () {
+    test('unsurfaced byways are avoided unless the crew says otherwise', () {
       expect(
         RoutePreferences.defaults.bywaySurface,
         BywaySurfacePreference.avoidUnsurfaced,
@@ -60,94 +81,83 @@ void main() {
         );
       },
     );
+  });
 
-    test('the summary always states which way round the byways are', () {
-      expect(RoutePreferences.defaults.summary, 'Unsurfaced byways avoided.');
+  group('which Valhalla costing plans the route', () {
+    test('nothing entered routes as a car, exactly as before', () {
+      expect(RoutePreferences.defaults.valhallaCosting, 'auto');
+      expect(RoutePreferences.defaults.vehicle.requiresTruckCosting, isFalse);
       expect(
-        const RoutePreferences(
-          bywaySurface: BywaySurfacePreference.allowUnsurfaced,
-        ).summary,
-        'Unsurfaced byways allowed.',
+        RoutePreferences.defaults.valhallaCostingOptions().keys,
+        contains('auto'),
       );
+    });
+
+    test('a single entered dimension switches to truck costing', () {
+      // The whole point of the feature. Valhalla's `auto` costing ignores
+      // `maxheight` outright, so a crew who entered a height gets nothing back
+      // from `auto` — the switch is what makes a low bridge avoidable at all.
+      const tall = RoutePreferences(vehicle: ChaseVehicle(heightMetres: 3.2));
+      expect(tall.valhallaCosting, 'truck');
+      expect(tall.requiresValhallaCosting, isTrue);
+      final options = tall.valhallaCostingOptions();
+      expect(options.keys, ['truck']);
+      expect((options['truck']! as Map)['height'], 3.2);
+    });
+
+    test('towing alone does not switch to truck costing', () {
+      // The dangerous case, asserted rather than assumed. `truck` costing with
+      // no dimensions inherits Valhalla's articulated-lorry defaults — 4.11 m
+      // and 21.77 t — which would refuse most of the roads to a launch site,
+      // for reasons the crew never stated.
+      const towingOnly = RoutePreferences(vehicle: ChaseVehicle(towing: true));
+      expect(towingOnly.vehicle.towing, isTrue);
+      expect(towingOnly.valhallaCosting, 'auto');
+      expect(towingOnly.valhallaCostingOptions().keys, ['auto']);
+    });
+
+    test('unentered dimensions are sent small, never omitted', () {
+      // Omitting them would inherit the lorry defaults. A blank field means
+      // "not told", which must restrict nothing, so the fallbacks understate.
+      final dimensions = const ChaseVehicle(
+        heightMetres: 3,
+      ).valhallaTruckDimensions();
+      expect(dimensions['height'], 3);
+      expect(dimensions['width'], 2);
+      expect(dimensions['length'], 5);
+      expect(dimensions['weight'], 2);
+      expect(dimensions['hazmat'], isFalse);
     });
   });
 
-  group('engine choice matches requestRoadRoute in the web planner', () {
-    test('defaults stay on OSRM', () {
-      expect(RoutePreferences.defaults.requiresValhallaCosting, isFalse);
-    });
-
-    test('a bendier style alone stays on OSRM', () {
-      for (final style in RouteStyle.values) {
-        expect(
-          RoutePreferences(style: style).requiresValhallaCosting,
-          isFalse,
-          reason: '${style.apiValue} needs only OSRM alternatives',
-        );
-      }
-    });
-
-    test('each avoidance moves to the motorcycle service', () {
-      expect(
-        const RoutePreferences(avoidMotorways: true).requiresValhallaCosting,
-        isTrue,
-      );
-      expect(
-        const RoutePreferences(avoidMajorRoads: true).requiresValhallaCosting,
-        isTrue,
-      );
-      expect(
-        const RoutePreferences(avoidTolls: true).requiresValhallaCosting,
-        isTrue,
-      );
-      expect(
-        const RoutePreferences(avoidFerries: true).requiresValhallaCosting,
-        isTrue,
-      );
-    });
-
-    test('seeking byways moves to the motorcycle service', () {
-      // OSRM's car profile does not route highway=track at all, so this is the
-      // byway case OSRM cannot serve.
-      expect(
-        const RoutePreferences(
-          bywaySurface: BywaySurfacePreference.allowUnsurfaced,
-        ).requiresValhallaCosting,
-        isTrue,
-      );
-    });
-  });
-
-  group('Valhalla auto costing options', () {
+  group('Valhalla road costing options', () {
     test('the profile is auto, and never motorcycle again', () {
-      // A chase vehicle is a Land Rover or a van, often towing. Routing it as a
-      // motorbike sends it down roads it should not take and reads speed limits
-      // off roads it cannot use, so the option names themselves are pinned:
-      // `use_tracks` is auto's lever, `use_trails` is the motorcycle one and
-      // Valhalla ignores it under auto.
-      final options = RoutePreferences.defaults.valhallaAutoCostingOptions();
+      // `use_tracks` is auto's lever; `use_trails` is the motorcycle one, and
+      // Valhalla ignores it under auto. A naive rename would have silently
+      // stopped the byway preference working at all.
+      final options = RoutePreferences.defaults.valhallaRoadCostingOptions();
       expect(options.containsKey('use_tracks'), isTrue);
       expect(options.containsKey('use_trails'), isFalse);
     });
 
     test('a crew that has not asked to avoid unsurfaced ways gets tracks', () {
-      // The one that matters for a retrieve: a landing field is usually reached
-      // down a farm track, and Valhalla's auto costing avoids tracks by default,
-      // so they have to be opened back up explicitly.
+      // A landing field is usually reached down a farm track, and auto costing
+      // avoids tracks by default, so they must be opened back up explicitly.
       const allowed = RoutePreferences(
         bywaySurface: BywaySurfacePreference.allowUnsurfaced,
       );
-      expect(allowed.valhallaAutoCostingOptions()['use_tracks'], 0.5);
-      expect(allowed.valhallaAutoCostingOptions()['exclude_unpaved'], isFalse);
+      expect(allowed.valhallaRoadCostingOptions()['use_tracks'], 0.5);
+      expect(allowed.valhallaRoadCostingOptions()['exclude_unpaved'], isFalse);
       expect(
-        RoutePreferences.defaults.valhallaAutoCostingOptions()['use_tracks'],
+        RoutePreferences.defaults.valhallaRoadCostingOptions()['use_tracks'],
         0,
       );
     });
 
     test('defaults', () {
-      expect(RoutePreferences.defaults.valhallaAutoCostingOptions(), {
+      expect(RoutePreferences.defaults.valhallaRoadCostingOptions(), {
         'use_highways': 1,
+        'use_living_streets': 0.5,
         'use_tolls': 0.5,
         'use_ferry': 0.5,
         'use_tracks': 0,
@@ -158,23 +168,13 @@ void main() {
       });
     });
 
-    test('each style sets its own highway preference', () {
-      expect(
-        RouteStyle.values.map(
-          (style) => RoutePreferences(
-            style: style,
-          ).valhallaAutoCostingOptions()['use_highways'],
-        ),
-        [1, 0.6, 0.35, 0.15],
-      );
-    });
-
-    test('avoiding major roads overrides the style highway preference', () {
+    test('avoiding major roads beats a style that prefers them', () {
+      // One is a leaning, the other is an instruction the crew typed.
       expect(
         const RoutePreferences(
-          style: RouteStyle.veryTwisty,
+          style: RouteStyle.majorRoads,
           avoidMajorRoads: true,
-        ).valhallaAutoCostingOptions()['use_highways'],
+        ).valhallaRoadCostingOptions()['use_highways'],
         0.08,
       );
     });
@@ -182,72 +182,105 @@ void main() {
     test('avoiding motorways excludes rather than penalises them', () {
       final options = const RoutePreferences(
         avoidMotorways: true,
-      ).valhallaAutoCostingOptions();
+      ).valhallaRoadCostingOptions();
       expect(options['exclude_highways'], isTrue);
-      // The motorway exclusion is independent of the twistiness setting.
       expect(options['use_highways'], 1);
     });
 
-    test('allowing byways relaxes both surface levers together', () {
-      final options = const RoutePreferences(
-        bywaySurface: BywaySurfacePreference.allowUnsurfaced,
-      ).valhallaAutoCostingOptions();
-      expect(options['use_tracks'], 0.5);
-      expect(options['exclude_unpaved'], isFalse);
+    test('the dimensions ride alongside the road levers, not instead', () {
+      final options =
+          const RoutePreferences(
+                avoidMotorways: true,
+                vehicle: ChaseVehicle(heightMetres: 3.1, towing: true),
+              ).valhallaCostingOptions()['truck']!
+              as Map;
+      expect(options['exclude_highways'], isTrue);
+      expect(options['use_tracks'], 0);
+      expect(options['height'], 3.1);
     });
+  });
 
-    test('the whole combination the issue asks for', () {
+  group('choosing between alternatives', () {
+    test('only a towing vehicle asks for straighter roads', () {
+      expect(RoutePreferences.defaults.prefersStraighterRoads, isFalse);
       expect(
         const RoutePreferences(
-          style: RouteStyle.twisty,
-          avoidMotorways: true,
-        ).valhallaAutoCostingOptions(),
-        {
-          'use_highways': 0.35,
-          'use_tolls': 0.5,
-          'use_ferry': 0.5,
-          'use_tracks': 0,
-          'exclude_highways': true,
-          'exclude_tolls': false,
-          'exclude_ferries': false,
-          'exclude_unpaved': true,
-        },
+          vehicle: ChaseVehicle(towing: true),
+        ).prefersStraighterRoads,
+        isTrue,
+      );
+    });
+
+    test('a length alone is not read as a bend aversion', () {
+      // "5 m long" describes an ordinary estate car. Inferring that it wants
+      // straighter roads would apply the preference to most of the fleet.
+      expect(
+        const RoutePreferences(
+          vehicle: ChaseVehicle(lengthMetres: 5),
+        ).prefersStraighterRoads,
+        isFalse,
       );
     });
   });
 
-  test('preferences round-trip through JSON', () {
+  test('preferences round-trip through JSON, vehicle and all', () {
     const preferences = RoutePreferences(
-      style: RouteStyle.veryTwisty,
+      style: RouteStyle.majorRoads,
       avoidMotorways: true,
       avoidMajorRoads: true,
       avoidTolls: true,
       avoidFerries: true,
       bywaySurface: BywaySurfacePreference.allowUnsurfaced,
+      vehicle: ChaseVehicle(
+        heightMetres: 3.2,
+        widthMetres: 2.1,
+        lengthMetres: 11,
+        grossWeightTonnes: 3.5,
+        towing: true,
+      ),
     );
 
     expect(RoutePreferences.fromJson(preferences.toJson()), preferences);
-    expect(preferences.toJson()['style'], 'very-twisty');
+    expect(preferences.toJson()['style'], 'major-roads');
     expect(preferences.toJson()['bywaySurface'], 'allow-unsurfaced');
   });
 
-  test('the applied notes read in the planner order', () {
+  test('an unspecified vehicle is absent from the JSON, not an empty map', () {
+    // "Never told us" and "told us and then cleared it" mean the same thing and
+    // must read back the same.
+    expect(RoutePreferences.defaults.toJson().containsKey('vehicle'), isFalse);
+    expect(
+      RoutePreferences.fromJson(RoutePreferences.defaults.toJson()).vehicle,
+      ChaseVehicle.unspecified,
+    );
+  });
+
+  test('the applied notes end with the numbers being routed against', () {
     expect(
       const RoutePreferences(
-        style: RouteStyle.flowing,
+        style: RouteStyle.majorRoads,
         avoidMotorways: true,
-        avoidMajorRoads: true,
         avoidTolls: true,
-        avoidFerries: true,
+        vehicle: ChaseVehicle(heightMetres: 3.2, towing: true),
       ).appliedNotes,
       [
-        'Flowing-road bias',
+        'Major roads preferred',
         'motorways excluded',
-        'major roads avoided',
         'tolls excluded',
-        'ferries excluded',
         'unsurfaced byways avoided',
+        'towing',
+        '3.2 m high',
       ],
+    );
+  });
+
+  test('with nothing chosen the summary says direct, not quickest', () {
+    expect(RoutePreferences.defaults.summary, 'Unsurfaced byways avoided.');
+    expect(
+      const RoutePreferences(
+        bywaySurface: BywaySurfacePreference.allowUnsurfaced,
+      ).summary,
+      'Unsurfaced byways allowed.',
     );
   });
 }

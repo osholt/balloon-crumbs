@@ -2,15 +2,21 @@ import 'dart:math' as math;
 
 import '../domain/imported_route.dart';
 
-/// The web planner's twistiness score, in Dart.
+/// How bendy a route is: 150 m sampling, heading changes below 8 degrees
+/// discarded as geometry noise, changes above 70 degrees discarded as route
+/// manoeuvres, and the remainder divided by route distance in kilometres.
 ///
-/// This is the score #46 established and `docs/route-twistiness.md` records:
-/// 150 m sampling, heading changes below 8 degrees discarded as geometry noise,
-/// changes above 70 degrees discarded as route manoeuvres, and the remainder
-/// divided by route distance in kilometres. It is a port of `routeBendScore`
-/// and `formatRouteBendScore` in `apps/website/planner-core.mjs`, not a second
-/// notion of twisty, and the fixtures in `route_twistiness_test.dart` pin it to
-/// the same numbers the web planner produces.
+/// Built to *seek* corners for motorcyclists (#46). It survives the deletion of
+/// that app because the measurement was never the motorcycling part — a road
+/// with 40 degrees of bend per kilometre is a road with 40 degrees of bend per
+/// kilometre, and whether that is the point of the ride or the reason the
+/// trailer will not make the corner is a question of who is driving. See
+/// [chooseWithinDetour], which now reads it the other way up.
+///
+/// The doc comment here used to claim this was pinned to `routeBendScore` in
+/// `apps/website/planner-core.mjs` by the fixtures in its test. That file does
+/// not exist in this repository and never has; the fixtures pin the score
+/// against itself, which is still worth having but is not a cross-check.
 class RouteTwistiness {
   const RouteTwistiness._();
 
@@ -88,16 +94,18 @@ class RouteTwistiness {
   /// the quickest is kept. It never asks for a road the provider did not offer.
   static T? chooseWithinDetour<T>(
     List<T> alternatives, {
-    required RouteStyle style,
+    required RoutePreferences preferences,
     required double Function(T) duration,
-    required double Function(T) twistiness,
+    required double Function(T) bendScore,
   }) {
     if (alternatives.isEmpty) return null;
     final quickest = alternatives.first;
-    if (!style.prefersBends || alternatives.length == 1) return quickest;
+    if (!preferences.prefersStraighterRoads || alternatives.length == 1) {
+      return quickest;
+    }
 
     final quickestDuration = duration(quickest);
-    final allowance = quickestDuration * style.detourLimit;
+    final allowance = quickestDuration * RoutePreferences.towingDetourLimit;
     final eligible = alternatives
         .where((candidate) {
           final candidateDuration = duration(candidate);
@@ -107,9 +115,12 @@ class RouteTwistiness {
         .toList(growable: false);
     if (eligible.isEmpty) return quickest;
 
+    // The straightest, not the twistiest. Same score, opposite sign: a vehicle
+    // with a trailer behind it wants the fewest tight bends it can get away
+    // with, where a motorcycle wanted the most.
     return eligible.reduce(
       (best, candidate) =>
-          twistiness(candidate) > twistiness(best) ? candidate : best,
+          bendScore(candidate) < bendScore(best) ? candidate : best,
     );
   }
 }

@@ -203,6 +203,7 @@ class RideMapFeature extends StatefulWidget {
     this.pendingSharedGpxFile,
     this.pendingInAppRoute,
     this.acquireCurrentPosition,
+    this.chaseVehicle = ChaseVehicle.unspecified,
     this.navigationExportCoordinator,
     this.routeStore,
     this.canEditRoute = true,
@@ -263,6 +264,7 @@ class RideMapFeature extends StatefulWidget {
     PickedGpxFile? pendingSharedGpxFile,
     PendingInAppRoute? pendingInAppRoute,
     Future<GeoPoint?> Function()? acquireCurrentPosition,
+    ChaseVehicle chaseVehicle = ChaseVehicle.unspecified,
     RouteStore? routeStore,
     CompletedRideStore? completedRideStore,
     bool canEditRoute = true,
@@ -317,6 +319,7 @@ class RideMapFeature extends StatefulWidget {
     pendingSharedGpxFile: pendingSharedGpxFile,
     pendingInAppRoute: pendingInAppRoute,
     acquireCurrentPosition: acquireCurrentPosition,
+    chaseVehicle: chaseVehicle,
     routeStore: routeStore,
     completedRideStore: completedRideStore,
     canEditRoute: canEditRoute,
@@ -407,6 +410,10 @@ class RideMapFeature extends StatefulWidget {
   final PickedGpxFile? pendingSharedGpxFile;
   final PendingInAppRoute? pendingInAppRoute;
   final Future<GeoPoint?> Function()? acquireCurrentPosition;
+
+  /// The crew's own vehicle, stamped onto any route planned here so the
+  /// route says what it was planned to fit.
+  final ChaseVehicle chaseVehicle;
   final NavigationExportCoordinator? navigationExportCoordinator;
   final RouteStore? routeStore;
   final bool canEditRoute;
@@ -569,6 +576,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         pendingSharedGpxFile: widget.pendingSharedGpxFile,
         pendingInAppRoute: widget.pendingInAppRoute,
         acquireCurrentPosition: widget.acquireCurrentPosition,
+        chaseVehicle: widget.chaseVehicle,
         navigationExportCoordinator: widget.navigationExportCoordinator,
         distanceUnit: widget.distanceUnit,
         speedLimitDisplay: widget.speedLimitDisplay,
@@ -653,6 +661,7 @@ class RideMapScreen extends StatefulWidget {
     this.pendingSharedGpxFile,
     this.pendingInAppRoute,
     this.acquireCurrentPosition,
+    this.chaseVehicle = ChaseVehicle.unspecified,
     this.navigationExportCoordinator,
     this.destinationRoutePlanner,
     this.roadRoutingService,
@@ -753,6 +762,10 @@ class RideMapScreen extends StatefulWidget {
   final PickedGpxFile? pendingSharedGpxFile;
   final PendingInAppRoute? pendingInAppRoute;
   final Future<GeoPoint?> Function()? acquireCurrentPosition;
+
+  /// The crew's own vehicle, stamped onto any route planned here so the
+  /// route says what it was planned to fit.
+  final ChaseVehicle chaseVehicle;
   final NavigationExportCoordinator? navigationExportCoordinator;
   final DestinationRoutePlanner? destinationRoutePlanner;
   final RoadRoutingService? roadRoutingService;
@@ -4373,6 +4386,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       request = await DestinationRouteSheet.show(
         context,
         initialRequest: request,
+        vehicle: widget.chaseVehicle,
       );
       if (request == null || !mounted) return;
       setState(() => _routing = true);

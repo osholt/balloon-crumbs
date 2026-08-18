@@ -32,8 +32,8 @@ class RoutingConfiguration {
       ),
     ),
     // The Valhalla service used for the exclusions OSRM's driving profile
-    // cannot express. Same host the web planner uses; the costing differs, see
-    // [RoutePreferences.valhallaAutoCostingOptions].
+    // cannot express, and for the vehicle dimensions it cannot express at all.
+    // See [RoutePreferences.valhallaCostingOptions].
     valhallaRoutingUrl: Uri.parse(
       const String.fromEnvironment(
         'BALLOON_CRUMBS_VALHALLA_ROUTING_URL',
@@ -383,8 +383,8 @@ class OsrmRoadRoutingService implements RoadRoutingService {
     this.readMiniRoundabouts = bundledMiniRoundabouts,
   });
 
-  /// Alternatives asked of OSRM when a bendier style has to choose between
-  /// them. The web planner asks for the same three.
+  /// Alternatives asked of OSRM when there is a choice worth making between
+  /// them, which is when the vehicle is towing and wants the straightest one.
   static const alternativeCount = 3;
 
   final http.Client client;
@@ -413,7 +413,7 @@ class OsrmRoadRoutingService implements RoadRoutingService {
       );
     }
     _requireHttps(baseUrl, 'Routing');
-    final style = preferences?.style ?? RouteStyle.quickest;
+    final resolvedPreferences = preferences ?? RoutePreferences.defaults;
     final coordinates = waypoints
         .map((point) => '${point.longitude},${point.latitude}')
         .join(';');
@@ -424,10 +424,11 @@ class OsrmRoadRoutingService implements RoadRoutingService {
         'overview': 'full',
         'geometries': 'geojson',
         'steps': 'true',
-        // Only asked for when a style has to choose. The quickest route needs
-        // no alternatives, and not asking keeps the default request identical
-        // to the one this client has always sent.
-        if (style.prefersBends) 'alternatives': '$alternativeCount',
+        // Only asked for when something will choose between them. Not asking
+        // keeps the default request identical to the one this client has always
+        // sent.
+        if (resolvedPreferences.prefersStraighterRoads)
+          'alternatives': '$alternativeCount',
         // Constrains only the origin, so the rejoin point and the target may be
         // approached however the engine likes (#444).
         'bearings': ?osrmBearings(
@@ -465,10 +466,10 @@ class OsrmRoadRoutingService implements RoadRoutingService {
     final chosen =
         RouteTwistiness.chooseWithinDetour(
           parsed,
-          style: style,
+          preferences: resolvedPreferences,
           duration: (candidate) =>
               candidate.duration.inMilliseconds.toDouble() / 1000,
-          twistiness: (candidate) => candidate.twistinessScore ?? 0,
+          bendScore: (candidate) => candidate.twistinessScore ?? 0,
         ) ??
         parsed.first;
     final miniRoundabouts = await readMiniRoundabouts();
@@ -610,9 +611,22 @@ class OsrmRoadRoutingService implements RoadRoutingService {
 
 /// Valhalla road routing, for the exclusions OSRM cannot express.
 ///
-/// Sends `costing: auto` with `costing_options.auto` from
-/// [RoutePreferences.valhallaAutoCostingOptions], and kilometre units. It asked
-/// for `motorcycle` costing until the motorcycle domain was deleted: a chase
+/// Sends `costing: auto` or `costing: truck` with matching `costing_options`
+/// from [RoutePreferences.valhallaCostingOptions], and kilometre units.
+///
+/// `truck` is what makes low bridges avoidable: `auto` costing ignores
+/// `maxheight`, `maxweight` and `maxwidth` outright, so a crew who entered a
+/// height gets nothing back from `auto` at all. It is used only once a dimension
+/// has been entered — see [ChaseVehicle.requiresTruckCosting] for why a ticked
+/// "towing" box is not enough on its own.
+///
+/// The honest limit, which the surface must not overstate: this can only avoid
+/// restrictions OpenStreetMap actually records. UK `maxheight` coverage is
+/// patchy and plenty of signed bridges are unmapped, so a clear route means "no
+/// mapped restriction on this line", never "this line is passable". The same
+/// discipline the speed-camera layer already keeps.
+///
+/// It asked for `motorcycle` costing until the motorcycle domain was deleted: a chase
 /// vehicle is a Land Rover or a van, often towing, and routing one as a motorbike
 /// picks roads it should not and reads speed limits off roads it cannot use.
 ///
@@ -669,8 +683,8 @@ class ValhallaRoadRoutingService implements RoadRoutingService {
             },
           )
           .toList(growable: false),
-      'costing': 'auto',
-      'costing_options': {'auto': resolved.valhallaAutoCostingOptions()},
+      'costing': resolved.valhallaCosting,
+      'costing_options': resolved.valhallaCostingOptions(),
       'units': 'kilometers',
       'directions_options': {'units': 'kilometers'},
     };

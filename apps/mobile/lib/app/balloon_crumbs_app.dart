@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../controllers/chase_vehicle_controller.dart';
 import '../controllers/distance_unit_controller.dart';
 import '../controllers/completed_rides_controller.dart';
 import '../controllers/map_style_mode_controller.dart';
@@ -33,6 +34,7 @@ class BalloonCrumbsApp extends StatelessWidget {
     required this.riderProfile,
     required this.sharedRoutes,
     required this.speedLimitDisplay,
+    this.chaseVehicle,
     this.routeProgressDisplay,
     required this.recordedRoutes,
     required this.completedRides,
@@ -54,6 +56,7 @@ class BalloonCrumbsApp extends StatelessWidget {
   final RiderProfileController riderProfile;
   final SharedRouteController sharedRoutes;
   final SpeedLimitDisplayController speedLimitDisplay;
+  final ChaseVehicleController? chaseVehicle;
   final RouteProgressDisplayController? routeProgressDisplay;
   final RecordedRouteStore recordedRoutes;
   final CompletedRidesController completedRides;
@@ -112,6 +115,7 @@ class BalloonCrumbsApp extends StatelessWidget {
         sharedRoutes,
         riderProfile,
         speedLimitDisplay,
+        ?chaseVehicle,
         ?routeProgressDisplay,
       ]),
       builder: (context, _) {
@@ -127,6 +131,7 @@ class BalloonCrumbsApp extends StatelessWidget {
             riderProfile: riderProfile,
             sharedRoutes: sharedRoutes,
             speedLimitDisplay: speedLimitDisplay,
+            chaseVehicle: chaseVehicle,
             routeProgressDisplay: routeProgressDisplay,
             recordedRoutes: recordedRoutes,
             completedRides: completedRides,
@@ -155,6 +160,7 @@ class BalloonCrumbsApp extends StatelessWidget {
             riderProfile: riderProfile,
             sharedRoutes: sharedRoutes,
             speedLimitDisplay: speedLimitDisplay,
+            chaseVehicle: chaseVehicle,
             routeProgressDisplay: routeProgressDisplay,
             completedRideStore: completedRides,
             testControl: testControl,
@@ -175,6 +181,7 @@ class BalloonCrumbsApp extends StatelessWidget {
           riderProfile: riderProfile,
           sharedRoutes: sharedRoutes,
           speedLimitDisplay: speedLimitDisplay,
+          chaseVehicle: chaseVehicle,
           routeProgressDisplay: routeProgressDisplay,
           recordedRoutes: recordedRoutes,
           completedRides: completedRides,
