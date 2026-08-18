@@ -9,8 +9,8 @@ not a claim that every P0 item is small. Work packages are defined in
 | 1 | P0 | ~~Isolate inherited TEC baseline and keep CI green~~ **done** | WP1 | — |
 | 2 | P0 | Balloon-capable telemetry: altitude, source, vertical speed | WP2 | 1 |
 | 3 | P0 | Craft model, flight roles, and pilot authority | WP3 | 2 |
-| 4 | P0 | Delete the motorcycle domain and rename the vocabulary | WP4 | 3 |
-| 4a | P0 | Replace the 15 motorcycle map markers with craft icons (#18) | WP4 | 3 |
+| 4 | P0 | ~~Delete the motorcycle domain~~ **done**; vocabulary rename deferred to after 6, 7 | WP4 | 3 |
+| 4a | P0 | Replace the 15 motorcycle map markers with craft icons (#18) | WP4 | 6, 7 |
 | 5 | P0 | Altitude-coloured ground track and telemetry card | WP5 | 2, 3 |
 | 6 | P0 | Pilot view, drawn landing area, and inferred landing phase | WP6 | 3, 5 |
 | 7 | P0 | Multiple chase vehicles, rendezvous, and vehicle assignment | WP7 | 3, 5 |
@@ -39,6 +39,15 @@ not a claim that every P0 item is small. Work packages are defined in
 craft model rather than twice. **WP4 early**, because the motorcycle domain is
 currently the larger half of the app and anything built on top of it costs more
 to unpick later.
+
+**The vocabulary rename moved behind items 6 and 7, for the same reason it was
+put behind WP3.** WP3 built the craft read model but nothing creates a craft
+outside tests, so no surface can move onto crafts until WP6 and WP7 build
+registration — pilot authority for the balloon, vehicle assignment for the chase.
+Renaming `rider` → `crew` against rider-based surfaces would mean renaming twice.
+Item 4a (#18) moved with it: a marker keyed to `CraftKind` needs a craft to exist.
+Measured and reasoned in delivery-plan.md under "the craft model has no creation
+path".
 
 **Items 22 and 23 are deliberately last but constrain item 3 now.** Multiple
 balloons with a shared vehicle pool, where a vehicle switches target mid-flight
