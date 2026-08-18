@@ -8,78 +8,76 @@ import 'package:flutter/services.dart' show rootBundle;
 
 import 'route_trail_style.dart';
 
-/// Rider-selectable bike silhouettes, generated as flat single-colour art
-/// (see assets/icons/motorcycles) so they can be tinted per role exactly like
-/// the Icon widgets they replace.
-enum MotorcycleIconStyle {
-  adventureTourer,
-  roadster,
-  dualSport,
-  sportNaked,
-  cruiserClassic,
-  standardTwin,
-  cafeRacer,
-  dirtBike,
-  fullTourer,
-  cruiserBagger,
-  scrambler,
-  sportTouring,
-  scooter,
-  sidecarRig,
-  streetFighter,
+/// The craft silhouettes a person can pick to represent themselves on the map.
+///
+/// Generated as flat single-colour art in the app icon's hand (see
+/// `assets/icons/craft`), so the alpha channel alone carries the shape: the
+/// widget tints it with `BlendMode.srcIn` and MapLibre uses it as an SDF mask.
+/// Nothing reads the RGB.
+///
+/// These replaced fifteen motorcycle types. A balloon operation has two kinds of
+/// craft, not fifteen models of one, and the vehicle flavours are the
+/// distinctions a retrieve actually turns on — whether it can leave the road,
+/// carry the envelope, or tow.
+///
+/// Still chosen per *person*, which is the inherited model and is not yet right:
+/// several crew in one basket each pick their own, where the thing on the map
+/// ought to be the craft. Issue #18 moves the icon onto `Craft` once anything
+/// creates one — see "the craft model has no creation path" in
+/// `docs/delivery-plan.md`.
+enum CraftIconStyle {
+  balloon,
+  fourByFour,
+  pickup,
+  van,
+  trailer,
 }
 
-extension MotorcycleIconStyleData on MotorcycleIconStyle {
-  static const Map<MotorcycleIconStyle, String> _fileNames = {
-    MotorcycleIconStyle.adventureTourer: '00_adventure_tourer',
-    MotorcycleIconStyle.roadster: '01_roadster',
-    MotorcycleIconStyle.dualSport: '02_dual_sport',
-    MotorcycleIconStyle.sportNaked: '03_sport_naked',
-    MotorcycleIconStyle.cruiserClassic: '04_cruiser_classic',
-    MotorcycleIconStyle.standardTwin: '05_standard_twin',
-    MotorcycleIconStyle.cafeRacer: '06_cafe_racer',
-    MotorcycleIconStyle.dirtBike: '07_dirt_bike',
-    MotorcycleIconStyle.fullTourer: '08_full_tourer',
-    MotorcycleIconStyle.cruiserBagger: '09_cruiser_bagger',
-    MotorcycleIconStyle.scrambler: '10_scrambler',
-    MotorcycleIconStyle.sportTouring: '11_sport_touring',
-    MotorcycleIconStyle.scooter: '12_scooter',
-    MotorcycleIconStyle.sidecarRig: '13_sidecar_rig',
-    MotorcycleIconStyle.streetFighter: '14_street_fighter',
+extension CraftIconStyleData on CraftIconStyle {
+  static const Map<CraftIconStyle, String> _fileNames = {
+    CraftIconStyle.balloon: '0_balloon',
+    CraftIconStyle.fourByFour: '1_four_by_four',
+    CraftIconStyle.pickup: '2_pickup',
+    CraftIconStyle.van: '3_van',
+    CraftIconStyle.trailer: '4_trailer',
   };
 
-  String get assetPath => 'assets/icons/motorcycles/${_fileNames[this]}.png';
+  String get assetPath => 'assets/icons/craft/${_fileNames[this]}.png';
 
   String get label => switch (this) {
-    MotorcycleIconStyle.adventureTourer => 'Adventure tourer',
-    MotorcycleIconStyle.roadster => 'Roadster',
-    MotorcycleIconStyle.dualSport => 'Dual sport',
-    MotorcycleIconStyle.sportNaked => 'Sport naked',
-    MotorcycleIconStyle.cruiserClassic => 'Classic cruiser',
-    MotorcycleIconStyle.standardTwin => 'Standard twin',
-    MotorcycleIconStyle.cafeRacer => 'Cafe racer',
-    MotorcycleIconStyle.dirtBike => 'Dirt bike',
-    MotorcycleIconStyle.fullTourer => 'Full tourer',
-    MotorcycleIconStyle.cruiserBagger => 'Cruiser bagger',
-    MotorcycleIconStyle.scrambler => 'Scrambler',
-    MotorcycleIconStyle.sportTouring => 'Sport touring',
-    MotorcycleIconStyle.scooter => 'Scooter',
-    MotorcycleIconStyle.sidecarRig => 'Sidecar rig',
-    MotorcycleIconStyle.streetFighter => 'Street fighter',
+    CraftIconStyle.balloon => 'Balloon',
+    CraftIconStyle.fourByFour => 'Four-by-four',
+    CraftIconStyle.pickup => 'Pickup',
+    CraftIconStyle.van => 'Van',
+    CraftIconStyle.trailer => 'Towing a trailer',
   };
+
+  bool get isBalloon => this == CraftIconStyle.balloon;
 }
 
-/// Default style for sessions created before this feature existed, and the
-/// fallback when a peer sends an unrecognised style name.
-const motorcycleIconStyleDefault = MotorcycleIconStyle.adventureTourer;
+/// Default for sessions created before craft symbols existed, and the fallback
+/// when a peer sends a style name this build does not know.
+///
+/// A vehicle rather than the balloon: most phones in a flight are in a chase
+/// vehicle, and exactly one craft is the balloon. Defaulting everyone to a
+/// balloon would put a fleet of aircraft on the map.
+const craftIconStyleDefault = CraftIconStyle.fourByFour;
 
-MotorcycleIconStyle motorcycleIconStyleFromName(String? name) =>
-    MotorcycleIconStyle.values.firstWhere(
+/// Reads a style name that may have been written by another build.
+///
+/// Every motorcycle name a previous build wrote — `adventureTourer` and the
+/// fourteen others — is unrecognised here and degrades to
+/// [craftIconStyleDefault] rather than failing to parse, which is the same rule
+/// `rideRoleFromName` and `craftKindFromName` follow. The wire key is still
+/// `motorcycleStyle` so an older peer's snapshot stays readable; renaming it
+/// belongs to the vocabulary pass.
+CraftIconStyle craftIconStyleFromName(String? name) =>
+    CraftIconStyle.values.firstWhere(
       (style) => style.name == name,
-      orElse: () => motorcycleIconStyleDefault,
+      orElse: () => craftIconStyleDefault,
     );
 
-enum RiderSymbolKind { motorcycle, initials, emoji }
+enum RiderSymbolKind { craft, initials, emoji }
 
 /// Ink choices for an initials marker. These stay separate from the rider's
 /// badge colour because the same initials need to remain recognisable when two
@@ -110,13 +108,15 @@ const riderInitialsInkDefault = RiderInitialsInk.dark;
 
 /// How a rider identifies themselves inside their coloured marker badge.
 ///
-/// The wire representation deliberately reuses the existing
-/// `motorcycleStyle` string. Old builds therefore see an unknown style and
-/// safely fall back to the default bike, while new builds can show initials or
-/// an emoji without requiring a relay protocol migration.
+/// The wire representation deliberately reuses the existing `motorcycleStyle`
+/// string. An older build sees an unknown style and falls back to its own
+/// default, while this one can show initials or an emoji without a relay
+/// protocol migration. The key kept its name when the bikes became crafts, for
+/// the same reason: renaming it would break that fallback for no gain, and the
+/// vocabulary pass owns it.
 class RiderSymbol {
-  const RiderSymbol.motorcycle()
-    : kind = RiderSymbolKind.motorcycle,
+  const RiderSymbol.craft()
+    : kind = RiderSymbolKind.craft,
       emoji = null,
       customInitials = null,
       initialsInk = riderInitialsInkDefault;
@@ -139,7 +139,7 @@ class RiderSymbol {
   final RiderInitialsInk initialsInk;
 
   String get storageValue => switch (kind) {
-    RiderSymbolKind.motorcycle => 'motorcycle',
+    RiderSymbolKind.craft => 'craft',
     RiderSymbolKind.initials =>
       customInitials == null && initialsInk == riderInitialsInkDefault
           ? 'initials'
@@ -147,14 +147,14 @@ class RiderSymbol {
     RiderSymbolKind.emoji => 'emoji:$emoji',
   };
 
-  String wireValue(MotorcycleIconStyle motorcycleStyle) => switch (kind) {
-    RiderSymbolKind.motorcycle => motorcycleStyle.name,
+  String wireValue(CraftIconStyle motorcycleStyle) => switch (kind) {
+    RiderSymbolKind.craft => motorcycleStyle.name,
     _ => storageValue,
   };
 
-  String label(String displayName, MotorcycleIconStyle motorcycleStyle) =>
+  String label(String displayName, CraftIconStyle motorcycleStyle) =>
       switch (kind) {
-        RiderSymbolKind.motorcycle => motorcycleStyle.label,
+        RiderSymbolKind.craft => motorcycleStyle.label,
         RiderSymbolKind.initials => 'Initials ${initialsFor(displayName)}',
         RiderSymbolKind.emoji => 'Emoji $emoji',
       };
@@ -173,8 +173,8 @@ class RiderSymbol {
     initialsInk: ink ?? initialsInk,
   );
 
-  String imageName(String displayName, MotorcycleIconStyle motorcycleStyle) {
-    if (kind == RiderSymbolKind.motorcycle) return motorcycleStyle.name;
+  String imageName(String displayName, CraftIconStyle motorcycleStyle) {
+    if (kind == RiderSymbolKind.craft) return motorcycleStyle.name;
     final glyph = kind == RiderSymbolKind.initials
         ? initialsFor(displayName)
         : emoji!;
@@ -201,12 +201,12 @@ class RiderSymbol {
       final emoji = value!.substring('emoji:'.length);
       if (riderEmojiChoices.contains(emoji)) return RiderSymbol.emoji(emoji);
     }
-    return const RiderSymbol.motorcycle();
+    return const RiderSymbol.craft();
   }
 
   static RiderSymbol fromWireValue(String? value) {
-    if (MotorcycleIconStyle.values.any((style) => style.name == value)) {
-      return const RiderSymbol.motorcycle();
+    if (CraftIconStyle.values.any((style) => style.name == value)) {
+      return const RiderSymbol.craft();
     }
     return fromStorageValue(value);
   }
@@ -223,14 +223,14 @@ class RiderSymbol {
   int get hashCode => Object.hash(kind, emoji, customInitials, initialsInk);
 }
 
-const riderSymbolDefault = RiderSymbol.motorcycle();
+const riderSymbolDefault = RiderSymbol.craft();
 
 /// A deliberately small, high-contrast catalogue that renders consistently on
 /// both supported platforms and keeps the wire value comfortably below the
 /// relay's existing 40-character motorcycle-style limit.
 const riderEmojiChoices = <String>[
-  '🏍️',
-  '🛵',
+  '🎈',
+  '🚐',
   '🏁',
   '⚡',
   '🔥',
@@ -351,15 +351,15 @@ double riderInitialsIconSize({
 /// A motorcycle glyph standing in for the plain circle/Material icon
 /// previously used for rider map markers, tinted by the caller (role colour)
 /// exactly like the `Icon` widget it replaces.
-class MotorcycleIcon extends StatelessWidget {
-  const MotorcycleIcon({
+class CraftIcon extends StatelessWidget {
+  const CraftIcon({
     super.key,
     required this.style,
     required this.color,
     this.size = 34,
   });
 
-  final MotorcycleIconStyle style;
+  final CraftIconStyle style;
   final Color color;
   final double size;
 
@@ -391,7 +391,7 @@ class RiderMarkerBadge extends StatelessWidget {
     this.glyphColor = RouteTrailStyle.markerGlyph,
   });
 
-  final MotorcycleIconStyle style;
+  final CraftIconStyle style;
   final Color badgeColor;
   final RiderSymbol symbol;
   final String displayName;
@@ -415,7 +415,7 @@ class RiderMarkerBadge extends StatelessWidget {
     ),
     child: Center(
       child: switch (symbol.kind) {
-        RiderSymbolKind.motorcycle => MotorcycleIcon(
+        RiderSymbolKind.craft => CraftIcon(
           style: style,
           // Dark, not white. Every badge fill is light because it has to be
           // found on a dark basemap, so a white glyph on top had almost no
@@ -471,7 +471,7 @@ class RiderMarkerBadge extends StatelessWidget {
 /// `MapLibreMapController.addImage(name, bytes, sdf: true)` on the native
 /// map. SDF images are tinted per-feature via the layer's `iconColor` paint
 /// property, using only this asset's alpha channel as the shape mask.
-Future<Uint8List> loadMotorcycleIconPng(MotorcycleIconStyle style) async {
+Future<Uint8List> loadCraftIconPng(CraftIconStyle style) async {
   final data = await rootBundle.load(style.assetPath);
   return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
 }
@@ -479,11 +479,11 @@ Future<Uint8List> loadMotorcycleIconPng(MotorcycleIconStyle style) async {
 Future<({Uint8List bytes, bool sdf})> rasterizeRiderSymbolPng({
   required RiderSymbol symbol,
   required String displayName,
-  required MotorcycleIconStyle motorcycleStyle,
+  required CraftIconStyle motorcycleStyle,
   double size = riderSymbolRasterSize,
 }) async {
-  if (symbol.kind == RiderSymbolKind.motorcycle) {
-    return (bytes: await loadMotorcycleIconPng(motorcycleStyle), sdf: true);
+  if (symbol.kind == RiderSymbolKind.craft) {
+    return (bytes: await loadCraftIconPng(motorcycleStyle), sdf: true);
   }
   final glyph = symbol.kind == RiderSymbolKind.initials
       ? symbol.initialsFor(displayName)

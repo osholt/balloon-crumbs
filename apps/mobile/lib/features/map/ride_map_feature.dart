@@ -69,7 +69,7 @@ import 'map_camera_guard.dart';
 import 'maneuver_list_screen.dart';
 import 'maneuver_symbol.dart';
 import 'group_mini_map_framing.dart';
-import 'motorcycle_icon.dart';
+import 'craft_icon.dart';
 import 'navigation_export_sheet.dart';
 import 'route_confirmation_sheet.dart';
 import 'route_progress_panel.dart';
@@ -217,7 +217,7 @@ class RideMapFeature extends StatefulWidget {
     this.speedLimitDisplay,
     this.showRouteProgress = true,
     this.basemapConfiguration = const BasemapConfiguration(),
-    this.localMotorcycleStyle = motorcycleIconStyleDefault,
+    this.localMotorcycleStyle = craftIconStyleDefault,
     this.localRiderSymbol = riderSymbolDefault,
     this.localDisplayName = 'You',
     this.localBadgeColor = const Color(0xFF2F80ED),
@@ -274,7 +274,7 @@ class RideMapFeature extends StatefulWidget {
     bool showRouteProgress = true,
     bool darkMapStyle = false,
     bool restrainedLightMapStyle = true,
-    MotorcycleIconStyle localMotorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle localMotorcycleStyle = craftIconStyleDefault,
     RiderSymbol localRiderSymbol = riderSymbolDefault,
     String localDisplayName = 'You',
     Color localBadgeColor = const Color(0xFF2F80ED),
@@ -421,7 +421,7 @@ class RideMapFeature extends StatefulWidget {
   final SpeedLimitDisplayController? speedLimitDisplay;
   final bool showRouteProgress;
   final BasemapConfiguration basemapConfiguration;
-  final MotorcycleIconStyle localMotorcycleStyle;
+  final CraftIconStyle localMotorcycleStyle;
   final RiderSymbol localRiderSymbol;
   final String localDisplayName;
   final Color localBadgeColor;
@@ -669,7 +669,7 @@ class RideMapScreen extends StatefulWidget {
     this.speedLimitDisplay,
     this.showRouteProgress = true,
     this.disposeOfflineTileCache = false,
-    this.localMotorcycleStyle = motorcycleIconStyleDefault,
+    this.localMotorcycleStyle = craftIconStyleDefault,
     this.localRiderSymbol = riderSymbolDefault,
     this.localDisplayName = 'You',
     this.localBadgeColor = const Color(0xFF2F80ED),
@@ -782,7 +782,7 @@ class RideMapScreen extends StatefulWidget {
   final SpeedLimitDisplayController? speedLimitDisplay;
   final bool showRouteProgress;
   final bool disposeOfflineTileCache;
-  final MotorcycleIconStyle localMotorcycleStyle;
+  final CraftIconStyle localMotorcycleStyle;
   final RiderSymbol localRiderSymbol;
   final String localDisplayName;
   final Color localBadgeColor;
@@ -3718,10 +3718,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await _ensureRiderSymbolImages(controller);
       return;
     }
-    for (final style in MotorcycleIconStyle.values) {
+    for (final style in CraftIconStyle.values) {
       await controller.addImage(
         style.name,
-        await loadMotorcycleIconPng(style),
+        await loadCraftIconPng(style),
         true,
       );
     }
@@ -3755,7 +3755,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     ml.MapLibreMapController controller,
   ) async {
     final riders =
-        <({RiderSymbol symbol, String displayName, MotorcycleIconStyle style})>[
+        <({RiderSymbol symbol, String displayName, CraftIconStyle style})>[
           (
             symbol: widget.localRiderSymbol,
             displayName: widget.localDisplayName,
@@ -3771,7 +3771,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               ),
         ];
     for (final rider in riders) {
-      if (rider.symbol.kind == RiderSymbolKind.motorcycle) continue;
+      if (rider.symbol.kind == RiderSymbolKind.craft) continue;
       final imageName = rider.symbol.imageName(rider.displayName, rider.style);
       if (!_registeredRiderSymbolImages.add(imageName)) continue;
       final raster = await rasterizeRiderSymbolPng(
@@ -4401,7 +4401,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   /// pictogram — they are meant to fill the circle — and inheriting the
   /// pictogram's size is what left them at about three quarters of what the
   /// symbol picker's preview promised (#259). Theirs is derived from the badge
-  /// instead, by the one rule in `motorcycle_icon.dart`, so the three rider
+  /// instead, by the one rule in `craft_icon.dart`, so the three rider
   /// layers and the picker cannot answer differently again.
   static Object _riderIconSize(
     double badgeDiameter,
@@ -5954,7 +5954,7 @@ class MapOverlayMarker {
   /// set, which riders always provide.
   final IconData icon;
   final Color color;
-  final MotorcycleIconStyle? motorcycleStyle;
+  final CraftIconStyle? motorcycleStyle;
   final RiderSymbol riderSymbol;
   final String? riderDisplayName;
 
@@ -6497,7 +6497,7 @@ class _GroupMiniMap extends StatefulWidget {
   final GeoPoint? currentPosition;
   final List<MapOverlayMarker> riders;
   final int riderCount;
-  final MotorcycleIconStyle localMotorcycleStyle;
+  final CraftIconStyle localMotorcycleStyle;
   final RiderSymbol localRiderSymbol;
   final String localDisplayName;
   final VoidCallback? onTap;
@@ -6879,7 +6879,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
                         color: rider.color,
                         size: 16,
                         motorcycleStyle:
-                            rider.motorcycleStyle ?? motorcycleIconStyleDefault,
+                            rider.motorcycleStyle ?? craftIconStyleDefault,
                         riderSymbol: rider.riderSymbol,
                         displayName: rider.riderDisplayName ?? rider.label,
                       ),
@@ -6908,7 +6908,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
     required GeoPoint point,
     required Color color,
     required double size,
-    required MotorcycleIconStyle motorcycleStyle,
+    required CraftIconStyle motorcycleStyle,
     required RiderSymbol riderSymbol,
     required String displayName,
   }) => Marker(
@@ -7152,7 +7152,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
               'strokeColor': _hexColor(riderBadgeStrokeColor(rider.color)),
               'iconImage': rider.riderSymbol.imageName(
                 rider.riderDisplayName ?? rider.label,
-                rider.motorcycleStyle ?? motorcycleIconStyleDefault,
+                rider.motorcycleStyle ?? craftIconStyleDefault,
               ),
               'initialsSymbol':
                   rider.riderSymbol.kind == RiderSymbolKind.initials,
@@ -7182,12 +7182,12 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
     _MiniMapSnapshot snapshot,
   ) async {
     final riders =
-        <({RiderSymbol symbol, String displayName, MotorcycleIconStyle style})>[
+        <({RiderSymbol symbol, String displayName, CraftIconStyle style})>[
           for (final rider in snapshot.riders)
             (
               symbol: rider.riderSymbol,
               displayName: rider.riderDisplayName ?? rider.label,
-              style: rider.motorcycleStyle ?? motorcycleIconStyleDefault,
+              style: rider.motorcycleStyle ?? craftIconStyleDefault,
             ),
           if (snapshot.currentPosition != null)
             (
@@ -7472,7 +7472,7 @@ class _GroupMiniMapPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
       );
-      if (symbol.kind == RiderSymbolKind.motorcycle) return;
+      if (symbol.kind == RiderSymbolKind.craft) return;
       final text = symbol.kind == RiderSymbolKind.initials
           ? riderInitials(displayName)
           : symbol.emoji!;
@@ -9214,7 +9214,7 @@ class _CurrentPositionMarker extends StatelessWidget {
 
   final bool navigationMode;
   final double headingDegrees;
-  final MotorcycleIconStyle style;
+  final CraftIconStyle style;
   final RiderSymbol symbol;
   final String displayName;
   final Color badgeColor;
@@ -9224,7 +9224,7 @@ class _CurrentPositionMarker extends StatelessWidget {
     // The badge circle is rotation-symmetric, so only the bike glyph inside
     // visibly turns - this keeps showing heading without the odd look a
     // rotating non-circular marker would have.
-    angle: navigationMode || symbol.kind != RiderSymbolKind.motorcycle
+    angle: navigationMode || symbol.kind != RiderSymbolKind.craft
         ? 0
         : headingDegrees * math.pi / 180,
     child: DecoratedBox(

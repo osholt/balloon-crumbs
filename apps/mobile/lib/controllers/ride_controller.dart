@@ -23,7 +23,7 @@ import '../domain/ride_join_payload.dart';
 import '../domain/ride_session.dart';
 import '../domain/rider_color.dart';
 import '../domain/session_store.dart';
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 import '../relay/live_presence.dart';
 import '../services/nearby_bridge.dart';
 import '../services/completed_ride_archiver.dart';
@@ -651,7 +651,7 @@ class RideController extends ChangeNotifier {
 
   Future<void> createRide(
     String displayName, {
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
     RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,
@@ -671,7 +671,7 @@ class RideController extends ChangeNotifier {
 
   Future<void> createSimulationRide({
     int riderCount = RideSession.defaultSimulationRiderCount,
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
   }) async {
@@ -751,7 +751,7 @@ class RideController extends ChangeNotifier {
   Future<void> joinRideFromInvitation(
     RideJoinPayload invitation,
     String displayName, {
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
   }) async {
@@ -772,7 +772,7 @@ class RideController extends ChangeNotifier {
   Future<void> joinRide(
     String rideCode,
     String displayName, {
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
     String? joinToken,
@@ -806,7 +806,7 @@ class RideController extends ChangeNotifier {
     required String inviteSecret,
     required String joinToken,
     required String displayName,
-    required MotorcycleIconStyle motorcycleStyle,
+    required CraftIconStyle motorcycleStyle,
     required RiderSymbol riderSymbol,
     required RiderColor riderColor,
   }) async {
@@ -1518,7 +1518,7 @@ class RideController extends ChangeNotifier {
     required String displayName,
     bool isSimulation = false,
     int simulationRiderCount = RideSession.defaultSimulationRiderCount,
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
     RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 import 'ride_coordination_mode.dart';
 import 'ride_role.dart';
 import 'rider_color.dart';
@@ -22,7 +22,7 @@ class RideSession {
     required this.joinedAt,
     this.isSimulation = false,
     this.simulationRiderCount = defaultSimulationRiderCount,
-    this.motorcycleStyle = motorcycleIconStyleDefault,
+    this.motorcycleStyle = craftIconStyleDefault,
     this.riderSymbol = riderSymbolDefault,
     this.riderColor = riderColorDefault,
     this.coordinationMode = RideCoordinationMode.keepTogether,
@@ -49,7 +49,7 @@ class RideSession {
   final DateTime joinedAt;
   final bool isSimulation;
   final int simulationRiderCount;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final RideCoordinationMode coordinationMode;
@@ -110,7 +110,7 @@ class RideSession {
     joinedAt: DateTime.parse(json['joinedAt']! as String).toLocal(),
     isSimulation: json['isSimulation'] as bool? ?? false,
     simulationRiderCount: _simulationRiderCount(json['simulationRiderCount']),
-    motorcycleStyle: motorcycleIconStyleFromName(
+    motorcycleStyle: craftIconStyleFromName(
       json['motorcycleStyle'] as String?,
     ),
     riderSymbol: RiderSymbol.fromStorageValue(json['riderSymbol'] as String?),

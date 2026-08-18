@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/rider_profile_controller.dart';
 import '../../domain/rider_color.dart';
-import '../map/motorcycle_icon.dart';
+import '../map/craft_icon.dart';
 import '../map/rider_symbol_picker.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -20,7 +20,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final TextEditingController _nameController = TextEditingController(
     text: widget.riderProfile.displayName,
   );
-  late MotorcycleIconStyle _motorcycleStyle =
+  late CraftIconStyle _motorcycleStyle =
       widget.riderProfile.motorcycleStyle;
   late RiderSymbol _riderSymbol = widget.riderProfile.riderSymbol;
   late RiderColor _riderColor = widget.riderProfile.riderColor;

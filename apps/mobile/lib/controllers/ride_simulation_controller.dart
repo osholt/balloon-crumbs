@@ -10,7 +10,7 @@ import '../domain/ride_role.dart';
 import '../domain/ride_session.dart';
 import '../domain/rider_color.dart';
 import '../domain/rider_location.dart';
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 import '../services/geo_calculations.dart';
 import '../services/situation_event_factory.dart';
 import 'situational_awareness_controller.dart';
@@ -44,7 +44,7 @@ class SimulatedRiderSnapshot {
   final bool isOffRoute;
   final GeoPoint position;
   final double headingDegrees;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
 
@@ -151,9 +151,9 @@ class RideSimulationController extends ChangeNotifier {
     // of silhouettes and colours without repeating the local rider's own
     // choices. Lead/TEC roles still override to their reserved colour when
     // rendered, so this only ever shows for plain riders.
-    MotorcycleIconStyle demoStyleFor(int index) =>
-        MotorcycleIconStyle.values[(index + 1) %
-            MotorcycleIconStyle.values.length];
+    CraftIconStyle demoStyleFor(int index) =>
+        CraftIconStyle.values[(index + 1) %
+            CraftIconStyle.values.length];
     RiderColor demoColorFor(int index) =>
         RiderColor.values[(index + 1) % RiderColor.values.length];
     _SimulatedAgent rider({
@@ -671,7 +671,7 @@ class _SimulatedAgent {
   double progressMeters;
   final double speedFactor;
   final double trafficPhaseSeconds;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final bool isLocal;

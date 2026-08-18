@@ -1,7 +1,7 @@
 import '../domain/ride_role.dart';
 import '../domain/rider_color.dart';
 import '../domain/rider_location.dart';
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 
 /// How old a rider's newest position is, in states a rider can act on.
 ///
@@ -146,7 +146,7 @@ class PresenceRosterMember {
     required this.joinedAt,
     this.left = false,
     this.leftAt,
-    this.motorcycleStyle = motorcycleIconStyleDefault,
+    this.motorcycleStyle = craftIconStyleDefault,
     this.riderSymbol = riderSymbolDefault,
     this.riderColor = riderColorDefault,
   });
@@ -163,7 +163,7 @@ class PresenceRosterMember {
   /// authoritative but cannot be ordered against a later rejoin, so the roster
   /// may only add a departed row it alone knows about (#144).
   final DateTime? leftAt;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
 }
@@ -179,7 +179,7 @@ class LiveRiderPresence {
     required this.sources,
     required this.isLocal,
     required this.knownSince,
-    this.motorcycleStyle = motorcycleIconStyleDefault,
+    this.motorcycleStyle = craftIconStyleDefault,
     this.riderSymbol = riderSymbolDefault,
     this.riderColor = riderColorDefault,
     this.location,
@@ -200,7 +200,7 @@ class LiveRiderPresence {
   /// roster when the transport supplies it and otherwise from their oldest
   /// observed sample. Deterministic so a recomputed roster does not reorder.
   final DateTime knownSince;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
 

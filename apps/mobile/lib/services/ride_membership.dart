@@ -2,7 +2,7 @@ import '../domain/ride_event.dart';
 import '../domain/ride_role.dart';
 import '../domain/rider_color.dart';
 import '../domain/rider_location.dart';
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 import '../relay/live_presence.dart';
 import 'ride_event_authenticator.dart';
 import 'ride_lifecycle.dart';
@@ -124,7 +124,7 @@ class RideParticipant {
   /// [RideLiveView.renderedPositions] draws, and that comes from live presence.
   final RiderLocation? lastKnownLocation;
   final RideMembershipState state;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final Set<RideTransportEvidence> transportEvidence;
@@ -248,7 +248,7 @@ class RideParticipant {
     DateTime? rejoinedAfterLeavingAt,
     RiderLocation? lastKnownLocation,
     RideMembershipState? state,
-    MotorcycleIconStyle? motorcycleStyle,
+    CraftIconStyle? motorcycleStyle,
     RiderSymbol? riderSymbol,
     RiderColor? riderColor,
     Set<RideTransportEvidence>? transportEvidence,
@@ -379,7 +379,7 @@ class RideMembershipReducer {
     required String localDisplayName,
     required RideRole localRole,
     required DateTime localJoinedAt,
-    required MotorcycleIconStyle localMotorcycleStyle,
+    required CraftIconStyle localMotorcycleStyle,
     required RiderColor localRiderColor,
     RiderSymbol localRiderSymbol = riderSymbolDefault,
     DateTime? rideStartedAt,
@@ -448,7 +448,7 @@ class RideMembershipReducer {
           state: RideMembershipState.joined,
           motorcycleStyle: isLocal
               ? localMotorcycleStyle
-              : motorcycleIconStyleFromName(
+              : craftIconStyleFromName(
                   event.payload['motorcycleStyle'] as String?,
                 ),
           riderSymbol: isLocal
@@ -792,7 +792,7 @@ class RideMembershipReducer {
       joinedAt: location?.sample.recordedAt ?? event.createdAt,
       lastSeenAt: event.createdAt,
       state: RideMembershipState.left,
-      motorcycleStyle: location?.motorcycleStyle ?? motorcycleIconStyleDefault,
+      motorcycleStyle: location?.motorcycleStyle ?? craftIconStyleDefault,
       riderSymbol: location?.riderSymbol ?? riderSymbolDefault,
       riderColor: location?.riderColor ?? riderColorDefault,
       transportEvidence: _evidenceFor(

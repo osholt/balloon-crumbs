@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/domain/ride_coordination_mode.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
-import 'package:balloon_crumbs/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
 
 void main() {
   final session = RideSession(

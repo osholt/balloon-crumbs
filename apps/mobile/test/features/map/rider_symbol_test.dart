@@ -6,10 +6,57 @@ import 'package:balloon_crumbs/domain/geo_point.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/rider_color.dart';
 import 'package:balloon_crumbs/domain/rider_location.dart';
-import 'package:balloon_crumbs/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/features/map/rider_symbol_picker.dart';
 
 void main() {
+  group('the motorcycle styles this replaced', () {
+    // Fifteen bike names are in stored sessions and on the wire from peers that
+    // have not updated. None of them may throw, and none may resolve to the
+    // balloon: putting a chase vehicle's marker on the aircraft would be worse
+    // than showing the wrong vehicle.
+    const retiredBikeNames = [
+      'adventureTourer', 'roadster', 'dualSport', 'sportNaked',
+      'cruiserClassic', 'standardTwin', 'cafeRacer', 'dirtBike',
+      'fullTourer', 'cruiserBagger', 'scrambler', 'sportTouring',
+      'scooter', 'sidecarRig', 'streetFighter',
+    ];
+
+    test('degrade to the default craft rather than failing to parse', () {
+      for (final name in retiredBikeNames) {
+        expect(
+          craftIconStyleFromName(name),
+          craftIconStyleDefault,
+          reason: name,
+        );
+      }
+      expect(craftIconStyleFromName(null), craftIconStyleDefault);
+      expect(craftIconStyleFromName('somethingNewer'), craftIconStyleDefault);
+    });
+
+    test('never resolve to the balloon', () {
+      for (final name in retiredBikeNames) {
+        expect(craftIconStyleFromName(name).isBalloon, isFalse, reason: name);
+      }
+      expect(craftIconStyleDefault.isBalloon, isFalse);
+    });
+
+    test('a craft this build knows round-trips by name', () {
+      for (final style in CraftIconStyle.values) {
+        expect(craftIconStyleFromName(style.name), style);
+      }
+    });
+
+    test('a retired bike name still yields a usable rider symbol', () {
+      // `fromWireValue` reads the same field, so an older peer's snapshot has to
+      // produce the craft symbol rather than an absent one.
+      expect(
+        RiderSymbol.fromWireValue('scrambler').kind,
+        RiderSymbolKind.craft,
+      );
+    });
+  });
+
   test('initials use first and last names, or two letters from one name', () {
     expect(riderInitials('Keith Simmonds'), 'KS');
     expect(riderInitials('  Katherine   L  '), 'KL');
@@ -22,13 +69,13 @@ void main() {
     const emoji = RiderSymbol.emoji('😈');
 
     expect(
-      const RiderSymbol.motorcycle().wireValue(MotorcycleIconStyle.scrambler),
-      MotorcycleIconStyle.scrambler.name,
+      const RiderSymbol.craft().wireValue(CraftIconStyle.van),
+      CraftIconStyle.van.name,
     );
-    expect(initials.wireValue(MotorcycleIconStyle.scrambler), 'initials');
-    expect(emoji.wireValue(MotorcycleIconStyle.scrambler), 'emoji:😈');
+    expect(initials.wireValue(CraftIconStyle.van), 'initials');
+    expect(emoji.wireValue(CraftIconStyle.van), 'emoji:😈');
     expect(
-      RiderSymbol.fromWireValue(MotorcycleIconStyle.scrambler.name),
+      RiderSymbol.fromWireValue(CraftIconStyle.van.name),
       riderSymbolDefault,
     );
     expect(RiderSymbol.fromWireValue('initials'), initials);
@@ -48,7 +95,7 @@ void main() {
     expect(RiderSymbol.fromStorageValue(custom.storageValue), custom);
     expect(
       RiderSymbol.fromWireValue(
-        custom.wireValue(MotorcycleIconStyle.scrambler),
+        custom.wireValue(CraftIconStyle.van),
       ),
       custom,
     );
@@ -105,7 +152,7 @@ void main() {
         accuracyMeters: 4,
       ),
       receivedAt: DateTime.utc(2026, 7, 29),
-      motorcycleStyle: MotorcycleIconStyle.scrambler,
+      motorcycleStyle: CraftIconStyle.van,
       riderSymbol: const RiderSymbol.emoji('😈'),
     );
 
@@ -121,7 +168,7 @@ void main() {
     tester,
   ) async {
     var symbol = riderSymbolDefault;
-    var style = MotorcycleIconStyle.adventureTourer;
+    var style = CraftIconStyle.fourByFour;
     late StateSetter update;
     await tester.pumpWidget(
       MaterialApp(
@@ -180,7 +227,7 @@ void main() {
               child: RiderSymbolPicker(
                 displayName: 'Oliver Holt',
                 selectedSymbol: symbol,
-                motorcycleStyle: MotorcycleIconStyle.scrambler,
+                motorcycleStyle: CraftIconStyle.van,
                 badgeColor: RiderColor.white.color,
                 keyPrefix: 'custom-symbol',
                 bikeKeyPrefix: 'custom-bike',
@@ -217,7 +264,7 @@ void main() {
       const MaterialApp(
         home: Center(
           child: RiderMarkerBadge(
-            style: MotorcycleIconStyle.scrambler,
+            style: CraftIconStyle.van,
             badgeColor: Colors.teal,
             symbol: RiderSymbol.initials(),
             displayName: 'Keith Simmonds',
@@ -236,7 +283,7 @@ void main() {
     final result = await rasterizeRiderSymbolPng(
       symbol: const RiderSymbol.initials(),
       displayName: 'Keith Simmonds',
-      motorcycleStyle: MotorcycleIconStyle.scrambler,
+      motorcycleStyle: CraftIconStyle.van,
       size: 128,
     );
     final codec = await ui.instantiateImageCodec(result.bytes);
@@ -271,7 +318,7 @@ void main() {
     final result = await rasterizeRiderSymbolPng(
       symbol: symbol,
       displayName: 'Ignored Name',
-      motorcycleStyle: MotorcycleIconStyle.scrambler,
+      motorcycleStyle: CraftIconStyle.van,
     );
     final frame = await (await ui.instantiateImageCodec(
       result.bytes,
@@ -293,7 +340,7 @@ void main() {
     expect(result.sdf, isFalse);
     expect(purplePixels, greaterThan(100));
     expect(
-      symbol.imageName('Ignored Name', MotorcycleIconStyle.scrambler),
+      symbol.imageName('Ignored Name', CraftIconStyle.van),
       contains('purple'),
     );
   });
@@ -319,7 +366,7 @@ void main() {
           home: Scaffold(
             body: Center(
               child: RiderMarkerBadge(
-                style: MotorcycleIconStyle.scrambler,
+                style: CraftIconStyle.van,
                 symbol: const RiderSymbol.initials(),
                 displayName: 'Keith Simmonds',
                 badgeColor: const Color(0xFF2F80ED),
@@ -360,7 +407,7 @@ void main() {
       final result = await rasterizeRiderSymbolPng(
         symbol: const RiderSymbol.initials(),
         displayName: 'Keith Simmonds',
-        motorcycleStyle: MotorcycleIconStyle.scrambler,
+        motorcycleStyle: CraftIconStyle.van,
       );
       final frame = await (await ui.instantiateImageCodec(
         result.bytes,

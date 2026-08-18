@@ -1,4 +1,4 @@
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 import 'geo_point.dart';
 import 'ride_role.dart';
 import 'rider_color.dart';
@@ -150,7 +150,7 @@ class RiderLocation {
     required this.role,
     required this.sample,
     required this.receivedAt,
-    this.motorcycleStyle = motorcycleIconStyleDefault,
+    this.motorcycleStyle = craftIconStyleDefault,
     this.riderSymbol = riderSymbolDefault,
     this.riderColor = riderColorDefault,
   });
@@ -160,7 +160,7 @@ class RiderLocation {
   final RideRole role;
   final LocationSample sample;
   final DateTime receivedAt;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
 
@@ -182,7 +182,7 @@ class RiderLocation {
       Map<String, Object?>.from(json['sample']! as Map),
     ),
     receivedAt: DateTime.parse(json['receivedAt']! as String).toLocal(),
-    motorcycleStyle: motorcycleIconStyleFromName(
+    motorcycleStyle: craftIconStyleFromName(
       json['motorcycleStyle'] as String?,
     ),
     riderSymbol: RiderSymbol.fromWireValue(json['motorcycleStyle'] as String?),

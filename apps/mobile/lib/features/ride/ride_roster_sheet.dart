@@ -6,7 +6,7 @@ import '../../controllers/ride_controller.dart';
 import '../../domain/ride_role.dart';
 import '../../domain/rider_color.dart';
 import '../../services/ride_membership.dart';
-import '../map/motorcycle_icon.dart';
+import '../map/craft_icon.dart';
 
 enum _RosterFilter { active, attention, left, all }
 

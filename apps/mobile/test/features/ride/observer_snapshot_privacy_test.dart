@@ -6,7 +6,7 @@ import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/domain/rider_color.dart';
 import 'package:balloon_crumbs/domain/rider_location.dart';
-import 'package:balloon_crumbs/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/features/ride/active_ride_shell.dart';
 import 'package:balloon_crumbs/services/ride_membership.dart';
 import 'package:balloon_crumbs/services/rider_contact_share.dart';
@@ -160,7 +160,7 @@ void main() {
         joinedAt: now,
         lastSeenAt: now,
         state: RideMembershipState.active,
-        motorcycleStyle: motorcycleIconStyleDefault,
+        motorcycleStyle: craftIconStyleDefault,
         riderColor: RiderColor.orange,
         transportEvidence: const {RideTransportEvidence.localDevice},
         isLocal: true,
@@ -172,7 +172,7 @@ void main() {
         joinedAt: now,
         lastSeenAt: now,
         state: RideMembershipState.active,
-        motorcycleStyle: motorcycleIconStyleDefault,
+        motorcycleStyle: craftIconStyleDefault,
         riderColor: RiderColor.cyan,
         transportEvidence: const {RideTransportEvidence.internetRelay},
         isLocal: false,

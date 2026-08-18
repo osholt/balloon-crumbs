@@ -88,7 +88,7 @@ import '../../services/trail_display_simplifier.dart';
 import '../map/hazard_map_symbol.dart';
 import '../map/maneuver_diagnostics.dart';
 import '../map/maneuver_list_screen.dart';
-import '../map/motorcycle_icon.dart';
+import '../map/craft_icon.dart';
 import '../map/ride_map.dart';
 import '../map/route_confirmation_sheet.dart';
 import '../settings/emergency_info_sheet.dart';
@@ -3334,7 +3334,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           widget.mapStyleMode.dayStyle == DayMapStyle.restrained,
       localMotorcycleStyle:
           widget.rideController.session?.motorcycleStyle ??
-          motorcycleIconStyleDefault,
+          craftIconStyleDefault,
       localRiderSymbol:
           widget.rideController.session?.riderSymbol ?? riderSymbolDefault,
       localDisplayName: widget.rideController.session?.displayName ?? 'You',

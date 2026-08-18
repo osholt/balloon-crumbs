@@ -18,7 +18,7 @@ import 'package:balloon_crumbs/domain/rider_color.dart';
 import 'package:balloon_crumbs/domain/recorded_route_store.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/features/home/home_screen.dart';
-import 'package:balloon_crumbs/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/internet/internet_relay_client.dart';
 import 'package:balloon_crumbs/services/nearby_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -119,7 +119,7 @@ void main() {
   ) async {
     await riderProfile.save(
       displayName: 'Oliver',
-      motorcycleStyle: MotorcycleIconStyle.scrambler,
+      motorcycleStyle: CraftIconStyle.van,
       riderSymbol: const RiderSymbol.emoji('🦊'),
       riderColor: RiderColor.cyan,
     );

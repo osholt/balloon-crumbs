@@ -3,7 +3,7 @@ import 'package:balloon_crumbs/domain/geo_point.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/rider_color.dart';
 import 'package:balloon_crumbs/domain/rider_location.dart';
-import 'package:balloon_crumbs/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/relay/live_presence.dart';
 import 'package:balloon_crumbs/services/ride_membership.dart';
 
@@ -60,7 +60,7 @@ void main() {
     joinedAt: now,
     lastSeenAt: now,
     state: state,
-    motorcycleStyle: MotorcycleIconStyle.adventureTourer,
+    motorcycleStyle: CraftIconStyle.fourByFour,
     riderSymbol: riderSymbolDefault,
     riderColor: RiderColor.green,
     transportEvidence: const {RideTransportEvidence.internetRelay},

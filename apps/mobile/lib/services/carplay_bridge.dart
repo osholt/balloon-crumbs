@@ -10,7 +10,7 @@ import '../domain/rider_color.dart';
 import '../domain/ride_role.dart';
 import '../domain/ride_session.dart';
 import '../domain/rider_location.dart';
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 import 'basemap_configuration.dart';
 import 'guidance_time_remaining.dart';
 import 'navigation_camera.dart';
@@ -77,7 +77,7 @@ class CarPlayLocalRider {
 
   final String riderId;
   final String displayName;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final String roleLabel;

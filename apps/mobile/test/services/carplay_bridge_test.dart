@@ -10,7 +10,7 @@ import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart' as presence;
 import 'package:balloon_crumbs/domain/rider_location.dart';
 import 'package:balloon_crumbs/domain/rider_color.dart';
-import 'package:balloon_crumbs/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/services/basemap_configuration.dart';
 import 'package:balloon_crumbs/services/carplay_bridge.dart';
 import 'package:balloon_crumbs/services/navigation_camera.dart';
@@ -139,7 +139,7 @@ void main() {
       localRider: const CarPlayLocalRider(
         riderId: 'installation-1',
         displayName: 'Oliver',
-        motorcycleStyle: MotorcycleIconStyle.scrambler,
+        motorcycleStyle: CraftIconStyle.van,
         riderSymbol: RiderSymbol.emoji('🦊'),
         riderColor: RiderColor.purple,
       ),
@@ -155,7 +155,7 @@ void main() {
       'isLocal': true,
       'role': 'Rider',
       'riderSymbol': 'emoji:🦊',
-      'motorcycleStyle': 'scrambler',
+      'motorcycleStyle': 'van',
       'riderColor': 'purple',
       'latitude': 51.46,
       'longitude': -2.51,
@@ -520,7 +520,7 @@ void main() {
             accuracyMeters: 6,
           ),
           receivedAt: now,
-          motorcycleStyle: MotorcycleIconStyle.cafeRacer,
+          motorcycleStyle: CraftIconStyle.pickup,
           riderSymbol: const RiderSymbol.initials(
             customInitials: 'OH',
             initialsInk: RiderInitialsInk.purple,
@@ -534,7 +534,7 @@ void main() {
     final rider =
         ((received!.arguments as Map)['riders'] as List).single as Map;
     expect(rider['riderSymbol'], 'initials:v1:T0g:purple');
-    expect(rider['motorcycleStyle'], 'cafeRacer');
+    expect(rider['motorcycleStyle'], 'pickup');
     expect(rider['riderColor'], 'white');
   });
 
@@ -589,7 +589,7 @@ void main() {
         'isLocal': true,
         'role': 'Lead',
         'riderSymbol': 'initials',
-        'motorcycleStyle': 'adventureTourer',
+        'motorcycleStyle': 'fourByFour',
         'riderColor': 'orange',
         'latitude': 51.45,
         'longitude': -2.58,
