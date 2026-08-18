@@ -51,16 +51,11 @@ class RideLifecycleReducer {
               event.payload['leaderRiderId'] == event.deviceId) {
             return RideLifecycle(startEvent: event);
           }
-        case RideEventType.markerStarted:
         case RideEventType.riderLeft:
-        case RideEventType.markerPass:
-        case RideEventType.markerEnded:
         case RideEventType.statusMessage:
         case RideEventType.riderLocationUpdated:
         case RideEventType.hazardReported:
         case RideEventType.hazardCleared:
-        case RideEventType.routeDeviationChanged:
-        case RideEventType.routeAlertAcknowledged:
         case RideEventType.routeRevisionChunk:
         case RideEventType.routeRevisionPublished:
         case RideEventType.routeCleared:
@@ -70,10 +65,11 @@ class RideLifecycleReducer {
         case RideEventType.rideReopened:
         case RideEventType.iceInfoShared:
         case RideEventType.iceInfoViewed:
-        case RideEventType.tecRoleRequested:
-        case RideEventType.tecRoleResponded:
-        case RideEventType.rejoinRouteShared:
         case RideEventType.riderContactShared:
+        case RideEventType.craftRegistered:
+        case RideEventType.deviceAttachedToCraft:
+        case RideEventType.craftPrimaryDeviceNominated:
+        case RideEventType.craftChaseAssigned:
           break;
       }
     }

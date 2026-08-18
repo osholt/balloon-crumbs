@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/services/hazard_map_relevance.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/services/hazard_map_relevance.dart';
 
 void main() {
   final now = DateTime.utc(2026, 7, 27, 12);

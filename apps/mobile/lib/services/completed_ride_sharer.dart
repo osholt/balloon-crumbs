@@ -34,7 +34,7 @@ class SystemCompletedRideSharer implements CompletedRideSharer {
       distanceUnit,
     ).distance(ride.totalDistanceMeters);
     final text = [
-      'Hot Pursuit ride · ${ride.title}',
+      'Balloon Crumbs ride · ${ride.title}',
       'Ride code: ${ride.rideCode}',
       'Rider: ${ride.localDisplayName} (${ride.localRole.name})',
       'Started: ${ride.startedAt.toLocal().toIso8601String()}',
@@ -42,7 +42,6 @@ class SystemCompletedRideSharer implements CompletedRideSharer {
       'Duration: ${_duration(ride.duration)}',
       'Distance: $distance',
       'Riders: ${ride.riderCount}',
-      'Marker sessions: ${ride.markerSessions.length}',
     ].join('\n');
     await SharePlus.instance.share(
       ShareParams(
@@ -67,7 +66,7 @@ class SystemCompletedRideSharer implements CompletedRideSharer {
     await SharePlus.instance.share(
       ShareParams(
         title: 'Export ${ride.title}',
-        subject: 'Hot Pursuit GPX: ${ride.title}',
+        subject: 'Balloon Crumbs GPX: ${ride.title}',
         text:
             'Choose Files, Downloads or a GPX-compatible app in the share sheet.',
         files: [

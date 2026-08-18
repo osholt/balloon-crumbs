@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from ride_relay_server.app import create_app
+from balloon_crumbs_server.app import create_app
 
 SECRET = "0123456789abcdef0123456789abcdef"
 CURRENT_CAPABILITIES = [
@@ -12,12 +12,9 @@ CURRENT_CAPABILITIES = [
     "observer-access-v1",
     "pre-start-presence-v1",
     "push-notifications-v1",
-    "rejoin-route-sharing-v1",
     "ride-reopen-v1",
     "rider-contact-sharing-v1",
-    "road-ratings-v1",
     "route-revisions-v1",
-    "tec-role-assignment-v1",
     "traffic-incidents-v1",
     "traffic-reroutes-v1",
 ]
@@ -36,9 +33,9 @@ def test_compatibility_document_advertises_protocol_and_capabilities(client) -> 
         "requiredCapabilities": [],
         "cacheSeconds": 300,
         "updateUrls": {
-            "default": "https://hot-pursuit.invalid",
-            "iOS": "https://hot-pursuit.invalid",
-            "android": "https://hot-pursuit.invalid",
+            "default": "https://balloon-crumbs.invalid",
+            "iOS": "https://balloon-crumbs.invalid",
+            "android": "https://balloon-crumbs.invalid",
         },
     }
 

@@ -2,15 +2,15 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/services/external_hazard_provider.dart';
-import 'package:ride_relay/services/relay_traffic_hazard_provider.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/services/external_hazard_provider.dart';
+import 'package:balloon_crumbs/services/relay_traffic_hazard_provider.dart';
 
 void main() {
   final configuration = InternetRelayConfiguration(
-    baseUri: Uri.parse('https://relay.hot-pursuit.invalid/api'),
+    baseUri: Uri.parse('https://relay.balloon-crumbs.invalid/api'),
   );
   final now = DateTime.utc(2026, 7, 24, 20);
 

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/rider_profile_controller.dart';
 import '../../domain/rider_color.dart';
-import '../map/motorcycle_icon.dart';
+import '../map/craft_icon.dart';
 import '../map/rider_symbol_picker.dart';
 
 class RiderProfileSheet extends StatefulWidget {
@@ -38,7 +38,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
   late final TextEditingController _nameController = TextEditingController(
     text: widget.riderProfile.displayName,
   );
-  late MotorcycleIconStyle _style = widget.riderProfile.motorcycleStyle;
+  late CraftIconStyle _style = widget.riderProfile.motorcycleStyle;
   late RiderSymbol _symbol = widget.riderProfile.riderSymbol;
   late RiderColor _color = widget.riderProfile.riderColor;
   String? _nameError;

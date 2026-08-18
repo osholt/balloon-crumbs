@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Hot Pursuit</string>
+	<string>Balloon Crumbs</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>ride_relay</string>
+	<string>balloon_crumbs</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -66,17 +66,17 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Hot Pursuit uses nearby connections to exchange ride safety updates when mobile coverage is unavailable.</string>
+	<string>Balloon Crumbs uses nearby connections to exchange ride safety updates when mobile coverage is unavailable.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_90AAE9C4995F._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Hot Pursuit uses nearby devices and local networks to keep your ride group coordinated.</string>
+	<string>Balloon Crumbs uses nearby devices and local networks to keep your ride group coordinated.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Hot Pursuit uses your location during an active ride to share your position with your group, provide navigation, and warn about route deviations. You can pause or stop location sharing at any time.</string>
+	<string>Balloon Crumbs uses your location during an active flight to share your position with your crew and provide navigation. You can pause or stop location sharing at any time.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Hot Pursuit uses your location during an active ride to show your group position, keep the group informed of where you are, and warn about route deviations. During a ride it keeps doing this while you use another navigation app or the screen is off, and stops as soon as the ride ends.</string>
+	<string>Balloon Crumbs uses your location during an active flight to show your position to the crew and keep them informed of where you are. It keeps doing this while you use another navigation app or the screen is off, and stops as soon as the flight ends.</string>
 	<!--
 	  Location is a background mode because the group has to be able to see a
 	  rider whose phone is in a pocket or showing another navigation app. Without
@@ -114,17 +114,6 @@
 					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
 					<key>UISceneStoryboardFile</key>
 					<string>Main</string>
-				</dict>
-			</array>
-			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
-			<array>
-				<dict>
-					<key>UISceneClassName</key>
-					<string>CPTemplateApplicationScene</string>
-					<key>UISceneConfigurationName</key>
-					<string>CarPlay</string>
-					<key>UISceneDelegateClassName</key>
-					<string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
 				</dict>
 			</array>
 		</dict>

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/rider_profile_controller.dart';
 import '../../domain/rider_color.dart';
-import '../map/motorcycle_icon.dart';
+import '../map/craft_icon.dart';
 import '../map/rider_symbol_picker.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -20,8 +20,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final TextEditingController _nameController = TextEditingController(
     text: widget.riderProfile.displayName,
   );
-  late MotorcycleIconStyle _motorcycleStyle =
-      widget.riderProfile.motorcycleStyle;
+  late CraftIconStyle _motorcycleStyle = widget.riderProfile.motorcycleStyle;
   late RiderSymbol _riderSymbol = widget.riderProfile.riderSymbol;
   late RiderColor _riderColor = widget.riderProfile.riderColor;
   int _step = 0;
@@ -41,7 +40,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     appBar: AppBar(
       automaticallyImplyLeading: false,
       title: const Text(
-        'Set up Hot Pursuit',
+        'Set up Balloon Crumbs',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -112,7 +111,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       const SizedBox(height: 16),
       const Text(
-        'Hot Pursuit coordinates a private riding group with a shared '
+        'Balloon Crumbs coordinates a private riding group with a shared '
         'roster, route and safety alerts. Ride events are kept on your phone '
         'first, then relayed by the internet or nearby devices when available.',
         style: TextStyle(color: Color(0xFFBCC5D0), height: 1.5, fontSize: 17),
@@ -208,7 +207,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       const SizedBox(height: 14),
       const Text(
-        'Lead and Hot Pursuit use reserved role colours during a ride.',
+        'Lead uses a reserved role colour during a ride.',
         style: TextStyle(color: Color(0xFF7F8A98), fontSize: 12),
       ),
     ],
@@ -271,12 +270,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             'Follows the shared route and can send status, assistance and hazard markers.',
       ),
       const SizedBox(height: 10),
-      const _InfoCard(
-        icon: Icons.flag_outlined,
-        title: 'Hot Pursuit',
-        body:
-            'Closes the group and helps identify riders who may have dropped back.',
-      ),
       const SizedBox(height: 24),
       Text('The ride flow', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 12),

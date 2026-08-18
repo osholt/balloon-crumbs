@@ -1,19 +1,19 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/shared_route_controller.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/internet/plan_directory.dart';
-import 'package:ride_relay/services/gpx_import_source.dart';
-import 'package:ride_relay/services/planner_link_channel.dart';
-import 'package:ride_relay/services/shared_gpx_channel.dart';
+import 'package:balloon_crumbs/controllers/shared_route_controller.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/internet/plan_directory.dart';
+import 'package:balloon_crumbs/services/gpx_import_source.dart';
+import 'package:balloon_crumbs/services/planner_link_channel.dart';
+import 'package:balloon_crumbs/services/shared_gpx_channel.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('cold-start planner link fetches and stages a GPX route', () async {
     final source = _PlannerLinkSource([
-      'https://hot-pursuit.invalid/planner.html?code=7f3k9qrt',
+      'https://balloon-crumbs.invalid/planner.html?code=7f3k9qrt',
     ]);
     final directory = _PlanDirectory(
       result: const FetchedPlan(name: 'Sunday / Loop', gpx: '<gpx />'),
@@ -45,7 +45,9 @@ void main() {
     addTearDown(controller.dispose);
     expect(controller.pending, isNull);
 
-    source.values.add('https://hot-pursuit.invalid/planner.html?code=AB12CD34');
+    source.values.add(
+      'https://balloon-crumbs.invalid/planner.html?code=AB12CD34',
+    );
     await controller.refreshForTesting();
 
     expect(directory.codes, ['AB12CD34']);
@@ -58,7 +60,7 @@ void main() {
       final controller = await SharedRouteController.load(
         channel: const _NoGpxChannel(),
         plannerLinkSource: _PlannerLinkSource([
-          'https://hot-pursuit.invalid/planner.html?code=EXPIRED1',
+          'https://balloon-crumbs.invalid/planner.html?code=EXPIRED1',
         ]),
         planDirectory: _PlanDirectory(
           error: const PlanDirectoryException(
@@ -89,7 +91,7 @@ void main() {
     final controller = await SharedRouteController.load(
       channel: const _NoGpxChannel(),
       plannerLinkSource: _PlannerLinkSource([
-        'https://hot-pursuit.invalid/planner.html?code=AB12CD34',
+        'https://balloon-crumbs.invalid/planner.html?code=AB12CD34',
       ]),
       planDirectory: directory,
     );

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/speed_limit_display_controller.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/speed_limit.dart';
+import 'package:balloon_crumbs/controllers/speed_limit_display_controller.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/speed_limit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

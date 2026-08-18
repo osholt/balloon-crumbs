@@ -110,7 +110,7 @@ class RelayEngineConfig {
     required this.rideSecret,
     required this.localDeviceId,
     required this.endpointName,
-    this.serviceId = 'me.osholt.ride_relay.relay.v1',
+    this.serviceId = 'me.osholt.balloon_crumbs.relay.v1',
   });
 
   final String rideId;

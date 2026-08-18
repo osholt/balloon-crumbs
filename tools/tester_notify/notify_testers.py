@@ -9,7 +9,7 @@ second mail would be duplicate noise.
 
 Safety, in order of importance:
 
-* It never guesses a recipient. With `RIDE_RELAY_ANDROID_TESTER_GROUP` unset the
+* It never guesses a recipient. With `BALLOON_CRUMBS_ANDROID_TESTER_GROUP` unset the
   run renders the mail into the job summary and sends nothing.
 * It never fails a release. Every configuration and delivery outcome exits 0
   with a visible annotation; the caller also runs it `continue-on-error`.
@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 from pathlib import Path
 
-PACKAGE_NAME = "dev.osholt.hotpursuit"
+PACKAGE_NAME = "dev.osholt.ballooncrumbs"
 
 # Must stay identical to DistributionTrack's labels in
 # apps/mobile/lib/services/build_identity.dart: the mail tells a tester what
@@ -127,7 +127,7 @@ class Decision:
 
 def render_subject(context: ReleaseContext) -> str:
     build = f"{context.app_version} ({context.build_number})"
-    return f"Hot Pursuit {build} is on {context.track_label}"
+    return f"Balloon Crumbs {build} is on {context.track_label}"
 
 
 def render_body(context: ReleaseContext) -> str:
@@ -137,7 +137,7 @@ def render_body(context: ReleaseContext) -> str:
     ]
     build = f"{context.app_version} (build {context.build_number})"
     lines = [
-        f"Hot Pursuit {build} is now on {context.track_label}.",
+        f"Balloon Crumbs {build} is now on {context.track_label}.",
         "",
         f"  App version    {context.app_version}",
         f"  Build number   {context.build_number}  (the Google Play version code)",
@@ -157,7 +157,7 @@ def render_body(context: ReleaseContext) -> str:
         "     pull to refresh under Manage apps & device > Updates available.",
         "",
         "CONFIRM YOU ARE ON THIS BUILD",
-        '  Open Hot Pursuit, tap the gear icon, then "About & build".',
+        '  Open Balloon Crumbs, tap the gear icon, then "About & build".',
         "  It must show:",
         f"     App version         {context.app_version}",
         f"     Build number        {context.build_number}",
@@ -175,7 +175,7 @@ def render_body(context: ReleaseContext) -> str:
             "Full tester guide: " + context.doc_url("tester-update-guide.md"),
             f"Build produced by: {context.run_url}",
             "",
-            "You are receiving this because you are on the Hot Pursuit",
+            "You are receiving this because you are on the Balloon Crumbs",
             "closed tester list. Tell the maintainer if you want to leave it.",
         ]
     )
@@ -268,13 +268,13 @@ def decide(mode: str, recipient: str, missing_settings: Sequence[str]) -> Decisi
         return Decision(
             "dry-run",
             "no tester group is configured. Set the "
-            "RIDE_RELAY_ANDROID_TESTER_GROUP repository variable to send this "
+            "BALLOON_CRUMBS_ANDROID_TESTER_GROUP repository variable to send this "
             "mail; until then every run renders it here and sends nothing.",
         )
     if not is_single_address(recipient):
         return Decision(
             "skip",
-            "RIDE_RELAY_ANDROID_TESTER_GROUP is not a single plain address. "
+            "BALLOON_CRUMBS_ANDROID_TESTER_GROUP is not a single plain address. "
             "Set it to one group address; this tool will not split a list or "
             "risk a header it did not build. Nothing was sent.",
         )
@@ -320,7 +320,7 @@ def summary_markdown(
             "",
             f"- Status: **{status}**",
             f"- Why: {decision.reason}",
-            f"- Recipient variable: `RIDE_RELAY_ANDROID_TESTER_GROUP` = {destination} (masked)",
+            f"- Recipient variable: `BALLOON_CRUMBS_ANDROID_TESTER_GROUP` = {destination} (masked)",
             "",
             "### Subject",
             "",
@@ -391,7 +391,7 @@ def main(
     ]
     if blank:
         # An empty dart-define or a skipped identity step would otherwise mail
-        # testers "Hot Pursuit  (build )".
+        # testers "Balloon Crumbs  (build )".
         stream.write(
             "::error::Tester notification not sent: no value for " + ", ".join(blank) + ".\n"
         )

@@ -68,7 +68,7 @@ class GroupPipSnapshot {
 class GroupPipBridge {
   GroupPipBridge({@visibleForTesting MethodChannel? channel})
     : _channel =
-          channel ?? const MethodChannel('me.osholt.ride_relay/group_pip');
+          channel ?? const MethodChannel('me.osholt.balloon_crumbs/group_pip');
 
   final MethodChannel _channel;
   bool _active = false;

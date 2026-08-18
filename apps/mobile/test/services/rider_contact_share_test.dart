@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/services/ride_event_authenticator.dart';
-import 'package:ride_relay/services/rider_contact_share.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/services/ride_event_authenticator.dart';
+import 'package:balloon_crumbs/services/rider_contact_share.dart';
 
 /// Issue #188. A rider's **own** number reaches the people who might have to
 /// ring them, and nobody else; it is never mistaken for the ICE contact; and it
@@ -235,7 +235,7 @@ void main() {
       final recipients = RiderContactRecipients.resolve(
         localRole: RideRole.rider,
         leaderRiderId: 'leader',
-        tecRiderIds: const ['tec-a', 'tec-b'],
+        coordinationRiderIds: const ['tec-a', 'tec-b'],
       );
 
       expect(recipients.toRideGroup, isFalse);
@@ -247,18 +247,18 @@ void main() {
       final recipients = RiderContactRecipients.resolve(
         localRole: RideRole.rider,
         leaderRiderId: null,
-        tecRiderIds: const [],
+        coordinationRiderIds: const [],
       );
 
       expect(recipients.isEmpty, isTrue);
     });
 
-    for (final role in [RideRole.lead, RideRole.tailEndCharlie]) {
+    for (final role in [RideRole.lead, RideRole.lead]) {
       test('a ${role.name} offers theirs to the ride', () {
         final recipients = RiderContactRecipients.resolve(
           localRole: role,
           leaderRiderId: null,
-          tecRiderIds: const [],
+          coordinationRiderIds: const [],
         );
 
         expect(recipients.toRideGroup, isTrue);

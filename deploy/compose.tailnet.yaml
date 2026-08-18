@@ -1,12 +1,12 @@
 services:
   tailscale:
     image: tailscale/tailscale:v1.98.9
-    hostname: ${RIDE_RELAY_TAILSCALE_HOSTNAME:-ride-relay}
+    hostname: ${BALLOON_CRUMBS_TAILSCALE_HOSTNAME:-balloon-crumbs}
     restart: unless-stopped
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_AUTH_ONCE: "true"
-      TS_HOSTNAME: ${RIDE_RELAY_TAILSCALE_HOSTNAME:-ride-relay}
+      TS_HOSTNAME: ${BALLOON_CRUMBS_TAILSCALE_HOSTNAME:-balloon-crumbs}
       TS_SERVE_CONFIG: /config/serve.json
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "true"

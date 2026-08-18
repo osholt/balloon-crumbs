@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/services/measurement_formatter.dart';
-import 'package:ride_relay/services/spoken_guidance_schedule.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/services/measurement_formatter.dart';
+import 'package:balloon_crumbs/services/spoken_guidance_schedule.dart';
 
 void main() {
   const formatter = MeasurementFormatter(DistanceUnit.miles);

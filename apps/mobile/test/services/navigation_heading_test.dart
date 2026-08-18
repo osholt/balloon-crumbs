@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/navigation_heading.dart';
+import 'package:balloon_crumbs/services/navigation_heading.dart';
 
 final _start = DateTime.utc(2026, 7, 25, 12);
 

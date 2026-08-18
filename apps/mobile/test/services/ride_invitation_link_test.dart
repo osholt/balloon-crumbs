@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/join_invite.dart';
-import 'package:ride_relay/services/ride_invitation_link.dart';
+import 'package:balloon_crumbs/domain/join_invite.dart';
+import 'package:balloon_crumbs/services/ride_invitation_link.dart';
 
 void main() {
   const code = '123456';
@@ -11,7 +11,7 @@ void main() {
     final uri = Uri.parse(value);
 
     expect(uri.scheme, 'https');
-    expect(uri.host, 'hot-pursuit.invalid');
+    expect(uri.host, 'balloon-crumbs.invalid');
     expect(uri.path, '/join.html');
     expect(uri.hasQuery, isFalse);
     expect(Uri.decodeComponent(uri.fragment), '$code#$token');
@@ -34,7 +34,7 @@ void main() {
   test('rejects capability material outside the exact private fragment', () {
     expect(
       rideInvitationFromLink(
-        'https://hot-pursuit.invalid/join.html?token=$token#$code',
+        'https://balloon-crumbs.invalid/join.html?token=$token#$code',
       ),
       isNull,
     );
@@ -44,12 +44,12 @@ void main() {
     );
     expect(
       rideInvitationFromLink(
-        'https://hot-pursuit.invalid/join.html#open-$code%23$token',
+        'https://balloon-crumbs.invalid/join.html#open-$code%23$token',
       ),
       isNull,
     );
     expect(
-      rideInvitationFromLink('https://hot-pursuit.invalid/join.html#$code'),
+      rideInvitationFromLink('https://balloon-crumbs.invalid/join.html#$code'),
       isNull,
     );
   });

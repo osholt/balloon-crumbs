@@ -14,12 +14,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/domain/imported_route.dart' show GeoPoint;
-import 'package:ride_relay/features/ride/ride_recap_card.dart';
-import 'package:ride_relay/features/ride/ride_recap_screen.dart';
-import 'package:ride_relay/services/basemap_configuration.dart';
-import 'package:ride_relay/services/ride_summary_exporter.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' show GeoPoint;
+import 'package:balloon_crumbs/features/ride/ride_recap_card.dart';
+import 'package:balloon_crumbs/features/ride/ride_recap_screen.dart';
+import 'package:balloon_crumbs/services/basemap_configuration.dart';
+import 'package:balloon_crumbs/services/ride_summary_exporter.dart';
 
 void main() {
   final summary = RideSummary(
@@ -30,7 +30,6 @@ void main() {
     endedAt: DateTime.utc(2026, 7, 27, 11),
     generatedAt: DateTime.utc(2026, 7, 27, 11),
     eventCount: 40,
-    markerSessions: const [],
     riderCount: 3,
     totalDistanceMeters: 37670,
   );

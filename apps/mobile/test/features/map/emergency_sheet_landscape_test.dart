@@ -14,15 +14,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/route_store.dart';
-import 'package:ride_relay/features/map/ride_map.dart';
-import 'package:ride_relay/features/map/ride_map_feature.dart';
-import 'package:ride_relay/services/basemap_configuration.dart';
-import 'package:ride_relay/services/gpx_import_source.dart';
-import 'package:ride_relay/services/offline_tile_cache.dart';
-import 'package:ride_relay/services/route_importer.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/route_store.dart';
+import 'package:balloon_crumbs/features/map/ride_map.dart';
+import 'package:balloon_crumbs/features/map/ride_map_feature.dart';
+import 'package:balloon_crumbs/services/basemap_configuration.dart';
+import 'package:balloon_crumbs/services/gpx_import_source.dart';
+import 'package:balloon_crumbs/services/offline_tile_cache.dart';
+import 'package:balloon_crumbs/services/route_importer.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +55,7 @@ void main() {
             MapEmergencyContact(
               riderId: 'tec',
               displayName: 'Charlie',
-              role: RideRole.tailEndCharlie,
+              role: RideRole.rider,
             ),
           ],
           onEmergencyAlert: () async {},

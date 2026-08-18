@@ -3,14 +3,14 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/controllers/pre_start_presence_controller.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/relay/live_presence.dart';
-import 'package:ride_relay/services/ride_membership.dart';
+import 'package:balloon_crumbs/controllers/pre_start_presence_controller.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/relay/live_presence.dart';
+import 'package:balloon_crumbs/services/ride_membership.dart';
 
 /// Two simulated devices whose clocks do **not** agree, sharing one relay, over
 /// the real presence client so the response decoder is in the loop.
@@ -314,7 +314,7 @@ class _Relay {
           'capabilities': RelayProtocolCapabilities.current.toList(),
           'requiredCapabilities': <String>[],
           'cacheSeconds': 300,
-          'updateUrls': {'default': 'https://hot-pursuit.invalid'},
+          'updateUrls': {'default': 'https://balloon-crumbs.invalid'},
         }),
         200,
         headers: {'content-type': 'application/json'},

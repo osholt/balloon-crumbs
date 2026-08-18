@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/features/ride/active_ride_shell.dart';
-import 'package:ride_relay/services/ride_completion_detector.dart';
+import 'package:balloon_crumbs/features/ride/active_ride_shell.dart';
+import 'package:balloon_crumbs/services/ride_completion_detector.dart';
 
 void main() {
   const assessment = RideCompletionAssessment(

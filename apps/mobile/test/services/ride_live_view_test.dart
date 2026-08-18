@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/rider_color.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/features/map/motorcycle_icon.dart';
-import 'package:ride_relay/relay/live_presence.dart';
-import 'package:ride_relay/services/ride_membership.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/rider_color.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
+import 'package:balloon_crumbs/relay/live_presence.dart';
+import 'package:balloon_crumbs/services/ride_membership.dart';
 
 /// Issue #132: the rider count and the drawn markers were two separate
 /// judgements of the same rider, so a leader could count a follower ("2 riders")
@@ -193,7 +193,7 @@ RideParticipant _participant(
   joinedAt: DateTime.utc(2026, 7, 26, 11),
   lastSeenAt: DateTime.utc(2026, 7, 26, 12),
   state: state,
-  motorcycleStyle: motorcycleIconStyleDefault,
+  motorcycleStyle: craftIconStyleDefault,
   riderColor: riderColorDefault,
   transportEvidence: const {RideTransportEvidence.internetRelay},
   isLocal: false,

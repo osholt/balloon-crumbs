@@ -7,13 +7,14 @@ import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
 
+import '../domain/craft.dart';
+import '../services/craft_roster.dart';
 import '../domain/event_store.dart';
 import '../domain/geo_point.dart' as awareness_geo;
 import '../domain/ice_share.dart';
 import '../domain/imported_route.dart';
 import '../domain/completed_ride_store.dart';
 import '../domain/join_invite.dart';
-import '../domain/marker_assistance.dart';
 import '../domain/quick_message.dart';
 import '../domain/ride_coordination_mode.dart';
 import '../domain/ride_event.dart';
@@ -22,49 +23,21 @@ import '../domain/ride_join_payload.dart';
 import '../domain/ride_session.dart';
 import '../domain/rider_color.dart';
 import '../domain/session_store.dart';
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 import '../relay/live_presence.dart';
 import '../services/nearby_bridge.dart';
 import '../services/completed_ride_archiver.dart';
-import '../services/marker_statistics.dart';
 import '../services/ride_event_authenticator.dart';
 import '../services/ride_lifecycle.dart';
 import '../services/ride_invitation_link.dart';
 import '../services/ride_membership.dart';
 import '../services/received_quick_message.dart';
 import '../services/ride_route_reducer.dart';
-import '../services/rejoin_route_share.dart';
 import '../services/rider_contact_share.dart';
-import '../services/situation_event_factory.dart';
-import '../services/tec_role_assignment.dart';
 import '../internet/internet_relay_client.dart';
 
 typedef Clock = DateTime Function();
 typedef IdFactory = String Function();
-
-/// Why a leader's Hot Pursuit request did or did not go out.
-///
-/// Every value other than [sent] is something the leader is told in words: the
-/// one outcome this feature must never have is appearing to have asked somebody
-/// who was never asked.
-enum TecRoleRequestOutcome {
-  sent,
-
-  /// Only the current leader may ask.
-  notLeader,
-
-  /// No such rider in the live roster, or the leader picked themselves.
-  invalidTarget,
-
-  /// That rider already holds the role, so there is nothing to ask.
-  alreadyTailEndCharlie,
-
-  /// The negotiated relay cannot carry the request, so nothing was recorded.
-  relayUnsupported,
-
-  /// The journal write failed. [RideController.errorMessage] carries the reason.
-  failed,
-}
 
 /// Why a leader's attempt to un-end a ride did or did not take effect.
 ///
@@ -127,7 +100,6 @@ class RideController extends ChangeNotifier {
   bool _busy = false;
   String? _errorMessage;
   bool _errorIsRetryable = false;
-  RideRole? _roleBeforeMarker;
   Timer? _endedRideCleanupTimer;
   bool _endedRideSetAside = false;
   RideLifecycle _lifecycle = const RideLifecycle();
@@ -214,9 +186,7 @@ class RideController extends ChangeNotifier {
 
   bool get rideStarted => _lifecycle.started;
   DateTime? get rideStartedAt => _lifecycle.startedAt;
-  bool get isLocalRideLeader =>
-      _session?.role == RideRole.lead ||
-      (markerActive && _roleBeforeMarker == RideRole.lead);
+  bool get isLocalRideLeader => _session?.role == RideRole.lead;
   RidePhase get ridePhase => rideEnded
       ? RidePhase.ended
       : rideStarted
@@ -490,90 +460,6 @@ class RideController extends ChangeNotifier {
     return latest?.type == RideEventType.ridePaused;
   }
 
-  bool get markerActive {
-    final localDeviceId = _session?.localRiderId;
-    if (localDeviceId == null) return false;
-    var active = false;
-    for (final event in _events) {
-      if (event.deviceId != localDeviceId) continue;
-      if (event.type == RideEventType.markerStarted) {
-        active = true;
-      } else if (event.type == RideEventType.markerEnded) {
-        active = false;
-      }
-    }
-    return active;
-  }
-
-  RideMarkingSummary get markingSummary => MarkerStatistics.fromEvents(
-    _rideActivityEvents,
-    asOf: _clock(),
-    markerDeviceId: _session?.localRiderId,
-    authenticatedLocationEvidence: _authenticatedLocationEvidence,
-  );
-
-  /// Cached against the journal it was derived from.
-  ///
-  /// This walk parses a timestamp and authenticates a signature for every
-  /// position fix in the ride, and it is reached from [markingSummary], which
-  /// the dashboard reads during build. Recomputing it per build is what made
-  /// rotating and opening a menu cost over a second at the end of a long ride
-  /// (#165). `_events` is replaced wholesale whenever the journal changes, so
-  /// its identity is a sound cache key, and the result depends on nothing else
-  /// that varies - notably not on the clock.
-  List<RideEvent>? _evidenceJournal;
-  Map<String, String>? _evidence;
-
-  Map<String, String> get _authenticatedLocationEvidence {
-    if (identical(_evidenceJournal, _events) && _evidence != null) {
-      return _evidence!;
-    }
-    final computed = _computeAuthenticatedLocationEvidence();
-    _evidenceJournal = _events;
-    _evidence = computed;
-    return computed;
-  }
-
-  Map<String, String> _computeAuthenticatedLocationEvidence() {
-    final activeSession = _session;
-    final startedAt = rideStartedAt;
-    if (activeSession == null || startedAt == null) return const {};
-    final result = <String, String>{};
-    for (final event in _events) {
-      if (event.type != RideEventType.riderLocationUpdated ||
-          event.createdAt.isBefore(startedAt) ||
-          !SituationEventFactory.verify(event, activeSession.inviteSecret)) {
-        continue;
-      }
-      final rawLocation = event.payload['location'];
-      if (rawLocation is! Map) continue;
-      final riderId = rawLocation['riderId'];
-      final sample = rawLocation['sample'];
-      final recordedAt = sample is Map
-          ? DateTime.tryParse(sample['recordedAt'] as String? ?? '')
-          : null;
-      if (riderId is String && riderId == event.deviceId) {
-        if (recordedAt != null && recordedAt.isBefore(startedAt)) continue;
-        result[event.id] = riderId;
-      }
-    }
-    return result;
-  }
-
-  MarkerSessionSummary? get currentMarkerSession =>
-      markingSummary.activeSession;
-
-  String? get currentMarkerSessionId => currentMarkerSession?.sessionId;
-
-  int get markerPassCount {
-    return currentMarkerSession?.uniquePassCount ?? 0;
-  }
-
-  int get verifiedMarkerPassCount =>
-      currentMarkerSession?.verifiedPassCount ?? 0;
-
-  bool get tecPassedCurrentMarker => currentMarkerSession?.tecPassedAt != null;
-
   int get pendingEventCount =>
       _events.where((event) => !event.acknowledged).length;
 
@@ -658,7 +544,7 @@ class RideController extends ChangeNotifier {
   String get rideCodeShareText {
     final activeSession = _requireSession();
     final name = activeSession.rideName;
-    final group = name == null ? 'my Hot Pursuit group' : '"$name"';
+    final group = name == null ? 'my Balloon Crumbs group' : '"$name"';
     final invite = joinInviteText(
       activeSession.rideCode,
       activeSession.joinToken,
@@ -667,7 +553,7 @@ class RideController extends ChangeNotifier {
       activeSession.rideCode,
       activeSession.joinToken,
     );
-    return 'Join $group in Hot Pursuit: $link\n\n'
+    return 'Join $group in Balloon Crumbs: $link\n\n'
         'Enter ride code ${activeSession.rideCode} in the app, or paste this '
         'private invite: $invite.';
   }
@@ -682,7 +568,6 @@ class RideController extends ChangeNotifier {
       await _archiveCurrentRideIfComplete();
       await _expireEndedRideIfDue();
       await _purgeUnusedIceSharesIfEnded();
-      _roleBeforeMarker = _activeMarkerPreviousRole();
     }
     _invalidateMembershipProjection();
     notifyListeners();
@@ -738,7 +623,6 @@ class RideController extends ChangeNotifier {
       _events.insert(lower, event);
     }
     _eventIds.add(event.id);
-    _invalidateEventDerivedState();
     // Position-only movement is reconciled through live presence and does not
     // change membership identity. The 15-second freshness refresh performs a
     // bounded-rate projection for last-seen state.
@@ -767,11 +651,10 @@ class RideController extends ChangeNotifier {
 
   Future<void> createRide(
     String displayName, {
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
-    RideCoordinationMode coordinationMode =
-        RideCoordinationMode.secondBikeDropOff,
+    RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,
     String? rideName,
   }) async {
     await _run(() async {
@@ -788,7 +671,7 @@ class RideController extends ChangeNotifier {
 
   Future<void> createSimulationRide({
     int riderCount = RideSession.defaultSimulationRiderCount,
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
   }) async {
@@ -815,7 +698,6 @@ class RideController extends ChangeNotifier {
       _session = null;
       _replaceEvents(const []);
       _invalidateMembershipProjection();
-      _roleBeforeMarker = null;
       await _createRide(
         displayName: 'Demo Lead',
         isSimulation: true,
@@ -869,7 +751,7 @@ class RideController extends ChangeNotifier {
   Future<void> joinRideFromInvitation(
     RideJoinPayload invitation,
     String displayName, {
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
   }) async {
@@ -890,7 +772,7 @@ class RideController extends ChangeNotifier {
   Future<void> joinRide(
     String rideCode,
     String displayName, {
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
     String? joinToken,
@@ -924,7 +806,7 @@ class RideController extends ChangeNotifier {
     required String inviteSecret,
     required String joinToken,
     required String displayName,
-    required MotorcycleIconStyle motorcycleStyle,
+    required CraftIconStyle motorcycleStyle,
     required RiderSymbol riderSymbol,
     required RiderColor riderColor,
   }) async {
@@ -994,36 +876,6 @@ class RideController extends ChangeNotifier {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Issue #128 part 1 - a leader can ask a named rider to be Hot Pursuit.
-  //
-  // Deliberately a request, not an assignment. Roles stay self-selected: the
-  // target's acceptance records their own `roleChanged`, so the membership
-  // reducer, the session's own role and every TEC surface keep exactly one
-  // source of truth. These two events carry only who was asked and what they
-  // answered, which is what lets the leader see pending versus accepted instead
-  // of believing the back is covered when nobody is watching it.
-  // ---------------------------------------------------------------------------
-
-  /// Every leader-issued TEC request in this ride, reconciled from the journal.
-  TecRoleAssignmentState get tecRoleAssignments {
-    final activeSession = _session;
-    if (activeSession == null) return const TecRoleAssignmentState();
-    return const TecRoleAssignmentReducer().fromEvents(
-      rideId: activeSession.rideId,
-      inviteSecret: activeSession.inviteSecret,
-      events: _events,
-      now: _clock(),
-    );
-  }
-
-  /// The unanswered request addressed to this phone, if any.
-  TecRoleAssignment? get pendingTecRoleRequestForLocalRider {
-    final localRiderId = _session?.localRiderId;
-    if (localRiderId == null) return null;
-    return tecRoleAssignments.pendingFor(localRiderId);
-  }
-
   /// The rider currently holding [RideRole.lead] in the reconciled roster.
   ///
   /// Used to address a leader-only event. Null when the leader has left or is
@@ -1036,8 +888,8 @@ class RideController extends ChangeNotifier {
 
   /// True when a running ride has nobody holding the lead role.
   ///
-  /// A leader who leaves takes the group's pace, the line the TEC is following
-  /// and the route authority with them, and until #176 nothing said so: a tester
+  /// A leader who leaves takes the group's pace and the route authority with
+  /// them, and until #176 nothing said so: a tester
   /// left as leader to see what would happen and the ride carried on, with the
   /// remaining riders untold and nobody offered the role.
   ///
@@ -1046,141 +898,151 @@ class RideController extends ChangeNotifier {
   bool get rideHasNoLeader =>
       rideStarted && !rideEnded && leaderRiderId == null;
 
-  /// Asks [targetRiderId] to take the Hot Pursuit role.
+  // ---------------------------------------------------------------------------
+  // WP3 — crafts. One flight holds one balloon and zero or more vehicles;
+  // devices attach to a craft, and a craft reports one position however many
+  // phones are aboard it. See docs/delivery-plan.md.
+  // ---------------------------------------------------------------------------
+
+  /// The device that last spoke for each craft, so the election's hysteresis has
+  /// an incumbent to hold onto between frames. Without it, two phones side by
+  /// side in a basket trade the balloon back and forth and the track stutters.
+  Map<String, String> _craftReporters = const {};
+
+  /// Reconciles the craft roster from the journal.
   ///
-  /// [relayCanCarryRequest] is the negotiated `tec-role-assignment-v1`
-  /// capability. When it is false nothing is recorded at all: a request that
-  /// cannot leave this phone must not sit on the leader's screen looking sent.
-  Future<TecRoleRequestOutcome> requestTecRole({
-    required String targetRiderId,
-    required String targetDisplayName,
-    bool relayCanCarryRequest = true,
-  }) async {
-    final activeSession = _session;
-    if (activeSession == null || !isLocalRideLeader) {
-      return TecRoleRequestOutcome.notLeader;
-    }
-    if (targetRiderId == activeSession.localRiderId) {
-      return TecRoleRequestOutcome.invalidTarget;
-    }
-    final target = participantFor(targetRiderId);
-    if (target == null || !target.isIncludedInLiveCount) {
-      return TecRoleRequestOutcome.invalidTarget;
-    }
-    final acceptedTecRiderId = tecRoleAssignments.acceptedTecRiderId;
-    if (target.role == RideRole.tailEndCharlie &&
-        (acceptedTecRiderId == null || acceptedTecRiderId == targetRiderId)) {
-      return TecRoleRequestOutcome.alreadyTailEndCharlie;
-    }
-    if (!relayCanCarryRequest) {
-      return TecRoleRequestOutcome.relayUnsupported;
-    }
-    await _run(() async {
-      await _record(
-        type: RideEventType.tecRoleRequested,
-        priority: EventPriority.important,
-        // Outlives the reducer's ten-minute pending window so the answer and
-        // the question are never orphaned from each other in the journal.
-        expiresAt: _clock().add(const Duration(hours: 2)),
-        payload: TecRoleAssignmentReducer.requestPayload(
-          requestId: _idFactory(),
-          leaderRiderId: activeSession.localRiderId,
-          targetRiderId: targetRiderId,
-          targetDisplayName: targetDisplayName,
-        ),
-      );
-    });
-    return _errorMessage == null
-        ? TecRoleRequestOutcome.sent
-        : TecRoleRequestOutcome.failed;
+  /// Deliberately a method rather than a getter: it carries the elected
+  /// reporters forward, and hiding that behind property syntax would make a
+  /// state change look like a read. Call it once per frame and pass the result
+  /// around rather than calling it per widget.
+  CraftRoster resolveCraftRoster() {
+    final roster = const CraftRosterReducer().fromEvents(
+      events: _events,
+      now: _clock(),
+      previousReporters: _craftReporters,
+    );
+    _craftReporters = CraftRosterReducer.reportersOf(roster);
+    return roster;
   }
 
-  /// Answers the request addressed to this phone.
+  /// The craft this device is aboard, if it has been attached to one.
+  CraftState? get localCraft {
+    final localRiderId = _session?.localRiderId;
+    if (localRiderId == null) return null;
+    return resolveCraftRoster().forDevice(localRiderId);
+  }
+
+  /// Whether this device may start or end the flight, nominate a craft's
+  /// reporting device, or declare a landing.
   ///
-  /// Accepting records the answer **and** the local rider's own
-  /// [RideEventType.roleChanged], in that order, so a peer that reads only one
-  /// of the two still converges: the role change alone is the existing
-  /// self-selection, and the answer alone leaves the leader's view honest.
-  Future<bool> respondToTecRoleRequest({
-    required String requestId,
-    required bool accepted,
+  /// Transitional: authority still comes from the inherited leader role. WP4
+  /// replaces this with [FlightRole.hasFlightAuthority] once the session carries
+  /// a flight role rather than a ride role. The seam is here so every caller
+  /// changes in one place.
+  bool get hasFlightAuthority => isLocalRideLeader;
+
+  /// Registers a balloon or vehicle in this flight.
+  ///
+  /// Idempotent by craft id: re-registering updates the label rather than
+  /// creating a second craft, so two devices racing to register the balloon
+  /// converge instead of putting two aircraft on the map.
+  Future<bool> registerCraft({
+    required String craftId,
+    required CraftKind kind,
+    required String label,
   }) async {
-    final activeSession = _session;
-    if (activeSession == null) return false;
-    final pending = tecRoleAssignments.pendingFor(activeSession.localRiderId);
-    if (pending == null || pending.requestId != requestId) return false;
+    if (_session == null || craftId.isEmpty) return false;
+    // Only the pilot introduces the balloon. A vehicle can register itself:
+    // a chase crew joining mid-flight should not need the pilot to act while
+    // they are flying.
+    if (kind == CraftKind.balloon && !hasFlightAuthority) return false;
     await _run(() async {
       await _record(
-        type: RideEventType.tecRoleResponded,
+        type: RideEventType.craftRegistered,
         priority: EventPriority.important,
-        expiresAt: _clock().add(const Duration(hours: 2)),
-        payload: TecRoleAssignmentReducer.responsePayload(
-          requestId: requestId,
-          targetRiderId: activeSession.localRiderId,
-          accepted: accepted,
-        ),
-      );
-      if (!accepted) return;
-      final updated = activeSession.copyWith(role: RideRole.tailEndCharlie);
-      _session = updated;
-      await _sessionStore.save(updated);
-      await _record(
-        type: RideEventType.roleChanged,
-        payload: {'role': RideRole.tailEndCharlie.name},
+        payload: {'craftId': craftId, 'kind': kind.name, 'label': label},
       );
     });
     return _errorMessage == null;
   }
 
-  // ---------------------------------------------------------------------------
-  // Issue #128 part 2 - a separated rider's rejoin route, for the leader only.
-  // ---------------------------------------------------------------------------
-
-  /// Rejoin routes other riders have shared with this phone, still live.
+  /// Says this device is aboard [craftId].
   ///
-  /// Empty for everyone who is not the addressed leader, empty once the route
-  /// revision moves on, and empty once the ride ends.
-  Map<String, SharedRejoinRoute> get sharedRejoinRoutes {
+  /// Re-sent on a move, so the latest wins: stepping out of the basket into a
+  /// vehicle is one event rather than a leave and a join.
+  Future<bool> attachLocalDeviceToCraft(String craftId) async {
     final activeSession = _session;
-    if (activeSession == null) return const {};
-    return const SharedRejoinRouteReducer().fromEvents(
-      rideId: activeSession.rideId,
-      inviteSecret: activeSession.inviteSecret,
-      events: _events,
-      localRiderId: activeSession.localRiderId,
-      routeRevisionNumber: _routeState.revisionNumber,
-      now: _clock(),
-      departedRiderIds: participants
-          .where((participant) => !participant.isIncludedInLiveCount)
-          .map((participant) => participant.riderId),
-      rideEnded: rideEnded,
-    );
-  }
-
-  /// Relays [share] to the current leader, and to nobody else.
-  ///
-  /// Returns false without recording anything when there is no known leader or
-  /// the negotiated relay cannot carry it — the rider keeps their own guidance
-  /// either way, and the caller names the limitation.
-  Future<bool> shareRejoinRoute(
-    SharedRejoinRoute share, {
-    bool relayCanCarryShare = true,
-  }) async {
-    final activeSession = _session;
-    if (activeSession == null || !relayCanCarryShare) return false;
-    if (share.riderId != activeSession.localRiderId) return false;
-    final leader = leaderRiderId;
-    if (leader == null || leader == activeSession.localRiderId) return false;
+    if (activeSession == null) return false;
+    if (resolveCraftRoster().byId(craftId) == null) return false;
     await _run(() async {
       await _record(
-        type: RideEventType.rejoinRouteShared,
-        // The same retention band as a location event: this is where a rider is
-        // about to be, so it is treated as perishable as where they are.
-        expiresAt: share.expiresAt,
-        payload: SharedRejoinRouteReducer.payload(
-          share: share,
-          leaderRiderId: leader,
-        ),
+        type: RideEventType.deviceAttachedToCraft,
+        priority: EventPriority.important,
+        payload: {
+          'deviceId': activeSession.localRiderId,
+          'craftId': craftId,
+          'craftLabel': resolveCraftRoster().byId(craftId)?.craft.label,
+        },
+      );
+    });
+    return _errorMessage == null;
+  }
+
+  /// Nominates which device aboard [craftId] should normally report its
+  /// position. A preference the election honours while that device is usable,
+  /// never an override that can leave a craft silent.
+  Future<bool> nominateCraftPrimaryDevice({
+    required String craftId,
+    required String deviceId,
+  }) async {
+    if (_session == null || !hasFlightAuthority) return false;
+    final craft = resolveCraftRoster().byId(craftId);
+    // Nominating a device that is not aboard would silently do nothing at
+    // election time, which is worse than refusing.
+    if (craft == null || !craft.deviceIds.contains(deviceId)) return false;
+    await _run(() async {
+      await _record(
+        type: RideEventType.craftPrimaryDeviceNominated,
+        priority: EventPriority.important,
+        payload: {
+          'craftId': craftId,
+          'deviceId': deviceId,
+          'craftLabel': craft.craft.label,
+        },
+      );
+    });
+    return _errorMessage == null;
+  }
+
+  /// Points a vehicle at the craft it is chasing.
+  ///
+  /// Redundant while there is one balloon, and the thing that makes several
+  /// balloons a new event rather than a schema change (backlog 22, 23).
+  Future<bool> assignChase({
+    required String vehicleCraftId,
+    required String? targetCraftId,
+  }) async {
+    if (_session == null) return false;
+    final roster = resolveCraftRoster();
+    final vehicle = roster.byId(vehicleCraftId);
+    if (vehicle == null || vehicle.isBalloon) return false;
+    if (targetCraftId != null) {
+      final target = roster.byId(targetCraftId);
+      // A vehicle chases an aircraft, not another vehicle, and never itself.
+      if (target == null || !target.isBalloon) return false;
+    }
+    await _run(() async {
+      await _record(
+        type: RideEventType.craftChaseAssigned,
+        priority: EventPriority.important,
+        payload: {
+          'craftId': vehicleCraftId,
+          'chasing': targetCraftId,
+          'vehicleLabel': vehicle.craft.label,
+          'targetLabel': targetCraftId == null
+              ? null
+              : roster.byId(targetCraftId)?.craft.label,
+        },
       );
     });
     return _errorMessage == null;
@@ -1512,94 +1374,6 @@ class RideController extends ChangeNotifier {
     });
   }
 
-  Future<void> startMarker({
-    String mode = 'manual',
-    String? decisionPointId,
-  }) async {
-    if (markerActive) {
-      return;
-    }
-    await _run(() async {
-      if (!rideStarted) {
-        throw const FormatException('Start the ride before using marker mode.');
-      }
-      if (!coordinationMode.usesSecondBikeDropOff) {
-        throw const FormatException(
-          'Junction markers are only available in Second-bike drop-off rides.',
-        );
-      }
-      final activeSession = _requireSession();
-      _roleBeforeMarker = activeSession.role;
-      final markerSessionId = _idFactory();
-      final updated = activeSession.copyWith(role: RideRole.marker);
-      _session = updated;
-      await _sessionStore.save(updated);
-      await _record(
-        type: RideEventType.markerStarted,
-        priority: EventPriority.important,
-        payload: {
-          'mode': mode,
-          'markerSessionId': markerSessionId,
-          'decisionPointId': ?decisionPointId,
-          'previousRole': activeSession.role.name,
-        },
-      );
-    });
-  }
-
-  Future<void> recordMarkerPass(
-    String riderId, {
-    String? evidenceEventId,
-    RideRole? riderRole,
-    DateTime? observedAt,
-  }) async {
-    final markerSession = currentMarkerSession;
-    if (!markerActive ||
-        markerSession == null ||
-        markerSession.uniqueRiderIds.contains(riderId)) {
-      return;
-    }
-    await _run(() async {
-      await _record(
-        type: RideEventType.markerPass,
-        payload: {
-          'riderId': riderId,
-          'markerSessionId': markerSession.sessionId,
-          'authenticated': evidenceEventId != null,
-          'evidenceEventId': ?evidenceEventId,
-          'role': ?riderRole?.name,
-          'observedAt': ?observedAt?.toUtc().toIso8601String(),
-        },
-      );
-    });
-  }
-
-  Future<void> endMarker() async {
-    if (!markerActive) {
-      return;
-    }
-    await _run(() async {
-      final current = currentMarkerSession;
-      final roleAfterMarker =
-          _roleBeforeMarker ?? _activeMarkerPreviousRole() ?? RideRole.rider;
-      await _record(
-        type: RideEventType.markerEnded,
-        priority: EventPriority.important,
-        payload: {
-          'markerSessionId': current?.sessionId,
-          'uniquePasses': current?.uniquePassCount ?? 0,
-          'verifiedPasses': current?.verifiedPassCount ?? 0,
-          'tecPassed': current?.tecPassedAt != null,
-        },
-      );
-      final activeSession = _requireSession();
-      final updated = activeSession.copyWith(role: roleAfterMarker);
-      _session = updated;
-      _roleBeforeMarker = null;
-      await _sessionStore.save(updated);
-    });
-  }
-
   Future<void> endRide() async {
     if (rideEnded) return;
     await _run(() async {
@@ -1607,28 +1381,12 @@ class RideController extends ChangeNotifier {
       if (!isLocalRideLeader) {
         throw const FormatException('Only the ride leader can end the ride.');
       }
-      if (markerActive) {
-        final current = currentMarkerSession;
-        await _record(
-          type: RideEventType.markerEnded,
-          priority: EventPriority.important,
-          payload: {
-            'markerSessionId': current?.sessionId,
-            'uniquePasses': current?.uniquePassCount ?? 0,
-            'verifiedPasses': current?.verifiedPassCount ?? 0,
-            'tecPassed': current?.tecPassedAt != null,
-            'reason': 'ride-ended',
-          },
-        );
-      }
-      final summary = markingSummary;
       await _record(
         type: RideEventType.rideEnded,
         priority: EventPriority.important,
-        payload: {'markingSummary': summary.toJson()},
+        payload: const {},
       );
       await _archiveCurrentRideIfComplete();
-      _roleBeforeMarker = null;
       await _purgeUnusedIceSharesIfEnded();
       await _expireEndedRideIfDue();
     });
@@ -1759,11 +1517,10 @@ class RideController extends ChangeNotifier {
     required String displayName,
     bool isSimulation = false,
     int simulationRiderCount = RideSession.defaultSimulationRiderCount,
-    MotorcycleIconStyle motorcycleStyle = motorcycleIconStyleDefault,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
-    RideCoordinationMode coordinationMode =
-        RideCoordinationMode.secondBikeDropOff,
+    RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,
     String? rideName,
   }) async {
     // The home screen deliberately remains available while an ended ride is
@@ -2024,7 +1781,6 @@ class RideController extends ChangeNotifier {
     final removed = toRemove.toSet();
     _events = _events.where((event) => !removed.contains(event.id)).toList();
     _eventIds.removeAll(removed);
-    _invalidateEventDerivedState();
     _invalidateMembershipProjection();
   }
 
@@ -2040,7 +1796,6 @@ class RideController extends ChangeNotifier {
     _invalidateMembershipProjection();
     _lifecycle = const RideLifecycle();
     _routeState = const RideRouteState();
-    _roleBeforeMarker = null;
     _usedIceShareEventIds.clear();
     _transportByEventId.clear();
     _livePresence = const [];
@@ -2048,43 +1803,12 @@ class RideController extends ChangeNotifier {
     _positionChannelUnavailable = false;
   }
 
-  void _invalidateEventDerivedState() {
-    _evidenceJournal = null;
-    _evidence = null;
-  }
-
   void _replaceEvents(Iterable<RideEvent> events) {
     _events = events.toList(growable: true);
     _eventIds
       ..clear()
       ..addAll(_events.map((event) => event.id));
-    _invalidateEventDerivedState();
     _invalidateMembershipProjection();
-  }
-
-  RideRole? _activeMarkerPreviousRole() {
-    final localDeviceId = _session?.localRiderId;
-    if (localDeviceId == null || !markerActive) return null;
-    for (final event in _events.reversed) {
-      if (event.deviceId != localDeviceId ||
-          event.type != RideEventType.markerStarted) {
-        continue;
-      }
-      final value = event.payload['previousRole'];
-      if (value is! String) return null;
-      try {
-        return RideRole.values.byName(value);
-      } on ArgumentError {
-        return null;
-      }
-    }
-    return null;
-  }
-
-  Iterable<RideEvent> get _rideActivityEvents {
-    final startedAt = rideStartedAt;
-    if (startedAt == null) return const [];
-    return _events.where((event) => !event.createdAt.isBefore(startedAt));
   }
 
   void _rebuildLifecycle() {

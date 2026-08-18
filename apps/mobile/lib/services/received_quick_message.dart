@@ -162,9 +162,8 @@ class QuickMessageOrigin {
 
   /// Resolves the honest form for one pair of positions.
   ///
-  /// [maximumOnRouteDistanceMeters] mirrors
-  /// `LeaderRideStatusCalculator.maximumOnRouteDistanceMeters`, so "on the
-  /// route" means the same thing here as it does in the TEC gap.
+  /// [maximumOnRouteDistanceMeters] is how far off the shared route a position
+  /// may be and still be described in terms of it.
   static QuickMessageOrigin? between({
     required GeoPoint? readerPosition,
     required GeoPoint? senderPosition,

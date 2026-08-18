@@ -137,7 +137,7 @@ class ValhallaSpeedLimitConfiguration {
 
   factory ValhallaSpeedLimitConfiguration.fromEnvironment() {
     const raw = String.fromEnvironment(
-      'RIDE_RELAY_SPEED_LIMIT_URL',
+      'BALLOON_CRUMBS_SPEED_LIMIT_URL',
       defaultValue: 'https://valhalla1.openstreetmap.de/trace_attributes',
     );
     final parsed = Uri.tryParse(raw.trim());
@@ -506,7 +506,7 @@ class ValhallaSpeedLimitProvider
                     'lon': location.point.longitude,
                   },
               ],
-              'costing': 'motorcycle',
+              'costing': 'auto',
               'shape_match': 'map_snap',
               'trace_options': {
                 'gps_accuracy': effectiveAccuracy.clamp(5, 50),
@@ -545,7 +545,7 @@ class ValhallaSpeedLimitProvider
     'accept': 'application/json',
     'content-type': 'application/json',
     'user-agent': 'TailEndCharlie/0.1 speed-limit-display',
-    'x-client-id': 'hot-pursuit.invalid',
+    'x-client-id': 'balloon-crumbs.invalid',
   };
 
   /// Asks `locate` for every road near a stationary fix and picks the one the
@@ -575,7 +575,7 @@ class ValhallaSpeedLimitProvider
                   'radius': _stationaryMatchCeilingMeters + 5,
                 },
               ],
-              'costing': 'motorcycle',
+              'costing': 'auto',
               'verbose': true,
               // `locate` does not echo its units, so they are stated. A limit
               // wrongly read as mph would fail the UK-value test below rather

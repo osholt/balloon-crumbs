@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/data/ride_diagnostics_log_store.dart';
-import 'package:ride_relay/services/ride_diagnostics_log_writer.dart';
-import 'package:ride_relay/services/ride_diagnostics_recorder.dart';
+import 'package:balloon_crumbs/data/ride_diagnostics_log_store.dart';
+import 'package:balloon_crumbs/services/ride_diagnostics_log_writer.dart';
+import 'package:balloon_crumbs/services/ride_diagnostics_recorder.dart';
 
 void main() {
   group('the stored log keeps up with the recorder (#456)', () {

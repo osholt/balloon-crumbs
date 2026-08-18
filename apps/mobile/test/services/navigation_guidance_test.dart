@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/navigation_guidance.dart';
-import 'package:ride_relay/services/road_routing.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/navigation_guidance.dart';
+import 'package:balloon_crumbs/services/road_routing.dart';
 
 import 'osrm_maneuver_fixtures.dart';
 
@@ -108,6 +108,24 @@ void main() {
           )
           .state,
       NavigationGuidanceState.offRoute,
+    );
+    // The wording is asserted, not just the state. It used to promise "finding
+    // directions back", which stopped being true when rejoin routing was
+    // deleted: telling a rider a recalculation is coming makes them wait instead
+    // of deciding.
+    expect(
+      planner
+          .assess(
+            route: _route(),
+            position: const GeoPoint(latitude: 0.01, longitude: 0.005),
+            progressMeters: 556,
+          )
+          .message,
+      NavigationGuidancePlanner.offRouteMessage,
+    );
+    expect(
+      NavigationGuidancePlanner.offRouteMessage,
+      isNot(contains('finding directions')),
     );
     expect(
       planner

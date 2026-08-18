@@ -221,7 +221,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _carPlayBridge.publish(
         session: null,
         riderLocations: const [],
-        routeAlerts: const [],
         activeHazards: const [],
         rideState: _planningDestination
             ? 'Planning route…'
@@ -229,7 +228,6 @@ class _HomeScreenState extends State<HomeScreen> {
         surfaceMode: CarPlaySurfaceMode.home,
         canPlanRoute: true,
         canFreeRoam: true,
-        showTecStatus: false,
         followRider: position != null,
         distanceUnit: widget.distanceUnits.value,
         basemap: _homeBasemap,
@@ -289,7 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
         riderSymbol: profile.riderSymbol,
         riderColor: profile.riderColor,
         coordinationMode: groupRide
-            ? RideCoordinationMode.secondBikeDropOff
+            ? RideCoordinationMode.keepTogether
             : RideCoordinationMode.solo,
         rideName: destination.label,
       );
@@ -954,7 +952,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
   final _codeFocusNode = FocusNode();
   final _codeFieldKey = GlobalKey();
   RideCoordinationMode _selectedCoordinationMode =
-      RideCoordinationMode.secondBikeDropOff;
+      RideCoordinationMode.keepTogether;
 
   /// Set once a created ride's code needs sharing before handing off to the
   /// map - the moment a leader most needs it, with people waiting nearby.
@@ -1049,46 +1047,18 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
                   selected: {_selectedCoordinationMode.isGroup},
                   onSelectionChanged: (selection) => setState(() {
                     _selectedCoordinationMode = selection.first
-                        ? RideCoordinationMode.secondBikeDropOff
+                        ? RideCoordinationMode.keepTogether
                         : RideCoordinationMode.solo;
                   }),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _selectedCoordinationMode == RideCoordinationMode.solo
-                      ? RideCoordinationMode.solo.description
-                      : 'Choose how this group will handle junctions.',
+                  _selectedCoordinationMode.description,
                   style: const TextStyle(
                     color: Color(0xFFABB5C1),
                     fontSize: 13,
                   ),
                 ),
-                if (_selectedCoordinationMode.isGroup) ...[
-                  const SizedBox(height: 12),
-                  RadioGroup<RideCoordinationMode>(
-                    groupValue: _selectedCoordinationMode,
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _selectedCoordinationMode = value);
-                      }
-                    },
-                    child: Column(
-                      children: [
-                        for (final mode in const [
-                          RideCoordinationMode.secondBikeDropOff,
-                          RideCoordinationMode.keepTogether,
-                        ])
-                          RadioListTile<RideCoordinationMode>(
-                            key: Key('ride-mode-${mode.name}'),
-                            contentPadding: EdgeInsets.zero,
-                            value: mode,
-                            title: Text(mode.label),
-                            subtitle: Text(mode.description),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _rideNameController,
@@ -1509,7 +1479,7 @@ class _ShareCodeStep extends StatelessWidget {
                   onPressed: () => SharePlus.instance.share(
                     ShareParams(
                       text: controller.rideCodeShareText,
-                      subject: 'Join my Hot Pursuit group',
+                      subject: 'Join my Balloon Crumbs group',
                     ),
                   ),
                   icon: const Icon(Icons.ios_share),

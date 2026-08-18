@@ -5,20 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/domain/completed_ride.dart';
-import 'package:ride_relay/domain/completed_ride_store.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/domain/recorded_route_store.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/route_store.dart';
-import 'package:ride_relay/features/map/ride_map.dart';
-import 'package:ride_relay/services/basemap_configuration.dart';
-import 'package:ride_relay/services/gpx_import_source.dart';
-import 'package:ride_relay/services/imported_track_matcher.dart';
-import 'package:ride_relay/services/offline_tile_cache.dart';
-import 'package:ride_relay/services/approximate_place_index.dart';
-import 'package:ride_relay/services/route_importer.dart';
-import 'package:ride_relay/services/stored_route_library.dart';
+import 'package:balloon_crumbs/domain/completed_ride.dart';
+import 'package:balloon_crumbs/domain/completed_ride_store.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/domain/recorded_route_store.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/route_store.dart';
+import 'package:balloon_crumbs/features/map/ride_map.dart';
+import 'package:balloon_crumbs/services/basemap_configuration.dart';
+import 'package:balloon_crumbs/services/gpx_import_source.dart';
+import 'package:balloon_crumbs/services/imported_track_matcher.dart';
+import 'package:balloon_crumbs/services/offline_tile_cache.dart';
+import 'package:balloon_crumbs/services/approximate_place_index.dart';
+import 'package:balloon_crumbs/services/route_importer.dart';
+import 'package:balloon_crumbs/services/stored_route_library.dart';
 
 /// A rider who has just ridden a route, or recorded one, can ride it again
 /// without exporting a GPX and importing it back (#155). These drive the real
@@ -58,7 +58,7 @@ void main() {
     await tester.tap(find.byKey(const Key('use-stored-route')));
     await _followOriginalTrack(tester);
 
-    expect(find.text('Review route'), findsOneWidget);
+    expect(find.text('Use this route?'), findsOneWidget);
     expect(find.textContaining('tidied recording'), findsOneWidget);
     await _confirmReview(tester);
 
@@ -142,7 +142,7 @@ void main() {
     await tester.tap(find.byKey(const Key('use-stored-route')));
     await _followOriginalTrack(tester);
 
-    expect(find.text('Review route'), findsOneWidget);
+    expect(find.text('Use this route?'), findsOneWidget);
     expect(find.textContaining('Reversed'), findsWidgets);
     await _confirmReview(tester);
 
@@ -187,7 +187,10 @@ void main() {
 
       expect(find.text('Add turn directions?'), findsOneWidget);
       await tester.tap(find.byKey(const Key('generate-navigable-route')));
-      await tester.pumpAndSettle();
+      // The import spinner keeps running underneath the confirmation sheet, so
+      // pump through the sheet's transition rather than settling.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
 
       expect(matcher.originals, hasLength(1));
       final reversed = matcher.originals.single;
@@ -195,11 +198,7 @@ void main() {
       expect(reversed.paths[1].points.length, greaterThanOrEqualTo(2));
       expect(reversed.paths[1].points.first.latitude, closeTo(51.47, 1e-9));
       expect(reversed.paths[1].points.last.latitude, closeTo(51.45, 1e-9));
-      expect(find.text('Review route'), findsOneWidget);
-      expect(
-        find.byKey(const Key('route-review-original-line')),
-        findsOneWidget,
-      );
+      expect(find.text('Use this route?'), findsOneWidget);
 
       await _confirmReview(tester);
       expect(store.savedRoutes.single.maneuvers, isNotEmpty);
@@ -337,11 +336,11 @@ final _testPlaces = ApproximatePlaceIndex.fromJson(
 
 Future<void> _confirmReview(WidgetTester tester) async {
   await tester.scrollUntilVisible(
-    find.byKey(const Key('confirm-reviewed-route')),
+    find.byKey(const Key('confirm-route-confirmation')),
     250,
     scrollable: find.byType(Scrollable).last,
   );
-  await tester.tap(find.byKey(const Key('confirm-reviewed-route')));
+  await tester.tap(find.byKey(const Key('confirm-route-confirmation')));
   await tester.pumpAndSettle();
 }
 
@@ -353,7 +352,11 @@ Future<void> _followOriginalTrack(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 300));
   expect(find.text('Add turn directions?'), findsOneWidget);
   await tester.tap(find.byKey(const Key('follow-original-track')));
-  await tester.pumpAndSettle();
+  // Same reason as above: the import spinner keeps running underneath the
+  // confirmation sheet, so pump through the sheet's transition rather than
+  // settling.
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 /// Two hundred metres of riding, a wait at a junction where the fix wanders,
@@ -416,7 +419,6 @@ CompletedRide _completedRide({
   riderCount: 3,
   eventCount: 40,
   totalDistanceMeters: 42000,
-  markerSessions: const [],
   plannedRoute: null,
   traveledRoute: traveledRoute,
 );

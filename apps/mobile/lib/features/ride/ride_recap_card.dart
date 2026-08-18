@@ -7,7 +7,7 @@ import '../../services/ride_summary_exporter.dart';
 import 'route_sketch.dart';
 
 /// A shareable social-media summary card for a completed ride: route shape,
-/// rider count, distance, ride time, and marker passes.
+/// rider count, distance and ride time.
 class RideRecapCard extends StatelessWidget {
   const RideRecapCard({
     super.key,
@@ -209,11 +209,6 @@ class RideRecapCard extends StatelessWidget {
                     icon: Icons.timer_outlined,
                     label: 'Ride time',
                     value: _duration(summary.rideDuration),
-                  ),
-                  _Stat(
-                    icon: Icons.flag_outlined,
-                    label: 'Marker passes',
-                    value: '${summary.totalConfirmedPasses}',
                   ),
                 ],
               ),

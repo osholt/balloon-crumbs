@@ -1,9 +1,9 @@
-# Hot Pursuit
+# Balloon Crumbs
 
-**Working title:** Hot Pursuit
+**Working title:** Balloon Crumbs
 **Status:** product scaffold; inherited functionality is not yet field-ready for balloon operations
 
-Hot Pursuit is an account-free coordination app for hot-air-balloon pilots,
+Balloon Crumbs is an account-free coordination app for hot-air-balloon pilots,
 crew, and multiple chase vehicles. A pilot starts a flight, shares a six-digit
 code, and the participating phones exchange live position and flight state. The
 chase view is designed to show the balloon's coloured altitude trail, current
@@ -53,8 +53,6 @@ docs/                        Product, architecture, source, and backlog notes
 ```
 
 ## Local verification
-
-The inherited internal Dart/Python names remain `ride_relay` for now.
 
 ```bash
 cd apps/mobile

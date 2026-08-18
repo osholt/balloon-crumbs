@@ -1,8 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/navigation_export.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/navigation_export.dart';
 
 void main() {
   test(
@@ -85,7 +85,7 @@ void main() {
     expect(uri.host, 'waze.com');
     expect(uri.queryParameters['ll'], '53.030000,-1.030000');
     expect(uri.queryParameters['navigate'], 'yes');
-    expect(uri.queryParameters['vehicle_type'], 'motorcycle');
+    expect(uri.queryParameters['vehicle_type'], 'car');
     expect(uri.queryParameters, isNot(contains('waypoints')));
   });
 

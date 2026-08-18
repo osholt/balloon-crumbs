@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/ride_invitation_link_controller.dart';
-import 'package:ride_relay/services/ride_invitation_link.dart';
+import 'package:balloon_crumbs/controllers/ride_invitation_link_controller.dart';
+import 'package:balloon_crumbs/services/ride_invitation_link.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +22,7 @@ void main() {
     'warm refresh replaces a malformed notice with a later valid link',
     () async {
       final source = _QueuedSource([
-        'https://hot-pursuit.invalid/join.html#bad',
+        'https://balloon-crumbs.invalid/join.html#bad',
       ]);
       final controller = await RideInvitationLinkController.load(
         source: source,

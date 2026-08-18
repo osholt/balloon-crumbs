@@ -60,7 +60,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   /// The request the presented alert is asking about, so the same question is
   /// not raised twice and a question that has gone away takes its alert with
   /// it.
-  private var presentedTecRequestID: String?
 
   func templateApplicationScene(
     _ templateApplicationScene: CPTemplateApplicationScene,
@@ -149,7 +148,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     canPlanRoute = false
     canFreeRoam = false
     submittedSearchText = ""
-    presentedTecRequestID = nil
     (UIApplication.shared.delegate as? AppDelegate)?.carPlayDidDisconnect(self)
   }
 
@@ -164,7 +162,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     guard sceneLifecycle.rootReady else { return }
     updateSurfaceActions(snapshot)
     updateNavigationSession(snapshot: snapshot)
-    updateTecRoleRequest(snapshot["tecRequest"] as? [String: Any])
     updateRideStart(snapshot["rideStart"] as? [String: Any])
   }
 
@@ -174,74 +171,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
   func apply(mapStyle: [String: Any]) {
     mapViewController?.apply(mapStyle: mapStyle)
-  }
-
-  /// Raises, and takes down, the leader's "will you be Hot Pursuit?"
-  /// question (#128).
-  ///
-  /// A two-action alert is the whole interaction: the role is a request the
-  /// target answers, and asking it on the screen the rider is already looking
-  /// at is the point. Once the request is answered, expires, is superseded or
-  /// the target leaves, Dart stops publishing it and the alert comes down —
-  /// leaving it up would be asking a rider to agree to something no longer on
-  /// offer.
-  private func updateTecRoleRequest(_ request: [String: Any]?) {
-    guard
-      let request,
-      let requestID = request["requestId"] as? String,
-      !requestID.isEmpty
-    else {
-      if presentedTecRequestID != nil {
-        presentedTecRequestID = nil
-        interfaceController?.dismissTemplate(animated: true) { _, error in
-          if let error {
-            NSLog("CarPlay role request could not be dismissed: %@", error.localizedDescription)
-          }
-        }
-      }
-      return
-    }
-    guard requestID != presentedTecRequestID else { return }
-    guard let interfaceController else { return }
-
-    let answer: (Bool) -> Void = { [weak self] accepted in
-      self?.presentedTecRequestID = nil
-      interfaceController.dismissTemplate(animated: true) { _, error in
-        if let error {
-          NSLog("CarPlay role answer could not be dismissed: %@", error.localizedDescription)
-        }
-      }
-      (UIApplication.shared.delegate as? AppDelegate)?
-        .answerCarPlayTecRoleRequest(requestID: requestID, accepted: accepted)
-    }
-    let alert = CPAlertTemplate(
-      titleVariants: [
-        request["title"] as? String ?? "Be Hot Pursuit?",
-        "Be Hot Pursuit?",
-        "Ride at the back?",
-      ],
-      actions: [
-        // Declining first would put the destructive answer under the thumb
-        // that is reaching for the screen at a fuel stop.
-        CPAlertAction(title: "Accept", style: .default) { _ in answer(true) },
-        CPAlertAction(title: "Not now", style: .cancel) { _ in answer(false) },
-      ]
-    )
-    presentedTecRequestID = requestID
-    interfaceController.presentTemplate(alert, animated: true) {
-      [weak self, weak interfaceController] success, error in
-      guard
-        let self,
-        let interfaceController,
-        self.interfaceController === interfaceController
-      else { return }
-      if !success, self.presentedTecRequestID == requestID {
-        self.presentedTecRequestID = nil
-      }
-      if let error {
-        NSLog("CarPlay role request was not presented: %@", error.localizedDescription)
-      }
-    }
   }
 
   @available(iOS 17.4, *)

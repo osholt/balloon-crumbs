@@ -1,16 +1,16 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/ride_controller.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/data/in_memory_session_store.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/relay/live_presence.dart';
-import 'package:ride_relay/services/nearby_bridge.dart';
+import 'package:balloon_crumbs/controllers/ride_controller.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/data/in_memory_session_store.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/relay/live_presence.dart';
+import 'package:balloon_crumbs/services/nearby_bridge.dart';
 
 /// A join must reach the leader's roster without waiting for the bulk event
 /// batch: the field report in issue #99 had a joiner the leader never saw at all.

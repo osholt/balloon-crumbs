@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/speed_limit.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/speed_limit.dart';
 
 void main() {
   const endpoint = 'https://speed-limit.example/trace_attributes';
@@ -107,7 +107,7 @@ void main() {
       ),
       client: MockClient((request) async {
         final body = jsonDecode(request.body) as Map<String, Object?>;
-        expect(request.headers['x-client-id'], 'hot-pursuit.invalid');
+        expect(request.headers['x-client-id'], 'balloon-crumbs.invalid');
         if (request.url.path.endsWith('locate')) {
           locateRequests.add(body);
           return http.Response(locate ?? '[]', 200);
@@ -588,7 +588,7 @@ void main() {
       final shape = harness.traceRequests.single['shape'] as List;
       expect(shape, hasLength(2));
       expect(shape.first, isNot(shape.last));
-      expect(harness.traceRequests.single['costing'], 'motorcycle');
+      expect(harness.traceRequests.single['costing'], 'auto');
     });
 
     test('parses the live unlimited trace sentinel', () async {

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/features/ride/ride_recap_card.dart';
-import 'package:ride_relay/services/ride_summary_exporter.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/features/ride/ride_recap_card.dart';
+import 'package:balloon_crumbs/services/ride_summary_exporter.dart';
 
 void main() {
   testWidgets('renders headline stats', (tester) async {
@@ -27,7 +27,6 @@ void main() {
 
     expect(find.text('RIDE ABC123'), findsOneWidget);
     expect(find.text('4'), findsOneWidget);
-    expect(find.text('7'), findsOneWidget);
     expect(find.textContaining('km'), findsOneWidget);
   });
 
@@ -178,15 +177,6 @@ RideSummary _summary({String rideCode = 'ABC123'}) => RideSummary(
   endedAt: DateTime.utc(2026, 7, 16, 10, 30),
   generatedAt: DateTime.utc(2026, 7, 16, 10, 31),
   eventCount: 42,
-  markerSessions: [
-    MarkerSessionSummary(
-      markerDeviceId: 'device-a',
-      startedAt: DateTime.utc(2026, 7, 16, 9, 10),
-      endedAt: DateTime.utc(2026, 7, 16, 9, 20),
-      uniquePassCount: 7,
-      duration: const Duration(minutes: 10),
-    ),
-  ],
   riderCount: 4,
   totalDistanceMeters: 32000,
 );

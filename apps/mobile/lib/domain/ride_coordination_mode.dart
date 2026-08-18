@@ -1,12 +1,8 @@
-/// How a ride uses Hot Pursuit's group-coordination features.
+/// How a ride uses Balloon Crumbs' group-coordination features.
 enum RideCoordinationMode {
   /// One rider, with route recording and navigation but no join code or group
   /// controls.
   solo,
-
-  /// The classic second-bike drop-off system: junction marker prompts, marker
-  /// passes and Hot Pursuit statistics are enabled.
-  secondBikeDropOff,
 
   /// Riders stay together as one group, without junction drop-off prompts.
   ///
@@ -16,12 +12,8 @@ enum RideCoordinationMode {
 
   bool get isGroup => this != RideCoordinationMode.solo;
 
-  bool get usesSecondBikeDropOff =>
-      this == RideCoordinationMode.secondBikeDropOff;
-
   String get label => switch (this) {
     RideCoordinationMode.solo => 'Solo ride',
-    RideCoordinationMode.secondBikeDropOff => 'Second-bike drop-off',
     RideCoordinationMode.keepTogether => 'Keep-together group',
   };
 
@@ -29,16 +21,17 @@ enum RideCoordinationMode {
     RideCoordinationMode.solo =>
       'Navigation and ride recording for just you. No join code or group '
           'controls; you can still share a private watcher link.',
-    RideCoordinationMode.secondBikeDropOff =>
-      'Use junction drop-offs, marker prompts and Hot Pursuit tracking.',
     RideCoordinationMode.keepTogether =>
-      'Ride as one group without junction drop-offs or marker prompts.',
+      'Fly as one group with a shared join code.',
   };
 
   static RideCoordinationMode fromName(String? name) =>
       RideCoordinationMode.values.firstWhere(
         (mode) => mode.name == name,
-        // Every ride created before this choice existed used this system.
-        orElse: () => RideCoordinationMode.secondBikeDropOff,
+        // Rides created before this choice existed were stored as
+        // `secondBikeDropOff`, which no longer exists. They must degrade to a
+        // group, not to solo: solo has no join code and no crew, so falling
+        // back to it would silently strip a stored flight of both.
+        orElse: () => RideCoordinationMode.keepTogether,
       );
 }

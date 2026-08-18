@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/services/hazard_deduplicator.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/services/hazard_deduplicator.dart';
 
 void main() {
   test('nearby same-type reports merge and preserve stable identity', () {

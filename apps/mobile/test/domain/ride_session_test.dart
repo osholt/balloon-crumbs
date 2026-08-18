@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/ride_coordination_mode.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/domain/ride_coordination_mode.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
 
 void main() {
   final session = RideSession(
@@ -74,7 +74,7 @@ void main() {
     final legacy = solo.toJson()..remove('coordinationMode');
     expect(
       RideSession.fromJson(legacy).coordinationMode,
-      RideCoordinationMode.secondBikeDropOff,
+      RideCoordinationMode.keepTogether,
     );
   });
 

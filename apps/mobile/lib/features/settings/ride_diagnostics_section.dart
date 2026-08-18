@@ -154,7 +154,7 @@ class _RideDiagnosticsSectionState extends State<RideDiagnosticsSection> {
       await SharePlus.instance.share(
         ShareParams(
           title: 'Ride diagnostics ${log.rideCode ?? log.rideId}',
-          subject: 'Hot Pursuit diagnostics ${log.rideCode ?? log.rideId}',
+          subject: 'Balloon Crumbs diagnostics ${log.rideCode ?? log.rideId}',
           files: [
             XFile.fromData(
               Uint8List.fromList(utf8.encode(log.text)),

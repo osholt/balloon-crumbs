@@ -31,7 +31,7 @@ class ObserverAccessConfiguration {
   factory ObserverAccessConfiguration.fromEnvironment() {
     const webValue = String.fromEnvironment(
       'OBSERVER_WEB_BASE_URL',
-      defaultValue: 'https://relay.hot-pursuit.invalid/observer.html',
+      defaultValue: 'https://relay.balloon-crumbs.invalid/observer.html',
     );
     return ObserverAccessConfiguration(
       relay: InternetRelayConfiguration.fromEnvironment(),
@@ -551,10 +551,9 @@ class HttpObserverAccessClient implements ObserverAccessApi {
         'Observer access requires an authenticated ride.',
       );
     }
-    final digest = Hmac(
-      sha256,
-      utf8.encode(session.inviteSecret),
-    ).convert(utf8.encode('ride-relay-internet-token-v1\n${session.rideId}'));
+    final digest = Hmac(sha256, utf8.encode(session.inviteSecret)).convert(
+      utf8.encode('balloon-crumbs-internet-token-v1\n${session.rideId}'),
+    );
     return 'rr1_${base64Url.encode(digest.bytes).replaceAll('=', '')}';
   }
 

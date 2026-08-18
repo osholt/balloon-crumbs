@@ -1,6 +1,6 @@
 # Source Baseline
 
-Hot Pursuit was scaffolded from `osholt/tailendcharlie` at commit
+Balloon Crumbs was scaffolded from `osholt/tailendcharlie` at commit
 `5a90c59da54416a5fb8da67cf45960691543d5b7` (Tail End Charlie `origin/main`,
 2026-08-15).
 
@@ -22,9 +22,9 @@ Deliberately not copied:
 
 Safety changes made at scaffold time:
 
-- the public brand is `Hot Pursuit`;
-- provisional development IDs use `dev.osholt.hotpursuit`;
-- copied domains use `hot-pursuit.invalid` / `relay.hot-pursuit.invalid`; and
+- the public brand is `Balloon Crumbs`;
+- provisional development IDs use `dev.osholt.ballooncrumbs`;
+- copied domains use `balloon-crumbs.invalid` / `relay.balloon-crumbs.invalid`; and
 - no GitHub secret, provider key, signing key, or production endpoint is present.
 
 ## Inherited capabilities, not yet product claims

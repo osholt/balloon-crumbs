@@ -300,9 +300,9 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
       ShareParams(
         text: invite.grant.scope == ObserverAccessScope.group
             ? 'Watch our group ride using this private, read-only, '
-                  'time-limited Hot Pursuit link:\n${invite.shareUri}'
+                  'time-limited Balloon Crumbs link:\n${invite.shareUri}'
             : 'Follow my last-known ride progress using this private, '
-                  'time-limited Hot Pursuit link:\n${invite.shareUri}',
+                  'time-limited Balloon Crumbs link:\n${invite.shareUri}',
         sharePositionOrigin: origin,
       ),
     );

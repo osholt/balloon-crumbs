@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/route_preferences.dart';
+import 'package:balloon_crumbs/domain/route_preferences.dart';
 
 /// These fixtures are the web planner's own numbers, copied from
 /// `apps/website/planner-core.mjs`. If either side changes, one of the two test
@@ -74,13 +74,13 @@ void main() {
 
   group('engine choice matches requestRoadRoute in the web planner', () {
     test('defaults stay on OSRM', () {
-      expect(RoutePreferences.defaults.requiresMotorcycleCosting, isFalse);
+      expect(RoutePreferences.defaults.requiresValhallaCosting, isFalse);
     });
 
     test('a bendier style alone stays on OSRM', () {
       for (final style in RouteStyle.values) {
         expect(
-          RoutePreferences(style: style).requiresMotorcycleCosting,
+          RoutePreferences(style: style).requiresValhallaCosting,
           isFalse,
           reason: '${style.apiValue} needs only OSRM alternatives',
         );
@@ -89,19 +89,19 @@ void main() {
 
     test('each avoidance moves to the motorcycle service', () {
       expect(
-        const RoutePreferences(avoidMotorways: true).requiresMotorcycleCosting,
+        const RoutePreferences(avoidMotorways: true).requiresValhallaCosting,
         isTrue,
       );
       expect(
-        const RoutePreferences(avoidMajorRoads: true).requiresMotorcycleCosting,
+        const RoutePreferences(avoidMajorRoads: true).requiresValhallaCosting,
         isTrue,
       );
       expect(
-        const RoutePreferences(avoidTolls: true).requiresMotorcycleCosting,
+        const RoutePreferences(avoidTolls: true).requiresValhallaCosting,
         isTrue,
       );
       expect(
-        const RoutePreferences(avoidFerries: true).requiresMotorcycleCosting,
+        const RoutePreferences(avoidFerries: true).requiresValhallaCosting,
         isTrue,
       );
     });
@@ -112,19 +112,45 @@ void main() {
       expect(
         const RoutePreferences(
           bywaySurface: BywaySurfacePreference.allowUnsurfaced,
-        ).requiresMotorcycleCosting,
+        ).requiresValhallaCosting,
         isTrue,
       );
     });
   });
 
-  group('Valhalla costing options match motorcycleCostingOptions', () {
+  group('Valhalla auto costing options', () {
+    test('the profile is auto, and never motorcycle again', () {
+      // A chase vehicle is a Land Rover or a van, often towing. Routing it as a
+      // motorbike sends it down roads it should not take and reads speed limits
+      // off roads it cannot use, so the option names themselves are pinned:
+      // `use_tracks` is auto's lever, `use_trails` is the motorcycle one and
+      // Valhalla ignores it under auto.
+      final options = RoutePreferences.defaults.valhallaAutoCostingOptions();
+      expect(options.containsKey('use_tracks'), isTrue);
+      expect(options.containsKey('use_trails'), isFalse);
+    });
+
+    test('a crew that has not asked to avoid unsurfaced ways gets tracks', () {
+      // The one that matters for a retrieve: a landing field is usually reached
+      // down a farm track, and Valhalla's auto costing avoids tracks by default,
+      // so they have to be opened back up explicitly.
+      const allowed = RoutePreferences(
+        bywaySurface: BywaySurfacePreference.allowUnsurfaced,
+      );
+      expect(allowed.valhallaAutoCostingOptions()['use_tracks'], 0.5);
+      expect(allowed.valhallaAutoCostingOptions()['exclude_unpaved'], isFalse);
+      expect(
+        RoutePreferences.defaults.valhallaAutoCostingOptions()['use_tracks'],
+        0,
+      );
+    });
+
     test('defaults', () {
-      expect(RoutePreferences.defaults.valhallaMotorcycleCostingOptions(), {
+      expect(RoutePreferences.defaults.valhallaAutoCostingOptions(), {
         'use_highways': 1,
         'use_tolls': 0.5,
         'use_ferry': 0.5,
-        'use_trails': 0,
+        'use_tracks': 0,
         'exclude_highways': false,
         'exclude_tolls': false,
         'exclude_ferries': false,
@@ -137,7 +163,7 @@ void main() {
         RouteStyle.values.map(
           (style) => RoutePreferences(
             style: style,
-          ).valhallaMotorcycleCostingOptions()['use_highways'],
+          ).valhallaAutoCostingOptions()['use_highways'],
         ),
         [1, 0.6, 0.35, 0.15],
       );
@@ -148,7 +174,7 @@ void main() {
         const RoutePreferences(
           style: RouteStyle.veryTwisty,
           avoidMajorRoads: true,
-        ).valhallaMotorcycleCostingOptions()['use_highways'],
+        ).valhallaAutoCostingOptions()['use_highways'],
         0.08,
       );
     });
@@ -156,7 +182,7 @@ void main() {
     test('avoiding motorways excludes rather than penalises them', () {
       final options = const RoutePreferences(
         avoidMotorways: true,
-      ).valhallaMotorcycleCostingOptions();
+      ).valhallaAutoCostingOptions();
       expect(options['exclude_highways'], isTrue);
       // The motorway exclusion is independent of the twistiness setting.
       expect(options['use_highways'], 1);
@@ -165,8 +191,8 @@ void main() {
     test('allowing byways relaxes both surface levers together', () {
       final options = const RoutePreferences(
         bywaySurface: BywaySurfacePreference.allowUnsurfaced,
-      ).valhallaMotorcycleCostingOptions();
-      expect(options['use_trails'], 0.5);
+      ).valhallaAutoCostingOptions();
+      expect(options['use_tracks'], 0.5);
       expect(options['exclude_unpaved'], isFalse);
     });
 
@@ -175,12 +201,12 @@ void main() {
         const RoutePreferences(
           style: RouteStyle.twisty,
           avoidMotorways: true,
-        ).valhallaMotorcycleCostingOptions(),
+        ).valhallaAutoCostingOptions(),
         {
           'use_highways': 0.35,
           'use_tolls': 0.5,
           'use_ferry': 0.5,
-          'use_trails': 0,
+          'use_tracks': 0,
           'exclude_highways': true,
           'exclude_tolls': false,
           'exclude_ferries': false,

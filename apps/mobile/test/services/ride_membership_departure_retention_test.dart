@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/rider_color.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/features/map/motorcycle_icon.dart';
-import 'package:ride_relay/relay/live_presence.dart';
-import 'package:ride_relay/services/ride_event_authenticator.dart';
-import 'package:ride_relay/services/ride_membership.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/rider_color.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
+import 'package:balloon_crumbs/relay/live_presence.dart';
+import 'package:balloon_crumbs/services/ride_event_authenticator.dart';
+import 'package:balloon_crumbs/services/ride_membership.dart';
 
 /// Issue #144: leaving a ride *erased* the rider. The field report is the
 /// requirement — "It would be good to keep that until at least the end of the
@@ -38,7 +38,7 @@ void main() {
     localDisplayName: 'Oliver',
     localRole: RideRole.lead,
     localJoinedAt: startedAt,
-    localMotorcycleStyle: motorcycleIconStyleDefault,
+    localMotorcycleStyle: craftIconStyleDefault,
     localRiderColor: riderColorDefault,
     rideStartedAt: startedAt,
     rideEndedAt: rideEndedAt,
@@ -57,13 +57,13 @@ void main() {
           _join(deviceId: 'bill', displayName: 'Bill', at: startedAt),
           _roleChanged(
             deviceId: 'bill',
-            role: RideRole.tailEndCharlie,
+            role: RideRole.rider,
             at: startedAt.add(const Duration(minutes: 1)),
           ),
           _location(
             deviceId: 'bill',
             displayName: 'Bill',
-            role: RideRole.tailEndCharlie,
+            role: RideRole.rider,
             at: startedAt.add(const Duration(minutes: 10)),
             latitude: 51.20011,
             longitude: -2.40022,
@@ -83,7 +83,7 @@ void main() {
       expect(bill.leftAt, startedAt.add(const Duration(minutes: 32)));
       expect(bill.stateLabel, 'Left the ride at 14:32');
       // Role and last-seen survive: this is the record you look somebody up in.
-      expect(bill.role, RideRole.tailEndCharlie);
+      expect(bill.role, RideRole.rider);
       expect(bill.lastSeenAt, startedAt.add(const Duration(minutes: 32)));
       // Last known position survives, read from the ride's own journal.
       expect(bill.lastKnownLocation?.sample.position.latitude, 51.20011);
@@ -145,7 +145,7 @@ void main() {
         _location(
           deviceId: 'bill',
           displayName: 'Bill',
-          role: RideRole.marker,
+          role: RideRole.rider,
           at: startedAt.add(const Duration(minutes: 4)),
           latitude: 51.5,
           longitude: -2.5,
@@ -161,7 +161,6 @@ void main() {
     final bill = riderIn(participants, 'bill');
     expect(bill.state, RideMembershipState.left);
     expect(bill.displayName, 'Bill');
-    expect(bill.role, RideRole.marker);
     expect(bill.stateLabel, 'Left the ride at 14:06');
     expect(bill.lastKnownLocation?.sample.position.latitude, 51.5);
     expect(bill.isIncludedInLiveCount, isFalse);
@@ -187,7 +186,7 @@ void main() {
         _rosterMember(
           riderId: 'bill',
           displayName: 'Bill',
-          role: RideRole.tailEndCharlie,
+          role: RideRole.rider,
           joinedAt: startedAt,
           left: true,
           leftAt: startedAt.add(const Duration(minutes: 32)),
@@ -198,7 +197,7 @@ void main() {
     final bill = riderIn(participants, 'bill');
     expect(bill.state, RideMembershipState.left);
     expect(bill.stateLabel, 'Left the ride at 14:32');
-    expect(bill.role, RideRole.tailEndCharlie);
+    expect(bill.role, RideRole.rider);
     expect(bill.knownFromRelayOnly, isTrue);
     expect(bill.isIncludedInLiveCount, isFalse);
     expect(bill.lastKnownPositionLabel, isNull);
@@ -293,39 +292,6 @@ void main() {
     expect(sam.hasLeft, isTrue);
     expect(sam.stateLabel, 'Left the ride');
     expect(sam.isIncludedInLiveCount, isFalse);
-  });
-
-  test('a departed rider stops carrying a route alert', () {
-    final participants = reduce(
-      events: [
-        _join(deviceId: 'bill', displayName: 'Bill', at: startedAt),
-        _event(
-          id: 'alert-bill',
-          deviceId: 'leader',
-          type: RideEventType.routeDeviationChanged,
-          createdAt: startedAt.add(const Duration(minutes: 4)),
-          payload: const {
-            'alert': {
-              'riderId': 'bill',
-              'assessment': {'state': 'offRoute'},
-            },
-          },
-        ),
-        _left(
-          deviceId: 'bill',
-          displayName: 'Bill',
-          at: startedAt.add(const Duration(minutes: 5)),
-        ),
-      ],
-    );
-
-    final bill = riderIn(participants, 'bill');
-    expect(bill.hasLeft, isTrue);
-    expect(
-      bill.attentionLabel,
-      isNull,
-      reason: 'a rider who has gone is not off course',
-    );
   });
 
   test('the record is retained through the end of the ride, not beyond it', () {

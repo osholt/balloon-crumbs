@@ -320,6 +320,20 @@ class NavigationGuidancePlanner {
   static const noRouteLineMessage =
       'This route has no path to follow. Choose or import it again.';
 
+  /// Shown when the rider is further from the route line than turn prompts can
+  /// be trusted for.
+  ///
+  /// It used to read "Off route — finding directions back", which was true while
+  /// `route_rejoin_planner` existed to compute the way back. That was deleted
+  /// with the motorcycle domain, so the sentence promised a recalculation that
+  /// never started — the one thing a rider must not be told falsely, because it
+  /// makes them wait instead of deciding.
+  ///
+  /// WP7 replaces this with continuous routing to the pilot's intended landing
+  /// zone. Until then it states the position and nothing more.
+  static const offRouteMessage =
+      'Off the route line — turn prompts are paused.';
+
   /// Shown when routing was meant to happen for this route and did not.
   ///
   /// `RouteGeometryEnricher` converts a `RoutePathKind.route` path into a
@@ -392,7 +406,7 @@ class NavigationGuidancePlanner {
     if (riderProjection.distanceMeters > maximumDistanceFromRouteMeters) {
       return const NavigationGuidanceAssessment(
         state: NavigationGuidanceState.offRoute,
-        message: 'Off route — finding directions back.',
+        message: offRouteMessage,
       );
     }
 

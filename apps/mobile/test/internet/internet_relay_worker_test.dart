@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/internet/internet_cursor_store.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/internet/internet_relay_worker.dart';
-import 'package:ride_relay/services/ride_event_authenticator.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/internet/internet_cursor_store.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/internet/internet_relay_worker.dart';
+import 'package:balloon_crumbs/services/ride_event_authenticator.dart';
 
 void main() {
   test(
@@ -298,7 +298,10 @@ void main() {
     final status = await blocked.timeout(const Duration(seconds: 1));
 
     expect(api.callCount, 0);
-    expect(status.actionUrl, Uri.parse('https://hot-pursuit.invalid/update'));
+    expect(
+      status.actionUrl,
+      Uri.parse('https://balloon-crumbs.invalid/update'),
+    );
     await worker.close();
   });
 }
@@ -447,7 +450,7 @@ RelayCompatibilityResult _compatibility(
       ? 'Update required.'
       : null,
   updateUri: disposition == RelayCompatibilityDisposition.updateRequired
-      ? Uri.parse('https://hot-pursuit.invalid/update')
+      ? Uri.parse('https://balloon-crumbs.invalid/update')
       : null,
 );
 

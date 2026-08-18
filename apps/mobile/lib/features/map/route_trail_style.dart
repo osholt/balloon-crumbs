@@ -67,8 +67,7 @@ class RouteLineStyle {
 /// | route ahead   | #3DDC84 |      4.11  |        9.54  |    10.27  |
 /// | travelled     | #FF7A1A |      2.81  |        6.52  |     7.02  |
 /// | leader trail  | #D3B8FF |      4.22  |        9.78  |    10.53  |
-/// | off route     | #FF5FD1 |      2.73  |        6.33  |     6.81  |
-/// | rejoin        | #00E5FF |      4.77  |       11.06  |    11.91  |
+/// | connector     | #00E5FF |      4.77  |       11.06  |    11.91  |
 ///
 /// "dark worst" is against the lightest surface of the dark basemap (the
 /// motorway fill), "dark typical" against its background. The casing measures
@@ -79,10 +78,11 @@ class RouteLineStyle {
 /// visible", so it is the reference the other lines are held against rather
 /// than something to re-tune.
 ///
-/// The closest pair by luminance alone is the route ahead against the rejoin
-/// breadcrumb (1.16) and against the leader trail (1.03). Hue separates the
-/// first, and both are separated by width and pattern: 6px long-dash for the
-/// route ahead, 4.5px dash for the rejoin, 8px solid for the leader trail.
+/// The closest pair by luminance alone is the route ahead against the
+/// route-start connector (1.16) and against the leader trail (1.03). Hue
+/// separates the first, and both are separated by width and pattern: 6px
+/// long-dash for the route ahead, 4.5px dash for the connector, 8px solid for
+/// the leader trail.
 class RouteTrailStyle {
   const RouteTrailStyle._();
 
@@ -112,9 +112,9 @@ class RouteTrailStyle {
   /// [markerGlyph] as a MapLibre paint string.
   static const markerGlyphHex = casingHex;
 
-  /// Green rather than cyan: cyan belongs to the rejoin breadcrumb (#102), and
-  /// the route ahead and a live rejoin appear together, so those two must not be
-  /// the pair that looks alike. Green also survives the light basemap, whose road
+  /// Green rather than cyan: cyan belongs to the route-start connector (#133),
+  /// and the route ahead and a live connector appear together, so those two must
+  /// not be the pair that looks alike. Green also survives the light basemap, whose road
   /// fills are white and cream - a yellow or amber route line would disappear
   /// into the `#FFEEAA` trunk-road fill it is drawn on.
   static const _plannedRouteColor = Color(0xFF3DDC84);
@@ -148,23 +148,14 @@ class RouteTrailStyle {
     casingWidthPixels: 12,
   );
 
-  /// A rider flagged as suspected off route, off route, or recovering.
-  static const offRouteTrail = RouteLineStyle(
-    color: Color(0xFFFF5FD1),
-    widthPixels: 4,
-    casingWidthPixels: 8,
-    dashPixels: [9, 7],
-  );
-
-  /// The live rejoin route from off-route rerouting (#102), which claimed this
-  /// cyan and renders it dashed. Declared here so the palette stays one table
-  /// and the widths and dash runs stay distinct from every other line.
+  /// The road route to the start of the planned route (#133), which claimed this
+  /// cyan and renders it dashed. Declared here so the palette stays one table and
+  /// the widths and dash runs stay distinct from every other line.
   ///
-  /// Now slotted in fully: [RiderTrailKind.rejoin] maps to it in [forTrail],
-  /// and - because MapLibre cannot data-drive `line-dasharray` - it gets its own
-  /// dashed line layer from the same per-kind layer builder every other trail
-  /// uses.
-  static const rejoinBreadcrumb = RouteLineStyle(
+  /// [RiderTrailKind.routeStartConnector] maps to it in [forTrail], and - because
+  /// MapLibre cannot data-drive `line-dasharray` - it gets its own dashed line
+  /// layer from the same per-kind layer builder every other trail uses.
+  static const routeStartConnectorLine = RouteLineStyle(
     color: Color(0xFF00E5FF),
     widthPixels: 4.5,
     casingWidthPixels: 8.5,
@@ -183,8 +174,7 @@ class RouteTrailStyle {
   static RouteLineStyle forTrail(RiderTrailKind kind) => switch (kind) {
     RiderTrailKind.rider => travelled,
     RiderTrailKind.leader => leaderTrail,
-    RiderTrailKind.offRoute => offRouteTrail,
-    RiderTrailKind.rejoin => rejoinBreadcrumb,
+    RiderTrailKind.routeStartConnector => routeStartConnectorLine,
   };
 
   /// Every badge fill a marker glyph is drawn on, so one test can hold the whole
@@ -238,8 +228,7 @@ class RouteTrailStyle {
     'route ahead': routeAhead,
     'travelled': travelled,
     'leader trail': leaderTrail,
-    'off route': offRouteTrail,
-    'rejoin breadcrumb': rejoinBreadcrumb,
+    'route start connector': routeStartConnectorLine,
   };
 
   /// Surfaces of the dark basemap as this app renders it: the OpenFreeMap dark

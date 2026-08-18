@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/spoken_audio_mode.dart';
+import 'package:balloon_crumbs/services/spoken_audio_mode.dart';
 
 void main() {
   group('silencing navigation must never silence safety (#415)', () {
@@ -50,33 +50,6 @@ void main() {
           expect(() => spokenAudioAllows(mode, audioClass), returnsNormally);
         }
       }
-    });
-  });
-
-  group('going off route quietens navigation, not warnings', () {
-    test('a rider off route drops to alerts only', () {
-      // Turn-by-turn for a route the rider is not on names junctions that are
-      // not coming.
-      expect(
-        spokenAudioModeOffRoute(SpokenAudioMode.everything),
-        SpokenAudioMode.alertsOnly,
-      );
-    });
-
-    test('a rider who chose silence stays silent', () {
-      // An explicit choice outranks an automatic one — the same rule the mapped
-      // speed limit follows for a rider who turned it off.
-      expect(
-        spokenAudioModeOffRoute(SpokenAudioMode.silent),
-        SpokenAudioMode.silent,
-      );
-    });
-
-    test('alerts only is already there and stays', () {
-      expect(
-        spokenAudioModeOffRoute(SpokenAudioMode.alertsOnly),
-        SpokenAudioMode.alertsOnly,
-      );
     });
   });
 

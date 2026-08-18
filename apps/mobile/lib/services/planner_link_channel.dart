@@ -10,7 +10,9 @@ abstract interface class IncomingPlannerLinkSource {
 class PlannerLinkChannel implements IncomingPlannerLinkSource {
   const PlannerLinkChannel();
 
-  static const _channel = MethodChannel('me.osholt.ride_relay/planner_link');
+  static const _channel = MethodChannel(
+    'me.osholt.balloon_crumbs/planner_link',
+  );
 
   @override
   Future<String?> consumePending() async {
@@ -29,7 +31,7 @@ String? planCodeFromPlannerLink(String value) {
   final uri = Uri.tryParse(value);
   if (uri == null ||
       uri.scheme != 'https' ||
-      uri.host.toLowerCase() != 'hot-pursuit.invalid' ||
+      uri.host.toLowerCase() != 'balloon-crumbs.invalid' ||
       uri.path != '/planner.html' ||
       uri.userInfo.isNotEmpty ||
       uri.hasFragment) {

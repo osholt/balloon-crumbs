@@ -34,14 +34,6 @@ class CompletedRideArchiver {
       riderCount: summary.riderCount,
       eventCount: summary.eventCount,
       totalDistanceMeters: summary.totalDistanceMeters,
-      markerSessions: [
-        for (final marker in summary.markerSessions)
-          CompletedMarkerSession(
-            startedAt: marker.startedAt,
-            endedAt: marker.endedAt,
-            uniquePassCount: marker.uniquePassCount,
-          ),
-      ],
       plannedRoute: plannedRoute,
       traveledRoute: summaryExporter.traveledRoute(
         session,

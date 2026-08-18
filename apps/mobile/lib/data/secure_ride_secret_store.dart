@@ -9,7 +9,7 @@ class SecureRideSecretStore implements RideSecretStore {
   const SecureRideSecretStore({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
 
-  static const _prefix = 'ride_relay_invite_secret_v1_';
+  static const _prefix = 'balloon_crumbs_invite_secret_v1_';
   final FlutterSecureStorage _storage;
 
   String _key(String rideId) =>

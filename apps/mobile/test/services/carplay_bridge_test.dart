@@ -2,23 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/geo_point.dart' as presence;
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/domain/rider_color.dart';
-import 'package:ride_relay/features/map/motorcycle_icon.dart';
-import 'package:ride_relay/services/basemap_configuration.dart';
-import 'package:ride_relay/services/carplay_bridge.dart';
-import 'package:ride_relay/services/carplay_tec_status.dart';
-import 'package:ride_relay/services/leader_ride_status.dart';
-import 'package:ride_relay/services/navigation_camera.dart';
-import 'package:ride_relay/services/route_progress.dart';
-import 'package:ride_relay/services/route_journey_progress.dart';
-import 'package:ride_relay/services/tec_gap_trend.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart' as presence;
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/domain/rider_color.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
+import 'package:balloon_crumbs/services/basemap_configuration.dart';
+import 'package:balloon_crumbs/services/carplay_bridge.dart';
+import 'package:balloon_crumbs/services/navigation_camera.dart';
+import 'package:balloon_crumbs/services/route_progress.dart';
+import 'package:balloon_crumbs/services/route_journey_progress.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -44,14 +41,12 @@ void main() {
     Future<void> publish() => bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       routeName: 'Friday to the Ferry',
       rideState: 'Ride in progress',
       guidanceTitle: 'turn right',
       guidanceDetail: '400 m · A27',
       groupStatus: '5 riders visible',
-      markerStatus: 'Marker at the next junction',
     );
 
     await publish();
@@ -85,21 +80,6 @@ void main() {
       'guidanceSecondsRemaining': null,
       'distanceUnit': null,
       'groupStatus': '5 riders visible',
-      'markerStatus': 'Marker at the next junction',
-      'marker': null,
-      'tec': {
-        'state': 'none',
-        'riderId': null,
-        'name': null,
-        'headline': 'No TEC',
-        'detail': 'Nobody is covering the back',
-        'distanceMeters': null,
-        'etaSeconds': null,
-        'locationAgeSeconds': null,
-        'trend': 'unknown',
-        'trendLabel': null,
-      },
-      'tecRequest': null,
       'rideStart': null,
       'speed': null,
       'basemap': null,
@@ -121,7 +101,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       localSpeedMetersPerSecond: 10,
       localSpeedIsAgeing: true,
@@ -151,18 +130,16 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       surfaceMode: CarPlaySurfaceMode.home,
       canPlanRoute: true,
       canFreeRoam: true,
-      showTecStatus: false,
       followRider: true,
       localPosition: const GeoPoint(latitude: 51.46, longitude: -2.51),
       localRider: const CarPlayLocalRider(
         riderId: 'installation-1',
         displayName: 'Oliver',
-        motorcycleStyle: MotorcycleIconStyle.scrambler,
+        motorcycleStyle: CraftIconStyle.van,
         riderSymbol: RiderSymbol.emoji('🦊'),
         riderColor: RiderColor.purple,
       ),
@@ -172,14 +149,13 @@ void main() {
     expect(snapshot['surfaceMode'], 'home');
     expect(snapshot['canPlanRoute'], isTrue);
     expect(snapshot['canFreeRoam'], isTrue);
-    expect(snapshot['tec'], isNull);
     expect(snapshot['localRider'], {
       'riderId': 'installation-1',
       'label': 'Oliver',
       'isLocal': true,
       'role': 'Rider',
       'riderSymbol': 'emoji:🦊',
-      'motorcycleStyle': 'scrambler',
+      'motorcycleStyle': 'van',
       'riderColor': 'purple',
       'latitude': 51.46,
       'longitude': -2.51,
@@ -199,7 +175,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       rideStart: const CarPlayRideStart(
         enabled: true,
@@ -225,7 +200,6 @@ void main() {
       bool busy = false,
       bool locationReady = true,
       bool isGroup = false,
-      bool hasTec = false,
     }) => CarPlayRideStart.project(
       hasSession: hasSession,
       isLeader: isLeader,
@@ -234,7 +208,6 @@ void main() {
       busy: busy,
       locationReady: locationReady,
       isGroup: isGroup,
-      hasTec: hasTec,
     );
 
     expect(project(hasSession: false), isNull);
@@ -254,9 +227,7 @@ void main() {
     expect(solo.enabled, isTrue);
     expect(solo.warning, isNull);
 
-    final groupWithoutTec = project(isGroup: true)!;
-    expect(groupWithoutTec.warning, contains('No Hot Pursuit'));
-    expect(project(isGroup: true, hasTec: true)!.warning, isNull);
+    expect(project(isGroup: true)!.warning, isNull);
   });
 
   test(
@@ -274,7 +245,6 @@ void main() {
       Future<void> publish({CarPlayRideStart? rideStart}) => bridge.publish(
         session: null,
         riderLocations: const [],
-        routeAlerts: const [],
         activeHazards: const [],
         rideStart: rideStart,
       );
@@ -314,7 +284,6 @@ void main() {
     Future<void> publish() => bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
     );
 
@@ -362,7 +331,6 @@ void main() {
       await bridge.publish(
         session: null,
         riderLocations: const [],
-        routeAlerts: const [],
         activeHazards: const [],
         route: route,
         routeName: route.name,
@@ -407,7 +375,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       routeProgress: const RouteProgressGeometry(
         riddenPaths: [
@@ -454,7 +421,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       distanceUnit: DistanceUnit.miles,
       journeyProgress: RouteJourneyProgress(
@@ -554,7 +520,7 @@ void main() {
             accuracyMeters: 6,
           ),
           receivedAt: now,
-          motorcycleStyle: MotorcycleIconStyle.cafeRacer,
+          motorcycleStyle: CraftIconStyle.pickup,
           riderSymbol: const RiderSymbol.initials(
             customInitials: 'OH',
             initialsInk: RiderInitialsInk.purple,
@@ -562,50 +528,14 @@ void main() {
           riderColor: RiderColor.white,
         ),
       ],
-      routeAlerts: const [],
       activeHazards: const [],
     );
 
     final rider =
         ((received!.arguments as Map)['riders'] as List).single as Map;
     expect(rider['riderSymbol'], 'initials:v1:T0g:purple');
-    expect(rider['motorcycleStyle'], 'cafeRacer');
+    expect(rider['motorcycleStyle'], 'pickup');
     expect(rider['riderColor'], 'white');
-  });
-
-  test('publishes structured junction marker mode for the turn card', () async {
-    MethodCall? received;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      received = call;
-      return null;
-    });
-    final bridge = CarPlayBridge(channel: channel);
-    addTearDown(bridge.dispose);
-
-    await bridge.publish(
-      session: null,
-      riderLocations: const [],
-      routeAlerts: const [],
-      activeHazards: const [],
-      markerStatus: 'Wait for Hot Pursuit.',
-      marker: const CarPlayMarkerStatus(
-        stage: 'tecApproaching',
-        title: 'TEC approaching',
-        detail: '4/4 riders passed · TEC 0.2 mi away',
-        ridersPassed: 4,
-        ridersExpected: 4,
-        tecDistanceMeters: 322,
-      ),
-    );
-
-    expect((received!.arguments as Map)['marker'], {
-      'stage': 'tecApproaching',
-      'title': 'TEC approaching',
-      'detail': '4/4 riders passed · TEC 0.2 mi away',
-      'ridersPassed': 4,
-      'ridersExpected': 4,
-      'tecDistanceMeters': 322.0,
-    });
   });
 
   test(
@@ -634,7 +564,6 @@ void main() {
           riderColor: RiderColor.orange,
         ),
         riderLocations: const [],
-        routeAlerts: const [],
         activeHazards: const [],
         basemap: const BasemapConfiguration(
           styleUrl: 'https://tiles.example.com/day',
@@ -660,7 +589,7 @@ void main() {
         'isLocal': true,
         'role': 'Lead',
         'riderSymbol': 'initials',
-        'motorcycleStyle': 'adventureTourer',
+        'motorcycleStyle': 'fourByFour',
         'riderColor': 'orange',
         'latitude': 51.45,
         'longitude': -2.58,
@@ -716,174 +645,9 @@ void main() {
   });
 
   // Issue #128: one rider self-selects the role, the leader asks another, and
-  // both carry RideRole.tailEndCharlie in the journal. The phone map already
+  // both carry RideRole.rider in the journal. The phone map already
   // resolves that to one back-marker; a head unit showing two is telling the
   // leader the group has two backs.
-  test('marks only the effective back-marker as Hot Pursuit', () async {
-    MethodCall? received;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      received = call;
-      return null;
-    });
-    final bridge = CarPlayBridge(channel: channel);
-    addTearDown(bridge.dispose);
-    final now = DateTime.utc(2026, 8, 2, 12);
-    RiderLocation holder(String riderId, String displayName) => RiderLocation(
-      riderId: riderId,
-      displayName: displayName,
-      role: RideRole.tailEndCharlie,
-      sample: LocationSample(
-        position: const presence.GeoPoint(latitude: 51.45, longitude: -2.58),
-        recordedAt: now,
-        accuracyMeters: 6,
-      ),
-      receivedAt: now,
-    );
-
-    await bridge.publish(
-      session: null,
-      riderLocations: [holder('bill', 'Bill'), holder('dave', 'Dave')],
-      routeAlerts: const [],
-      activeHazards: const [],
-      effectiveTecRiderIds: const {'dave'},
-    );
-
-    final riders = (received!.arguments as Map)['riders'] as List;
-    final byName = {
-      for (final rider in riders.cast<Map>()) rider['label']: rider,
-    };
-    expect(byName['Dave']!['isTec'], isTrue);
-    expect(byName['Dave']!['role'], 'Hot Pursuit');
-    expect(byName['Bill']!['isTec'], isFalse);
-    expect(byName['Bill']!['role'], 'Rider');
-  });
-
-  // A caller that has not resolved a back-marker must not have its riders
-  // silently demoted: an empty set means "not resolved", not "nobody".
-  test('leaves the journal role alone when no TEC has been resolved', () async {
-    MethodCall? received;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      received = call;
-      return null;
-    });
-    final bridge = CarPlayBridge(channel: channel);
-    addTearDown(bridge.dispose);
-    final now = DateTime.utc(2026, 8, 2, 12);
-
-    await bridge.publish(
-      session: null,
-      riderLocations: [
-        RiderLocation(
-          riderId: 'bill',
-          displayName: 'Bill',
-          role: RideRole.tailEndCharlie,
-          sample: LocationSample(
-            position: const presence.GeoPoint(
-              latitude: 51.45,
-              longitude: -2.58,
-            ),
-            recordedAt: now,
-            accuracyMeters: 6,
-          ),
-          receivedAt: now,
-        ),
-      ],
-      routeAlerts: const [],
-      activeHazards: const [],
-    );
-
-    final riders = (received!.arguments as Map)['riders'] as List;
-    expect((riders.single as Map)['role'], 'Hot Pursuit');
-    expect((riders.single as Map)['isTec'], isFalse);
-  });
-
-  test('publishes the resolved back-marker beside the rider list', () async {
-    MethodCall? received;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      received = call;
-      return null;
-    });
-    final bridge = CarPlayBridge(channel: channel);
-    addTearDown(bridge.dispose);
-
-    await bridge.publish(
-      session: null,
-      riderLocations: const [],
-      routeAlerts: const [],
-      activeHazards: const [],
-      tec: const CarPlayTecStatus(
-        availability: TecAvailability.tracking,
-        riderId: 'dave',
-        name: 'Dave',
-        distanceMeters: 1931,
-        estimatedTime: Duration(minutes: 3),
-        trend: TecGapTrend.closing,
-      ),
-    );
-
-    final tec = (received!.arguments as Map)['tec'] as Map;
-    expect(tec['state'], 'tracking');
-    expect(tec['headline'], 'TEC · 1.2 mi · ~3 min ↓');
-    expect(tec['detail'], 'Dave · 1.2 mi · about 3 min · ↓ Closing');
-  });
-
-  // A leader asking at a fuel stop is standing there waiting, and an alert left
-  // up after the question has gone is asking a rider to agree to something no
-  // longer on offer. Both directions therefore jump the ordinary throttle.
-  test('a TEC request and its withdrawal both jump the throttle', () async {
-    final calls = <MethodCall>[];
-    var now = DateTime.utc(2026, 8, 2, 12);
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      calls.add(call);
-      return null;
-    });
-    final bridge = CarPlayBridge(channel: channel, clock: () => now);
-    addTearDown(bridge.dispose);
-
-    Future<void> publish({CarPlayTecRequest? request}) => bridge.publish(
-      session: null,
-      riderLocations: const [],
-      routeAlerts: const [],
-      activeHazards: const [],
-      tecRequest: request,
-    );
-
-    await publish();
-    now = now.add(const Duration(milliseconds: 100));
-    // No request either time: the ordinary throttle still applies.
-    await publish();
-    expect(calls, hasLength(1));
-
-    now = now.add(const Duration(milliseconds: 100));
-    await publish(
-      request: const CarPlayTecRequest(requestId: 'req-1', leaderName: 'Sam'),
-    );
-    expect(calls, hasLength(2));
-
-    now = now.add(const Duration(milliseconds: 100));
-    // The same request again is not news.
-    await publish(
-      request: const CarPlayTecRequest(requestId: 'req-1', leaderName: 'Sam'),
-    );
-    expect(calls, hasLength(2));
-
-    now = now.add(const Duration(milliseconds: 100));
-    await publish();
-    expect(calls, hasLength(3));
-    expect((calls.last.arguments as Map)['tecRequest'], isNull);
-
-    final request = (calls[1].arguments as Map)['tecRequest'] as Map;
-    expect(request['requestId'], 'req-1');
-    expect(request['title'], 'Be Hot Pursuit?');
-    expect(
-      request['message'],
-      'Sam has asked you to ride at the back and keep the group together.',
-    );
-  });
-
-  // #321: the head unit renders with the phone's own MapLibre styles so it
-  // shares the tile cache and survives a signal drop. Both styles travel as
-  // fallbacks, alongside the exact style selected on the phone.
   test('carries both basemap styles to the head unit', () async {
     MethodCall? received;
     messenger.setMockMethodCallHandler(channel, (call) async {
@@ -896,7 +660,6 @@ void main() {
     await bridge.publish(
       session: null,
       riderLocations: const [],
-      routeAlerts: const [],
       activeHazards: const [],
       basemap: const BasemapConfiguration(
         styleUrl: 'https://tiles.example.com/day',
@@ -928,7 +691,6 @@ void main() {
       await bridge.publish(
         session: null,
         riderLocations: const [],
-        routeAlerts: const [],
         activeHazards: const [],
         basemap: const BasemapConfiguration(
           styleUrl: 'https://tiles.example.com/day',
@@ -943,46 +705,6 @@ void main() {
       });
     },
   );
-
-  test('names the role rather than a rider when the leader is unknown', () {
-    const request = CarPlayTecRequest(requestId: 'req-1', leaderName: null);
-
-    expect(
-      request.message,
-      'The ride leader has asked you to ride at the back and keep the group '
-      'together.',
-    );
-  });
-
-  // Accepting puts a rider on the back of the group. An answer this phone
-  // cannot identify is dropped rather than guessed at.
-  test('relays a well-formed answer and drops a malformed one', () async {
-    final answers = <(String, bool)>[];
-    final bridge = CarPlayBridge(
-      channel: channel,
-      onTecRoleAnswered: (requestId, accepted) async {
-        answers.add((requestId, accepted));
-      },
-    );
-    addTearDown(bridge.dispose);
-
-    Future<void> answer(Object? arguments) => messenger.handlePlatformMessage(
-      channel.name,
-      channel.codec.encodeMethodCall(
-        MethodCall('answerTecRoleRequest', arguments),
-      ),
-      (_) {},
-    );
-
-    await answer({'requestId': 'req-1', 'accepted': true});
-    await answer({'requestId': 'req-2', 'accepted': false});
-    await answer({'requestId': '', 'accepted': true});
-    await answer({'accepted': true});
-    await answer({'requestId': 'req-3'});
-    await answer('req-4');
-
-    expect(answers, [('req-1', true), ('req-2', false)]);
-  });
 
   test('relays only rider-reportable CarPlay hazards', () async {
     final reports = <HazardType>[];

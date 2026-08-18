@@ -6,8 +6,8 @@
 // cannot work out for themselves. It was missing.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart' show GeoPoint;
-import 'package:ride_relay/features/map/ride_map_feature.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart' show GeoPoint;
+import 'package:balloon_crumbs/features/map/ride_map_feature.dart';
 
 void main() {
   test('carries the position as coordinates and as a link', () {

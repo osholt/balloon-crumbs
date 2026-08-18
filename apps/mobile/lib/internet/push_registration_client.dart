@@ -147,7 +147,7 @@ class HttpPushRegistrationClient implements PushRegistrationApi {
     'accept': 'application/json',
     'authorization': 'Bearer ${_rideBearerToken(session)}',
     'content-type': 'application/json',
-    'x-ride-relay-device': session.localRiderId,
+    'x-balloon-crumbs-device': session.localRiderId,
     ..._clientDescriptor.headers,
   };
 
@@ -184,6 +184,6 @@ String _rideBearerToken(RideSession session) {
   final digest = Hmac(
     sha256,
     utf8.encode(session.inviteSecret),
-  ).convert(utf8.encode('ride-relay-internet-token-v1\n${session.rideId}'));
+  ).convert(utf8.encode('balloon-crumbs-internet-token-v1\n${session.rideId}'));
   return 'rr1_${base64Url.encode(digest.bytes).replaceAll('=', '')}';
 }

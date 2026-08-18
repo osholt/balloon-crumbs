@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/demo_route_loader.dart';
-import 'package:ride_relay/services/navigation_guidance.dart';
+import 'package:balloon_crumbs/services/demo_route_loader.dart';
+import 'package:balloon_crumbs/services/navigation_guidance.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

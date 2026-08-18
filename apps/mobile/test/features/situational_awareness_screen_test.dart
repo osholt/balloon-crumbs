@@ -2,18 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/foreground_location_controller.dart';
-import 'package:ride_relay/controllers/situational_awareness_controller.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/features/situational_awareness/situational_awareness_screen.dart';
-import 'package:ride_relay/services/device_location_source.dart';
-import 'package:ride_relay/services/external_hazard_provider.dart';
-import 'package:ride_relay/services/route_deviation_detector.dart';
+import 'package:balloon_crumbs/controllers/foreground_location_controller.dart';
+import 'package:balloon_crumbs/controllers/situational_awareness_controller.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/features/situational_awareness/situational_awareness_screen.dart';
+import 'package:balloon_crumbs/services/device_location_source.dart';
+import 'package:balloon_crumbs/services/external_hazard_provider.dart';
 
 void main() {
   late DateTime now;
@@ -41,7 +40,6 @@ void main() {
       externalProviders: const [WazeReadHazardProvider()],
       clock: () => now,
       idFactory: () => 'id-${id++}',
-      routeConfig: const RouteDeviationConfig(samplesToConfirmOffRoute: 1),
     );
     await controller.initialize();
   });
@@ -79,49 +77,19 @@ void main() {
     expect(find.text(HazardType.debris.label), findsOneWidget);
   });
 
-  testWidgets('shows only actionable rider alerts, not provider diagnostics', (
+  testWidgets('provider diagnostics stay off the rider surface', (
     tester,
   ) async {
     await controller.recordLocalLocation(_sample(51.002));
     await tester.pumpWidget(_app(controller));
 
-    expect(find.text('1 route alert'), findsOneWidget);
-    expect(find.text('Acknowledge'), findsOneWidget);
+    // The route-alert half of this went with off-route alerting; the rule it
+    // also protected did not — an external provider's health is a diagnostic,
+    // not something to put in front of a rider.
     expect(find.text('Waze reports'), findsNothing);
     expect(find.text('EXTERNAL SOURCES'), findsNothing);
     expect(find.text('RIDER STATUS'), findsNothing);
-    expect(find.text('RIDERS NEEDING ATTENTION'), findsOneWidget);
-
-    await tester.tap(find.text('Acknowledge'));
-    await tester.pump();
-    expect(find.text('Seen'), findsOneWidget);
-  });
-
-  testWidgets('rejoin guidance is shown to the affected rider verbatim', (
-    tester,
-  ) async {
-    await controller.recordLocalLocation(_sample(51.002));
-    await tester.pumpWidget(
-      _app(
-        controller,
-        rejoinGuidance:
-            'You are off route by 220 m. Rejoin routing is unavailable, so no '
-            'route back is being drawn.',
-      ),
-    );
-
-    expect(find.byKey(const Key('rejoin-guidance-text')), findsOneWidget);
-    expect(
-      find.textContaining('Rejoin routing is unavailable'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('no rejoin guidance is shown when there is none', (tester) async {
-    await controller.recordLocalLocation(_sample(51));
-    await tester.pumpWidget(_app(controller));
-
-    expect(find.byKey(const Key('rejoin-guidance-text')), findsNothing);
+    expect(find.text('RIDERS NEEDING ATTENTION'), findsNothing);
   });
 
   testWidgets('pre-start offers current position without promising a track', (
@@ -203,15 +171,9 @@ void main() {
   );
 }
 
-Widget _app(
-  SituationalAwarenessController controller, {
-  String? rejoinGuidance,
-}) => MaterialApp(
+Widget _app(SituationalAwarenessController controller) => MaterialApp(
   theme: ThemeData.dark(useMaterial3: true),
-  home: SituationalAwarenessScreen(
-    controller: controller,
-    rejoinGuidance: rejoinGuidance,
-  ),
+  home: SituationalAwarenessScreen(controller: controller),
 );
 
 LocationSample _sample(double latitude) => LocationSample(

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../controllers/ride_controller.dart';
-import 'marker_assistance_widgets.dart';
 
 /// The one confirmation for ending a ride, wherever it is reached from.
 ///
@@ -12,9 +11,9 @@ import 'marker_assistance_widgets.dart';
 /// The two were not merely worded differently. Only the ride menu's told the
 /// leader whether the ride could be resumed, including the sentence "this
 /// action cannot be undone for the group" when the relay cannot carry a reopen.
-/// Only the dashboard's showed the marking summary and offered to share it
-/// first. **So whether a leader learned that ending the ride was irreversible
-/// depended on which button they happened to press.**
+/// Only the dashboard's offered to share the summary first. **So whether a
+/// leader learned that ending the ride was irreversible depended on which
+/// button they happened to press.**
 ///
 /// This is the union of the two, not the intersection: nothing either of them
 /// said was lost. The consolidation now routes the map and Ride actions through
@@ -22,13 +21,11 @@ import 'marker_assistance_widgets.dart';
 /// Whether this rider may end the ride for everyone.
 ///
 /// One named decision for every surface that offers it, because there were
-/// three separate expressions of it and two were wrong. `RideController.endRide`
-/// accepts `isLocalRideLeader`, and the ride menu offers the action on the same
-/// — but the shell's end-ride guard and the map's exit dialog both read
-/// `session?.role == RideRole.lead`, which is **false while the leader is acting
-/// as the marker**. So a leader marking a junction was refused an action the
-/// controller would have accepted: End ride did nothing at all, and LEAVE showed
-/// the follower's dialog with no "End for everyone" (#306).
+/// three separate expressions of it and two were wrong: `RideController.endRide`
+/// and the ride menu agreed on `isLocalRideLeader`, while the shell's end-ride
+/// guard and the map's exit dialog each re-derived it and disagreed. End ride
+/// did nothing at all, and LEAVE showed the follower's dialog with no "End for
+/// everyone" (#306).
 bool canEndRideForEveryone(RideController controller) =>
     controller.isLocalRideLeader;
 
@@ -41,7 +38,6 @@ Future<bool> confirmEndRide(
   // Offering an action and then silently refusing it is worse than not
   // offering it; see [canEndRideForEveryone].
   if (!canEndRideForEveryone(controller)) return false;
-  final summary = controller.markingSummary;
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -56,8 +52,6 @@ Future<bool> confirmEndRide(
               isSolo: !controller.coordinationMode.isGroup,
             ),
           ),
-          const SizedBox(height: 14),
-          EndRideMarkingSummary(summary: summary),
         ],
       ),
       actions: [

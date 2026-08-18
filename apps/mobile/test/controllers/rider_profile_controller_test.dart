@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/rider_profile_controller.dart';
-import 'package:ride_relay/domain/rider_color.dart';
-import 'package:ride_relay/features/map/motorcycle_icon.dart';
+import 'package:balloon_crumbs/controllers/rider_profile_controller.dart';
+import 'package:balloon_crumbs/domain/rider_color.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -54,7 +54,7 @@ void main() {
 
     await profile.completeOnboarding(
       displayName: '  Oliver  ',
-      motorcycleStyle: MotorcycleIconStyle.scrambler,
+      motorcycleStyle: CraftIconStyle.van,
       riderSymbol: const RiderSymbol.emoji('🦊'),
       riderColor: RiderColor.cyan,
       educationSkipped: false,
@@ -66,7 +66,7 @@ void main() {
     expect(profile.takePendingRideChoice(), isNull);
     expect(reloaded.onboardingCompleted, isTrue);
     expect(reloaded.displayName, 'Oliver');
-    expect(reloaded.motorcycleStyle, MotorcycleIconStyle.scrambler);
+    expect(reloaded.motorcycleStyle, CraftIconStyle.van);
     expect(reloaded.riderSymbol, const RiderSymbol.emoji('🦊'));
     expect(reloaded.riderColor, RiderColor.cyan);
   });
@@ -82,7 +82,7 @@ void main() {
 
       await profile.save(
         displayName: 'Hot Pursuit',
-        motorcycleStyle: MotorcycleIconStyle.fullTourer,
+        motorcycleStyle: CraftIconStyle.pickup,
         riderSymbol: symbol,
         riderColor: RiderColor.purple,
       );
@@ -97,7 +97,7 @@ void main() {
     final profile = await RiderProfileController.load();
     await profile.completeOnboarding(
       displayName: 'Oliver',
-      motorcycleStyle: MotorcycleIconStyle.roadster,
+      motorcycleStyle: CraftIconStyle.trailer,
       riderColor: RiderColor.orange,
       educationSkipped: true,
       rideChoice: OnboardingRideChoice.create,
@@ -117,7 +117,7 @@ void main() {
     await expectLater(
       profile.completeOnboarding(
         displayName: '   ',
-        motorcycleStyle: MotorcycleIconStyle.adventureTourer,
+        motorcycleStyle: CraftIconStyle.fourByFour,
         riderColor: RiderColor.green,
         educationSkipped: false,
         rideChoice: OnboardingRideChoice.create,

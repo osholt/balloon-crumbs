@@ -15,28 +15,28 @@ class RoutingConfiguration {
   const RoutingConfiguration({
     required this.routingBaseUrl,
     required this.geocodingBaseUrl,
-    required this.motorcycleRoutingUrl,
+    required this.valhallaRoutingUrl,
   });
 
   factory RoutingConfiguration.fromEnvironment() => RoutingConfiguration(
     routingBaseUrl: Uri.parse(
       const String.fromEnvironment(
-        'RIDE_RELAY_ROUTING_URL',
+        'BALLOON_CRUMBS_ROUTING_URL',
         defaultValue: 'https://router.project-osrm.org',
       ),
     ),
     geocodingBaseUrl: Uri.parse(
       const String.fromEnvironment(
-        'RIDE_RELAY_GEOCODING_URL',
+        'BALLOON_CRUMBS_GEOCODING_URL',
         defaultValue: 'https://nominatim.openstreetmap.org',
       ),
     ),
-    // The same Valhalla motorcycle service the web planner uses for the
-    // exclusions OSRM's driving profile cannot express, so the two surfaces ask
-    // the same engine the same question.
-    motorcycleRoutingUrl: Uri.parse(
+    // The Valhalla service used for the exclusions OSRM's driving profile
+    // cannot express. Same host the web planner uses; the costing differs, see
+    // [RoutePreferences.valhallaAutoCostingOptions].
+    valhallaRoutingUrl: Uri.parse(
       const String.fromEnvironment(
-        'RIDE_RELAY_MOTORCYCLE_ROUTING_URL',
+        'BALLOON_CRUMBS_VALHALLA_ROUTING_URL',
         defaultValue: 'https://valhalla1.openstreetmap.de/route',
       ),
     ),
@@ -44,7 +44,7 @@ class RoutingConfiguration {
 
   final Uri routingBaseUrl;
   final Uri geocodingBaseUrl;
-  final Uri motorcycleRoutingUrl;
+  final Uri valhallaRoutingUrl;
 }
 
 class RoadRouteResult {
@@ -608,22 +608,23 @@ class OsrmRoadRoutingService implements RoadRoutingService {
   }
 }
 
-/// Valhalla motorcycle routing, for the exclusions OSRM cannot express.
+/// Valhalla road routing, for the exclusions OSRM cannot express.
 ///
-/// It sends the same request the web planner sends: `costing: motorcycle`,
-/// `costing_options.motorcycle` from
-/// [RoutePreferences.valhallaMotorcycleCostingOptions], and kilometre units. The
-/// two surfaces therefore ask one engine one question and get one answer.
+/// Sends `costing: auto` with `costing_options.auto` from
+/// [RoutePreferences.valhallaAutoCostingOptions], and kilometre units. It asked
+/// for `motorcycle` costing until the motorcycle domain was deleted: a chase
+/// vehicle is a Land Rover or a van, often towing, and routing one as a motorbike
+/// picks roads it should not and reads speed limits off roads it cannot use.
 ///
 /// It deliberately reports no general engine manoeuvres. Valhalla numbers its
 /// manoeuvre types where OSRM names them, and this app turns a manoeuvre into a
-/// spoken instruction and a second-bike marker drop, so a mapping invented
-/// without a verified fixture could state the wrong direction at a junction.
+/// spoken instruction, so a mapping invented without a verified fixture could
+/// state the wrong direction at a junction.
 /// Reviewed mapped mini-roundabouts may still be added from route geometry; the
 /// rest falls back to geometry-derived decision points, and
 /// [PreferenceAwareRoadRoutingService] says so out loud.
-class ValhallaMotorcycleRoutingService implements RoadRoutingService {
-  const ValhallaMotorcycleRoutingService({
+class ValhallaRoadRoutingService implements RoadRoutingService {
+  const ValhallaRoadRoutingService({
     required this.client,
     required this.routeUrl,
     this.timeout = const Duration(seconds: 20),
@@ -656,7 +657,7 @@ class ValhallaMotorcycleRoutingService implements RoadRoutingService {
         'A maximum of 100 route points is supported.',
       );
     }
-    _requireHttps(routeUrl, 'Motorcycle routing');
+    _requireHttps(routeUrl, 'Valhalla routing');
     final resolved = preferences ?? RoutePreferences.defaults;
     final request = {
       'locations': waypoints
@@ -668,10 +669,8 @@ class ValhallaMotorcycleRoutingService implements RoadRoutingService {
             },
           )
           .toList(growable: false),
-      'costing': 'motorcycle',
-      'costing_options': {
-        'motorcycle': resolved.valhallaMotorcycleCostingOptions(),
-      },
+      'costing': 'auto',
+      'costing_options': {'auto': resolved.valhallaAutoCostingOptions()},
       'units': 'kilometers',
       'directions_options': {'units': 'kilometers'},
     };
@@ -688,11 +687,11 @@ class ValhallaMotorcycleRoutingService implements RoadRoutingService {
         .timeout(timeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw FormatException(
-        'Motorcycle routing failed (${response.statusCode}).',
+        'Valhalla routing failed (${response.statusCode}).',
       );
     }
     if (response.bodyBytes.length > maximumResponseBytes) {
-      throw const FormatException('Motorcycle routing response is too large.');
+      throw const FormatException('Valhalla routing response is too large.');
     }
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
     final trip = decoded is Map ? decoded['trip'] : null;
@@ -721,7 +720,7 @@ class ValhallaMotorcycleRoutingService implements RoadRoutingService {
     }
     if (points.length < 2) {
       throw const FormatException(
-        'Motorcycle routing returned insufficient geometry.',
+        'Valhalla routing returned insufficient geometry.',
       );
     }
     final summary = trip['summary'];
@@ -729,7 +728,7 @@ class ValhallaMotorcycleRoutingService implements RoadRoutingService {
     final lengthKm = summary is Map ? summary['length'] : null;
     final seconds = summary is Map ? summary['time'] : null;
     if (lengthKm is! num || seconds is! num) {
-      throw const FormatException('Motorcycle routing summary is invalid.');
+      throw const FormatException('Valhalla routing summary is invalid.');
     }
     final distanceMeters = lengthKm.toDouble() * 1000;
     final miniRoundabouts = await readMiniRoundabouts();
@@ -768,7 +767,7 @@ class ValhallaMotorcycleRoutingService implements RoadRoutingService {
   /// Valhalla's manoeuvres, translated into the same shape the OSRM path
   /// produces.
   ///
-  /// This used to be `const []`. Every route planned with a motorcycle
+  /// This used to be `const []`. Every route planned with a Valhalla
   /// preference — avoid motorways, prefer twisty roads (#182) — therefore
   /// arrived with **no turn instructions at all**, which is why navigation
   /// "sometimes worked and sometimes didn't" (#303): whether a rider got turn
@@ -862,7 +861,7 @@ class ValhallaMotorcycleRoutingService implements RoadRoutingService {
         37 => (type: 'merge', modifier: 'right'),
         38 => (type: 'merge', modifier: 'left'),
         // Ferries, transit, lifts and building entrances are not steps a
-        // motorcycle route can act on, and inventing a direction for one would
+        // Valhalla route can act on, and inventing a direction for one would
         // be worse than leaving it out.
         _ => null,
       };
@@ -930,7 +929,7 @@ class ValhallaMotorcycleRoutingService implements RoadRoutingService {
       do {
         if (index >= encoded.length) {
           throw const FormatException(
-            'Motorcycle routing returned an invalid route shape.',
+            'Valhalla routing returned an invalid route shape.',
           );
         }
         byte = encoded.codeUnitAt(index) - 63;
@@ -954,18 +953,17 @@ class ValhallaMotorcycleRoutingService implements RoadRoutingService {
 
 /// Sends a request to whichever engine can honour the rider's preferences.
 ///
-/// The dispatch rule is [RoutePreferences.requiresMotorcycleCosting], which is
-/// the web planner's `requestRoadRoute` rule. Same rule, same engine, same
-/// options, same route.
+/// The dispatch rule is [RoutePreferences.requiresValhallaCosting], which is the
+/// web planner's `requestRoadRoute` rule.
 class PreferenceAwareRoadRoutingService implements RoadRoutingService {
   const PreferenceAwareRoadRoutingService({
     required this.osrm,
-    required this.motorcycle,
+    required this.valhalla,
   });
 
   /// Warning shown when a planned route came back with no turn instructions.
   ///
-  /// It used to say the motorcycle router "does not return turn instructions",
+  /// It used to say the Valhalla router "does not return turn instructions",
   /// and to be shown on every preference-routed plan. Both halves were wrong:
   /// Valhalla does return manoeuvres — they were being discarded — and nothing
   /// in the app ever worked ordinary junctions out from the route shape, so the
@@ -975,24 +973,24 @@ class PreferenceAwareRoadRoutingService implements RoadRoutingService {
   /// It is kept, because a route with no manoeuvres is still possible and must
   /// still be said out loud, but it is now raised on the fact rather than on
   /// the engine.
-  static const motorcycleManeuverWarning =
+  static const missingManeuverWarning =
       'This route came back with no turn instructions, so the app will not '
       'announce junctions on it. The line on the map is still the route to '
       'follow.';
 
   final RoadRoutingService osrm;
-  final RoadRoutingService motorcycle;
+  final RoadRoutingService valhalla;
 
-  bool usesMotorcycleCosting(RoutePreferences? preferences) =>
-      preferences?.requiresMotorcycleCosting ?? false;
+  bool usesValhallaCosting(RoutePreferences? preferences) =>
+      preferences?.requiresValhallaCosting ?? false;
 
   @override
   Future<RoadRouteResult> routeThrough(
     List<GeoPoint> waypoints, {
     RoutePreferences? preferences,
     double? originBearingDegrees,
-  }) => usesMotorcycleCosting(preferences)
-      ? motorcycle.routeThrough(
+  }) => usesValhallaCosting(preferences)
+      ? valhalla.routeThrough(
           waypoints,
           preferences: preferences,
           originBearingDegrees: originBearingDegrees,
@@ -1168,19 +1166,19 @@ class DestinationRoutePlanner {
     // preference-routed plan was how a real absence of turn guidance stayed
     // invisible: it was indistinguishable from the standing notice (#303).
     if (roadRoute.maneuvers.isEmpty) {
-      warnings.add(PreferenceAwareRoadRoutingService.motorcycleManeuverWarning);
+      warnings.add(PreferenceAwareRoadRoutingService.missingManeuverWarning);
     }
     final id = _idFactory();
     final route = ImportedRoute(
       id: id,
       name: 'To ${_shortLabel(destination.label)}',
       description:
-          'Road route generated by Hot Pursuit. '
+          'Road route generated by Balloon Crumbs. '
           '${MeasurementFormatter(distanceUnit).distance(roadRoute.distanceMeters)}, '
           '${_durationLabel(roadRoute.duration)}. '
           '${preferences.summary}',
       importedAt: _clock().toUtc(),
-      sourceFileName: 'ride-relay-destination-$id.gpx',
+      sourceFileName: 'balloon-crumbs-destination-$id.gpx',
       paths: [
         RoutePath(
           kind: RoutePathKind.track,

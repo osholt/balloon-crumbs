@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/internet/internet_cursor_store.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/internet/internet_relay_worker.dart';
-import 'package:ride_relay/relay/live_presence.dart';
-import 'package:ride_relay/services/ride_event_authenticator.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/internet/internet_cursor_store.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/internet/internet_relay_worker.dart';
+import 'package:balloon_crumbs/relay/live_presence.dart';
+import 'package:balloon_crumbs/services/ride_event_authenticator.dart';
 
 /// Upload and download share one relay request, so a refused upload used to
 /// discard the download that would have carried a join or a position. Because
@@ -120,7 +120,7 @@ void main() {
     await eventStore.append(_event(id: 'local', createdAt: _base));
     final api = _RejectingApi(
       const InternetRelayException(
-        'Update Hot Pursuit.',
+        'Update Balloon Crumbs.',
         code: 'update_required',
         statusCode: 426,
       ),

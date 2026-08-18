@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show Rect;
 
@@ -21,24 +20,6 @@ typedef _TrailPoint = ({
   DateTime recordedAt,
 });
 
-class MarkerSessionSummary {
-  const MarkerSessionSummary({
-    required this.markerDeviceId,
-    required this.startedAt,
-    required this.endedAt,
-    required this.uniquePassCount,
-    required this.duration,
-  });
-
-  final String markerDeviceId;
-  final DateTime startedAt;
-  final DateTime? endedAt;
-  final int uniquePassCount;
-  final Duration duration;
-
-  bool get isComplete => endedAt != null;
-}
-
 class RideSummary {
   const RideSummary({
     required this.rideId,
@@ -48,7 +29,6 @@ class RideSummary {
     required this.endedAt,
     required this.generatedAt,
     required this.eventCount,
-    required this.markerSessions,
     required this.riderCount,
     required this.totalDistanceMeters,
   });
@@ -60,22 +40,11 @@ class RideSummary {
   final DateTime? endedAt;
   final DateTime generatedAt;
   final int eventCount;
-  final List<MarkerSessionSummary> markerSessions;
   final int riderCount;
   final double totalDistanceMeters;
 
   Duration get rideDuration =>
       (endedAt ?? generatedAt).difference(startedAt).abs();
-
-  Duration get totalMarkingDuration => markerSessions.fold(
-    Duration.zero,
-    (total, session) => total + session.duration,
-  );
-
-  int get totalConfirmedPasses => markerSessions.fold(
-    0,
-    (total, session) => total + session.uniquePassCount,
-  );
 }
 
 class RideSummaryExporter {
@@ -101,55 +70,10 @@ class RideSummaryExporter {
         (ordered.isEmpty
             ? session.joinedAt
             : _earlier(session.joinedAt, ordered.first.createdAt));
-    final activityEvents = lifecycle.startedAt == null
-        ? ordered
-        : ordered
-              .where((event) => !event.createdAt.isBefore(startedAt))
-              .toList(growable: false);
     final endedAt = ordered
         .where((event) => event.type == RideEventType.rideEnded)
         .map((event) => event.createdAt)
         .lastOrNull;
-
-    final completed = <MarkerSessionSummary>[];
-    final active = <String, _MarkerAccumulator>{};
-    for (final event in activityEvents) {
-      switch (event.type) {
-        case RideEventType.markerStarted:
-          active.putIfAbsent(
-            event.deviceId,
-            () => _MarkerAccumulator(
-              markerDeviceId: event.deviceId,
-              startedAt: event.createdAt,
-            ),
-          );
-        case RideEventType.markerPass:
-          final riderId = event.payload['riderId'];
-          if (riderId is String && riderId.isNotEmpty) {
-            active[event.deviceId]?.riderIds.add(riderId);
-          }
-        case RideEventType.markerEnded:
-          final accumulator = active.remove(event.deviceId);
-          if (accumulator != null) {
-            final rawRecordedPasses = event.payload['uniquePasses'];
-            final recordedPasses = rawRecordedPasses is num
-                ? rawRecordedPasses.toInt()
-                : 0;
-            completed.add(
-              accumulator.finish(
-                endedAt: event.createdAt,
-                minimumPasses: math.max(recordedPasses, 0),
-              ),
-            );
-          }
-        default:
-          break;
-      }
-    }
-    for (final accumulator in active.values) {
-      completed.add(accumulator.finish(endedAt: null, now: generatedAt));
-    }
-    completed.sort((left, right) => left.startedAt.compareTo(right.startedAt));
 
     final riderIds = {session.localRiderId, ...ordered.map((e) => e.deviceId)};
     final trail = _ownTrail(
@@ -166,7 +90,6 @@ class RideSummaryExporter {
       endedAt: endedAt,
       generatedAt: generatedAt,
       eventCount: ordered.length,
-      markerSessions: List.unmodifiable(completed),
       riderCount: riderIds.length,
       totalDistanceMeters: _trailDistanceMeters(trail),
     );
@@ -227,7 +150,7 @@ class RideSummaryExporter {
       distanceUnit,
     ).distance(summary.totalDistanceMeters);
     final buffer = StringBuffer()
-      ..writeln('Hot Pursuit summary · ${summary.rideCode}')
+      ..writeln('Balloon Crumbs summary · ${summary.rideCode}')
       ..writeln('Rider: ${summary.displayName}')
       ..writeln('Riders on this ride: ${summary.riderCount}')
       ..writeln('Started: ${summary.startedAt.toLocal().toIso8601String()}')
@@ -236,19 +159,7 @@ class RideSummaryExporter {
       )
       ..writeln('Ride time: ${_duration(summary.rideDuration)}')
       ..writeln('Distance covered: $distance')
-      ..writeln('Events recorded: ${summary.eventCount}')
-      ..writeln('Marker sessions: ${summary.markerSessions.length}')
-      ..writeln(
-        'Time spent marking: ${_duration(summary.totalMarkingDuration)}',
-      )
-      ..writeln('Confirmed marker passes: ${summary.totalConfirmedPasses}');
-    for (var index = 0; index < summary.markerSessions.length; index += 1) {
-      final marker = summary.markerSessions[index];
-      buffer.writeln(
-        'Marker ${index + 1}: ${_duration(marker.duration)}, '
-        '${marker.uniquePassCount} passes${marker.isComplete ? '' : ' (active)'}.',
-      );
-    }
+      ..writeln('Events recorded: ${summary.eventCount}');
     return buffer.toString().trimRight();
   }
 
@@ -264,33 +175,15 @@ class RideSummaryExporter {
       ['event_count', summary.eventCount],
       ['rider_count', summary.riderCount],
       ['distance_meters', summary.totalDistanceMeters.round()],
-      [],
-      [
-        'marker_device_id',
-        'started_at_utc',
-        'ended_at_utc',
-        'duration_seconds',
-        'unique_passes',
-        'complete',
-      ],
-      for (final marker in summary.markerSessions)
-        [
-          marker.markerDeviceId,
-          marker.startedAt.toUtc().toIso8601String(),
-          marker.endedAt?.toUtc().toIso8601String(),
-          marker.duration.inSeconds,
-          marker.uniquePassCount,
-          marker.isComplete,
-        ],
     ];
     return '${rows.map(_csvRow).join('\r\n')}\r\n';
   }
 
   String fileName(RideSummary summary) =>
-      'ride-relay-${summary.rideCode.toLowerCase()}-summary.csv';
+      'balloon-crumbs-${summary.rideCode.toLowerCase()}-summary.csv';
 
   String trailFileName(RideSummary summary) =>
-      'ride-relay-${summary.rideCode.toLowerCase()}-trail.gpx';
+      'balloon-crumbs-${summary.rideCode.toLowerCase()}-trail.gpx';
 
   static List<RideEvent> _sorted(Iterable<RideEvent> events) =>
       events.toList(growable: false)..sort((left, right) {
@@ -396,29 +289,6 @@ class RideSummaryExporter {
       left.isBefore(right) ? left : right;
 }
 
-class _MarkerAccumulator {
-  _MarkerAccumulator({required this.markerDeviceId, required this.startedAt});
-
-  final String markerDeviceId;
-  final DateTime startedAt;
-  final Set<String> riderIds = {};
-
-  MarkerSessionSummary finish({
-    required DateTime? endedAt,
-    DateTime? now,
-    int minimumPasses = 0,
-  }) {
-    final effectiveEnd = endedAt ?? now ?? startedAt;
-    return MarkerSessionSummary(
-      markerDeviceId: markerDeviceId,
-      startedAt: startedAt,
-      endedAt: endedAt,
-      uniquePassCount: math.max(riderIds.length, minimumPasses),
-      duration: effectiveEnd.difference(startedAt).abs(),
-    );
-  }
-}
-
 abstract interface class RideSummarySharer {
   Future<void> share(
     RideSession session,
@@ -464,7 +334,7 @@ class SystemRideSummarySharer implements RideSummarySharer {
     await SharePlus.instance.share(
       ShareParams(
         title: 'Ride summary ${summary.rideCode}',
-        subject: 'Hot Pursuit summary ${summary.rideCode}',
+        subject: 'Balloon Crumbs summary ${summary.rideCode}',
         text: exporter.toPlainText(summary, distanceUnit: distanceUnit),
         files: [
           XFile.fromData(

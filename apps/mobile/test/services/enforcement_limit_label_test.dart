@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/services/fixed_speed_camera_catalogue.dart';
+import 'package:balloon_crumbs/services/fixed_speed_camera_catalogue.dart';
 
 void main() {
   // The values below are the real ones. They come from counting the bundled

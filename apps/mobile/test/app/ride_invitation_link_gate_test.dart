@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/app/ride_invitation_link_gate.dart';
-import 'package:ride_relay/controllers/ride_code_preference_controller.dart';
-import 'package:ride_relay/controllers/ride_controller.dart';
-import 'package:ride_relay/controllers/ride_invitation_link_controller.dart';
-import 'package:ride_relay/controllers/rider_profile_controller.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/data/in_memory_session_store.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/services/nearby_bridge.dart';
-import 'package:ride_relay/services/ride_invitation_link.dart';
+import 'package:balloon_crumbs/app/ride_invitation_link_gate.dart';
+import 'package:balloon_crumbs/controllers/ride_code_preference_controller.dart';
+import 'package:balloon_crumbs/controllers/ride_controller.dart';
+import 'package:balloon_crumbs/controllers/ride_invitation_link_controller.dart';
+import 'package:balloon_crumbs/controllers/rider_profile_controller.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/data/in_memory_session_store.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/services/nearby_bridge.dart';
+import 'package:balloon_crumbs/services/ride_invitation_link.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -89,7 +89,7 @@ void main() {
         expectedCode: '123456',
         expectedToken: 'Abcdefghijklmnop12345678',
       ),
-      link: 'https://hot-pursuit.invalid/join.html#broken',
+      link: 'https://balloon-crumbs.invalid/join.html#broken',
     );
     addTearDown(fixture.dispose);
 

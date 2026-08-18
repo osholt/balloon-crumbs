@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/features/map/route_progress_panel.dart';
-import 'package:ride_relay/services/route_journey_progress.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/features/map/route_progress_panel.dart';
+import 'package:balloon_crumbs/services/route_journey_progress.dart';
 
 void main() {
   testWidgets('shows trip, next-stop and current-time information compactly', (

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/situational_awareness_controller.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/rider_trail_recorder.dart';
+import 'package:balloon_crumbs/controllers/situational_awareness_controller.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/rider_trail_recorder.dart';
 
 /// Regression cover for #100: a rider's travelled trail is recorded from
 /// position history alone, so it survives leaving the planned route, having no
@@ -23,18 +23,6 @@ void main() {
     expect(later.single.kind, RiderTrailKind.leader);
     expect(later.single.points, hasLength(2));
     expect(later.single.isRenderable, isTrue);
-  });
-
-  test('records a trail for a follower flagged off route', () {
-    final recorder = RiderTrailRecorder();
-
-    recorder.update([_update('sam', _point(0, 0))]);
-    final trails = recorder.update([
-      _update('sam', _point(0.01, 0), isOffRoute: true),
-    ]);
-
-    expect(trails.single.kind, RiderTrailKind.offRoute);
-    expect(trails.single.points, hasLength(2));
   });
 
   test('records trails when no route has been imported at all', () {
@@ -67,20 +55,17 @@ void main() {
     ];
     final excursion = [_point(0.01, 0.0015), _point(0.012, 0.002)];
 
-    // On route, off route, then back on route: the alert state changes, the
-    // recorded history does not restart.
+    // Along the route, away from it, then back: the recorded history is one
+    // trail throughout and never restarts.
     for (final point in route.take(2)) {
       recorder.update([_update('sam', point)]);
     }
     for (final point in excursion) {
-      recorder.update([_update('sam', point, isOffRoute: true)]);
+      recorder.update([_update('sam', point)]);
     }
-    final rejoined = recorder.update([
-      _update('sam', route[2], isOffRoute: true),
-    ]);
+    recorder.update([_update('sam', route[2])]);
     final settled = recorder.update([_update('sam', route[3])]);
 
-    expect(rejoined.single.kind, RiderTrailKind.offRoute);
     expect(settled.single.kind, RiderTrailKind.rider);
     expect(settled.single.points, hasLength(6));
     expect(settled.single.points.first.latitude, 0);
@@ -297,19 +282,9 @@ void main() {
     expect(recorder.trailFor('guest'), isEmpty);
   });
 
-  test('the leader kind wins over an off-route flag', () {
-    expect(
-      RiderTrailRecorder.kindFor(isLeader: true, isOffRoute: true),
-      RiderTrailKind.leader,
-    );
-    expect(
-      RiderTrailRecorder.kindFor(isLeader: false, isOffRoute: true),
-      RiderTrailKind.offRoute,
-    );
-    expect(
-      RiderTrailRecorder.kindFor(isLeader: false, isOffRoute: false),
-      RiderTrailKind.rider,
-    );
+  test('the leader trail is styled apart from every other craft', () {
+    expect(RiderTrailRecorder.kindFor(isLeader: true), RiderTrailKind.leader);
+    expect(RiderTrailRecorder.kindFor(isLeader: false), RiderTrailKind.rider);
   });
 }
 
@@ -320,7 +295,6 @@ RiderTrailUpdate _update(
   String riderId,
   GeoPoint position, {
   bool isLeader = false,
-  bool isOffRoute = false,
   bool isEligible = true,
   List<GeoPoint>? journalTrail,
 }) => RiderTrailUpdate(
@@ -328,7 +302,6 @@ RiderTrailUpdate _update(
   displayName: riderId,
   position: position,
   isLeader: isLeader,
-  isOffRoute: isOffRoute,
   isEligible: isEligible,
   journalTrail: journalTrail,
 );

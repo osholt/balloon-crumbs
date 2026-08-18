@@ -48,14 +48,9 @@ enum RideStartChoice {
   group;
 
   /// The coordination mode this implies.
-  ///
-  /// Group means the drop-off system, which is what `createRide` has always
-  /// defaulted to and what the app is *for*; a rider who wants keep-together can
-  /// change it once the ride is running, which is the trade #431 asked for —
-  /// sensible defaults now, adjustable later, rather than four questions first.
   RideCoordinationMode get coordinationMode => switch (this) {
     RideStartChoice.solo => RideCoordinationMode.solo,
-    RideStartChoice.group => RideCoordinationMode.secondBikeDropOff,
+    RideStartChoice.group => RideCoordinationMode.keepTogether,
   };
 
   String get label => switch (this) {

@@ -110,10 +110,10 @@ class RidePushNotificationController extends ChangeNotifier
       } else if (result.permission == PushPermissionState.denied) {
         await _revokeSilently(session);
         _statusMessage =
-            'Notifications are blocked by system settings. In-app alerts still work while Hot Pursuit is open.';
+            'Notifications are blocked by system settings. In-app alerts still work while Balloon Crumbs is open.';
       } else {
         _statusMessage =
-            'A push token is not available yet. Hot Pursuit will retry when the app resumes.';
+            'A push token is not available yet. Balloon Crumbs will retry when the app resumes.';
       }
     } on Object {
       _statusMessage =
@@ -166,7 +166,7 @@ class RidePushNotificationController extends ChangeNotifier
             'Notifications are blocked by system settings. The ride registration was removed.';
       } else {
         _statusMessage =
-            'A push token is not available yet. Hot Pursuit will retry when the app resumes.';
+            'A push token is not available yet. Balloon Crumbs will retry when the app resumes.';
       }
     } on Object {
       _statusMessage =

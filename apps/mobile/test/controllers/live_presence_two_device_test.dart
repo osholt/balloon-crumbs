@@ -1,14 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/pre_start_presence_controller.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
-import 'package:ride_relay/relay/live_presence.dart';
-import 'package:ride_relay/relay/relay_presence.dart';
+import 'package:balloon_crumbs/controllers/pre_start_presence_controller.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/relay/live_presence.dart';
+import 'package:balloon_crumbs/relay/relay_presence.dart';
 
 /// Two simulated devices sharing one relay, exercising the sequences from the
 /// field report in issue #99: a joiner who could see the route but never the

@@ -24,7 +24,7 @@ class InternetRelayConfiguration {
   });
 
   factory InternetRelayConfiguration.fromEnvironment() {
-    const value = String.fromEnvironment('RIDE_RELAY_API_BASE_URL');
+    const value = String.fromEnvironment('BALLOON_CRUMBS_API_BASE_URL');
     if (value.trim().isEmpty) {
       return const InternetRelayConfiguration(baseUri: null);
     }
@@ -70,14 +70,6 @@ abstract final class RelayProtocolCapabilities {
   static const trafficIncidents = 'traffic-incidents-v1';
   static const trafficReroutes = 'traffic-reroutes-v1';
 
-  /// The leader asking a named rider to take the Hot Pursuit role, and
-  /// that rider's answer (issue #128 part 1).
-  static const tecRoleAssignment = 'tec-role-assignment-v1';
-
-  /// A separated rider's advisory rejoin route, relayed to the ride leader only
-  /// (issue #128 part 2).
-  static const rejoinRouteSharing = 'rejoin-route-sharing-v1';
-
   /// A rider's own phone number, addressed to the ride's coordination roles
   /// (issue #188). Named so a client can say "the ride service cannot carry
   /// this" instead of appearing to have shared a number that went nowhere.
@@ -85,12 +77,6 @@ abstract final class RelayProtocolCapabilities {
 
   /// Anonymous rider verdicts on catalogued roads (issue #159).
   ///
-  /// Not an event type, so it is not in the worker's event-to-capability map: it
-  /// is a standalone unauthenticated endpoint. It is negotiated through the same
-  /// compatibility document so a relay that does not accept ratings produces a
-  /// named limitation and the answers stay durable on the phone, instead of the
-  /// rider being thanked for something that went nowhere.
-  static const roadRatings = 'road-ratings-v1';
 
   /// The leader un-ending a ride that ended by mistake (#206, #207).
   ///
@@ -110,10 +96,7 @@ abstract final class RelayProtocolCapabilities {
     observerAccess,
     trafficIncidents,
     trafficReroutes,
-    tecRoleAssignment,
-    rejoinRouteSharing,
     riderContactSharing,
-    roadRatings,
     rideReopen,
   };
 }
@@ -130,8 +113,8 @@ class RelayClientDescriptor {
 
   /// The build's real identity.
   ///
-  /// When a build channel does not inject `RIDE_RELAY_APP_VERSION` /
-  /// `RIDE_RELAY_APP_BUILD` the descriptor reports [unknownVersion] instead of
+  /// When a build channel does not inject `BALLOON_CRUMBS_APP_VERSION` /
+  /// `BALLOON_CRUMBS_APP_BUILD` the descriptor reports [unknownVersion] instead of
   /// a plausible-looking constant. A wrong version is worse than an absent one:
   /// it makes every version-conditional diagnostic silently misleading.
   factory RelayClientDescriptor.current() => RelayClientDescriptor(
@@ -146,11 +129,13 @@ class RelayClientDescriptor {
   static const unknownVersion = 'unknown';
 
   static const _rawAppVersion = String.fromEnvironment(
-    'RIDE_RELAY_APP_VERSION',
+    'BALLOON_CRUMBS_APP_VERSION',
   );
-  static const _rawAppBuild = String.fromEnvironment('RIDE_RELAY_APP_BUILD');
+  static const _rawAppBuild = String.fromEnvironment(
+    'BALLOON_CRUMBS_APP_BUILD',
+  );
   static const _rawDistributionTrack = String.fromEnvironment(
-    'RIDE_RELAY_DISTRIBUTION_TRACK',
+    'BALLOON_CRUMBS_DISTRIBUTION_TRACK',
   );
 
   static String get _declaredAppVersion =>
@@ -500,7 +485,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
         ..headers['accept'] = 'application/json'
         ..headers.addAll(_clientDescriptor.headers)
         ..headers.addAll(
-          joinToken == null ? {} : {'x-ride-relay-join-token': joinToken},
+          joinToken == null ? {} : {'x-balloon-crumbs-join-token': joinToken},
         ),
     );
     final body = await _readBoundedResponse(response);
@@ -641,7 +626,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
     final error = configuration.configurationError;
     if (error != null) {
       throw const RideCodeDirectoryException(
-        'Joining by ride code needs the Hot Pursuit service to be connected.',
+        'Joining by ride code needs the Balloon Crumbs service to be connected.',
       );
     }
   }
@@ -805,7 +790,7 @@ class HttpInternetRelayClient
         'authorization': 'Bearer ${_rideBearerToken(session)}',
         'content-type': 'application/json',
         'idempotency-key': _idempotencyKey(bodyBytes),
-        'x-ride-relay-device': session.localRiderId,
+        'x-balloon-crumbs-device': session.localRiderId,
         ..._clientDescriptor.headers,
       })
       ..bodyBytes = bodyBytes;
@@ -1116,7 +1101,7 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
         'accept': 'application/json',
         'authorization': 'Bearer ${_rideBearerToken(session)}',
         'content-type': 'application/json',
-        'x-ride-relay-device': session.localRiderId,
+        'x-balloon-crumbs-device': session.localRiderId,
         ..._clientDescriptor.headers,
       })
       ..bodyBytes = bodyBytes;
@@ -1410,7 +1395,7 @@ Future<RelayCompatibilityResult> _fetchCompatibility({
         : RelayCompatibilityDisposition.compatible;
     final message = switch (disposition) {
       RelayCompatibilityDisposition.updateRequired =>
-        'Update Hot Pursuit before joining or synchronizing this ride.',
+        'Update Balloon Crumbs before joining or synchronizing this ride.',
       RelayCompatibilityDisposition.serverUpgradeRequired =>
         'This app is newer than the configured ride service. Try again after the service is updated.',
       _ => null,
@@ -1466,6 +1451,6 @@ String _rideBearerToken(RideSession session) {
   final digest = Hmac(
     sha256,
     utf8.encode(session.inviteSecret),
-  ).convert(utf8.encode('ride-relay-internet-token-v1\n${session.rideId}'));
+  ).convert(utf8.encode('balloon-crumbs-internet-token-v1\n${session.rideId}'));
   return 'rr1_${base64Url.encode(digest.bytes).replaceAll('=', '')}';
 }

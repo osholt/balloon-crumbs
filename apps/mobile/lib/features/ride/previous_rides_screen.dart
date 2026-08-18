@@ -19,7 +19,7 @@ import '../../services/measurement_formatter.dart';
 import '../../services/ride_summary_exporter.dart';
 import '../../services/stored_route_library.dart';
 import '../../services/trail_direction_arrows.dart';
-import '../map/motorcycle_icon.dart';
+import '../map/craft_icon.dart';
 import '../map/resolved_route_map_preview.dart'
     show embeddedMapGestureRecognizers;
 import '../map/stored_route_picker.dart';
@@ -295,7 +295,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
           ),
           const SizedBox(height: 14),
           const Text(
-            'Ride history is stored locally on this phone. Hot Pursuit '
+            'Ride history is stored locally on this phone. Balloon Crumbs '
             'does not upload a permanent copy. The native share destination '
             'determines where an exported GPX is saved.',
             style: TextStyle(color: Color(0xFF8994A2), fontSize: 12),
@@ -429,18 +429,6 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
       endedAt: ride.endedAt,
       generatedAt: ride.archivedAt,
       eventCount: ride.eventCount,
-      markerSessions: [
-        for (final (index, marker) in ride.markerSessions.indexed)
-          MarkerSessionSummary(
-            markerDeviceId: 'archived-marker-$index',
-            startedAt: marker.startedAt,
-            endedAt: marker.endedAt,
-            uniquePassCount: marker.uniquePassCount,
-            duration: (marker.endedAt ?? ride.endedAt)
-                .difference(marker.startedAt)
-                .abs(),
-          ),
-      ],
       riderCount: ride.riderCount,
       totalDistanceMeters: ride.totalDistanceMeters,
     );

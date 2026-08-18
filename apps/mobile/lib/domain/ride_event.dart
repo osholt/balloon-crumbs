@@ -6,15 +6,10 @@ enum RideEventType {
   riderLeft,
   roleChanged,
   rideStarted,
-  markerStarted,
-  markerPass,
-  markerEnded,
   statusMessage,
   riderLocationUpdated,
   hazardReported,
   hazardCleared,
-  routeDeviationChanged,
-  routeAlertAcknowledged,
   routeRevisionChunk,
   routeRevisionPublished,
   routeCleared,
@@ -26,18 +21,6 @@ enum RideEventType {
 
   // Appended, never reordered: an older build recognises a type by name and
   // skips the ones it does not know (see `relay_event_compatibility.dart`).
-  /// The ride leader asks a named rider to take the Hot Pursuit role
-  /// (issue #128 part 1). A request, not an assignment: the role only changes
-  /// when the target answers.
-  tecRoleRequested,
-
-  /// The named target accepts or declines a [tecRoleRequested].
-  tecRoleResponded,
-
-  /// One rider's advisory rejoin route, addressed to the ride leader
-  /// (issue #128 part 2). Also carries the cleared form that expires it.
-  rejoinRouteShared,
-
   /// A rider's **own** phone number, offered so the ride's coordination roles
   /// can ring or text them — and, when a coordination role shares, so a stopped
   /// rider can ring them (issue #188).
@@ -57,6 +40,30 @@ enum RideEventType {
   /// The later of the two decides whether the ride has ended, exactly as
   /// [ridePaused] and [rideResumed] already decide whether it is paused.
   rideReopened,
+
+  /// A balloon or vehicle is part of this flight (WP3).
+  ///
+  /// Appended rather than replacing [riderJoined]: a device still joins, and now
+  /// also says which craft it is aboard. An older build skips these and sees the
+  /// flat participant list it already understands, which is the degradation we
+  /// want — it loses craft grouping, not the flight.
+  craftRegistered,
+
+  /// A device is aboard a craft. Re-sent on a move, so the latest wins: handing a
+  /// phone from the basket to a vehicle is one event, not a leave and a join.
+  deviceAttachedToCraft,
+
+  /// The pilot nominates which device aboard the balloon should normally report
+  /// its position. A preference the election honours while that device is
+  /// usable, never an override that can silence a craft.
+  craftPrimaryDeviceNominated,
+
+  /// Which craft a vehicle is currently chasing.
+  ///
+  /// Its own fact rather than part of membership, so reassigning a vehicle
+  /// mid-flight is a new event rather than a schema change. Redundant while
+  /// there is one balloon; the thing that makes several balloons cheap later.
+  craftChaseAssigned,
 }
 
 enum EventPriority { routine, important, critical }

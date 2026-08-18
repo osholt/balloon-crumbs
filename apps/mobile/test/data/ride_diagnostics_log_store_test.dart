@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/data/ride_diagnostics_log_store.dart';
+import 'package:balloon_crumbs/data/ride_diagnostics_log_store.dart';
 
 void main() {
   late Directory directory;
@@ -53,7 +53,7 @@ void main() {
     test('a log with no ride code is still offered', () async {
       await store.write(
         rideId: 'ride-1',
-        text: 'Hot Pursuit · ride diagnostics',
+        text: 'Balloon Crumbs · ride diagnostics',
       );
 
       final log = await store.latest();
@@ -180,7 +180,7 @@ void main() {
 /// store reads the ride code and the written-at back out of that header.
 String _log(String rideCode, {DateTime? at}) {
   final written = (at ?? DateTime.utc(2026, 8, 12, 18)).toIso8601String();
-  return 'Hot Pursuit · ride diagnostics\n'
+  return 'Balloon Crumbs · ride diagnostics\n'
       'Ride:  $rideCode\n'
       'Build: 1.0.1+51\n'
       'Written: $written\n'

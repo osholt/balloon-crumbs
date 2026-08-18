@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../domain/rider_color.dart';
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 import '../services/rider_contact_share.dart';
 
 /// Remembers how a rider last presented themselves - name, bike, colour -
@@ -49,7 +49,7 @@ class RiderProfileController extends ChangeNotifier {
   final SharedPreferences _preferences;
   final String _installationId;
   String _displayName;
-  MotorcycleIconStyle _motorcycleStyle;
+  CraftIconStyle _motorcycleStyle;
   RiderSymbol _riderSymbol;
   RiderColor _riderColor;
   String _emergencyContactName;
@@ -63,7 +63,7 @@ class RiderProfileController extends ChangeNotifier {
 
   String get installationId => _installationId;
   String get displayName => _displayName;
-  MotorcycleIconStyle get motorcycleStyle => _motorcycleStyle;
+  CraftIconStyle get motorcycleStyle => _motorcycleStyle;
   RiderSymbol get riderSymbol => _riderSymbol;
   RiderColor get riderColor => _riderColor;
   bool get onboardingCompleted => _onboardingCompleted;
@@ -119,7 +119,7 @@ class RiderProfileController extends ChangeNotifier {
       preferences,
       installationId,
       displayName,
-      motorcycleIconStyleFromName(preferences.getString(_styleKey)),
+      craftIconStyleFromName(preferences.getString(_styleKey)),
       RiderSymbol.fromStorageValue(preferences.getString(_symbolKey)),
       riderColorFromName(preferences.getString(_colorKey)),
       preferences.getString(_emergencyContactNameKey) ?? '',
@@ -134,7 +134,7 @@ class RiderProfileController extends ChangeNotifier {
 
   Future<void> save({
     required String displayName,
-    required MotorcycleIconStyle motorcycleStyle,
+    required CraftIconStyle motorcycleStyle,
     RiderSymbol? riderSymbol,
     required RiderColor riderColor,
   }) async {
@@ -153,7 +153,7 @@ class RiderProfileController extends ChangeNotifier {
 
   Future<void> completeOnboarding({
     required String displayName,
-    required MotorcycleIconStyle motorcycleStyle,
+    required CraftIconStyle motorcycleStyle,
     RiderSymbol? riderSymbol,
     required RiderColor riderColor,
     required bool educationSkipped,

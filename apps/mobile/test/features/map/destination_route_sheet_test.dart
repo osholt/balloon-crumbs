@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/route_preferences.dart';
-import 'package:ride_relay/features/map/destination_route_sheet.dart';
+import 'package:balloon_crumbs/domain/route_preferences.dart';
+import 'package:balloon_crumbs/features/map/destination_route_sheet.dart';
 
 void main() {
   testWidgets('collects a destination and offers motorcycle app handoff', (
@@ -145,6 +145,13 @@ void main() {
       reason: 'the documented default is to avoid them',
     );
 
+    // Scrolling to the byway switch above pushes this one out of view, so it is
+    // brought back rather than tapped blind.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('avoid-motorways-switch')),
+      -250,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.tap(find.byKey(const Key('avoid-motorways-switch')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
@@ -212,6 +219,6 @@ void main() {
       request?.preferences.bywaySurface,
       BywaySurfacePreference.allowUnsurfaced,
     );
-    expect(request?.preferences.requiresMotorcycleCosting, isTrue);
+    expect(request?.preferences.requiresValhallaCosting, isTrue);
   });
 }

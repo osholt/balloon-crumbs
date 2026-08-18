@@ -6,9 +6,9 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/features/map/route_trail_style.dart';
-import 'package:ride_relay/services/basemap_configuration.dart';
-import 'package:ride_relay/services/map_style_repository.dart';
+import 'package:balloon_crumbs/features/map/route_trail_style.dart';
+import 'package:balloon_crumbs/services/basemap_configuration.dart';
+import 'package:balloon_crumbs/services/map_style_repository.dart';
 
 /// A `#rrggbb` paint string as an opaque colour, so the palette can be measured
 /// where it is actually declared rather than restated as `Color` literals.
@@ -36,7 +36,9 @@ void main() {
   late Directory directory;
 
   setUp(() async {
-    directory = await Directory.systemTemp.createTemp('ride-relay-style-test');
+    directory = await Directory.systemTemp.createTemp(
+      'balloon-crumbs-style-test',
+    );
   });
 
   tearDown(() async {
@@ -54,7 +56,7 @@ void main() {
 
       final style = jsonDecode((await repository.resolve()).style) as Map;
 
-      expect(style['name'], 'Hot Pursuit offline fallback');
+      expect(style['name'], 'Balloon Crumbs offline fallback');
       expect(style['sources'], isEmpty);
     },
   );
@@ -600,8 +602,7 @@ void main() {
         'route ahead': 10.44,
         'travelled': 7.14,
         'leader trail': 10.71,
-        'off route': 6.93,
-        'rejoin breadcrumb': 12.11,
+        'route start connector': 12.11,
       };
 
       expect(RouteTrailStyle.allLines.keys, overGround.keys);
@@ -685,7 +686,7 @@ void main() {
       final light = worst(RouteTrailStyle.lightBasemapSurfaces.values);
 
       expect(light, closeTo(1.00, 0.01));
-      expect(dark, closeTo(1.50, 0.01));
+      expect(dark, closeTo(1.55, 0.01));
       expect(
         dark,
         greaterThan(light),
@@ -845,7 +846,7 @@ final _minimalStyle = jsonEncode({
 });
 
 const _configuration = BasemapConfiguration(
-  styleUrl: 'https://maps.example.test/styles/ride-relay.json',
+  styleUrl: 'https://maps.example.test/styles/balloon-crumbs.json',
   attribution: '© OpenStreetMap contributors',
   cacheNamespace: 'open-map-v1',
   persistentCachingAllowed: true,

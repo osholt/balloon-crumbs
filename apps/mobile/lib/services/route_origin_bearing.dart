@@ -1,4 +1,4 @@
-/// Which way the rider is pointing, told to the routing engine (#444).
+/// Which way the vehicle is pointing, told to the routing engine (#444).
 ///
 /// ## The defect
 ///
@@ -7,8 +7,8 @@
 /// > asking for a manoeuvre that only makes sense if the rider were facing the
 /// > other way.
 ///
-/// The rejoin request sent the rider's position and nothing else. A position on a
-/// two-way road is ambiguous: the engine picks a direction, and half the time it
+/// The routing request sent the vehicle's position and nothing else. A position
+/// on a two-way road is ambiguous: the engine picks a direction, and half the time it
 /// picks the one the rider is not facing. The first instruction is then a U-turn
 /// dressed up as a left, at the moment a rider has least attention to spare and
 /// least reason to doubt the app.
@@ -23,6 +23,10 @@
 /// Feeding that in would produce a *confidently* wrong first instruction, which
 /// is the very defect being fixed rather than a smaller version of it.
 ///
+/// Introduced for off-route rejoin routing, which has since been deleted. The
+/// bearing problem belongs to the router itself, so this stayed: any request
+/// that starts from a moving vehicle needs it.
+///
 /// So below the floor no bearing is sent at all and the engine guesses, exactly
 /// as it did before. Guessing when nothing is known is honest; guessing from
 /// noise is not.
@@ -32,17 +36,17 @@ library;
 ///
 /// The same 3 m/s the stopped-speed readout (#445) and the CarPlay estimate
 /// (#452) use. One idea, one number.
-const rejoinBearingMinimumSpeedMetersPerSecond = 3.0;
+const originBearingMinimumSpeedMetersPerSecond = 3.0;
 
 /// How far either side of the heading the engine may still choose a road.
 ///
 /// Wide enough to survive GPS heading error and a bike that is leaning, narrow
 /// enough to exclude the opposite carriageway — which is the whole point. ±60°
 /// cannot admit a road running back the way the rider came.
-const rejoinBearingToleranceDegrees = 60.0;
+const originBearingToleranceDegrees = 60.0;
 
 /// The bearing to send for the origin, or null when none should be.
-double? rejoinOriginBearing({
+double? originBearingForTravel({
   required double? headingDegrees,
   required double? speedMetersPerSecond,
 }) {
@@ -52,7 +56,7 @@ double? rejoinOriginBearing({
   if (heading < 0 || heading >= 360) return null;
   if (speed == null ||
       !speed.isFinite ||
-      speed < rejoinBearingMinimumSpeedMetersPerSecond) {
+      speed < originBearingMinimumSpeedMetersPerSecond) {
     return null;
   }
   return heading;
@@ -61,15 +65,15 @@ double? rejoinOriginBearing({
 /// OSRM's `bearings` parameter for a request with [waypointCount] coordinates.
 ///
 /// The list must have exactly one entry per coordinate; entries may be empty,
-/// which means "any direction". Only the origin is constrained — the rejoin point
-/// and the target may be approached however the engine likes.
+/// which means "any direction". Only the origin is constrained — every waypoint
+/// after it may be approached however the engine likes.
 ///
 /// Returns null when there is no bearing to send, so the caller omits the
 /// parameter entirely rather than sending a list of empties.
 String? osrmBearings({
   required double? originBearingDegrees,
   required int waypointCount,
-  double toleranceDegrees = rejoinBearingToleranceDegrees,
+  double toleranceDegrees = originBearingToleranceDegrees,
 }) {
   final bearing = originBearingDegrees;
   if (bearing == null || waypointCount < 1) return null;

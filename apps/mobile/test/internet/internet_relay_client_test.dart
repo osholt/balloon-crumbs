@@ -4,10 +4,10 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
 
 void main() {
   group('HttpInternetRelayClient', () {
@@ -266,7 +266,10 @@ void main() {
 
       expect(result.disposition, RelayCompatibilityDisposition.updateRequired);
       expect(result.canSynchronize, isFalse);
-      expect(result.updateUri, Uri.parse('https://hot-pursuit.invalid/update'));
+      expect(
+        result.updateUri,
+        Uri.parse('https://balloon-crumbs.invalid/update'),
+      );
       client.close();
     });
 
@@ -350,7 +353,7 @@ void main() {
         });
         expect(requests.last.method, 'GET');
         expect(
-          requests.last.headers.containsKey('x-ride-relay-join-token'),
+          requests.last.headers.containsKey('x-balloon-crumbs-join-token'),
           isFalse,
         );
         directory.close();
@@ -385,7 +388,7 @@ void main() {
       await directory.resolve('123456', joinToken: 'pastedTokenValue123456');
 
       expect(
-        requests.last.headers['x-ride-relay-join-token'],
+        requests.last.headers['x-balloon-crumbs-join-token'],
         'pastedTokenValue123456',
       );
       directory.close();
@@ -484,7 +487,7 @@ void main() {
           isA<RideCodeDirectoryException>().having(
             (error) => error.message,
             'message',
-            contains('Update Hot Pursuit'),
+            contains('Update Balloon Crumbs'),
           ),
         ),
       );
@@ -512,9 +515,9 @@ http.Response _compatibilityResponse({int minimumClientProtocol = 1}) =>
         'requiredCapabilities': <String>[],
         'cacheSeconds': 300,
         'updateUrls': {
-          'default': 'https://hot-pursuit.invalid/update',
-          'iOS': 'https://hot-pursuit.invalid/update',
-          'android': 'https://hot-pursuit.invalid/update',
+          'default': 'https://balloon-crumbs.invalid/update',
+          'iOS': 'https://balloon-crumbs.invalid/update',
+          'android': 'https://balloon-crumbs.invalid/update',
         },
       }),
       200,

@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/internet/internet_relay_client.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/internet/internet_relay_client.dart';
 
 void main() {
   test(
@@ -26,7 +26,7 @@ void main() {
               'capabilities': RelayProtocolCapabilities.current.toList(),
               'requiredCapabilities': <String>[],
               'cacheSeconds': 300,
-              'updateUrls': {'default': 'https://hot-pursuit.invalid'},
+              'updateUrls': {'default': 'https://balloon-crumbs.invalid'},
             }),
             200,
             headers: {'content-type': 'application/json'},
@@ -121,7 +121,7 @@ void main() {
               'capabilities': ['ride-start-v1'],
               'requiredCapabilities': <String>[],
               'cacheSeconds': 300,
-              'updateUrls': {'default': 'https://hot-pursuit.invalid'},
+              'updateUrls': {'default': 'https://balloon-crumbs.invalid'},
             }),
             200,
             headers: {'content-type': 'application/json'},

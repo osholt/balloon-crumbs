@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/foreground_location_controller.dart';
-import 'package:ride_relay/controllers/map_style_mode_controller.dart';
-import 'package:ride_relay/controllers/speed_limit_display_controller.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/features/home/home_map_backdrop.dart';
-import 'package:ride_relay/services/device_location_source.dart';
+import 'package:balloon_crumbs/controllers/foreground_location_controller.dart';
+import 'package:balloon_crumbs/controllers/map_style_mode_controller.dart';
+import 'package:balloon_crumbs/controllers/speed_limit_display_controller.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/features/home/home_map_backdrop.dart';
+import 'package:balloon_crumbs/services/device_location_source.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

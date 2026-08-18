@@ -20,9 +20,11 @@ Voice guidance <- road route, staleness, and recalculation events
 
 ## Domain migration
 
-The inherited implementation calls a session a `ride` and uses Dart/Python
-packages named `ride_relay`. Keep those internal names until the core domain
-boundaries are covered by tests; a broad rename is not a product feature.
+The Dart and Python packages are now `balloon_crumbs` and
+`balloon_crumbs_server`. The inherited implementation still calls a flight a
+`ride` and a participant a `rider` throughout, and those names stay until the
+domain work that replaces the concepts behind them — renaming `ride` to `flight`
+without changing what it models would only hide how much is left to do.
 
 Target concepts:
 

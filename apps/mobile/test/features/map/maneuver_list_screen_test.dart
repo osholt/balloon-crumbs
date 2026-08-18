@@ -2,10 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/features/map/maneuver_list_screen.dart';
-import 'package:ride_relay/services/navigation_guidance.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/features/map/maneuver_list_screen.dart';
+import 'package:balloon_crumbs/services/navigation_guidance.dart';
 
 import '../../services/osrm_maneuver_fixtures.dart';
 

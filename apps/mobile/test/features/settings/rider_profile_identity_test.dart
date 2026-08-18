@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/controllers/rider_profile_controller.dart';
-import 'package:ride_relay/domain/rider_color.dart';
-import 'package:ride_relay/features/map/motorcycle_icon.dart';
-import 'package:ride_relay/features/settings/rider_profile_sheet.dart';
+import 'package:balloon_crumbs/controllers/rider_profile_controller.dart';
+import 'package:balloon_crumbs/domain/rider_color.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
+import 'package:balloon_crumbs/features/settings/rider_profile_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -17,7 +17,7 @@ void main() {
     final profile = await RiderProfileController.load();
     await profile.save(
       displayName: 'Oliver Holt',
-      motorcycleStyle: MotorcycleIconStyle.scrambler,
+      motorcycleStyle: CraftIconStyle.van,
       riderColor: RiderColor.green,
     );
     await tester.pumpWidget(

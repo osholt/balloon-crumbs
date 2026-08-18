@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as ml;
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/features/map/map_camera_guard.dart';
-import 'package:ride_relay/features/map/resolved_route_map_preview.dart';
-import 'package:ride_relay/features/ride/previous_rides_screen.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/features/map/map_camera_guard.dart';
+import 'package:balloon_crumbs/features/map/resolved_route_map_preview.dart';
+import 'package:balloon_crumbs/features/ride/previous_rides_screen.dart';
 
 void main() {
   group('MapLibreCameraGuard', () {

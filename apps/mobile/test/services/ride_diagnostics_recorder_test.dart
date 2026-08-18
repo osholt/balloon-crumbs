@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/services/ride_diagnostics_configuration.dart';
-import 'package:ride_relay/services/ride_diagnostics_recorder.dart';
-import 'package:ride_relay/services/spoken_guidance.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/services/ride_diagnostics_configuration.dart';
+import 'package:balloon_crumbs/services/ride_diagnostics_recorder.dart';
+import 'package:balloon_crumbs/services/spoken_guidance.dart';
 
 void main() {
   // A synthetic track, so the pairing that answers #412 can be driven without
@@ -69,7 +69,7 @@ void main() {
     double? bearingAfter = 100,
     String headingChange = '+90.0° (clockwise, to the right)',
   }) => [
-    'Hot Pursuit · turn detail',
+    'Balloon Crumbs · turn detail',
     'Instruction:      Take the 2nd exit',
     'Shown as:         $shownAs (roundabout)',
     'Engine type:      roundabout',

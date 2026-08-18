@@ -1,4 +1,4 @@
-# Hot Pursuit mobile app
+# Balloon Crumbs mobile app
 
 The shared Flutter client and native iOS/Android shells. Run all commands in
 this directory unless using the repository `Makefile`.

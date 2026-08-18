@@ -31,7 +31,7 @@ val dartDefines =
         .toMap()
 
 android {
-    namespace = "me.osholt.ride_relay"
+    namespace = "me.osholt.balloon_crumbs"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -45,7 +45,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.osholt.hotpursuit"
+        applicationId = "dev.osholt.ballooncrumbs"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26
@@ -53,31 +53,31 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         if (
-            dartDefines["RIDE_RELAY_PUSH_ENABLED"] == "true" &&
-            !dartDefines["RIDE_RELAY_FIREBASE_API_KEY"].isNullOrEmpty() &&
-            !dartDefines["RIDE_RELAY_FIREBASE_PROJECT_ID"].isNullOrEmpty() &&
-            !dartDefines["RIDE_RELAY_FIREBASE_MESSAGING_SENDER_ID"].isNullOrEmpty() &&
-            !dartDefines["RIDE_RELAY_FIREBASE_ANDROID_APP_ID"].isNullOrEmpty()
+            dartDefines["BALLOON_CRUMBS_PUSH_ENABLED"] == "true" &&
+            !dartDefines["BALLOON_CRUMBS_FIREBASE_API_KEY"].isNullOrEmpty() &&
+            !dartDefines["BALLOON_CRUMBS_FIREBASE_PROJECT_ID"].isNullOrEmpty() &&
+            !dartDefines["BALLOON_CRUMBS_FIREBASE_MESSAGING_SENDER_ID"].isNullOrEmpty() &&
+            !dartDefines["BALLOON_CRUMBS_FIREBASE_ANDROID_APP_ID"].isNullOrEmpty()
         ) {
             resValue(
                 "string",
                 "google_api_key",
-                dartDefines.getValue("RIDE_RELAY_FIREBASE_API_KEY"),
+                dartDefines.getValue("BALLOON_CRUMBS_FIREBASE_API_KEY"),
             )
             resValue(
                 "string",
                 "project_id",
-                dartDefines.getValue("RIDE_RELAY_FIREBASE_PROJECT_ID"),
+                dartDefines.getValue("BALLOON_CRUMBS_FIREBASE_PROJECT_ID"),
             )
             resValue(
                 "string",
                 "gcm_defaultSenderId",
-                dartDefines.getValue("RIDE_RELAY_FIREBASE_MESSAGING_SENDER_ID"),
+                dartDefines.getValue("BALLOON_CRUMBS_FIREBASE_MESSAGING_SENDER_ID"),
             )
             resValue(
                 "string",
                 "google_app_id",
-                dartDefines.getValue("RIDE_RELAY_FIREBASE_ANDROID_APP_ID"),
+                dartDefines.getValue("BALLOON_CRUMBS_FIREBASE_ANDROID_APP_ID"),
             )
         }
     }

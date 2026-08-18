@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'motorcycle_icon.dart';
+import 'craft_icon.dart';
 
 /// Shared profile control for choosing the glyph inside a rider's colour badge.
 ///
@@ -22,10 +22,10 @@ class RiderSymbolPicker extends StatelessWidget {
 
   final String displayName;
   final RiderSymbol selectedSymbol;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final Color badgeColor;
   final ValueChanged<RiderSymbol> onSymbolChanged;
-  final ValueChanged<MotorcycleIconStyle> onMotorcycleStyleChanged;
+  final ValueChanged<CraftIconStyle> onMotorcycleStyleChanged;
   final String keyPrefix;
   final String bikeKeyPrefix;
 
@@ -40,14 +40,14 @@ class RiderSymbolPicker extends StatelessWidget {
         runSpacing: 9,
         children: [
           _SymbolChoice(
-            key: Key('$keyPrefix-motorcycle'),
-            label: 'Bike',
-            selected: selectedSymbol.kind == RiderSymbolKind.motorcycle,
-            symbol: const RiderSymbol.motorcycle(),
+            key: Key('$keyPrefix-craft'),
+            label: 'Craft',
+            selected: selectedSymbol.kind == RiderSymbolKind.craft,
+            symbol: const RiderSymbol.craft(),
             displayName: displayName,
             motorcycleStyle: motorcycleStyle,
             badgeColor: badgeColor,
-            onTap: () => onSymbolChanged(const RiderSymbol.motorcycle()),
+            onTap: () => onSymbolChanged(const RiderSymbol.craft()),
           ),
           _SymbolChoice(
             key: Key('$keyPrefix-initials'),
@@ -88,15 +88,15 @@ class RiderSymbolPicker extends StatelessWidget {
         ],
       ),
       const SizedBox(height: 12),
-      if (selectedSymbol.kind == RiderSymbolKind.motorcycle)
+      if (selectedSymbol.kind == RiderSymbolKind.craft)
         SizedBox(
           height: 68,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: MotorcycleIconStyle.values.length,
+            itemCount: CraftIconStyle.values.length,
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (context, index) {
-              final style = MotorcycleIconStyle.values[index];
+              final style = CraftIconStyle.values[index];
               final selected = style == motorcycleStyle;
               return Semantics(
                 button: true,
@@ -274,7 +274,7 @@ class _SymbolChoice extends StatelessWidget {
   final bool selected;
   final RiderSymbol symbol;
   final String displayName;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final Color badgeColor;
   final VoidCallback onTap;
 

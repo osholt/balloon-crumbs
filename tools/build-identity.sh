@@ -65,7 +65,7 @@ if ! printf '%s' "$build_number" | grep -Eq '^[0-9]+$'; then
   exit 1
 fi
 
-printf 'RIDE_RELAY_APP_VERSION=%s\n' "$version_name"
-printf 'RIDE_RELAY_APP_BUILD=%s\n' "$build_number"
-printf 'RIDE_RELAY_DISTRIBUTION_TRACK=%s\n' "$track"
-printf 'RIDE_RELAY_BUILD_TIMESTAMP=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf 'BALLOON_CRUMBS_APP_VERSION=%s\n' "$version_name"
+printf 'BALLOON_CRUMBS_APP_BUILD=%s\n' "$build_number"
+printf 'BALLOON_CRUMBS_DISTRIBUTION_TRACK=%s\n' "$track"
+printf 'BALLOON_CRUMBS_BUILD_TIMESTAMP=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

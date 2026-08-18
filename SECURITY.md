@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Hot Pursuit has not reached a public release. Only the latest `main` branch is
+Balloon Crumbs has not reached a public release. Only the latest `main` branch is
 currently maintained.
 
 ## Reporting a vulnerability

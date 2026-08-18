@@ -31,7 +31,7 @@ class NearbyCapabilities {
 class NearbyBridge {
   const NearbyBridge();
 
-  static const _channel = MethodChannel('me.osholt.ride_relay/nearby');
+  static const _channel = MethodChannel('me.osholt.balloon_crumbs/nearby');
 
   Future<NearbyCapabilities> capabilities() async {
     try {

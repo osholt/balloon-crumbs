@@ -87,7 +87,7 @@ class RenderingTest(unittest.TestCase):
 
         self.assertEqual(
             email.subject,
-            "Hot Pursuit 1.0.1 (31) is on Play closed testing (alpha)",
+            "Balloon Crumbs 1.0.1 (31) is on Play closed testing (alpha)",
         )
         for required in [
             "1.0.1",
@@ -97,7 +97,7 @@ class RenderingTest(unittest.TestCase):
             "Play closed testing (alpha)",
             "ce39e51",
             "https://github.com/osholt/tailendcharlie/commit/ce39e51",
-            "https://play.google.com/apps/testing/dev.osholt.hotpursuit",
+            "https://play.google.com/apps/testing/dev.osholt.ballooncrumbs",
             "About & build",
             "Distribution track  Play closed testing (alpha)",
             "WHAT CHANGED since build 28 (commit 67853ec)",
@@ -139,17 +139,17 @@ class SafetyTest(unittest.TestCase):
 
     def test_refuses_a_relay_url(self) -> None:
         with self.assertRaises(UnsafeContentError):
-            assert_safe("update at https://relay.hot-pursuit.invalid/api/v1/x")
+            assert_safe("update at https://relay.balloon-crumbs.invalid/api/v1/x")
 
     def test_refuses_plaintext_and_credential_bearing_links(self) -> None:
         with self.assertRaises(UnsafeContentError):
-            assert_safe("http://play.google.com/apps/testing/dev.osholt.hotpursuit")
+            assert_safe("http://play.google.com/apps/testing/dev.osholt.ballooncrumbs")
         with self.assertRaises(UnsafeContentError):
             assert_safe("https://user:pass@github.com/osholt/tailendcharlie")
 
     def test_a_relay_url_smuggled_through_the_changelog_is_caught(self) -> None:
         with self.assertRaises(UnsafeContentError):
-            render_email(context(changes=("- see https://relay.hot-pursuit.invalid/api",)))
+            render_email(context(changes=("- see https://relay.balloon-crumbs.invalid/api",)))
 
     def test_masks_the_group_address(self) -> None:
         self.assertEqual(
@@ -164,7 +164,7 @@ class ConfigurationTest(unittest.TestCase):
         decision = decide("auto", "", ())
 
         self.assertEqual(decision.action, "dry-run")
-        self.assertIn("RIDE_RELAY_ANDROID_TESTER_GROUP", decision.reason)
+        self.assertIn("BALLOON_CRUMBS_ANDROID_TESTER_GROUP", decision.reason)
 
     def test_dry_run_mode_wins_over_full_configuration(self) -> None:
         self.assertEqual(decide("dry-run", RECIPIENT, ()).action, "dry-run")
@@ -237,7 +237,7 @@ class MainTest(unittest.TestCase):
         self.assertEqual(self.sent, [])
         self.assertIn("Rendered only, not sent", rendered)
         self.assertIn("Play closed testing (alpha)", rendered)
-        self.assertIn("RIDE_RELAY_ANDROID_TESTER_GROUP", rendered)
+        self.assertIn("BALLOON_CRUMBS_ANDROID_TESTER_GROUP", rendered)
         self.assertIn("::notice::", self.out.getvalue())
 
     def test_missing_credentials_skip_visibly_and_keep_the_release_green(

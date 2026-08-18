@@ -8,36 +8,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as ml;
-import 'package:ride_relay/controllers/speed_limit_display_controller.dart';
-import 'package:ride_relay/controllers/personal_ride_heatmap_controller.dart';
-import 'package:ride_relay/domain/completed_ride.dart';
-import 'package:ride_relay/domain/completed_ride_store.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/domain/geo_point.dart' as awareness_geo;
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/domain/quick_message.dart';
-import 'package:ride_relay/domain/recorded_route_store.dart';
-import 'package:ride_relay/domain/route_store.dart';
-import 'package:ride_relay/domain/route_alert.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/features/map/hazard_map_symbol.dart';
-import 'package:ride_relay/features/map/ride_map.dart';
-import 'package:ride_relay/services/basemap_configuration.dart';
-import 'package:ride_relay/services/enforcement_alert_detector.dart';
-import 'package:ride_relay/services/enforcement_alert_presentation.dart';
-import 'package:ride_relay/services/ride_completion_detector.dart';
-import 'package:ride_relay/services/gpx_import_source.dart';
-import 'package:ride_relay/services/imported_track_matcher.dart';
-import 'package:ride_relay/services/leader_ride_status.dart';
-import 'package:ride_relay/services/map_style_repository.dart';
-import 'package:ride_relay/services/navigation_camera.dart';
-import 'package:ride_relay/services/offline_tile_cache.dart';
-import 'package:ride_relay/services/received_quick_message.dart';
-import 'package:ride_relay/services/route_importer.dart';
-import 'package:ride_relay/services/road_routing.dart';
-import 'package:ride_relay/services/speed_limit.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:balloon_crumbs/controllers/speed_limit_display_controller.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart' as awareness_geo;
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/domain/quick_message.dart';
+import 'package:balloon_crumbs/domain/recorded_route_store.dart';
+import 'package:balloon_crumbs/domain/route_store.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/features/map/hazard_map_symbol.dart';
+import 'package:balloon_crumbs/features/map/ride_map.dart';
+import 'package:balloon_crumbs/services/basemap_configuration.dart';
+import 'package:balloon_crumbs/services/enforcement_alert_detector.dart';
+import 'package:balloon_crumbs/services/enforcement_alert_presentation.dart';
+import 'package:balloon_crumbs/services/ride_completion_detector.dart';
+import 'package:balloon_crumbs/services/gpx_import_source.dart';
+import 'package:balloon_crumbs/services/imported_track_matcher.dart';
+import 'package:balloon_crumbs/services/map_style_repository.dart';
+import 'package:balloon_crumbs/services/navigation_camera.dart';
+import 'package:balloon_crumbs/services/offline_tile_cache.dart';
+import 'package:balloon_crumbs/services/received_quick_message.dart';
+import 'package:balloon_crumbs/services/route_importer.dart';
+import 'package:balloon_crumbs/services/road_routing.dart';
+import 'package:balloon_crumbs/services/speed_limit.dart';
 
 void main() {
   test('navigation panels preserve map context and rider clearance', () {
@@ -102,78 +96,6 @@ void main() {
       contains('tileSize: _basemap.usesMapLibre ? 512 : 256'),
       reason: 'both renderer camera targets must carry the lateral intent',
     );
-  });
-
-  testWidgets('personal ride heatmap is optional and below the active route', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({
-      PersonalRideHeatmapController.preferenceKey: true,
-    });
-    final archive = InMemoryCompletedRideStore();
-    final travelled = ImportedRoute(
-      id: 'travelled',
-      name: 'Travelled',
-      importedAt: DateTime.utc(2026, 8, 12),
-      sourceFileName: 'archive',
-      paths: const [
-        RoutePath(
-          kind: RoutePathKind.track,
-          points: [
-            GeoPoint(latitude: 51.45, longitude: -2.59),
-            GeoPoint(latitude: 51.46, longitude: -2.58),
-          ],
-        ),
-      ],
-      waypoints: const [],
-    );
-    await archive.save(_completedHeatmapRide(travelled));
-    final heatmap = await PersonalRideHeatmapController.load(store: archive);
-    addTearDown(heatmap.dispose);
-    final directory = Directory.systemTemp.createTempSync('personal-heatmap');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-    addTearDown(cache.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(travelled),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          completedRideStore: archive,
-          personalRideHeatmap: heatmap,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const Key('personal-rides-heatmap-layer')),
-      findsOneWidget,
-    );
-    final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
-    final heatmapIndex = map.children.indexWhere(
-      (child) => child is CircleLayer,
-    );
-    final routeIndex = map.children.indexWhere(
-      (child) => child is PolylineLayer,
-    );
-    expect(heatmapIndex, greaterThanOrEqualTo(0));
-    expect(routeIndex, greaterThan(heatmapIndex));
-
-    await tester.tap(find.byKey(const Key('map-layer-actions')));
-    await tester.pumpAndSettle();
-    expect(find.text('Personal rides heatmap'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('personal-rides-heatmap-toggle')));
-    await tester.pumpAndSettle();
-
-    expect(heatmap.visible, isFalse);
-    expect(find.byKey(const Key('personal-rides-heatmap-layer')), findsNothing);
   });
 
   test('environment map factory can preserve original daytime tiles', () {
@@ -276,96 +198,6 @@ void main() {
     );
     expect(groupMiniMapGridColor(Brightness.light), const Color(0xFFB8C4D0));
     expect(groupMiniMapGridColor(Brightness.dark), const Color(0xFF263443));
-  });
-
-  testWidgets('a routed rejoin takes over the live turn guidance', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync(
-      'rejoin-navigation-guidance',
-    );
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final originalRoute = ImportedRoute(
-      id: 'original-route',
-      name: 'Original route',
-      importedAt: DateTime.utc(2026, 7, 29, 10),
-      sourceFileName: 'original.gpx',
-      paths: const [
-        RoutePath(
-          kind: RoutePathKind.track,
-          points: [
-            GeoPoint(latitude: 51, longitude: -2),
-            GeoPoint(latitude: 51, longitude: -1.98),
-          ],
-        ),
-      ],
-      waypoints: const [],
-    );
-    final rejoinRoute = ImportedRoute(
-      id: 'rejoin-route',
-      name: 'Advisory rejoin route',
-      importedAt: DateTime.utc(2026, 7, 29, 10, 5),
-      sourceFileName: 'rejoin.gpx',
-      paths: const [
-        RoutePath(
-          kind: RoutePathKind.track,
-          points: [
-            GeoPoint(latitude: 51.01, longitude: -2),
-            GeoPoint(latitude: 51.01, longitude: -1.99),
-            GeoPoint(latitude: 51, longitude: -1.98),
-          ],
-        ),
-      ],
-      waypoints: const [],
-      maneuvers: const [
-        RouteManeuver(
-          position: GeoPoint(latitude: 51.01, longitude: -1.995),
-          type: 'turn',
-          modifier: 'right',
-          name: 'Rejoin Road',
-        ),
-      ],
-    );
-    final rejoin = ValueNotifier<ImportedRoute?>(rejoinRoute);
-    final navigation = ValueNotifier<MapNavigationPosition?>(
-      MapNavigationPosition(
-        point: const GeoPoint(latitude: 51.01, longitude: -1.999),
-        recordedAt: DateTime.utc(2026, 7, 29, 10, 5),
-        speedMetersPerSecond: 8,
-        headingDegrees: 90,
-        accuracyMeters: 5,
-      ),
-    );
-    addTearDown(rejoin.dispose);
-    addTearDown(navigation.dispose);
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-    addTearDown(cache.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(originalRoute),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          navigationPosition: navigation,
-          rejoinNavigationRoute: rejoin,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('navigation-guidance-banner')), findsOneWidget);
-    expect(find.text('Rejoin Road'), findsOneWidget);
-
-    rejoin.value = null;
-    await tester.pump();
-
-    expect(find.byKey(const Key('navigation-guidance-banner')), findsNothing);
   });
 
   testWidgets('pre-start map keeps riding controls and guidance hidden', (
@@ -1029,212 +861,6 @@ void main() {
     expect(find.byKey(const Key('maneuver-list')), findsOneWidget);
     expect(find.text('2nd exit, straight on'), findsOneWidget);
     expect(find.text('Arrive at the destination'), findsOneWidget);
-  });
-
-  testWidgets('turn guidance reduces the TEC gap to a single-line chip', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync(
-      'map-compact-tec-test',
-    );
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final route = ImportedRoute(
-      id: 'guided',
-      name: 'Guided route',
-      importedAt: DateTime.utc(2026, 7, 24),
-      sourceFileName: 'guided.gpx',
-      paths: const [
-        RoutePath(
-          kind: RoutePathKind.track,
-          points: [
-            GeoPoint(latitude: 51.45, longitude: -2.59),
-            GeoPoint(latitude: 51.451, longitude: -2.58),
-          ],
-        ),
-      ],
-      waypoints: const [],
-      maneuvers: const [
-        RouteManeuver(
-          position: GeoPoint(latitude: 51.451, longitude: -2.58),
-          type: 'turn',
-          modifier: 'right',
-        ),
-      ],
-    );
-    final navigation = ValueNotifier(
-      MapNavigationPosition(
-        point: const GeoPoint(latitude: 51.45, longitude: -2.59),
-        recordedAt: DateTime.utc(2026, 7, 24, 12),
-        speedMetersPerSecond: 10,
-        headingDegrees: 90,
-      ),
-    );
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        tecName: 'Charlie',
-        distanceToTecMeters: 3200,
-        estimatedTimeToTec: Duration(minutes: 4),
-        offCourseAlerts: [],
-      ),
-    );
-    addTearDown(navigation.dispose);
-    addTearDown(leaderStatus.dispose);
-
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(route),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          navigationPosition: navigation,
-          leaderStatus: leaderStatus,
-          distanceUnit: DistanceUnit.miles,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final chip = find.byKey(const Key('leader-tec-gap'));
-    expect(chip, findsOneWidget);
-    expect(find.text('TEC GAP'), findsNothing);
-    expect(find.text('TEC'), findsOneWidget);
-    expect(find.textContaining('2.0 mi · ~4 min'), findsOneWidget);
-    expect(find.textContaining('Charlie ·'), findsNothing);
-    expect(tester.getSize(chip).height, lessThanOrEqualTo(44));
-    expect(tester.getSize(chip).width, lessThanOrEqualTo(360));
-  });
-
-  testWidgets('a registered TEC without a position yet still says so', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync(
-      'map-tec-waiting-position-test',
-    );
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final route = ImportedRoute(
-      id: 'waiting-for-location',
-      name: 'Waiting route',
-      importedAt: DateTime.utc(2026, 7, 24),
-      sourceFileName: 'waiting.gpx',
-      paths: const [
-        RoutePath(
-          kind: RoutePathKind.track,
-          points: [
-            GeoPoint(latitude: 51.45, longitude: -2.59),
-            GeoPoint(latitude: 51.451, longitude: -2.58),
-          ],
-        ),
-      ],
-      waypoints: const [],
-      maneuvers: const [
-        RouteManeuver(
-          position: GeoPoint(latitude: 51.451, longitude: -2.58),
-          type: 'turn',
-          modifier: 'right',
-        ),
-      ],
-    );
-    final navigation = ValueNotifier<MapNavigationPosition?>(null);
-    // A TEC that is registered but has never reported a position: no name, no
-    // distance, no estimate and no location age.
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        tecAvailability: TecAvailability.awaitingLocation,
-        offCourseAlerts: [],
-      ),
-    );
-    addTearDown(navigation.dispose);
-    addTearDown(leaderStatus.dispose);
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(route),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          navigationPosition: navigation,
-          leaderStatus: leaderStatus,
-          distanceUnit: DistanceUnit.miles,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final chip = find.byKey(const Key('leader-tec-gap'));
-    expect(chip, findsOneWidget);
-    expect(find.textContaining('Waiting for location'), findsOneWidget);
-    expect(find.byKey(const Key('navigation-guidance-banner')), findsNothing);
-    // The status band now lives in the lower part of the screen so the road
-    // ahead stays visible at the top.
-    final screenHeight =
-        tester.view.physicalSize.height / tester.view.devicePixelRatio;
-    expect(tester.getTopLeft(chip).dy, greaterThan(screenHeight / 2));
-  });
-
-  testWidgets('no registered TEC hides the distance-to-TEC surface entirely', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync('map-no-tec-test');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      // No TEC identity of any kind: nobody holds the role.
-      const LeaderRideStatus(offCourseAlerts: []),
-    );
-    addTearDown(leaderStatus.dispose);
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(
-            _testRoute(id: 'no-tec', name: 'No TEC route'),
-          ),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          leaderStatus: leaderStatus,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('leader-tec-gap')), findsNothing);
-    expect(find.textContaining('waiting for location'), findsNothing);
-    expect(find.textContaining('Hot Pursuit'), findsNothing);
-
-    // Assigning a TEC mid-ride brings the surface back without a restart.
-    leaderStatus.value = const LeaderRideStatus(
-      tecAvailability: TecAvailability.stale,
-      tecName: 'Charlie',
-      tecLocationAge: Duration(minutes: 4),
-      offCourseAlerts: [],
-    );
-    await tester.pump();
-
-    expect(find.byKey(const Key('leader-tec-gap')), findsOneWidget);
-    expect(find.textContaining('4 min ago'), findsOneWidget);
-
-    leaderStatus.value = const LeaderRideStatus(offCourseAlerts: []);
-    await tester.pump();
-
-    expect(find.byKey(const Key('leader-tec-gap')), findsNothing);
   });
 
   testWidgets('initial speed-limit lookup starts after the first map frame', (
@@ -2123,22 +1749,6 @@ void main() {
       ),
     ]);
     addTearDown(overlays.dispose);
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        tecName: 'Charlie',
-        distanceToTecMeters: 3200,
-        estimatedTimeToTec: Duration(minutes: 4),
-        offCourseAlerts: [
-          LeaderOffCourseAlert(
-            riderId: 'alex',
-            displayName: 'Alex',
-            level: RouteAlertLevel.urgent,
-            distanceFromRouteMeters: 240,
-          ),
-        ],
-      ),
-    );
-    addTearDown(leaderStatus.dispose);
     final cache = OfflineTileCache(
       rootDirectory: directory,
       configuration: const BasemapConfiguration(),
@@ -2155,7 +1765,6 @@ void main() {
           routeImporter: RouteImporter(source: const _NoFileSource()),
           offlineTileCache: cache,
           overlayMarkers: overlays,
-          leaderStatus: leaderStatus,
           distanceUnit: DistanceUnit.miles,
           onRouteChanged: publishedRoutes.add,
           rideStarted: false,
@@ -2169,11 +1778,6 @@ void main() {
     expect(find.text('Import GPX'), findsOneWidget);
     expect(find.text('ROUTE-ONLY OFFLINE MAP'), findsOneWidget);
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
-    expect(find.byKey(const Key('leader-tec-gap')), findsOneWidget);
-    expect(find.text('TEC'), findsOneWidget);
-    expect(find.textContaining('Alex is clearly off course'), findsOneWidget);
-    expect(find.textContaining('2.0 mi'), findsOneWidget);
-    expect(find.textContaining('0.1 mi'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Use demo route'));
     await tester.tap(find.text('Use demo route'));
@@ -2181,17 +1785,17 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(find.text('Review route'), findsOneWidget);
+    expect(find.text('Use this route?'), findsOneWidget);
     expect(
       find.text("King's Oak Academy to Cross Hands Hotel"),
       findsOneWidget,
     );
     await tester.scrollUntilVisible(
-      find.byKey(const Key('confirm-reviewed-route')),
+      find.byKey(const Key('confirm-route-confirmation')),
       250,
       scrollable: find.byType(Scrollable).last,
     );
-    await tester.tap(find.byKey(const Key('confirm-reviewed-route')));
+    await tester.tap(find.byKey(const Key('confirm-route-confirmation')));
     for (var i = 0; i < 5; i += 1) {
       await tester.pump(const Duration(milliseconds: 100));
     }
@@ -2274,15 +1878,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(matcher.originals, [same(original)]);
-      expect(find.text('Review route'), findsOneWidget);
+      expect(find.text('Use this route?'), findsOneWidget);
       expect(find.text('Sunday route (navigable)'), findsOneWidget);
-      expect(
-        find.byKey(const Key('route-review-original-line')),
-        findsOneWidget,
-      );
       expect(await savedRoutes.list(), [same(original)]);
 
-      await tester.tap(find.byKey(const Key('confirm-reviewed-route')));
+      await tester.tap(find.byKey(const Key('confirm-route-confirmation')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       expect(routeStore.route?.id, 'matched-track');
@@ -2340,11 +1940,11 @@ void main() {
     await tester.tap(find.byKey(const Key('follow-original-track')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Review route'), findsOneWidget);
+    expect(find.text('Use this route?'), findsOneWidget);
     expect(matcher.originals, isEmpty);
     expect(await savedRoutes.list(), [same(original)]);
 
-    await tester.tap(find.byKey(const Key('confirm-reviewed-route')));
+    await tester.tap(find.byKey(const Key('confirm-route-confirmation')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(routeStore.route?.id, original.id);
@@ -2448,13 +2048,10 @@ void main() {
     await tester.tap(find.text('Load demo route'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Review route'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('cancel-reviewed-route')),
-      250,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.tap(find.byKey(const Key('cancel-reviewed-route')));
+    expect(find.text('Use this route?'), findsOneWidget);
+    // The confirmation sheet sizes to its content, so both actions are on
+    // screen without scrolling.
+    await tester.tap(find.byKey(const Key('cancel-route-confirmation')));
     await tester.pumpAndSettle();
 
     expect((await store.loadActiveRoute())?.id, original.id);
@@ -2574,95 +2171,6 @@ void main() {
     expect(find.text('Previous ride route'), findsNothing);
     expect(find.text('Choose a route'), findsOneWidget);
     expect(await newRideStore.loadActiveRoute(), isNull);
-  });
-
-  testWidgets('editing recalculates before one confirmed route is saved', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync('map-edit-test');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final store = _RecordingRouteStore();
-    final search = _RecordingDestinationSearch();
-    final routing = _StraightRoadRoutingService();
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: store,
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          acquireCurrentPosition: () async =>
-              const GeoPoint(latitude: 51.45, longitude: -2.59),
-          destinationRoutePlanner: DestinationRoutePlanner(
-            searchService: search,
-            routingService: routing,
-          ),
-          rideStarted: false,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Enter destination'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('destination-field')), 'Wrong');
-    // The sheet carries the route preferences (#182), so the plan button can
-    // start below the fold.
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('plan-destination-button')),
-      250,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.tap(find.byKey(const Key('plan-destination-button')));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Wrong place'), findsWidgets);
-    expect(store.savedRoutes, isEmpty);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('edit-reviewed-route')),
-      250,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.tap(find.byKey(const Key('edit-reviewed-route')));
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const Key('destination-field')))
-          .controller
-          ?.text,
-      'Wrong',
-    );
-
-    await tester.enterText(
-      find.byKey(const Key('destination-field')),
-      'Correct',
-    );
-    // The sheet carries the route preferences (#182), so the plan button can
-    // start below the fold.
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('plan-destination-button')),
-      250,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.tap(find.byKey(const Key('plan-destination-button')));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Correct place'), findsWidgets);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('confirm-reviewed-route')),
-      250,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.tap(find.byKey(const Key('confirm-reviewed-route')));
-    await tester.pumpAndSettle();
-
-    expect(search.queries, ['Wrong', 'Correct']);
-    expect(store.savedRoutes, hasLength(1));
-    expect(store.savedRoutes.single.name, 'To Correct place');
   });
 
   testWidgets('forwards the full-screen ride menu through the app wrapper', (
@@ -2806,129 +2314,6 @@ void main() {
   });
 
   testWidgets(
-    'keeps an automatic junction marker on the zoomed-out map overview',
-    (tester) async {
-      tester.view.physicalSize = const Size(844, 390);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final directory = Directory.systemTemp.createTempSync('marker-map-test');
-      addTearDown(() => directory.deleteSync(recursive: true));
-      final marker = ValueNotifier<MapJunctionMarkerOverlay?>(
-        const MapJunctionMarkerOverlay(
-          markerPoint: GeoPoint(latitude: 53, longitude: -1.01),
-          markerRiderName: 'You',
-          isLocalMarker: true,
-          ridersPassed: 2,
-          ridersExpected: 3,
-          tecDistanceMeters: 210,
-          instruction: 'You are holding the junction while riders pass.',
-          stage: MapJunctionMarkerStage.waitingForRiders,
-        ),
-      );
-      addTearDown(marker.dispose);
-      final route = ImportedRoute(
-        id: 'route',
-        name: 'Marker route',
-        importedAt: DateTime.utc(2026, 7, 17),
-        sourceFileName: 'route.gpx',
-        paths: const [
-          RoutePath(
-            kind: RoutePathKind.track,
-            points: [
-              GeoPoint(latitude: 53, longitude: -1.02),
-              GeoPoint(latitude: 53, longitude: -1.01),
-              GeoPoint(latitude: 53, longitude: -1.00),
-            ],
-          ),
-        ],
-        waypoints: const [],
-      );
-      final cache = OfflineTileCache(
-        rootDirectory: directory,
-        configuration: const BasemapConfiguration(),
-        httpClient: MockClient((_) async => http.Response('', 404)),
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData.dark(useMaterial3: true),
-          home: RideMapScreen(
-            routeStore: InMemoryRouteStore(route),
-            routeImporter: RouteImporter(source: const _NoFileSource()),
-            offlineTileCache: cache,
-            junctionMarkerOverlay: marker,
-            onEmergencyAlert: () async {},
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(AppBar), findsNothing);
-      expect(find.byKey(const Key('junction-marker-overlay')), findsOneWidget);
-      expect(find.text('You are holding this junction.'), findsOneWidget);
-      expect(find.text('2/3 passed'), findsOneWidget);
-      expect(find.byKey(const Key('navigation-follow-button')), findsNothing);
-      final overlayBounds = tester.getRect(
-        find.byKey(const Key('junction-marker-overlay')),
-      );
-      final riderX = 844 * navigationCameraLandscapeRiderFractionLeftTraffic;
-      expect(overlayBounds.left, greaterThan(riderX + 19));
-      expect(overlayBounds.right, closeTo(844 - 10, 1));
-      expect(overlayBounds.bottom, greaterThan(330));
-
-      marker.value = const MapJunctionMarkerOverlay(
-        markerPoint: GeoPoint(latitude: 53, longitude: -1.01),
-        markerRiderName: 'Maya',
-        isLocalMarker: false,
-        ridersPassed: 2,
-        ridersExpected: 3,
-        tecDistanceMeters: 210,
-        instruction: 'Maya is holding the junction while riders pass.',
-        stage: MapJunctionMarkerStage.waitingForRiders,
-      );
-      await tester.pump();
-
-      expect(find.byKey(const Key('junction-marker-overlay')), findsNothing);
-      expect(find.byType(AppBar), findsOneWidget);
-
-      tester.view.physicalSize = const Size(390, 844);
-      marker.value = const MapJunctionMarkerOverlay(
-        markerPoint: GeoPoint(latitude: 53, longitude: -1.01),
-        markerRiderName: 'You',
-        isLocalMarker: true,
-        ridersPassed: 2,
-        ridersExpected: 3,
-        tecDistanceMeters: 210,
-        instruction: 'You are holding the junction while riders pass.',
-        stage: MapJunctionMarkerStage.waitingForRiders,
-      );
-      await tester.pump();
-      await tester.pumpAndSettle();
-
-      final portraitBounds = tester.getRect(
-        find.byKey(const Key('junction-marker-overlay')),
-      );
-      expect(portraitBounds.left, greaterThanOrEqualTo(12));
-      expect(portraitBounds.right, lessThanOrEqualTo(378));
-      final emergencyBounds = tester.getRect(
-        find.byKey(const Key('emergency-alert-button')),
-      );
-      expect(emergencyBounds.bottom, lessThan(portraitBounds.top));
-
-      marker.value = null;
-      await tester.pump();
-
-      expect(find.byKey(const Key('junction-marker-overlay')), findsNothing);
-      expect(find.byType(AppBar), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-    },
-  );
-
-  testWidgets(
     'landscape moving mode hides chrome and styles progress and off-route trail',
     (tester) async {
       tester.view.physicalSize = const Size(844, 390);
@@ -2949,15 +2334,6 @@ void main() {
       );
       addTearDown(navigation.dispose);
       final traces = ValueNotifier<List<MapOverlayTrace>>([
-        const MapOverlayTrace(
-          id: 'trail-alex',
-          label: 'Alex off-route trace',
-          kind: RiderTrailKind.offRoute,
-          points: [
-            GeoPoint(latitude: 53, longitude: -1.01),
-            GeoPoint(latitude: 53.001, longitude: -1.011),
-          ],
-        ),
         const MapOverlayTrace(
           id: 'trail-blake',
           label: 'Blake leader trail',
@@ -3180,22 +2556,12 @@ void main() {
         isNot(contains(RouteTrailStyle.travelled.color)),
         reason: 'completed planned route must not be painted behind the rider',
       );
-      // The leader's trail is the widest line and is drawn under the plan; an
-      // off-route trail is dashed and drawn over it.
+      // The leader's trail is the widest line and is drawn under the plan.
       final leader = lineWithColor(RouteTrailStyle.leaderTrail.color);
       expect(leader.strokeWidth, RouteTrailStyle.leaderTrail.widthPixels);
       expect(
         layer.polylines.indexOf(leader),
         lessThan(layer.polylines.indexOf(ahead)),
-      );
-      final offRoute = lineWithColor(RouteTrailStyle.offRouteTrail.color);
-      expect(
-        offRoute.pattern.segments,
-        RouteTrailStyle.offRouteTrail.dashPixels,
-      );
-      expect(
-        layer.polylines.indexOf(offRoute),
-        greaterThan(layer.polylines.indexOf(ahead)),
       );
 
       await tester.drag(find.byType(FlutterMap), const Offset(80, 0));
@@ -3276,7 +2642,7 @@ void main() {
             MapEmergencyContact(
               riderId: 'tec',
               displayName: 'Charlie',
-              role: RideRole.tailEndCharlie,
+              role: RideRole.rider,
             ),
           ],
           onEmergencyAlert: () async => alerts += 1,
@@ -3344,7 +2710,7 @@ void main() {
             MapEmergencyContact(
               riderId: 'tec',
               displayName: 'Charlie',
-              role: RideRole.tailEndCharlie,
+              role: RideRole.rider,
             ),
           ],
           onEmergencyAlert: () async {},
@@ -3362,9 +2728,7 @@ void main() {
 
     // Both roles are listed, by name and role.
     expect(find.byKey(const Key('emergency-contact-lead')), findsOneWidget);
-    expect(find.byKey(const Key('emergency-contact-tec')), findsOneWidget);
     expect(find.text('Oliver (leader)'), findsOneWidget);
-    expect(find.text('Charlie (TEC)'), findsOneWidget);
 
     // The leader shared, so both dial controls are offered.
     expect(
@@ -3562,23 +2926,6 @@ void main() {
       ),
     );
     addTearDown(navigation.dispose);
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        tecName: 'Charlie',
-        distanceToTecMeters: 3200,
-        estimatedTimeToTec: Duration(minutes: 4),
-        tecLocationAge: Duration(seconds: 10),
-        offCourseAlerts: [
-          LeaderOffCourseAlert(
-            riderId: 'rider-alex',
-            displayName: 'Alex',
-            level: RouteAlertLevel.urgent,
-            distanceFromRouteMeters: 420,
-          ),
-        ],
-      ),
-    );
-    addTearDown(leaderStatus.dispose);
     final riders = ValueNotifier<List<MapOverlayMarker>>([
       const MapOverlayMarker(
         id: 'rider-alex',
@@ -3601,8 +2948,6 @@ void main() {
     final overlayKeys = <String>[
       'route-progress-panel-position',
       'navigation-guidance-banner',
-      'leader-off-course-alert',
-      'leader-tec-gap',
       'group-mini-map',
       'ride-menu-button',
       'emergency-alert-button',
@@ -3675,8 +3020,6 @@ void main() {
         for (final key in const [
           'ride-paused-banner',
           'route-progress-panel-position',
-          'leader-off-course-alert',
-          'leader-tec-gap',
           'group-mini-map',
           'ride-menu-button',
           'emergency-alert-button',
@@ -3734,7 +3077,6 @@ void main() {
           lessThanOrEqualTo(guidance.top),
           reason: 'the camera must lift the rider above the wider card',
         );
-        expect(rects['leader-tec-gap']!.bottom, lessThanOrEqualTo(miniMap.top));
         expect(
           rects['emergency-alert-button']!.left,
           greaterThanOrEqualTo(miniMap.right + 10),
@@ -3850,7 +3192,6 @@ void main() {
           routeImporter: RouteImporter(source: const _NoFileSource()),
           offlineTileCache: cache,
           navigationPosition: navigation,
-          leaderStatus: leaderStatus,
           overlayMarkers: riders,
           groupRiderCount: 3,
           ridePaused: true,
@@ -5292,23 +4633,6 @@ void main() {
       ),
     );
     addTearDown(navigation.dispose);
-    final leaderStatus = ValueNotifier<LeaderRideStatus?>(
-      const LeaderRideStatus(
-        tecName: 'Charlie',
-        distanceToTecMeters: 3200,
-        estimatedTimeToTec: Duration(minutes: 4),
-        tecLocationAge: Duration(seconds: 10),
-        offCourseAlerts: [
-          LeaderOffCourseAlert(
-            riderId: 'rider-alex',
-            displayName: 'Alex',
-            level: RouteAlertLevel.urgent,
-            distanceFromRouteMeters: 420,
-          ),
-        ],
-      ),
-    );
-    addTearDown(leaderStatus.dispose);
     final alerts = ValueNotifier<List<RideQuickMessageAlert>>(const []);
     addTearDown(alerts.dispose);
 
@@ -5350,7 +4674,6 @@ void main() {
         routeImporter: RouteImporter(source: const _NoFileSource()),
         offlineTileCache: cache,
         navigationPosition: navigation,
-        leaderStatus: leaderStatus,
         ridePaused: true,
         distanceUnit: DistanceUnit.miles,
         quickMessageAlerts: alerts,
@@ -5418,12 +4741,7 @@ void main() {
         reason: 'the alert must stack inside the band in $orientation',
       );
       // Nothing it shares the band with is covered.
-      for (final key in const [
-        'leader-off-course-alert',
-        'leader-tec-gap',
-        'navigation-guidance-banner',
-        ...actionKeys,
-      ]) {
+      for (final key in const ['navigation-guidance-banner', ...actionKeys]) {
         expect(
           alert.deflate(0.5).overlaps(tester.getRect(find.byKey(Key(key)))),
           isFalse,
@@ -5453,24 +4771,6 @@ void main() {
     await verify(landscape: true);
   });
 }
-
-CompletedRide _completedHeatmapRide(ImportedRoute traveledRoute) =>
-    CompletedRide(
-      rideId: 'heatmap-ride',
-      rideCode: '392725',
-      rideName: 'Previous ride',
-      localDisplayName: 'Oliver',
-      localRole: RideRole.lead,
-      startedAt: DateTime.utc(2026, 8, 12, 9),
-      endedAt: DateTime.utc(2026, 8, 12, 10),
-      archivedAt: DateTime.utc(2026, 8, 12, 10, 1),
-      riderCount: 1,
-      eventCount: 0,
-      totalDistanceMeters: 1000,
-      markerSessions: const [],
-      plannedRoute: null,
-      traveledRoute: traveledRoute,
-    );
 
 /// A received quick message as the ride shell publishes one.
 RideQuickMessageAlert _quickMessageAlert({
@@ -5554,37 +4854,6 @@ class _StubImportedTrackMatcher implements ImportedTrackMatcher {
     if (error case final failure?) throw failure;
     return result!;
   }
-}
-
-class _RecordingDestinationSearch implements DestinationSearchService {
-  final queries = <String>[];
-
-  @override
-  Future<List<DestinationMatch>> search(String query) async {
-    queries.add(query);
-    return [
-      DestinationMatch(
-        label: '$query place',
-        point: GeoPoint(
-          latitude: query == 'Wrong' ? 52 : 51.5,
-          longitude: query == 'Wrong' ? -1 : -2.5,
-        ),
-      ),
-    ];
-  }
-}
-
-class _StraightRoadRoutingService implements RoadRoutingService {
-  @override
-  Future<RoadRouteResult> routeThrough(
-    List<GeoPoint> waypoints, {
-    RoutePreferences? preferences,
-    double? originBearingDegrees,
-  }) async => RoadRouteResult(
-    points: waypoints,
-    distanceMeters: 12000,
-    duration: const Duration(minutes: 22),
-  );
 }
 
 class _RouteStartRoutingService implements RoadRoutingService {

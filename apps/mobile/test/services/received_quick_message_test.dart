@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/quick_message.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/services/geo_calculations.dart';
-import 'package:ride_relay/services/received_quick_message.dart';
-import 'package:ride_relay/services/ride_event_authenticator.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/quick_message.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/services/geo_calculations.dart';
+import 'package:balloon_crumbs/services/received_quick_message.dart';
+import 'package:balloon_crumbs/services/ride_event_authenticator.dart';
 
 const _rideId = 'ride-1';
 const _secret = 'invite-secret';

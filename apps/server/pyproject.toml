@@ -1,7 +1,7 @@
 [project]
-name = "ride-relay-server"
+name = "balloon-crumbs-server"
 version = "0.1.0"
-description = "Privacy-bounded internet relay for Hot Pursuit"
+description = "Privacy-bounded internet relay for Balloon Crumbs"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -26,15 +26,15 @@ dev = [
 ]
 
 [project.scripts]
-ride-relay-server = "ride_relay_server.__main__:main"
-ride-relay-cleanup = "ride_relay_server.cleanup:main"
+balloon-crumbs-server = "balloon_crumbs_server.__main__:main"
+balloon-crumbs-cleanup = "balloon_crumbs_server.cleanup:main"
 
 [build-system]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ride_relay_server"]
+packages = ["src/balloon_crumbs_server"]
 
 [tool.pytest.ini_options]
 addopts = "-q --strict-markers"

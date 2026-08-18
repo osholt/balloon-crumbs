@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/app/ride_relay_app.dart';
-import 'package:ride_relay/controllers/completed_rides_controller.dart';
-import 'package:ride_relay/controllers/distance_unit_controller.dart';
-import 'package:ride_relay/controllers/map_style_mode_controller.dart';
-import 'package:ride_relay/controllers/ride_code_preference_controller.dart';
-import 'package:ride_relay/controllers/ride_controller.dart';
-import 'package:ride_relay/controllers/rider_profile_controller.dart';
-import 'package:ride_relay/controllers/shared_route_controller.dart';
-import 'package:ride_relay/controllers/speed_limit_display_controller.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/data/in_memory_session_store.dart';
-import 'package:ride_relay/domain/completed_ride_store.dart';
-import 'package:ride_relay/domain/recorded_route_store.dart';
-import 'package:ride_relay/features/map/ride_map.dart';
-import 'package:ride_relay/services/leader_ride_status.dart';
-import 'package:ride_relay/services/nearby_bridge.dart';
+import 'package:balloon_crumbs/app/balloon_crumbs_app.dart';
+import 'package:balloon_crumbs/controllers/completed_rides_controller.dart';
+import 'package:balloon_crumbs/controllers/distance_unit_controller.dart';
+import 'package:balloon_crumbs/controllers/map_style_mode_controller.dart';
+import 'package:balloon_crumbs/controllers/ride_code_preference_controller.dart';
+import 'package:balloon_crumbs/controllers/ride_controller.dart';
+import 'package:balloon_crumbs/controllers/rider_profile_controller.dart';
+import 'package:balloon_crumbs/controllers/shared_route_controller.dart';
+import 'package:balloon_crumbs/controllers/speed_limit_display_controller.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/data/in_memory_session_store.dart';
+import 'package:balloon_crumbs/domain/completed_ride_store.dart';
+import 'package:balloon_crumbs/domain/recorded_route_store.dart';
+import 'package:balloon_crumbs/features/map/ride_map.dart';
+import 'package:balloon_crumbs/services/nearby_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Its own file on purpose.
@@ -113,18 +112,6 @@ void main() {
     await tester.tap(find.text('Map').last);
     await tester.pump();
 
-    // Ride Lab's authenticated virtual fixes are its source of truth. They do
-    // not appear in the relay participant list, so filtering them through that
-    // real-ride roster left the TEC card waiting forever despite Charlie
-    // moving on the map.
-    final rideMap = tester.widget<RideMapFeature>(find.byType(RideMapFeature));
-    final status = rideMap.leaderStatus?.value;
-    expect(status?.hasRegisteredTec, isTrue);
-    expect(status?.tecAvailability, TecAvailability.tracking);
-    expect(status?.tecName, 'Charlie');
-    expect(status?.distanceToTecMeters, isPositive);
-    expect(status?.estimatedTimeToTec, isNotNull);
-
     // Ride until the shell decides the rider is navigating and takes the bar
     // away. That state is the whole point of the test: if it never arrives,
     // the test is not exercising the defect and must say so rather than pass.
@@ -179,7 +166,7 @@ late RideCodePreferenceController _rideCodePreference;
 late CompletedRidesController _completedRides;
 final _recordedRoutes = InMemoryRecordedRouteStore();
 
-RideRelayApp _app(RideController controller) => RideRelayApp(
+BalloonCrumbsApp _app(RideController controller) => BalloonCrumbsApp(
   controller: controller,
   distanceUnits: DistanceUnitController.forLocale(const Locale('en', 'GB')),
   mapStyleMode: _mapStyleMode,

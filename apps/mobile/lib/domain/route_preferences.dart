@@ -39,8 +39,12 @@ enum RouteStyle {
   bool get prefersBends => this != RouteStyle.quickest;
 
   /// Valhalla `use_highways` for this style, or null when the style expresses
-  /// no highway preference of its own. `motorcycleCostingOptions` in
-  /// `planner-core.mjs` holds the same three numbers.
+  /// no highway preference of its own.
+  ///
+  /// Inherited from motorcycling, where seeking bends is the point. A chase crew
+  /// wants the quickest way to a landing zone, so biasing them off highways is
+  /// probably wrong — but it is a preference a person chooses, so WP7 gets to
+  /// decide whether the choice survives rather than this changing it quietly.
   double? get highwayPreference => switch (this) {
     RouteStyle.quickest => null,
     RouteStyle.flowing => 0.6,
@@ -110,8 +114,8 @@ class RoutePreferences {
 
   bool get isDefault => this == defaults;
 
-  /// Whether these preferences need Valhalla's motorcycle costing rather than
-  /// the plain OSRM driving profile.
+  /// Whether these preferences need Valhalla's costing rather than the plain
+  /// OSRM driving profile.
   ///
   /// This is the web planner's `requestRoadRoute` rule, extended for byways.
   /// The four avoidances are hard exclusions OSRM's driving profile cannot
@@ -119,26 +123,36 @@ class RoutePreferences {
   /// opposite reason: OSRM's standard car profile does not route
   /// `highway=track` at all, so *seeking* byways is the case OSRM cannot serve.
   /// Avoiding them is the case it already serves, which is why the default
-  /// preference does not force every route onto the motorcycle service.
-  bool get requiresMotorcycleCosting =>
+  /// preference does not force every route onto the Valhalla service.
+  bool get requiresValhallaCosting =>
       avoidMotorways ||
       avoidMajorRoads ||
       avoidTolls ||
       avoidFerries ||
       !bywaySurface.avoidsUnsurfaced;
 
-  /// Valhalla `costing_options.motorcycle`.
+  /// Valhalla `costing_options.auto`.
   ///
-  /// Identical to `motorcycleCostingOptions` in `planner-core.mjs`, including
-  /// its numbers. `use_trails` and `exclude_unpaved` are documented Valhalla
-  /// motorcycle/auto options derived from OpenStreetMap surface and track
-  /// tagging, which is what makes the byway preference honour the tags instead
-  /// of guessing from road class.
-  Map<String, Object?> valhallaMotorcycleCostingOptions() => {
+  /// The numbers came from `motorcycleCostingOptions` in the web planner's
+  /// `planner-core.mjs` and the two were deliberately identical. They are not any
+  /// more: a chase vehicle is a Land Rover or a van, often towing, so it is
+  /// routed with `auto` costing rather than `motorcycle`. Until the web planner
+  /// follows, the two surfaces ask the same engine slightly different questions.
+  ///
+  /// `use_tracks` rather than `use_trails`: they are the same idea under
+  /// different names, and Valhalla only accepts the former under `auto`. It is
+  /// the option that matters most here — a landing field is usually reached down
+  /// a farm track, and `auto` defaults to avoiding them, so a crew that has not
+  /// asked to avoid unsurfaced ways must have tracks opened back up explicitly.
+  ///
+  /// `exclude_unpaved` and `use_tracks` both derive from OpenStreetMap surface
+  /// and track tagging, which is what makes the byway preference honour the tags
+  /// instead of guessing from road class.
+  Map<String, Object?> valhallaAutoCostingOptions() => {
     'use_highways': avoidMajorRoads ? 0.08 : style.highwayPreference ?? 1,
     'use_tolls': avoidTolls ? 0 : 0.5,
     'use_ferry': avoidFerries ? 0 : 0.5,
-    'use_trails': bywaySurface.avoidsUnsurfaced ? 0 : 0.5,
+    'use_tracks': bywaySurface.avoidsUnsurfaced ? 0 : 0.5,
     'exclude_highways': avoidMotorways,
     'exclude_tolls': avoidTolls,
     'exclude_ferries': avoidFerries,

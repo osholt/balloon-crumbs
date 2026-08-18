@@ -91,7 +91,7 @@ class BuildIdentity {
   factory BuildIdentity.fromEnvironment({TargetPlatform? platform}) {
     final resolvedPlatform = platform ?? defaultTargetPlatform;
     const overriddenUpdateUrl = String.fromEnvironment(
-      'RIDE_RELAY_TESTER_UPDATE_URL',
+      'BALLOON_CRUMBS_TESTER_UPDATE_URL',
     );
     // Read the version through the relay descriptor rather than re-reading the
     // dart-defines here. Two independent reads with two different fallbacks is
@@ -106,23 +106,23 @@ class BuildIdentity {
       track: track,
       platform: resolvedPlatform,
       builtAt: _parseTimestamp(
-        const String.fromEnvironment('RIDE_RELAY_BUILD_TIMESTAMP'),
+        const String.fromEnvironment('BALLOON_CRUMBS_BUILD_TIMESTAMP'),
       ),
       relayHost: _hostOf(
-        const String.fromEnvironment('RIDE_RELAY_API_BASE_URL'),
+        const String.fromEnvironment('BALLOON_CRUMBS_API_BASE_URL'),
       ),
       updateUri: overriddenUpdateUrl.trim().isEmpty
           ? defaultUpdateUriFor(resolvedPlatform, track)
           : _secureUri(overriddenUpdateUrl),
       testerNotesUri: _secureUri(
         const String.fromEnvironment(
-          'RIDE_RELAY_TESTER_NOTES_URL',
+          'BALLOON_CRUMBS_TESTER_NOTES_URL',
           defaultValue: defaultTesterNotesUrl,
         ),
       ),
       testerBuildLifetime: Duration(
         days: const int.fromEnvironment(
-          'RIDE_RELAY_TESTER_BUILD_LIFETIME_DAYS',
+          'BALLOON_CRUMBS_TESTER_BUILD_LIFETIME_DAYS',
           defaultValue: 14,
         ).clamp(1, 365),
       ),
@@ -133,7 +133,7 @@ class BuildIdentity {
   /// the internal-testing invitation see the internal release here; testers who
   /// have not see the public listing and must accept the invitation first.
   static const playListingUrl =
-      'https://play.google.com/store/apps/details?id=dev.osholt.hotpursuit';
+      'https://play.google.com/store/apps/details?id=dev.osholt.ballooncrumbs';
 
   /// The closed-testing opt-in page for the Android package.
   ///
@@ -142,11 +142,11 @@ class BuildIdentity {
   /// store listing is the wrong destination for a closed-track build. This page
   /// both enrols the account and links straight through to the install/update.
   static const playClosedTestingOptInUrl =
-      'https://play.google.com/apps/testing/dev.osholt.hotpursuit';
+      'https://play.google.com/apps/testing/dev.osholt.ballooncrumbs';
 
   /// TestFlight's own landing page. A build-specific TestFlight invitation link
   /// can only be issued from App Store Connect, so it is supplied per build
-  /// through `RIDE_RELAY_TESTER_UPDATE_URL` when one exists.
+  /// through `BALLOON_CRUMBS_TESTER_UPDATE_URL` when one exists.
   static const testFlightUrl = 'https://testflight.apple.com/';
 
   static const defaultTesterNotesUrl =
@@ -200,7 +200,7 @@ class BuildIdentity {
 
   /// A single line a tester can copy into a bug report.
   String get bugReportLine =>
-      'Hot Pursuit ${reportsVersion ? '$appVersion+$appBuild' : 'unstamped build (version not reported)'} · '
+      'Balloon Crumbs ${reportsVersion ? '$appVersion+$appBuild' : 'unstamped build (version not reported)'} · '
       '${track.label} · ${platform.name}';
 
   bool get hasRelayEndpoint => relayHost.isNotEmpty;
@@ -235,7 +235,7 @@ class BuildIdentity {
       'Open Google Play, then Manage apps & device → Updates available. '
           'Play can take a few minutes to show a new internal-testing build.',
     TargetPlatform.iOS =>
-      'Open TestFlight and pull to refresh, then choose Update for Hot Pursuit.',
+      'Open TestFlight and pull to refresh, then choose Update for Balloon Crumbs.',
     _ => 'Reinstall the build from the channel it was distributed on.',
   };
 

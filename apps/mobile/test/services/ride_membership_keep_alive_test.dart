@@ -1,16 +1,16 @@
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/rider_color.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/features/map/motorcycle_icon.dart';
-import 'package:ride_relay/relay/live_presence.dart';
-import 'package:ride_relay/services/position_report_policy.dart';
-import 'package:ride_relay/services/ride_event_authenticator.dart';
-import 'package:ride_relay/services/ride_membership.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/rider_color.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
+import 'package:balloon_crumbs/relay/live_presence.dart';
+import 'package:balloon_crumbs/services/position_report_policy.dart';
+import 'package:balloon_crumbs/services/ride_event_authenticator.dart';
+import 'package:balloon_crumbs/services/ride_membership.dart';
 
 /// The #166 guarantee that #27 and #144 must survive: a rider who has stopped
 /// moving is still there.
@@ -38,7 +38,7 @@ void main() {
     localDisplayName: 'Lead',
     localRole: RideRole.lead,
     localJoinedAt: startedAt,
-    localMotorcycleStyle: motorcycleIconStyleDefault,
+    localMotorcycleStyle: craftIconStyleDefault,
     localRiderColor: riderColorDefault,
     rideStartedAt: startedAt,
     livePresence: livePresence,

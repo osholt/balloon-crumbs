@@ -1,13 +1,13 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/relay/relay_protocol.dart';
-import 'package:ride_relay/relay/relay_queue.dart';
-import 'package:ride_relay/relay/relay_presence.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/relay/relay_protocol.dart';
+import 'package:balloon_crumbs/relay/relay_queue.dart';
+import 'package:balloon_crumbs/relay/relay_presence.dart';
 
 void main() {
   const secret = '0123456789abcdef0123456789abcdef';

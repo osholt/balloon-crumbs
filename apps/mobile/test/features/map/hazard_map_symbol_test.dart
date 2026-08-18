@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/geo_point.dart';
-import 'package:ride_relay/domain/hazard.dart';
-import 'package:ride_relay/features/map/hazard_map_symbol.dart';
-import 'package:ride_relay/features/map/route_trail_style.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/features/map/hazard_map_symbol.dart';
+import 'package:balloon_crumbs/features/map/route_trail_style.dart';
 
 void main() {
   final reportedAt = DateTime.utc(2026, 7, 27, 12);

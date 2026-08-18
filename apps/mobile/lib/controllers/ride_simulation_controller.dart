@@ -10,20 +10,12 @@ import '../domain/ride_role.dart';
 import '../domain/ride_session.dart';
 import '../domain/rider_color.dart';
 import '../domain/rider_location.dart';
-import '../features/map/motorcycle_icon.dart';
+import '../features/map/craft_icon.dart';
 import '../services/geo_calculations.dart';
 import '../services/situation_event_factory.dart';
 import 'situational_awareness_controller.dart';
 
 enum RideSimulationState { ready, running, paused, completed }
-
-/// The automatic second-bike-drop sequence shown by the Ride Lab.
-enum SimulationMarkerPhase {
-  riding,
-  waitingForRiders,
-  tecApproaching,
-  readyToRideOff,
-}
 
 class SimulatedRiderSnapshot {
   const SimulatedRiderSnapshot({
@@ -52,7 +44,7 @@ class SimulatedRiderSnapshot {
   final bool isOffRoute;
   final GeoPoint position;
   final double headingDegrees;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
 
@@ -74,8 +66,6 @@ class RideSimulationController extends ChangeNotifier {
     this._awarenessController, {
     required RideSession session,
     required List<GeoPoint> route,
-    List<GeoPoint> markerJunctions = const [],
-    List<GeoPoint> fallbackJunctions = const [],
     this.tickInterval = const Duration(milliseconds: 100),
     this.eventInterval = const Duration(seconds: 2),
     this.riderCount = RideSession.defaultSimulationRiderCount,
@@ -91,38 +81,12 @@ class RideSimulationController extends ChangeNotifier {
        // ignore: prefer_initializing_formals
        _rideStarted = rideStarted,
        _routeSampler = _RouteSampler(route),
-       _selectedLocalRole = session.role == RideRole.marker
-           ? RideRole.rider
-           : session.role {
-    final leadStart = _routeSampler.totalDistanceMeters * 0.06;
-    _agents = _buildAgents(leadStart);
-    List<double> usableJunctions(List<GeoPoint> points) => _routeSampler
-        .progressesFor(points)
-        .where(
-          (progress) =>
-              progress > leadStart + 140 &&
-              progress < _routeSampler.totalDistanceMeters - 240,
-        )
-        .toList(growable: false);
-    final requestedJunctions = usableJunctions(markerJunctions);
-    final derivedJunctions = requestedJunctions.isEmpty
-        ? usableJunctions(fallbackJunctions)
-        : const <double>[];
-    final selectedJunctions = requestedJunctions.isNotEmpty
-        ? requestedJunctions
-        : derivedJunctions;
-    _markerJunctionProgresses = selectedJunctions.isEmpty
-        ? [
-            math.min(
-              _routeSampler.totalDistanceMeters - 240,
-              _routeSampler.totalDistanceMeters * 0.22,
-            ),
-          ]
-        : selectedJunctions;
+       _selectedLocalRole = session.role {
+    _agents = _buildAgents(_routeSampler.totalDistanceMeters * 0.06);
   }
 
   static const offRouteRiderId = 'ride-lab-alex';
-  static const tecRiderId = 'ride-lab-charlie';
+  static const backRiderId = 'ride-lab-charlie';
 
   final SituationalAwarenessController _awarenessController;
   final RideSession _session;
@@ -131,86 +95,26 @@ class RideSimulationController extends ChangeNotifier {
   final Duration eventInterval;
   final int riderCount;
   late final List<_SimulatedAgent> _agents;
-  late final List<double> _markerJunctionProgresses;
   RideRole _selectedLocalRole;
   Timer? _timer;
   RideSimulationState _state = RideSimulationState.ready;
   Duration _simulatedElapsed = Duration.zero;
   double _timeScale = 8;
   double _baseSpeedMetersPerSecond = 13.4;
-  bool _tecDelayed = false;
+  bool _backRiderDelayed = false;
   bool _emitting = false;
-  bool _markerMode = false;
   bool _rideStarted;
   Duration _eventElapsed = Duration.zero;
   int _eventSequence = 0;
   DateTime? _lastRecordedAt;
-  int _nextMarkerJunctionIndex = 0;
-  double? _activeMarkerProgressMeters;
-  String? _activeMarkerRiderId;
-  Set<String> _ridersExpectedToPass = const {};
-  SimulationMarkerPhase _markerPhase = SimulationMarkerPhase.riding;
-  Duration _tecApproachElapsed = Duration.zero;
-  int _automaticMarkerActivation = 0;
-  int _automaticMarkerRideOffActivation = 0;
-  bool _lastAutomaticMarkerRideOffWasLocal = false;
 
   RideSimulationState get state => _state;
   Duration get simulatedElapsed => _simulatedElapsed;
   double get timeScale => _timeScale;
   double get baseSpeedMetersPerSecond => _baseSpeedMetersPerSecond;
-  bool get tecDelayed => _tecDelayed;
+  bool get backRiderDelayed => _backRiderDelayed;
   bool get rideStarted => _rideStarted;
   RideRole get localRole => _selectedLocalRole;
-  bool get markerMode => _markerMode;
-  SimulationMarkerPhase get markerPhase => _markerPhase;
-  bool get automaticMarkerActive => _activeMarkerProgressMeters != null;
-  bool get automaticMarkerIsLocal =>
-      _activeMarkerRiderId == _session.localRiderId;
-  String? get automaticMarkerRiderName => switch (_activeMarkerRiderId) {
-    final String riderId => _agent(riderId).displayName,
-    null => null,
-  };
-  bool get canRideOff =>
-      _markerMode && _markerPhase == SimulationMarkerPhase.readyToRideOff;
-  int get automaticMarkerActivation => _automaticMarkerActivation;
-  int get automaticMarkerRideOffActivation => _automaticMarkerRideOffActivation;
-  bool get lastAutomaticMarkerRideOffWasLocal =>
-      _lastAutomaticMarkerRideOffWasLocal;
-  int get ridersExpectedToPass => _ridersExpectedToPass.length;
-  int get ridersPassedMarker {
-    final markerProgress = _activeMarkerProgressMeters;
-    if (markerProgress == null) return 0;
-    return _ridersExpectedToPass
-        .where(
-          (id) =>
-              _agent(id).progressMeters >= markerProgress + _markerPassMeters,
-        )
-        .length;
-  }
-
-  double? get tecDistanceToMarkerMeters {
-    final markerProgress = _activeMarkerProgressMeters;
-    if (markerProgress == null) return null;
-    return math.max(0, markerProgress - _agent(tecRiderId).progressMeters);
-  }
-
-  String get markerInstruction => switch (_markerPhase) {
-    SimulationMarkerPhase.riding =>
-      'The simulated second bike will stop at the next route decision.',
-    SimulationMarkerPhase.waitingForRiders =>
-      ridersPassedMarker < ridersExpectedToPass
-          ? '${_markerRiderSubject()} $_markerRiderPresentVerb holding the junction while riders pass '
-                '($ridersPassedMarker/$ridersExpectedToPass).'
-          : 'Riders are through. ${_markerRiderSubject()} $_markerRiderPresentVerb waiting for '
-                'Hot Pursuit.',
-    SimulationMarkerPhase.tecApproaching =>
-      '${ridersPassedMarker < ridersExpectedToPass ? 'Traffic is still clearing. ' : 'All riders are through. '}TEC is approaching — '
-          '${_markerRiderSubject().toLowerCase()} should get ready to ride off.',
-    SimulationMarkerPhase.readyToRideOff =>
-      'TEC has passed. ${_markerRiderSubject()} can ride off and return to '
-          'navigation.',
-  };
   bool get alexOffRoute => _agent(offRouteRiderId).isOffRoute;
   bool get isRunning => _state == RideSimulationState.running;
   double get routeDistanceMeters => _routeSampler.totalDistanceMeters;
@@ -247,9 +151,8 @@ class RideSimulationController extends ChangeNotifier {
     // of silhouettes and colours without repeating the local rider's own
     // choices. Lead/TEC roles still override to their reserved colour when
     // rendered, so this only ever shows for plain riders.
-    MotorcycleIconStyle demoStyleFor(int index) =>
-        MotorcycleIconStyle.values[(index + 1) %
-            MotorcycleIconStyle.values.length];
+    CraftIconStyle demoStyleFor(int index) =>
+        CraftIconStyle.values[(index + 1) % CraftIconStyle.values.length];
     RiderColor demoColorFor(int index) =>
         RiderColor.values[(index + 1) % RiderColor.values.length];
     _SimulatedAgent rider({
@@ -319,12 +222,10 @@ class RideSimulationController extends ChangeNotifier {
     }
     agents.add(
       rider(
-        id: tecRiderId,
+        id: backRiderId,
         displayName: 'Charlie',
         index: riderCount - 1,
-        role: _selectedLocalRole == RideRole.tailEndCharlie
-            ? RideRole.rider
-            : RideRole.tailEndCharlie,
+        role: RideRole.rider,
       ),
     );
     return agents;
@@ -332,9 +233,9 @@ class RideSimulationController extends ChangeNotifier {
 
   List<GeoPoint> _displayTrailFor(_SimulatedAgent agent) {
     if (agent.role != RideRole.lead) return agent.travelTrail;
-    final tec = _agent(tecRiderId);
+    final backRider = _agent(backRiderId);
     final routeTrail = _routeSampler.pointsBetween(
-      math.min(tec.progressMeters, agent.progressMeters),
+      math.min(backRider.progressMeters, agent.progressMeters),
       agent.progressMeters,
     );
     if (!agent.isOffRoute || agent.offRouteTrail.length < 2) {
@@ -403,51 +304,22 @@ class RideSimulationController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setTecDelayed(bool value) {
-    if (_tecDelayed == value) return;
-    _tecDelayed = value;
+  void setBackRiderDelayed(bool value) {
+    if (_backRiderDelayed == value) return;
+    _backRiderDelayed = value;
     notifyListeners();
   }
 
   void setLocalRole(RideRole role) {
-    if (role == RideRole.marker || role == _selectedLocalRole) return;
-    // The virtual viewpoint can safely change while another rider is holding a
-    // junction. It remains locked only when this device is the marker.
-    if (_markerMode &&
-        (_activeMarkerRiderId == null || automaticMarkerIsLocal)) {
-      return;
-    }
+    if (role == _selectedLocalRole) return;
     _selectedLocalRole = role;
     _assignPerspectiveRoles();
-    if (_activeMarkerRiderId case final markerRiderId?) {
-      _agent(markerRiderId).role = RideRole.marker;
-    }
     _positionFleetForPerspective();
-    _skipJunctionsBehindLocalRider();
     for (final agent in _agents) {
       agent.travelTrail.clear();
       _recordTravelTrail(agent);
     }
     notifyListeners();
-  }
-
-  void setMarkerMode(bool value) {
-    if (_markerMode == value) return;
-    _markerMode = value;
-    if (value) {
-      _agents.first.role = RideRole.marker;
-    } else {
-      _finishMarkerMode();
-      _assignPerspectiveRoles();
-    }
-    notifyListeners();
-  }
-
-  /// Leaves a completed automatic marker stop and resumes the navigation
-  /// simulation. The owning shell records the matching marker-ended event.
-  void rideOff() {
-    if (!canRideOff) return;
-    setMarkerMode(false);
   }
 
   Future<void> reportRoadworks() async {
@@ -495,39 +367,17 @@ class RideSimulationController extends ChangeNotifier {
     _simulatedElapsed += simulatedDelta;
     final seconds =
         simulatedDelta.inMicroseconds / Duration.microsecondsPerSecond;
-    final secondBike = _secondBikeFollowingLead();
-    final lead = _leadAgent();
-    final projectedLeadProgress = _isStoppedAtMarker(lead)
-        ? lead.progressMeters
-        : math.min(
-            routeDistanceMeters,
-            lead.progressMeters + _speedFor(lead) * seconds,
-          );
     for (final agent in _agents) {
-      if (_isStoppedAtMarker(agent)) continue;
-      final nextProgress = math.min(
+      agent.progressMeters = math.min(
         routeDistanceMeters,
         agent.progressMeters + _speedFor(agent) * seconds,
       );
-      if (agent.id == secondBike?.id &&
-          _shouldStartAutomaticMarker(
-            agent,
-            nextProgress,
-            projectedLeadProgress,
-          )) {
-        agent.progressMeters =
-            _markerJunctionProgresses[_nextMarkerJunctionIndex];
-        _startAutomaticMarker(agent);
-        continue;
-      }
-      agent.progressMeters = nextProgress;
     }
     _keepFollowerBehindLeader();
     for (final agent in _agents) {
       _recordTravelTrail(agent);
       if (agent.isOffRoute) _recordOffRouteTrail(agent);
     }
-    _updateAutomaticMarkerPhase(realElapsed);
     final completed = _agents.every(
       (agent) => agent.progressMeters >= routeDistanceMeters,
     );
@@ -550,12 +400,19 @@ class RideSimulationController extends ChangeNotifier {
       for (final entry in samples) {
         final agent = entry.agent;
         final sampled = entry.sampled;
+        final flight = _balloonFlightAt(agent);
         final sample = LocationSample(
           position: sampled.position,
           recordedAt: recordedAt,
           accuracyMeters: 4,
           speedMetersPerSecond: _speedFor(agent),
           headingDegrees: sampled.headingDegrees,
+          altitudeMeters: flight?.altitudeMeters,
+          altitudeSource: flight == null
+              ? AltitudeSource.unknown
+              : AltitudeSource.gnss,
+          altitudeAccuracyMeters: flight == null ? null : 6,
+          verticalSpeedMetersPerSecond: flight?.verticalSpeedMetersPerSecond,
         );
         if (agent.isLocal) {
           await _awarenessController.recordLocalLocation(sample);
@@ -611,11 +468,59 @@ class RideSimulationController extends ChangeNotifier {
     await _awarenessController.ingestRemoteEvent(event);
   }
 
+  /// The balloon's height and climb rate at its current point in the flight.
+  ///
+  /// Only the lead agent flies: it stands in for the balloon while the rest of
+  /// the fleet are chase vehicles on the road. Null for everyone else, and null
+  /// before the ride starts, so Ride Lab exercises the "this fix carries no
+  /// altitude" path as well as the flying one — the two have to look different
+  /// on every surface, and a demo that only ever shows a number would never
+  /// prove it.
+  ///
+  /// The shape is a short UK flight: climb out, ride the wind for most of the
+  /// track, then a long descent onto the landing field. Deliberately not a
+  /// smooth arc — a balloon holds a level while the pilot looks for a layer,
+  /// which is what makes an altitude trail worth colouring.
+  ({double altitudeMeters, double verticalSpeedMetersPerSecond})?
+  _balloonFlightAt(_SimulatedAgent agent) {
+    if (agent.role != RideRole.lead || routeDistanceMeters <= 0) return null;
+    final progress = (agent.progressMeters / routeDistanceMeters).clamp(
+      0.0,
+      1.0,
+    );
+    const groundMeters = 100.0;
+    const cruiseMeters = 640.0;
+    const climbRate = 2.4;
+    const descentRate = -1.6;
+
+    return switch (progress) {
+      // Climb out of the launch field.
+      < 0.18 => (
+        altitudeMeters:
+            groundMeters + (cruiseMeters - groundMeters) * (progress / 0.18),
+        verticalSpeedMetersPerSecond: climbRate,
+      ),
+      // Holding a layer, with the small drift a burner actually produces.
+      < 0.68 => (
+        altitudeMeters:
+            cruiseMeters + 40 * math.sin((progress - 0.18) * math.pi * 3),
+        verticalSpeedMetersPerSecond:
+            0.6 * math.cos((progress - 0.18) * math.pi * 3),
+      ),
+      // Long descent onto the field.
+      _ => (
+        altitudeMeters:
+            cruiseMeters -
+            (cruiseMeters - groundMeters) * ((progress - 0.68) / 0.32),
+        verticalSpeedMetersPerSecond: descentRate,
+      ),
+    };
+  }
+
   double _speedFor(_SimulatedAgent agent) {
     if (!_rideStarted) return 0;
     if (_state == RideSimulationState.completed) return 0;
-    if (_isStoppedAtMarker(agent)) return 0;
-    if (agent.id == tecRiderId && _tecDelayed) {
+    if (agent.id == backRiderId && _backRiderDelayed) {
       return _baseSpeedMetersPerSecond * 0.45;
     }
     final elapsedSeconds =
@@ -656,96 +561,8 @@ class RideSimulationController extends ChangeNotifier {
     }
   }
 
-  bool _shouldStartAutomaticMarker(
-    _SimulatedAgent candidate,
-    double nextProgress,
-    double projectedLeadProgress,
-  ) {
-    if (_markerMode ||
-        _nextMarkerJunctionIndex >= _markerJunctionProgresses.length) {
-      return false;
-    }
-    final markerProgress = _markerJunctionProgresses[_nextMarkerJunctionIndex];
-    return candidate.id != _leadAgent().id &&
-        projectedLeadProgress >= markerProgress + _leaderClearanceMeters &&
-        nextProgress >= markerProgress;
-  }
-
-  void _startAutomaticMarker(_SimulatedAgent marker) {
-    final markerProgress = _markerJunctionProgresses[_nextMarkerJunctionIndex];
-    final lead = _leadAgent();
-    _markerMode = true;
-    _activeMarkerProgressMeters = markerProgress;
-    _activeMarkerRiderId = marker.id;
-    _markerPhase = SimulationMarkerPhase.waitingForRiders;
-    marker.role = RideRole.marker;
-    _ridersExpectedToPass = {
-      for (final agent in _agents)
-        if (agent.id != marker.id &&
-            agent.id != lead.id &&
-            agent.id != tecRiderId &&
-            agent.progressMeters <= markerProgress + _markerPassMeters)
-          agent.id,
-    };
-    _lastAutomaticMarkerRideOffWasLocal = false;
-    _automaticMarkerActivation += 1;
-  }
-
-  void _updateAutomaticMarkerPhase(Duration realElapsed) {
-    final markerProgress = _activeMarkerProgressMeters;
-    if (!_markerMode || markerProgress == null) return;
-    final tec = _agent(tecRiderId);
-    final distance = markerProgress - tec.progressMeters;
-    if (distance <= _tecRideOffMeters) {
-      _lastAutomaticMarkerRideOffWasLocal = automaticMarkerIsLocal;
-      _automaticMarkerRideOffActivation += 1;
-      setMarkerMode(false);
-      return;
-    }
-    if (distance <= _tecApproachMeters) {
-      _markerPhase = SimulationMarkerPhase.tecApproaching;
-      return;
-    }
-    final ridersAreThrough = ridersPassedMarker >= ridersExpectedToPass;
-    if (!ridersAreThrough) {
-      _markerPhase = SimulationMarkerPhase.waitingForRiders;
-      _tecApproachElapsed = Duration.zero;
-      return;
-    }
-    if (tec.progressMeters >= markerProgress + _markerPassMeters) {
-      _markerPhase = SimulationMarkerPhase.tecApproaching;
-      _tecApproachElapsed += realElapsed;
-      if (_tecApproachElapsed >= const Duration(seconds: 2)) {
-        _markerPhase = SimulationMarkerPhase.readyToRideOff;
-      }
-      return;
-    }
-    _markerPhase = SimulationMarkerPhase.waitingForRiders;
-    _tecApproachElapsed = Duration.zero;
-  }
-
-  void _finishMarkerMode() {
-    if (_activeMarkerProgressMeters != null &&
-        _nextMarkerJunctionIndex < _markerJunctionProgresses.length) {
-      _nextMarkerJunctionIndex += 1;
-    }
-    _activeMarkerProgressMeters = null;
-    _activeMarkerRiderId = null;
-    _ridersExpectedToPass = const {};
-    _markerPhase = SimulationMarkerPhase.riding;
-    _tecApproachElapsed = Duration.zero;
-  }
-
   void _positionFleetForPerspective() {
     final local = _agents.first;
-    if (_selectedLocalRole == RideRole.tailEndCharlie) {
-      final lastRemoteProgress = _agents
-          .where((agent) => !agent.isLocal)
-          .map((agent) => agent.progressMeters)
-          .reduce(math.min);
-      local.progressMeters = math.max(0, lastRemoteProgress - 160);
-      return;
-    }
     if (_selectedLocalRole != RideRole.rider) return;
     final maya = _agent('ride-lab-maya');
     maya.progressMeters = math.min(
@@ -763,14 +580,6 @@ class RideSimulationController extends ChangeNotifier {
       local.progressMeters,
       math.max(0, lead.progressMeters - _followerGapMeters),
     );
-  }
-
-  void _skipJunctionsBehindLocalRider() {
-    while (_nextMarkerJunctionIndex < _markerJunctionProgresses.length &&
-        _markerJunctionProgresses[_nextMarkerJunctionIndex] <=
-            _agents.first.progressMeters + 20) {
-      _nextMarkerJunctionIndex += 1;
-    }
   }
 
   _SimulatedPosition _sampleAgent(_SimulatedAgent agent) {
@@ -795,55 +604,18 @@ class RideSimulationController extends ChangeNotifier {
     if (_selectedLocalRole != RideRole.lead) {
       _agent('ride-lab-maya').role = RideRole.lead;
     }
-    if (_selectedLocalRole != RideRole.tailEndCharlie) {
-      _agent(tecRiderId).role = RideRole.tailEndCharlie;
-    }
   }
 
-  static const _markerPassMeters = 35.0;
-  static const _tecApproachMeters = 260.0;
-  static const _tecRideOffMeters = 55.0;
   static const _followerGapMeters = 180.0;
-  static const _leaderClearanceMeters = 18.0;
-
-  bool _isStoppedAtMarker(_SimulatedAgent agent) =>
-      _markerMode &&
-      (_activeMarkerRiderId == agent.id ||
-          (_activeMarkerRiderId == null && agent.isLocal));
 
   _SimulatedAgent _leadAgent() => _agents.firstWhere(
     (agent) => agent.role == RideRole.lead,
     orElse: () => _agents.first,
   );
 
-  _SimulatedAgent? _secondBikeFollowingLead() {
-    final lead = _leadAgent();
-    final following =
-        _agents
-            .where(
-              (agent) =>
-                  agent.id != lead.id &&
-                  agent.progressMeters <= lead.progressMeters,
-            )
-            .toList(growable: false)
-          ..sort(
-            (first, second) =>
-                second.progressMeters.compareTo(first.progressMeters),
-          );
-    return following.isEmpty ? null : following.first;
-  }
-
-  String _markerRiderSubject() => automaticMarkerIsLocal
-      ? 'You'
-      : (automaticMarkerRiderName ?? 'The rider');
-
-  String get _markerRiderPresentVerb => automaticMarkerIsLocal ? 'are' : 'is';
-
   String get _localPerspectiveName => switch (_selectedLocalRole) {
     RideRole.lead => _session.displayName,
     RideRole.rider => 'You · Follower',
-    RideRole.tailEndCharlie => 'You · TEC',
-    RideRole.marker => 'You · Marker',
   };
 
   DateTime _nextRecordedAt() {
@@ -898,7 +670,7 @@ class _SimulatedAgent {
   double progressMeters;
   final double speedFactor;
   final double trafficPhaseSeconds;
-  final MotorcycleIconStyle motorcycleStyle;
+  final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final bool isLocal;
@@ -935,21 +707,6 @@ class _RouteSampler {
   final List<GeoPoint> _route;
   late final List<double> _cumulativeDistances;
   late final double totalDistanceMeters;
-
-  List<double> progressesFor(List<GeoPoint> points) {
-    final values =
-        points
-            .map((point) => GeoCalculations.projectOntoPolyline(point, _route))
-            .where((projection) => projection.distanceFromRouteMeters <= 120)
-            .map((projection) => projection.distanceAlongRouteMeters)
-            .toList()
-          ..sort();
-    final unique = <double>[];
-    for (final value in values) {
-      if (unique.isEmpty || value - unique.last >= 120) unique.add(value);
-    }
-    return List.unmodifiable(unique);
-  }
 
   List<GeoPoint> pointsBetween(double fromMeters, double toMeters) {
     final start = fromMeters.clamp(0, totalDistanceMeters).toDouble();

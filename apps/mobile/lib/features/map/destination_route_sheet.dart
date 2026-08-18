@@ -98,7 +98,7 @@ class _DestinationRouteSheetState extends State<DestinationRouteSheet> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Enter a place, postcode, or latitude and longitude. Hot Pursuit '
+              'Enter a place, postcode, or latitude and longitude. Balloon Crumbs '
               'will generate a road-following GPX route from your location.',
               style: TextStyle(color: Color(0xFF98A3B1)),
             ),
@@ -188,8 +188,8 @@ class _DestinationRouteSheetState extends State<DestinationRouteSheet> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'The same preferences as the web planner, so a route planned '
-              'here and one planned on the website mean the same thing.',
+              'The same options as the web planner. The route itself can '
+              'differ: this plans for a chase vehicle.',
               style: TextStyle(color: Color(0xFF98A3B1), fontSize: 12),
             ),
             const SizedBox(height: 10),
@@ -254,9 +254,10 @@ class _DestinationRouteSheetState extends State<DestinationRouteSheet> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Avoid unsurfaced byways'),
               subtitle: const Text(
-                'On by default. A byway open to all traffic is legal to ride '
+                'On by default. A byway open to all traffic is legal to drive '
                 'but often unsurfaced. Turn this off to allow ways '
-                'OpenStreetMap tags as unsurfaced or as a track.',
+                'OpenStreetMap tags as unsurfaced or as a track — which is how '
+                'a landing field down a farm track is reached.',
               ),
               value: _preferences.bywaySurface.avoidsUnsurfaced,
               onChanged: (value) => setState(
@@ -355,20 +356,21 @@ _DestinationHandoff _handoffFromTarget(NavigationTarget? target) =>
 
 extension on _DestinationHandoff {
   String get label => switch (this) {
-    _DestinationHandoff.rideRelay => 'Hot Pursuit',
+    _DestinationHandoff.rideRelay => 'Balloon Crumbs',
     _DestinationHandoff.calimoto => 'Calimoto',
     _DestinationHandoff.myRouteApp => 'MyRoute-app',
     _DestinationHandoff.googleMaps => 'Google Maps',
   };
 
   String get detail => switch (this) {
-    _DestinationHandoff.rideRelay => 'Show and save the route in Hot Pursuit.',
+    _DestinationHandoff.rideRelay =>
+      'Show and save the route in Balloon Crumbs.',
     _DestinationHandoff.calimoto =>
       'Generate GPX, then choose Calimoto in the system share sheet.',
     _DestinationHandoff.myRouteApp =>
       'Generate GPX, then choose MyRoute-app in the system share sheet.',
     _DestinationHandoff.googleMaps =>
-      'Open a Google Maps route preview after saving it in Hot Pursuit.',
+      'Open a Google Maps route preview after saving it in Balloon Crumbs.',
   };
 
   NavigationTarget? get target => switch (this) {

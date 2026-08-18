@@ -10,8 +10,8 @@ class SecureObserverGrantStore implements ObserverGrantStore {
   const SecureObserverGrantStore({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
 
-  static const _prefix = 'ride_relay_observer_grants_v1_';
-  static const _assistancePrefix = 'ride_relay_observer_assistance_v1_';
+  static const _prefix = 'balloon_crumbs_observer_grants_v1_';
+  static const _assistancePrefix = 'balloon_crumbs_observer_assistance_v1_';
   final FlutterSecureStorage _storage;
 
   String _key(String rideId) =>

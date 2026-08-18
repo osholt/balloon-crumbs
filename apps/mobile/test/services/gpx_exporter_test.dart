@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ride_relay/domain/imported_route.dart';
-import 'package:ride_relay/services/gpx_exporter.dart';
-import 'package:ride_relay/services/gpx_parser.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/gpx_exporter.dart';
+import 'package:balloon_crumbs/services/gpx_parser.dart';
 
 void main() {
   test('exports valid GPX 1.1 tracks, routes, and waypoints', () {
@@ -40,22 +40,6 @@ void main() {
           name: 'Fuel & food',
         ),
       ],
-      markerReview: const MarkerPlanReview(
-        rejected: [
-          MarkerReviewPoint(
-            id: 'maneuver-2',
-            position: GeoPoint(latitude: 53.15, longitude: -1.25),
-            label: 'Turn left marker',
-          ),
-        ],
-        added: [
-          MarkerReviewPoint(
-            id: 'geometry-4',
-            position: GeoPoint(latitude: 53.16, longitude: -1.26),
-            label: 'Missed junction',
-          ),
-        ],
-      ),
     );
     const exporter = GpxExporter();
 
@@ -71,8 +55,6 @@ void main() {
     expect(parsed.paths, hasLength(2));
     expect(parsed.pathPointCount, 3);
     expect(parsed.waypoints.single.name, 'Fuel & food');
-    expect(parsed.markerReview.rejected.single.id, 'maneuver-2');
-    expect(parsed.markerReview.added.single.label, 'Missed junction');
     expect(exporter.fileName(route), 'peaks-dales.gpx');
   });
 }

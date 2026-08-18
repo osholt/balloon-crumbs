@@ -4,9 +4,15 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, select
 
-from ride_relay_server.crypto import sha256
-from ride_relay_server.models import PushDelivery, PushRegistration, Ride, RideMember, StoredEvent
-from ride_relay_server.push import PushMessage, PushProviderResult
+from balloon_crumbs_server.crypto import sha256
+from balloon_crumbs_server.models import (
+    PushDelivery,
+    PushRegistration,
+    Ride,
+    RideMember,
+    StoredEvent,
+)
+from balloon_crumbs_server.push import PushMessage, PushProviderResult
 
 from .conftest import ride_token
 
@@ -51,7 +57,7 @@ class _EventDecryptCounter:
 def _headers(ride_id: str, installation_id: str) -> dict[str, str]:
     return {
         "authorization": f"Bearer {ride_token(ride_id, SECRET)}",
-        "x-ride-relay-device": installation_id,
+        "x-balloon-crumbs-device": installation_id,
     }
 
 
@@ -169,7 +175,7 @@ def test_urgent_alert_targets_current_coordinators_once(
     with factory() as session:
         assert session.scalar(select(func.count(PushDelivery.id))) == 2
     metrics = client.get("/metrics")
-    assert 'ride_relay_push_deliveries_total{outcome="delivered"} 2.0' in metrics.text
+    assert 'balloon_crumbs_push_deliveries_total{outcome="delivered"} 2.0' in metrics.text
 
 
 def test_push_membership_projection_does_not_decrypt_large_event_history(
@@ -315,67 +321,6 @@ def test_existing_ride_backfills_membership_projection_only_once(
             )
             == 2
         )
-
-
-def test_nested_off_course_alert_targets_coordinators_and_affected_rider(
-    client,
-    synchronize,
-    make_event,
-) -> None:
-    ride_id = "ride-push-off-course"
-    joined = [
-        make_event(
-            ride_id,
-            f"joined-{rider_id}",
-            device_id=rider_id,
-            event_type="riderJoined",
-            payload={"displayName": rider_id, "role": role},
-        )
-        for rider_id, role in [
-            ("observer", "rider"),
-            ("affected", "rider"),
-            ("lead", "lead"),
-            ("tec", "tailEndCharlie"),
-        ]
-    ]
-    assert synchronize(client, ride_id=ride_id, secret=SECRET, events=joined).status_code == 200
-    for rider_id, role in [
-        ("observer", "rider"),
-        ("affected", "rider"),
-        ("lead", "lead"),
-        ("tec", "tailEndCharlie"),
-    ]:
-        assert _register(client, ride_id, rider_id, role=role).status_code == 200
-    provider = _RecordingProvider()
-    client.app.state.push_dispatcher._providers["fcm"] = provider
-
-    alert = make_event(
-        ride_id,
-        "off-course-alert",
-        device_id="observer",
-        event_type="routeDeviationChanged",
-        payload={
-            "alert": {
-                "riderId": "affected",
-                "displayName": "Affected rider",
-                "assessment": {
-                    "state": "offRoute",
-                    "alertLevel": "urgent",
-                    "audience": "coordinators",
-                    "evaluatedAt": "2026-07-23T12:00:00Z",
-                    "message": "Off route",
-                },
-                "acknowledged": False,
-            }
-        },
-    )
-    assert synchronize(client, ride_id=ride_id, secret=SECRET, events=[alert]).status_code == 200
-
-    assert set(provider.tokens) == {
-        "fcm-token-affected-123456789",
-        "fcm-token-lead-123456789",
-        "fcm-token-tec-123456789",
-    }
 
 
 def test_preferences_filter_noncritical_but_not_critical_safety(

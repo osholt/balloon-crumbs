@@ -12,7 +12,7 @@ import 'ride_lifecycle.dart';
 /// the leader is fine but somebody else has stopped. The two are separate
 /// fields, separate events and separate consents.
 ///
-/// Privacy, stated plainly, the same way [RideEventType.rejoinRouteShared]
+/// Privacy, stated plainly, the same way the relayed advisory events
 /// states it: the ride relay is ride-scoped rather than per-recipient
 /// encrypted, so "addressed to the leader and TEC" means the event names its
 /// intended recipients, the sharer only sends when a recipient is known, and
@@ -183,16 +183,20 @@ class RiderContactRecipients {
   bool get isEmpty => !toRideGroup && riderIds.isEmpty;
 
   /// [localRole] is the role the sharer holds now. [leaderRiderId] and
-  /// [tecRiderIds] are the current coordination roles, excluding the sharer.
+  /// [coordinationRiderIds] are the current coordination roles, excluding the
+  /// sharer.
   static RiderContactRecipients resolve({
     required RideRole localRole,
     required String? leaderRiderId,
-    required Iterable<String> tecRiderIds,
+    required Iterable<String> coordinationRiderIds,
   }) {
-    if (localRole == RideRole.lead || localRole == RideRole.tailEndCharlie) {
+    if (localRole == RideRole.lead) {
       return const RiderContactRecipients.rideGroup();
     }
-    return RiderContactRecipients.addressed([?leaderRiderId, ...tecRiderIds]);
+    return RiderContactRecipients.addressed([
+      ?leaderRiderId,
+      ...coordinationRiderIds,
+    ]);
   }
 }
 

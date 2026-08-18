@@ -18,24 +18,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:ride_relay/controllers/ride_controller.dart';
-import 'package:ride_relay/data/in_memory_event_store.dart';
-import 'package:ride_relay/data/in_memory_session_store.dart';
-import 'package:ride_relay/domain/completed_ride_store.dart';
-import 'package:ride_relay/domain/distance_unit.dart';
-import 'package:ride_relay/domain/geo_point.dart' as sample_geo;
-import 'package:ride_relay/domain/imported_route.dart' show GeoPoint;
-import 'package:ride_relay/domain/ride_event.dart';
-import 'package:ride_relay/domain/ride_role.dart';
-import 'package:ride_relay/domain/ride_session.dart';
-import 'package:ride_relay/domain/rider_location.dart';
-import 'package:ride_relay/features/ride/ride_recap_card.dart';
-import 'package:ride_relay/services/completed_ride_archiver.dart';
-import 'package:ride_relay/services/ride_event_authenticator.dart';
-import 'package:ride_relay/services/ride_lifecycle.dart';
-import 'package:ride_relay/services/ride_route_reducer.dart';
-import 'package:ride_relay/services/nearby_bridge.dart';
-import 'package:ride_relay/services/ride_summary_exporter.dart';
+import 'package:balloon_crumbs/controllers/ride_controller.dart';
+import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/data/in_memory_session_store.dart';
+import 'package:balloon_crumbs/domain/completed_ride_store.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart' as sample_geo;
+import 'package:balloon_crumbs/domain/imported_route.dart' show GeoPoint;
+import 'package:balloon_crumbs/domain/ride_event.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
+import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
+import 'package:balloon_crumbs/features/ride/ride_recap_card.dart';
+import 'package:balloon_crumbs/services/completed_ride_archiver.dart';
+import 'package:balloon_crumbs/services/ride_event_authenticator.dart';
+import 'package:balloon_crumbs/services/ride_lifecycle.dart';
+import 'package:balloon_crumbs/services/ride_route_reducer.dart';
+import 'package:balloon_crumbs/services/nearby_bridge.dart';
+import 'package:balloon_crumbs/services/ride_summary_exporter.dart';
 
 /// A two-hour ride at `geolocator`'s configured `distanceFilter: 10` and an
 /// average 50 km/h is ~10,000 fixes for the local rider alone; every other
@@ -157,12 +157,12 @@ void main() {
         final initialize = await _timeAsync(controller.initialize);
         // What the dashboard and its menus read during build, twice - a
         // rebuild pays it again.
-        final marking = _time(() => controller.markingSummary);
-        final markingAgain = _time(() => controller.markingSummary);
+        final membership = _time(() => controller.liveView);
+        final membershipAgain = _time(() => controller.liveView);
         final clear = await _timeAsync(controller.clearEndedRide);
         debugPrint(
           'PROFILE #165 ${_pad(scale)}  initialize=${_ms(initialize)}  '
-          'markingSummary=${_ms(marking)} (again=${_ms(markingAgain)})  '
+          'liveView=${_ms(membership)} (again=${_ms(membershipAgain)})  '
           'clearEndedRide=${_ms(clear)}',
         );
         controller.dispose();

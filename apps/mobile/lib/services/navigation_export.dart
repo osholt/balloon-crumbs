@@ -19,7 +19,7 @@ enum NavigationTarget {
   harleyDavidson,
 }
 
-/// The amount of route information Hot Pursuit can transfer to an external
+/// The amount of route information Balloon Crumbs can transfer to an external
 /// navigation target. A receiving app may still change a GPX route on import.
 enum NavigationRouteTransfer { fullGpx, sampledWaypoints, destinationOnly }
 
@@ -78,7 +78,7 @@ const navigationHandoffCapabilities = <NavigationHandoffCapability>[
     transport: NavigationHandoffTransport.directLink,
     routeTransfer: NavigationRouteTransfer.destinationOnly,
     platforms: allNavigationPlatforms,
-    limitation: 'Opens motorcycle navigation to the final destination only',
+    limitation: 'Opens navigation to the final destination only',
     directLink: RouteNavigationLinks.waze,
   ),
   NavigationHandoffCapability(
@@ -197,7 +197,7 @@ class SystemGpxShareGateway implements GpxShareGateway {
     await SharePlus.instance.share(
       ShareParams(
         title: 'Export ${route.name}',
-        subject: 'Hot Pursuit route: ${route.name}',
+        subject: 'Balloon Crumbs route: ${route.name}',
         text: _shareInstruction(target),
         files: [
           XFile.fromData(
@@ -213,10 +213,10 @@ class SystemGpxShareGateway implements GpxShareGateway {
   }
 
   static String _shareInstruction(NavigationTarget target) => switch (target) {
-    NavigationTarget.shareGpx => 'GPX 1.1 route exported from Hot Pursuit.',
+    NavigationTarget.shareGpx => 'GPX 1.1 route exported from Balloon Crumbs.',
     _ =>
       'Choose ${target.label} in the share sheet if it is installed. '
-          'Hot Pursuit cannot preselect another app.',
+          'Balloon Crumbs cannot preselect another app.',
   };
 }
 
@@ -293,8 +293,8 @@ class RouteNavigationLinks {
     return Uri.https('waze.com', '/ul', {
       'll': _coordinate(points.last),
       'navigate': 'yes',
-      'vehicle_type': 'motorcycle',
-      'utm_source': 'ride_relay',
+      'vehicle_type': 'car',
+      'utm_source': 'balloon_crumbs',
     });
   }
 

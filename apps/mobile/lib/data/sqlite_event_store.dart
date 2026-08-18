@@ -22,7 +22,7 @@ class SqliteEventStore implements EventStore {
   Future<Database> _open() async {
     final databasePath = await getDatabasesPath();
     final database = await openDatabase(
-      path.join(databasePath, 'ride_relay_v1.db'),
+      path.join(databasePath, 'balloon_crumbs_v1.db'),
       version: 1,
       onCreate: (db, _) async {
         await db.execute('''
