@@ -1174,9 +1174,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           client: _carPlayRoutingClient,
           baseUrl: carPlayRouting.routingBaseUrl,
         ),
-        motorcycle: ValhallaMotorcycleRoutingService(
+        valhalla: ValhallaRoadRoutingService(
           client: _carPlayRoutingClient,
-          routeUrl: carPlayRouting.motorcycleRoutingUrl,
+          routeUrl: carPlayRouting.valhallaRoutingUrl,
         ),
       ),
     );

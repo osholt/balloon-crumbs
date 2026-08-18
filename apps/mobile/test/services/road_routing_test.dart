@@ -545,16 +545,18 @@ void main() {
       expect(veryTwisty.twistinessScore, greaterThan(flowing.twistinessScore!));
     });
 
-    test('avoiding motorways sends the documented motorcycle costing to '
+    test('avoiding motorways sends the documented auto costing to '
         'Valhalla', () async {
       Map<String, Object?>? costing;
-      final service = ValhallaMotorcycleRoutingService(
+      final service = ValhallaRoadRoutingService(
         client: MockClient((request) async {
           final json = jsonDecode(request.url.queryParameters['json']!) as Map;
           costing = Map<String, Object?>.from(
-            (json['costing_options'] as Map)['motorcycle'] as Map,
+            (json['costing_options'] as Map)['auto'] as Map,
           );
-          expect(json['costing'], 'motorcycle');
+          // A chase vehicle, not a motorbike: `auto` is what decides which roads
+          // it may be sent down and which limits are read off them.
+          expect(json['costing'], 'auto');
           expect(json['units'], 'kilometers');
           expect((json['locations'] as List), hasLength(2));
           return http.Response(_valhallaResponse(), 200);
@@ -574,7 +576,7 @@ void main() {
         'use_highways': 0.35,
         'use_tolls': 0.5,
         'use_ferry': 0.5,
-        'use_trails': 0,
+        'use_tracks': 0,
         'exclude_highways': true,
         'exclude_tolls': false,
         'exclude_ferries': false,
@@ -591,8 +593,8 @@ void main() {
       expect(result.maneuvers, isEmpty);
     });
 
-    group('the motorcycle router keeps its turn instructions (#303)', () {
-      // `maneuvers: const []`. Every route planned with a motorcycle
+    group('the Valhalla router keeps its turn instructions (#303)', () {
+      // `maneuvers: const []`. Every route planned with a Valhalla
       // preference — avoid motorways, prefer twisty roads (#182) — arrived with
       // no turn instructions at all, so whether a rider got guidance depended
       // on whether they had set a preference. "Sometimes the navigation worked
@@ -608,7 +610,7 @@ void main() {
       ];
 
       test('an ordinary turn keeps its direction and its road name', () {
-        final maneuvers = ValhallaMotorcycleRoutingService.parseManeuvers(
+        final maneuvers = ValhallaRoadRoutingService.parseManeuvers(
           route: lRoute(),
           legShapeOffsets: const [0],
           legManeuvers: const [
@@ -646,7 +648,7 @@ void main() {
           13: 'uturn',
         };
 
-        final maneuvers = ValhallaMotorcycleRoutingService.parseManeuvers(
+        final maneuvers = ValhallaRoadRoutingService.parseManeuvers(
           route: lRoute(),
           legShapeOffsets: const [0],
           legManeuvers: [
@@ -669,7 +671,7 @@ void main() {
         // through the junction, so the instruction is derived from the heading
         // on the way in against the heading on the way out. Those are the only
         // manoeuvres given bearings.
-        final maneuvers = ValhallaMotorcycleRoutingService.parseManeuvers(
+        final maneuvers = ValhallaRoadRoutingService.parseManeuvers(
           route: lRoute(),
           legShapeOffsets: const [0],
           legManeuvers: const [
@@ -709,7 +711,7 @@ void main() {
         // own index is not the combined one. Getting this wrong would place
         // every manoeuvre after the first stop at the wrong junction.
         final route = lRoute();
-        final maneuvers = ValhallaMotorcycleRoutingService.parseManeuvers(
+        final maneuvers = ValhallaRoadRoutingService.parseManeuvers(
           route: route,
           legShapeOffsets: const [0, 5],
           legManeuvers: const [
@@ -729,7 +731,7 @@ void main() {
       test('a manoeuvre the app cannot act on is left out, not guessed at', () {
         // Ferries, transit and building entrances. Inventing a direction for
         // one would be worse than omitting it.
-        final maneuvers = ValhallaMotorcycleRoutingService.parseManeuvers(
+        final maneuvers = ValhallaRoadRoutingService.parseManeuvers(
           route: lRoute(),
           legShapeOffsets: const [0],
           legManeuvers: const [
@@ -749,7 +751,7 @@ void main() {
       test(
         'a routed response reaches the caller with its manoeuvres',
         () async {
-          final service = ValhallaMotorcycleRoutingService(
+          final service = ValhallaRoadRoutingService(
             client: MockClient(
               (_) async => http.Response(
                 _valhallaResponse(
@@ -783,12 +785,12 @@ void main() {
 
     test('allowing unsurfaced byways relaxes both surface levers', () async {
       Map<String, Object?>? costing;
-      final service = ValhallaMotorcycleRoutingService(
+      final service = ValhallaRoadRoutingService(
         client: MockClient((request) async {
           costing = Map<String, Object?>.from(
             ((jsonDecode(request.url.queryParameters['json']!)
                         as Map)['costing_options']
-                    as Map)['motorcycle']
+                    as Map)['auto']
                 as Map,
           );
           return http.Response(_valhallaResponse(), 200);
@@ -803,16 +805,16 @@ void main() {
         ),
       );
 
-      expect(costing!['use_trails'], 0.5);
+      expect(costing!['use_tracks'], 0.5);
       expect(costing!['exclude_unpaved'], isFalse);
     });
 
     test('the dispatcher chooses the engine the preferences need', () async {
       final osrm = _FakeRoadRoutingService();
-      final motorcycle = _FakeRoadRoutingService();
+      final valhalla = _FakeRoadRoutingService();
       final dispatcher = PreferenceAwareRoadRoutingService(
         osrm: osrm,
-        motorcycle: motorcycle,
+        valhalla: valhalla,
       );
 
       await dispatcher.routeThrough(_twoPoints);
@@ -841,7 +843,7 @@ void main() {
         reason: 'no preference, the defaults, and a style-only change',
       );
       expect(
-        motorcycle.requests,
+        valhalla.requests,
         hasLength(2),
         reason: 'a hard exclusion, and seeking byways',
       );
@@ -867,7 +869,7 @@ void main() {
             }),
             routingService: PreferenceAwareRoadRoutingService(
               osrm: _FakeRoadRoutingService(),
-              motorcycle: _ManeuverlessRoadRoutingService(),
+              valhalla: _ManeuverlessRoadRoutingService(),
             ),
           ).planForReview(
             originQuery: 'Start',
@@ -887,7 +889,7 @@ void main() {
       expect(plan.route.plannedDuration, plan.duration);
       expect(
         plan.warnings,
-        contains(PreferenceAwareRoadRoutingService.motorcycleManeuverWarning),
+        contains(PreferenceAwareRoadRoutingService.missingManeuverWarning),
       );
     });
 
@@ -915,9 +917,9 @@ void main() {
             }),
             routingService: PreferenceAwareRoadRoutingService(
               osrm: _FakeRoadRoutingService(),
-              // The same motorcycle engine, now returning what Valhalla
+              // The same Valhalla engine, now returning what Valhalla
               // actually sends.
-              motorcycle: _FakeRoadRoutingService(),
+              valhalla: _FakeRoadRoutingService(),
             ),
           ).planForReview(
             originQuery: 'Start',
@@ -929,7 +931,7 @@ void main() {
       expect(
         plan.warnings,
         isNot(
-          contains(PreferenceAwareRoadRoutingService.motorcycleManeuverWarning),
+          contains(PreferenceAwareRoadRoutingService.missingManeuverWarning),
         ),
       );
     });

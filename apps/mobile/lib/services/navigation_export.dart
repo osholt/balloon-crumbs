@@ -78,7 +78,7 @@ const navigationHandoffCapabilities = <NavigationHandoffCapability>[
     transport: NavigationHandoffTransport.directLink,
     routeTransfer: NavigationRouteTransfer.destinationOnly,
     platforms: allNavigationPlatforms,
-    limitation: 'Opens motorcycle navigation to the final destination only',
+    limitation: 'Opens navigation to the final destination only',
     directLink: RouteNavigationLinks.waze,
   ),
   NavigationHandoffCapability(
@@ -293,7 +293,7 @@ class RouteNavigationLinks {
     return Uri.https('waze.com', '/ul', {
       'll': _coordinate(points.last),
       'navigate': 'yes',
-      'vehicle_type': 'motorcycle',
+      'vehicle_type': 'car',
       'utm_source': 'balloon_crumbs',
     });
   }

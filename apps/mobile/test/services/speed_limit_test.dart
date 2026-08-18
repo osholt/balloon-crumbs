@@ -588,7 +588,7 @@ void main() {
       final shape = harness.traceRequests.single['shape'] as List;
       expect(shape, hasLength(2));
       expect(shape.first, isNot(shape.last));
-      expect(harness.traceRequests.single['costing'], 'motorcycle');
+      expect(harness.traceRequests.single['costing'], 'auto');
     });
 
     test('parses the live unlimited trace sentinel', () async {

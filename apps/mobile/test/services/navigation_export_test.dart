@@ -85,7 +85,7 @@ void main() {
     expect(uri.host, 'waze.com');
     expect(uri.queryParameters['ll'], '53.030000,-1.030000');
     expect(uri.queryParameters['navigate'], 'yes');
-    expect(uri.queryParameters['vehicle_type'], 'motorcycle');
+    expect(uri.queryParameters['vehicle_type'], 'car');
     expect(uri.queryParameters, isNot(contains('waypoints')));
   });
 

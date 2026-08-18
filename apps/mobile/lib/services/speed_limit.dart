@@ -506,7 +506,7 @@ class ValhallaSpeedLimitProvider
                     'lon': location.point.longitude,
                   },
               ],
-              'costing': 'motorcycle',
+              'costing': 'auto',
               'shape_match': 'map_snap',
               'trace_options': {
                 'gps_accuracy': effectiveAccuracy.clamp(5, 50),
@@ -575,7 +575,7 @@ class ValhallaSpeedLimitProvider
                   'radius': _stationaryMatchCeilingMeters + 5,
                 },
               ],
-              'costing': 'motorcycle',
+              'costing': 'auto',
               'verbose': true,
               // `locate` does not echo its units, so they are stated. A limit
               // wrongly read as mph would fail the UK-value test below rather

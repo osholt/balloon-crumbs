@@ -1081,9 +1081,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
             client: _routingClient,
             baseUrl: routingConfiguration.routingBaseUrl,
           ),
-          motorcycle: ValhallaMotorcycleRoutingService(
+          valhalla: ValhallaRoadRoutingService(
             client: _routingClient,
-            routeUrl: routingConfiguration.motorcycleRoutingUrl,
+            routeUrl: routingConfiguration.valhallaRoutingUrl,
           ),
         );
     _defaultDestinationRoutePlanner = DestinationRoutePlanner(

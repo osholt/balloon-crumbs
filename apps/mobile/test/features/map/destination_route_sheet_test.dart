@@ -212,6 +212,6 @@ void main() {
       request?.preferences.bywaySurface,
       BywaySurfacePreference.allowUnsurfaced,
     );
-    expect(request?.preferences.requiresMotorcycleCosting, isTrue);
+    expect(request?.preferences.requiresValhallaCosting, isTrue);
   });
 }
