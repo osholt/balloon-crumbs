@@ -497,7 +497,7 @@ class _RideActionsPanel extends StatelessWidget {
             leading: const Icon(Icons.warning_amber_outlined),
             title: const Text('Alerts and reports'),
             subtitle: const Text(
-              'Road alerts, off-route riders and traffic alternatives',
+              'Road alerts and traffic alternatives',
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: onAlertsAndReports,
