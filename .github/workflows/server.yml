@@ -77,7 +77,33 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen --no-dev
       - run: uv run alembic upgrade head
-      - run: uv run python -c "from sqlalchemy import create_engine, inspect; from balloon_crumbs_server.config import get_settings; assert {'rides', 'ride_events', 'ride_members', 'idempotency_replays', 'ride_plans', 'discovery_suggestions', 'discovery_moderation_events', 'discovery_features', 'discovery_road_ratings'} <= set(inspect(create_engine(get_settings().database_url)).get_table_names())"
+      # The only place migrations run against the engine production uses; the
+      # unit tests use SQLite. Asserts both directions, because each has caught
+      # a real mistake: that migrations create what the relay needs, and that
+      # the tables 0011 dropped stay dropped.
+      - run: |
+          uv run python - <<'PY'
+          from sqlalchemy import create_engine, inspect
+
+          from balloon_crumbs_server.config import get_settings
+
+          tables = set(inspect(create_engine(get_settings().database_url)).get_table_names())
+
+          missing = {
+              "rides",
+              "ride_events",
+              "ride_members",
+              "idempotency_replays",
+              "ride_plans",
+          } - tables
+          assert not missing, f"migrations did not create: {sorted(missing)}"
+
+          # Withdrawn with the discovery API (#21). Asserted absent rather than
+          # simply unlisted, so a reverted migration or a reintroduced ORM class
+          # fails here on real Postgres rather than on a deploy.
+          revived = sorted(name for name in tables if name.startswith("discovery"))
+          assert not revived, f"discovery tables are back: {revived}"
+          PY
 
   container:
     name: Container build
