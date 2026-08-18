@@ -63,8 +63,7 @@ class FixedSpeedCameraCatalogue {
     required this.boundedRegion,
   });
 
-  /// Where the asset lives. Kept next to the discovery catalogue it was
-  /// generated alongside.
+  /// Where the asset lives.
   static const assetKey = 'assets/fixed_speed_cameras.geojson';
 
   final List<FixedSpeedCamera> cameras;

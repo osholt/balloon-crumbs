@@ -7,8 +7,8 @@ import '../../domain/hazard.dart';
 import 'route_trail_style.dart';
 
 /// Which shape a report is drawn as. The shape, not the colour, is what carries
-/// the family: this map already uses circles for people (rider badges, the "you
-/// are here" badge, discovery points), so enforcement - a fixed thing at the
+/// the family: this map already uses circles for people (rider badges and the
+/// "you are here" badge), so enforcement - a fixed thing at the
 /// roadside - gets a sign plate instead, and a rider glancing at it can tell the
 /// two apart without reading either (#135).
 enum HazardMapBadgeShape { circle, plate }
