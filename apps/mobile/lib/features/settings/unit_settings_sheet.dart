@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../controllers/chase_vehicle_controller.dart';
 import '../../controllers/distance_unit_controller.dart';
 import '../../controllers/map_style_mode_controller.dart';
 import '../../controllers/rider_profile_controller.dart';
@@ -19,6 +20,7 @@ import '../../services/build_identity.dart';
 import '../../services/natural_voice_pack.dart';
 import '../../services/spoken_guidance.dart';
 import 'about_build_sheet.dart';
+import 'chase_vehicle_sheet.dart';
 import 'rider_profile_sheet.dart';
 import 'ride_diagnostics_section.dart';
 import 'test_control_section.dart';
@@ -30,6 +32,7 @@ class UnitSettingsSheet extends StatelessWidget {
     required this.mapStyleMode,
     required this.riderProfile,
     required this.speedLimitDisplay,
+    this.chaseVehicle,
     this.routeProgressDisplay,
     this.currentRideActive = false,
     this.lastRelaySync,
@@ -44,6 +47,10 @@ class UnitSettingsSheet extends StatelessWidget {
   final MapStyleModeController mapStyleMode;
   final RiderProfileController riderProfile;
   final SpeedLimitDisplayController speedLimitDisplay;
+
+  /// Absent only where a caller has no vehicle store, which is tests: the
+  /// section is then hidden rather than shown broken.
+  final ChaseVehicleController? chaseVehicle;
   final RouteProgressDisplayController? routeProgressDisplay;
   final bool currentRideActive;
 
@@ -79,6 +86,7 @@ class UnitSettingsSheet extends StatelessWidget {
     MapStyleModeController mapStyleMode,
     RiderProfileController riderProfile, {
     required SpeedLimitDisplayController speedLimitDisplay,
+    ChaseVehicleController? chaseVehicle,
     RouteProgressDisplayController? routeProgressDisplay,
     bool currentRideActive = false,
     DateTime? lastRelaySync,
@@ -95,6 +103,7 @@ class UnitSettingsSheet extends StatelessWidget {
       mapStyleMode: mapStyleMode,
       riderProfile: riderProfile,
       speedLimitDisplay: speedLimitDisplay,
+      chaseVehicle: chaseVehicle,
       routeProgressDisplay: routeProgressDisplay,
       currentRideActive: currentRideActive,
       lastRelaySync: lastRelaySync,
@@ -111,6 +120,7 @@ class UnitSettingsSheet extends StatelessWidget {
       controller,
       mapStyleMode,
       speedLimitDisplay,
+      ?chaseVehicle,
       ?routeProgressDisplay,
     ]),
     builder: (context, _) => SingleChildScrollView(
@@ -157,6 +167,40 @@ class UnitSettingsSheet extends StatelessWidget {
               );
             },
           ),
+          if (chaseVehicle case final chaseVehicle?) ...[
+            const SizedBox(height: 16),
+            Text(
+              'CHASE VEHICLE',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: const Color(0xFF8D98A7),
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ListTile(
+              key: const Key('open-chase-vehicle'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.local_shipping_outlined),
+              title: Text(switch (chaseVehicle.vehicle.appliedNotes) {
+                [] => 'Add vehicle size',
+                final notes => notes.join(' · '),
+              }),
+              subtitle: const Text(
+                'Avoid low bridges, weight limits and narrow roads.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final appContext = Navigator.of(
+                  context,
+                  rootNavigator: true,
+                ).context;
+                if (!embedded) Navigator.of(context).pop();
+                unawaited(
+                  ChaseVehicleSheet.show(appContext, controller: chaseVehicle),
+                );
+              },
+            ),
+          ],
           const SizedBox(height: 16),
           Text(
             'DISTANCE UNITS',

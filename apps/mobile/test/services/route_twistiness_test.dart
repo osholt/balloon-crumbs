@@ -2,12 +2,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
 import 'package:balloon_crumbs/services/route_twistiness.dart';
 
-/// The same geometry and the same expected numbers as
-/// `apps/website/planner-core.test.mjs`. These fixtures exist so the app cannot
-/// grow a second notion of twisty: if either implementation drifts, one of the
-/// two suites fails (#46, #182).
+/// Geometry fixtures for the bend score (#46, #182).
+///
+/// These were described as pinning the score against
+/// `apps/website/planner-core.test.mjs`, so that a drift in either
+/// implementation failed one of two suites. That file does not exist in this
+/// repository and never has, so what these actually do is pin the score against
+/// itself — a regression test, not a cross-check. Still worth having, and worth
+/// not being wrong about.
 void main() {
-  test('the shared calibration fixture scores what the web planner scores', () {
+  test('the calibration fixture scores what it has always scored', () {
     final score = RouteTwistiness.score(
       _sinusoidalLane,
       distanceMeters: _sinusoidalLaneMeters,
@@ -69,77 +73,85 @@ void main() {
   });
 
   group('alternative selection within the detour allowance', () {
-    const quickest = (duration: 3600.0, twistiness: 5.0);
-    const bendier = (duration: 4300.0, twistiness: 40.0);
-    const bendiest = (duration: 6000.0, twistiness: 90.0);
-    const candidates = [quickest, bendier, bendiest];
+    // Named for the road, not the rider: the straight one is the one a trailer
+    // can follow, the bendy ones are the ones it cannot.
+    const straightest = (duration: 3600.0, bends: 5.0);
+    const bendy = (duration: 4000.0, bends: 40.0);
+    const hairpins = (duration: 4100.0, bends: 90.0);
 
-    ({double duration, double twistiness})? choose(RouteStyle style) =>
-        RouteTwistiness.chooseWithinDetour(
-          candidates,
-          style: style,
-          duration: (candidate) => candidate.duration,
-          twistiness: (candidate) => candidate.twistiness,
+    ({double duration, double bends})? choose(
+      List<({double duration, double bends})> candidates, {
+      RoutePreferences preferences = RoutePreferences.defaults,
+    }) => RouteTwistiness.chooseWithinDetour(
+      candidates,
+      preferences: preferences,
+      duration: (candidate) => candidate.duration,
+      bendScore: (candidate) => candidate.bends,
+    );
+
+    const towing = RoutePreferences(vehicle: ChaseVehicle(towing: true));
+
+    test('not towing keeps the provider order and ignores bends', () {
+      // The engine's first route is its quickest. With no trailer there is
+      // nothing to trade time for, so it is taken as offered.
+      expect(choose(const [hairpins, straightest]), hairpins);
+    });
+
+    test('towing takes the straightest route it can afford', () {
+      // The inversion this change is built on: the same score the motorcycle
+      // build used to seek corners now avoids them.
+      expect(
+        choose(const [bendy, hairpins, straightest], preferences: towing),
+        straightest,
+      );
+    });
+
+    test('towing will not exceed the allowance to straighten a route', () {
+      // 3600 * 1.15 = 4140 s. A straighter road half an hour away is not worth
+      // it to a crew whose balloon is coming down now.
+      expect(
+        choose(const [
+          bendy,
+          (duration: 9000.0, bends: 1.0),
+        ], preferences: towing),
+        bendy,
+        reason: '9000 s exceeds the 4600 s allowance',
+      );
+    });
+
+    test('the allowance does not depend on the road style', () {
+      // It is the trailer that makes a straighter road worth 15% more time, so
+      // both styles reach the same alternative. Hanging tolerance off the style
+      // is what previously made the default style allow nothing at all.
+      for (final style in RouteStyle.values) {
+        expect(
+          choose(
+            const [bendy, (duration: 4500.0, bends: 2.0)],
+            preferences: RoutePreferences(
+              style: style,
+              vehicle: const ChaseVehicle(towing: true),
+            ),
+          ),
+          (duration: 4500.0, bends: 2.0),
+          reason: '4000 * 1.15 = 4600 s, so it fits — ${style.name}',
         );
-
-    test('quickest keeps the provider order and ignores bends', () {
-      expect(choose(RouteStyle.quickest), quickest);
+      }
     });
 
-    test('flowing accepts 25% and no more', () {
-      // 4300 s is over the 4500 s allowance? No: 3600 * 1.25 = 4500, so it fits.
-      expect(choose(RouteStyle.flowing), bendier);
-    });
-
-    test('very twisty reaches the 75% alternative', () {
-      // 3600 * 1.75 = 6300 s, so the bendiest becomes eligible.
-      expect(choose(RouteStyle.veryTwisty), bendiest);
-    });
-
-    test('nothing eligible keeps the quickest', () {
-      expect(
-        RouteTwistiness.chooseWithinDetour(
-          const [quickest, bendiest],
-          style: RouteStyle.flowing,
-          duration: (candidate) => candidate.duration,
-          twistiness: (candidate) => candidate.twistiness,
-        ),
-        quickest,
-        reason: '6000 s exceeds the 4500 s allowance',
-      );
-    });
-
-    test('a single alternative is the answer whatever the style', () {
-      expect(
-        RouteTwistiness.chooseWithinDetour(
-          const [bendiest],
-          style: RouteStyle.twisty,
-          duration: (candidate) => candidate.duration,
-          twistiness: (candidate) => candidate.twistiness,
-        ),
-        bendiest,
-      );
+    test('a single alternative is the answer whatever is towed', () {
+      expect(choose(const [hairpins], preferences: towing), hairpins);
     });
 
     test('no alternatives at all is null, never an invented route', () {
-      expect(
-        RouteTwistiness.chooseWithinDetour(
-          const <({double duration, double twistiness})>[],
-          style: RouteStyle.twisty,
-          duration: (candidate) => candidate.duration,
-          twistiness: (candidate) => candidate.twistiness,
-        ),
-        isNull,
-      );
+      expect(choose(const [], preferences: towing), isNull);
     });
   });
 }
 
-/// Distance of [_sinusoidalLane], as the web planner measures it.
+/// Distance of [_sinusoidalLane].
 const _sinusoidalLaneMeters = 12963.688380;
 
-/// A deterministic sinusoidal lane. Byte-for-byte the coordinates used by the
-/// matching web planner test.
+/// A deterministic sinusoidal lane.
 const _sinusoidalLane = [
   GeoPoint(latitude: 51.4, longitude: -2.5),
   GeoPoint(latitude: 51.402337, longitude: -2.496),

@@ -168,12 +168,10 @@ void main() {
       BywaySurfacePreference.avoidUnsurfaced,
     );
     // Avoiding motorways alone is not a byway decision, and vice versa.
-    expect(request?.preferences.style, RouteStyle.quickest);
+    expect(request?.preferences.style, RouteStyle.direct);
   });
 
-  testWidgets('a rider can ask for twisty roads and for byways', (
-    tester,
-  ) async {
+  testWidgets('a crew can ask for major roads and for byways', (tester) async {
     DestinationPlanRequest? request;
     await tester.pumpWidget(
       MaterialApp(
@@ -185,7 +183,7 @@ void main() {
                   context,
                   initialRequest: const DestinationPlanRequest(
                     query: 'Matlock Bath',
-                    preferences: RoutePreferences(style: RouteStyle.twisty),
+                    preferences: RoutePreferences(style: RouteStyle.majorRoads),
                   ),
                 );
               },
@@ -214,11 +212,86 @@ void main() {
     await tester.tap(find.byKey(const Key('plan-destination-button')));
     await tester.pumpAndSettle();
 
-    expect(request?.preferences.style, RouteStyle.twisty);
+    expect(request?.preferences.style, RouteStyle.majorRoads);
     expect(
       request?.preferences.bywaySurface,
       BywaySurfacePreference.allowUnsurfaced,
     );
     expect(request?.preferences.requiresValhallaCosting, isTrue);
+  });
+
+  testWidgets('the stored vehicle is stamped onto the planned route', (
+    tester,
+  ) async {
+    DestinationPlanRequest? request;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: FilledButton(
+              onPressed: () async {
+                request = await DestinationRouteSheet.show(
+                  context,
+                  initialRequest: const DestinationPlanRequest(
+                    query: 'Long Marston',
+                  ),
+                  vehicle: const ChaseVehicle(heightMetres: 3.2, towing: true),
+                );
+              },
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    // Read back on screen, so the driver can see the numbers being routed
+    // against before committing to the route.
+    expect(
+      tester.widget<Text>(find.byKey(const Key('route-vehicle-summary'))).data,
+      'Planned for towing, 3.2 m high.',
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('plan-destination-button')),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.byKey(const Key('plan-destination-button')));
+    await tester.pumpAndSettle();
+
+    expect(request?.preferences.vehicle.heightMetres, 3.2);
+    expect(request?.preferences.vehicle.towing, isTrue);
+    // The reason the whole feature exists: a height entered in Settings has to
+    // reach the router as truck costing, or low bridges are never considered.
+    expect(request?.preferences.valhallaCosting, 'truck');
+  });
+
+  testWidgets('with no vehicle stored the crew is told it plans for a car', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: FilledButton(
+              onPressed: () => DestinationRouteSheet.show(context),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('route-vehicle-summary'))).data,
+      contains('Planned for a car'),
+    );
   });
 }

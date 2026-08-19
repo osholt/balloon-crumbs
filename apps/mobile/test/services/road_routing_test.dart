@@ -516,8 +516,8 @@ void main() {
       expect(result.twistinessScore, isNotNull);
     });
 
-    test('a bendier style asks OSRM for three alternatives and picks the '
-        'bendiest inside the allowance', () async {
+    test('a towing vehicle asks OSRM for three alternatives and picks the '
+        'straightest inside the allowance', () async {
       Uri? requested;
       final service = OsrmRoadRoutingService(
         client: MockClient((request) async {
@@ -527,22 +527,32 @@ void main() {
         baseUrl: Uri.parse('https://routing.example.test'),
       );
 
-      final flowing = await service.routeThrough(
+      final towing = await service.routeThrough(
         _twoPoints,
-        preferences: const RoutePreferences(style: RouteStyle.flowing),
+        preferences: const RoutePreferences(
+          vehicle: ChaseVehicle(towing: true),
+        ),
       );
-      final veryTwisty = await service.routeThrough(
+      final notTowing = await service.routeThrough(
         _twoPoints,
-        preferences: const RoutePreferences(style: RouteStyle.veryTwisty),
+        preferences: RoutePreferences.defaults,
       );
 
-      expect(requested!.queryParameters['alternatives'], '3');
-      // Quickest is 1000 s. Flowing allows 1250 s, so only the 1200 s
-      // alternative qualifies; very twisty allows 1750 s and reaches the
-      // bendiest 1700 s one.
-      expect(flowing.duration, const Duration(seconds: 1200));
-      expect(veryTwisty.duration, const Duration(seconds: 1700));
-      expect(veryTwisty.twistinessScore, greaterThan(flowing.twistinessScore!));
+      expect(
+        requested!.queryParameters.containsKey('alternatives'),
+        isFalse,
+        reason: 'the last request was the one without a trailer',
+      );
+      // Without a trailer the fastest route is taken as offered, corners and
+      // all. Towing allows 1000 * 1.15 = 1150 s, which reaches the straight
+      // 1100 s road but not the straighter 1700 s one.
+      expect(notTowing.duration, const Duration(seconds: 1000));
+      expect(towing.duration, const Duration(seconds: 1100));
+      expect(
+        towing.twistinessScore,
+        lessThan(notTowing.twistinessScore!),
+        reason: 'the trailer got the straighter road',
+      );
     });
 
     test('avoiding motorways sends the documented auto costing to '
@@ -566,14 +576,12 @@ void main() {
 
       final result = await service.routeThrough(
         _twoPoints,
-        preferences: const RoutePreferences(
-          style: RouteStyle.twisty,
-          avoidMotorways: true,
-        ),
+        preferences: const RoutePreferences(avoidMotorways: true),
       );
 
       expect(costing, {
-        'use_highways': 0.35,
+        'use_highways': 1,
+        'use_living_streets': 0.5,
         'use_tolls': 0.5,
         'use_ferry': 0.5,
         'use_tracks': 0,
@@ -824,7 +832,7 @@ void main() {
       );
       await dispatcher.routeThrough(
         _twoPoints,
-        preferences: const RoutePreferences(style: RouteStyle.veryTwisty),
+        preferences: const RoutePreferences(style: RouteStyle.majorRoads),
       );
       await dispatcher.routeThrough(
         _twoPoints,
@@ -836,16 +844,30 @@ void main() {
           bywaySurface: BywaySurfacePreference.allowUnsurfaced,
         ),
       );
+      await dispatcher.routeThrough(
+        _twoPoints,
+        preferences: const RoutePreferences(
+          vehicle: ChaseVehicle(heightMetres: 3.2),
+        ),
+      );
+      await dispatcher.routeThrough(
+        _twoPoints,
+        preferences: const RoutePreferences(
+          vehicle: ChaseVehicle(towing: true),
+        ),
+      );
 
       expect(
         osrm.requests,
         hasLength(3),
-        reason: 'no preference, the defaults, and a style-only change',
+        reason: 'no preference, the defaults, and towing with no dimensions',
       );
       expect(
         valhalla.requests,
-        hasLength(2),
-        reason: 'a hard exclusion, and seeking byways',
+        hasLength(4),
+        reason:
+            'preferring major roads, a hard exclusion, seeking byways, and '
+            'a height to route around',
       );
     });
 
@@ -875,14 +897,17 @@ void main() {
             originQuery: 'Start',
             query: 'Finish',
             preferences: const RoutePreferences(
-              style: RouteStyle.twisty,
+              style: RouteStyle.majorRoads,
               avoidMotorways: true,
             ),
           );
 
       expect(
         plan.route.preferences,
-        const RoutePreferences(style: RouteStyle.twisty, avoidMotorways: true),
+        const RoutePreferences(
+          style: RouteStyle.majorRoads,
+          avoidMotorways: true,
+        ),
       );
       expect(plan.route.description, contains('motorways excluded'));
       expect(plan.route.description, contains('unsurfaced byways avoided'));
@@ -954,7 +979,7 @@ void main() {
         ],
         waypoints: const [],
         preferences: const RoutePreferences(
-          style: RouteStyle.twisty,
+          style: RouteStyle.majorRoads,
           avoidMotorways: true,
         ),
       );
@@ -993,6 +1018,13 @@ String _osrmResponse() => jsonEncode({
 
 /// Three alternatives: straight and quickest first, then a bendier one inside
 /// the flowing allowance, then the bendiest and slowest.
+/// Three alternatives where the fastest is also the bendiest.
+///
+/// Deliberately that way round, and it is what makes this fixture able to fail.
+/// Ordered straightest-first, both a towing and a non-towing vehicle would pick
+/// the same route and the test would pass without exercising anything. It is
+/// also the realistic case: a lane through the hills is often quicker than the
+/// A-road, right up until there is a trailer on the back.
 String _osrmAlternativesResponse() {
   List<List<double>> sinusoid(double amplitude) => [
     for (var index = 0; index < 40; index += 1)
@@ -1001,20 +1033,23 @@ String _osrmAlternativesResponse() {
   return jsonEncode({
     'code': 'Ok',
     'routes': [
+      // OSRM's first route is its fastest, and this one is all corners.
       {
         'distance': 20000,
         'duration': 1000,
-        'geometry': {'coordinates': sinusoid(0)},
+        'geometry': {'coordinates': sinusoid(0.012)},
       },
+      // Straight, and inside the 1150 s a towing vehicle will accept.
       {
         'distance': 22000,
-        'duration': 1200,
-        'geometry': {'coordinates': sinusoid(0.006)},
+        'duration': 1100,
+        'geometry': {'coordinates': sinusoid(0)},
       },
+      // Straighter still, but far too slow to be worth it.
       {
         'distance': 26000,
         'duration': 1700,
-        'geometry': {'coordinates': sinusoid(0.012)},
+        'geometry': {'coordinates': sinusoid(0)},
       },
     ],
   });
