@@ -1,0 +1,8 @@
+# Apple fetches the association file and parses it as JSON. Cloudflare Pages
+# serves an extensionless file as application/octet-stream by default, and the
+# file deliberately has no .json extension because Apple requires the exact
+# name `apple-app-site-association`.
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
