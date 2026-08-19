@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
+import '../domain/app_links.dart';
 import '../domain/imported_route.dart';
 
 enum SpeedLimitLookupOutcome {
@@ -544,8 +545,8 @@ class ValhallaSpeedLimitProvider
   static const _headers = {
     'accept': 'application/json',
     'content-type': 'application/json',
-    'user-agent': 'TailEndCharlie/0.1 speed-limit-display',
-    'x-client-id': 'balloon-crumbs.invalid',
+    'user-agent': 'BalloonCrumbs/0.1 speed-limit-display',
+    'x-client-id': appLinkHost,
   };
 
   /// Asks `locate` for every road near a stationary fix and picks the one the

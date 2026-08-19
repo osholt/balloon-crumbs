@@ -1,3 +1,4 @@
+import 'package:balloon_crumbs/domain/app_links.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/controllers/ride_invitation_link_controller.dart';
 import 'package:balloon_crumbs/services/ride_invitation_link.dart';
@@ -21,9 +22,7 @@ void main() {
   test(
     'warm refresh replaces a malformed notice with a later valid link',
     () async {
-      final source = _QueuedSource([
-        'https://balloon-crumbs.invalid/join.html#bad',
-      ]);
+      final source = _QueuedSource(['https://$appLinkHost/join.html#bad']);
       final controller = await RideInvitationLinkController.load(
         source: source,
       );

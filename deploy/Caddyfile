@@ -102,5 +102,17 @@
 		file_server
 	}
 
+	# Apple fetches this from exactly this path, over HTTPS, following no
+	# redirect. The block above is an explicit allowlist that 404s everything
+	# else, so without this the association file would be present in the image
+	# and unreachable - which fails as a link that quietly opens Safari instead.
+	handle /.well-known/apple-app-site-association {
+		root * /srv/website
+		header Content-Type "application/json"
+		header Cache-Control "no-store"
+		header X-Content-Type-Options "nosniff"
+		file_server
+	}
+
 	respond 404
 }

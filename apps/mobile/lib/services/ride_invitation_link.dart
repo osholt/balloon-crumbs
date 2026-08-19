@@ -1,8 +1,7 @@
 import 'package:flutter/services.dart';
 
+import '../domain/app_links.dart';
 import '../domain/join_invite.dart';
-
-const rideInvitationPath = '/join.html';
 
 /// A private, server-resolvable invitation captured from an App/Universal Link.
 ///
@@ -56,7 +55,7 @@ String rideInvitationUrl(String rideCode, String joinToken) {
     throw const FormatException('Cannot create an invalid ride invitation.');
   }
   return Uri.https(
-    'balloon-crumbs.invalid',
+    appLinkHost,
     rideInvitationPath,
   ).replace(fragment: invitation).toString();
 }
@@ -67,7 +66,7 @@ RideInvitationLink? rideInvitationFromLink(String value) {
   final uri = Uri.tryParse(value);
   if (uri == null ||
       uri.scheme != 'https' ||
-      uri.host.toLowerCase() != 'balloon-crumbs.invalid' ||
+      uri.host.toLowerCase() != appLinkHost ||
       uri.path != rideInvitationPath ||
       uri.userInfo.isNotEmpty ||
       uri.hasPort ||

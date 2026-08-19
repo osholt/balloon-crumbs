@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:balloon_crumbs/domain/app_links.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -107,7 +108,7 @@ void main() {
       ),
       client: MockClient((request) async {
         final body = jsonDecode(request.body) as Map<String, Object?>;
-        expect(request.headers['x-client-id'], 'balloon-crumbs.invalid');
+        expect(request.headers['x-client-id'], appLinkHost);
         if (request.url.path.endsWith('locate')) {
           locateRequests.add(body);
           return http.Response(locate ?? '[]', 200);

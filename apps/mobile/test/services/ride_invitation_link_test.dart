@@ -1,3 +1,4 @@
+import 'package:balloon_crumbs/domain/app_links.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/domain/join_invite.dart';
 import 'package:balloon_crumbs/services/ride_invitation_link.dart';
@@ -11,7 +12,7 @@ void main() {
     final uri = Uri.parse(value);
 
     expect(uri.scheme, 'https');
-    expect(uri.host, 'balloon-crumbs.invalid');
+    expect(uri.host, appLinkHost);
     expect(uri.path, '/join.html');
     expect(uri.hasQuery, isFalse);
     expect(Uri.decodeComponent(uri.fragment), '$code#$token');
@@ -34,7 +35,7 @@ void main() {
   test('rejects capability material outside the exact private fragment', () {
     expect(
       rideInvitationFromLink(
-        'https://balloon-crumbs.invalid/join.html?token=$token#$code',
+        'https://$appLinkHost/join.html?token=$token#$code',
       ),
       isNull,
     );
@@ -44,12 +45,12 @@ void main() {
     );
     expect(
       rideInvitationFromLink(
-        'https://balloon-crumbs.invalid/join.html#open-$code%23$token',
+        'https://$appLinkHost/join.html#open-$code%23$token',
       ),
       isNull,
     );
     expect(
-      rideInvitationFromLink('https://balloon-crumbs.invalid/join.html#$code'),
+      rideInvitationFromLink('https://$appLinkHost/join.html#$code'),
       isNull,
     );
   });

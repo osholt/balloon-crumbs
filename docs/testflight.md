@@ -123,3 +123,56 @@ When more than one person needs builds, that trade changes. Tail End Charlie's
 `testflight.yml` is the reference: temporary keychain, imported cert and
 profile, manual signing, `xcrun altool` upload with a Developer-role key,
 retrying once on Apple's 5xx.
+
+## Universal links
+
+Invitation and planner links use `balloon-crumbs.tailendcharlie.app` — a
+subdomain of a domain that already exists rather than one bought for this app.
+Deliberately temporary: that zone is already on Cloudflare and already serves
+Tail End Charlie's own association file, so standing this one up is a DNS record
+and a static file rather than a certificate and a server. Moving to a Balloon
+Crumbs domain later is one line in `lib/domain/app_links.dart` plus the two
+files that have to agree with it.
+
+Three things must name the same host, and only a test enforces it
+(`test/domain/app_links_test.dart`):
+
+| where | what |
+| --- | --- |
+| `lib/domain/app_links.dart` | `appLinkHost`, used to build and parse links |
+| `ios/Runner/{DebugProfile,Release}.entitlements` | `applinks:<host>` |
+| `apps/website/.well-known/apple-app-site-association` | `appIDs: ["UY4624PH6X.dev.osholt.ballooncrumbs"]` |
+
+Get any one of them wrong and the failure is silent: the link opens Safari,
+which is exactly what a link that was never meant to open the app does. There is
+no error to notice, only somebody saying it did nothing.
+
+### What still has to happen for a tapped link to work
+
+The app side is done. The hosting side is not, and it is account access rather
+than code:
+
+1. Point `balloon-crumbs.tailendcharlie.app` at something that serves
+   `apps/website/`. A Cloudflare Pages project on this repository with that
+   custom domain is the cheapest option and matches how the sibling domain is
+   already served.
+2. Confirm the file is reachable at exactly
+   `https://balloon-crumbs.tailendcharlie.app/.well-known/apple-app-site-association`,
+   over HTTPS, with **no redirect** — Apple does not follow one:
+
+   ```bash
+   curl -sSI https://balloon-crumbs.tailendcharlie.app/.well-known/apple-app-site-association
+   ```
+
+3. Ship a build carrying the entitlement. iOS fetches the association file when
+   the app is installed, so a link tapped before that build is installed still
+   opens Safari.
+
+Until then the six-digit code is the mechanism that works, and it is offered
+alongside every link. That is not a fallback bolted on — it is why the invitation
+carries both.
+
+If the Caddy stack is ever the origin instead of Cloudflare, `deploy/Caddyfile`
+now serves the file with `Content-Type: application/json`. Its website block is
+an explicit path allowlist that 404s everything else, so without that route the
+file would ship in the image and be unreachable.

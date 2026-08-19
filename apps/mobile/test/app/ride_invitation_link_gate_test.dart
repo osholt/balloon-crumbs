@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:balloon_crumbs/domain/app_links.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/app/ride_invitation_link_gate.dart';
 import 'package:balloon_crumbs/controllers/ride_code_preference_controller.dart';
@@ -89,7 +90,7 @@ void main() {
         expectedCode: '123456',
         expectedToken: 'Abcdefghijklmnop12345678',
       ),
-      link: 'https://balloon-crumbs.invalid/join.html#broken',
+      link: 'https://$appLinkHost/join.html#broken',
     );
     addTearDown(fixture.dispose);
 
