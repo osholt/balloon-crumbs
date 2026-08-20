@@ -52,13 +52,13 @@ import '../../relay/native_nearby_transport.dart';
 import '../../relay/relay_engine.dart';
 import '../../relay/sqlite_relay_queue.dart';
 import '../../services/carplay_bridge.dart';
+import '../../services/fiesta_flight_loader.dart';
 import '../../services/geo_calculations.dart';
 import '../../services/spoken_audio_mode.dart';
 import '../../services/spoken_guidance_schedule.dart';
 import '../../services/spoken_guidance.dart';
 import '../../services/test_control_registry.dart';
 import '../../services/basemap_configuration.dart';
-import '../../services/demo_route_loader.dart';
 import '../../services/device_location_source.dart';
 import '../../services/external_hazard_provider.dart';
 import '../../services/fixed_speed_camera_catalogue.dart';
@@ -1086,6 +1086,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   RelayTrafficRerouteProvider? _trafficRerouteProvider;
   SharedPreferences? _trafficReroutePreferences;
   InMemoryRouteStore? _simulationRouteStore;
+
+  /// The bundled Fiesta flight, held so the simulation controller can play the
+  /// balloon back against the clock rather than dragging it along the road.
+  BalloonFlight? _balloonFlight;
   RouteStore? _rideRouteStore;
   StreamSubscription<RideEvent>? _receivedEventSubscription;
   StreamSubscription<RideEvent>? _internetReceivedEventSubscription;
@@ -1275,7 +1279,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     var publishStoredLeaderRoute = false;
     if (_isSimulation) {
       try {
-        route = await const BundledDemoRouteLoader().load();
+        // The chase crew's road route is the group route, because it is the
+        // one anybody drives. The balloon's air track is not a route at all.
+        const loader = BundledFiestaFlightLoader();
+        route = await loader.loadChaseRoute();
+        _balloonFlight = await loader.load();
         _simulationRouteStore = InMemoryRouteStore(route);
         _warnings.add(
           'Ride Lab is isolated: device GPS, internet relay and nearby radios '
@@ -1943,6 +1951,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       awareness,
       session: session,
       route: simulationRoute,
+      balloonFlight: _balloonFlight,
       riderCount: session.simulationRiderCount,
       rideStarted: widget.rideController.rideStarted,
     );

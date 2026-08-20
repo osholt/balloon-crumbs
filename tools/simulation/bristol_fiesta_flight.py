@@ -29,8 +29,15 @@ chase crew must leave Ashton Court southbound before they know exactly where.
 
 ## What this produces
 
-    assets/simulation/fiesta_balloon_flight.gpx   the balloon's air track
+    assets/simulation/fiesta_balloon_flight.json  the flight the simulator flies
+    assets/simulation/fiesta_balloon_flight.gpx   the same air track, viewable
     assets/simulation/fiesta_chase_route.gpx      a road route to the landing
+
+The JSON is what the simulator reads, because it carries the height and the
+clock alongside each position. GPX cannot: this app does not yet read `<ele>`
+on import (#16), and a track with no timing would leave the simulator guessing
+at a climb rate it already knows. The GPX is written anyway so the flight can be
+opened in anything that shows a track.
 
 Wind is interpolated as a vector between layers, never as a bearing: averaging
 094 and 339 as numbers gives 216, which is the opposite of the truth. Crossing
@@ -256,6 +263,40 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  {flown / 1000:.2f} km flown through the air over "
           f"{track[-1]['seconds'] / 60:.0f} minutes")
     print(f"  peak height {max(p['height'] for p in track):.0f} m above the launch field")
+
+    (assets / "fiesta_balloon_flight.json").write_text(
+        json.dumps(
+            {
+                "name": "Fiesta dawn ascent, 8 August 2026",
+                "launch": {
+                    "latitude": LAUNCH[0],
+                    "longitude": LAUNCH[1],
+                    "name": "Ashton Court",
+                    "elevationMetres": LAUNCH_ELEVATION_M,
+                },
+                "windLayers": [
+                    {"heightMetres": h, "fromDegrees": d, "speedKmh": s}
+                    for h, d, s in WIND_LAYERS
+                ],
+                "source": (
+                    "Open-Meteo, measured winds over Ashton Court for the dawn "
+                    "mass ascent of Saturday 8 August 2026"
+                ),
+                "samples": [
+                    {
+                        "seconds": round(point["seconds"]),
+                        "latitude": round(point["latitude"], 6),
+                        "longitude": round(point["longitude"], 6),
+                        "heightMetres": round(point["height"], 1),
+                    }
+                    for point in track
+                ],
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    print(f"  wrote {len(track)} flight samples")
 
     (assets / "fiesta_balloon_flight.gpx").write_text(
         gpx_track(
