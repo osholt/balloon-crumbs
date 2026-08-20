@@ -1,5 +1,6 @@
 import 'package:xml/xml.dart';
 
+import '../domain/app_links.dart';
 import '../domain/imported_route.dart';
 
 class GpxExporter {
@@ -14,8 +15,7 @@ class GpxExporter {
         'version': '1.1',
         'creator': 'Balloon Crumbs',
         'xmlns': 'http://www.topografix.com/GPX/1/1',
-        if (route.preferences != null)
-          'xmlns:tec': 'https://balloon-crumbs.invalid/gpx/1',
+        if (route.preferences != null) 'xmlns:bc': 'https://$appLinkHost/gpx/1',
       },
       nest: () {
         builder.element(
@@ -38,7 +38,7 @@ class GpxExporter {
                 nest: () {
                   if (route.preferences case final preferences?) {
                     builder.element(
-                      'tec:route-preferences',
+                      'bc:route-preferences',
                       attributes: {
                         'style': preferences.style.apiValue,
                         'avoid-motorways': '${preferences.avoidMotorways}',

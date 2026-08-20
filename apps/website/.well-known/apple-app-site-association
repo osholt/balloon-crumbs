@@ -1,0 +1,20 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["UY4624PH6X.dev.osholt.ballooncrumbs"],
+        "components": [
+          {
+            "/": "/join.html",
+            "comment": "Open a private Balloon Crumbs flight invitation in the installed app; the join code and its capability token stay in the URL fragment, which is never sent to this host."
+          },
+          {
+            "/": "/planner.html",
+            "?": { "code": "?*" },
+            "comment": "Open a shared Balloon Crumbs route code in the installed app."
+          }
+        ]
+      }
+    ]
+  }
+}

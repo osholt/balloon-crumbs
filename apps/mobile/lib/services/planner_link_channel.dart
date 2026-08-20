@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 
+import '../domain/app_links.dart';
+
 abstract interface class IncomingPlannerLinkSource {
   Future<String?> consumePending();
 }
@@ -31,8 +33,8 @@ String? planCodeFromPlannerLink(String value) {
   final uri = Uri.tryParse(value);
   if (uri == null ||
       uri.scheme != 'https' ||
-      uri.host.toLowerCase() != 'balloon-crumbs.invalid' ||
-      uri.path != '/planner.html' ||
+      uri.host.toLowerCase() != appLinkHost ||
+      uri.path != plannerPath ||
       uri.userInfo.isNotEmpty ||
       uri.hasFragment) {
     return null;

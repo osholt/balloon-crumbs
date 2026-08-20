@@ -12,6 +12,7 @@ import '../../controllers/speed_limit_display_controller.dart';
 import '../../controllers/ride_diagnostics_controller.dart';
 import '../../controllers/spoken_guidance_controller.dart';
 import '../../controllers/test_control_controller.dart';
+import '../../domain/app_links.dart';
 import '../../domain/distance_unit.dart';
 import '../../domain/map_style_mode.dart';
 import '../../domain/rider_color.dart';
@@ -850,7 +851,7 @@ class _AboutBuildTile extends StatelessWidget {
 
 Future<void> _openLegalPage(BuildContext context, String page) async {
   final opened = await launchUrl(
-    Uri.https('balloon-crumbs.invalid', '/$page'),
+    Uri.https(appLinkHost, '/$page'),
     mode: LaunchMode.externalApplication,
   );
   if (!opened && context.mounted) {

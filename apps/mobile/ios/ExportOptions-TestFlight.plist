@@ -4,18 +4,22 @@
 <dict>
   <key>method</key>
   <string>app-store-connect</string>
-  <key>provisioningProfiles</key>
-  <dict>
-    <key>dev.osholt.ballooncrumbs</key>
-    <string>Hot Pursuit CarPlay Navigation App Store</string>
-  </dict>
-  <key>signingCertificate</key>
-  <string>Apple Distribution</string>
+  <!-- Automatic, because this app has no restricted entitlements. The
+       inherited file named a manual profile - "Hot Pursuit CarPlay Navigation
+       App Store", from two product names ago - which existed only because
+       CarPlay entitlements cannot be minted automatically. Nothing here needs
+       that, and a stale profile name fails the export with "No profile found"
+       rather than falling back to something sensible. -->
   <key>signingStyle</key>
-  <string>manual</string>
+  <string>automatic</string>
   <key>teamID</key>
   <string>UY4624PH6X</string>
   <key>uploadSymbols</key>
   <true/>
+  <!-- No manageAppVersionAndBuildNumber: the build number comes from
+       --build-number so a re-run cannot silently take a different one than the
+       one the release notes name. -->
+  <key>manageAppVersionAndBuildNumber</key>
+  <false/>
 </dict>
 </plist>
