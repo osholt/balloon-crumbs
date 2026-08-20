@@ -1,0 +1,87 @@
+# Reports what Google Play is actually serving without committing an edit.
+name: Play track status
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-play-status
+  cancel-in-progress: false
+
+jobs:
+  status:
+    name: Report Play track status
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: android-internal
+    env:
+      PACKAGE_NAME: dev.osholt.ballooncrumbs
+    steps:
+      - name: Validate Play service account secret
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          test -n "$SERVICE_ACCOUNT_JSON" || {
+            echo "::error::Missing GOOGLE_PLAY_SERVICE_ACCOUNT_JSON. See docs/android-internal-testing.md." >&2
+            exit 1
+          }
+      - name: Install Google API client
+        run: pip install --quiet google-auth google-auth-httplib2 google-api-python-client
+      - name: Report every track
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/play.json"
+          python - <<'PY'
+          import os
+
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+
+          package = os.environ["PACKAGE_NAME"]
+          credentials = service_account.Credentials.from_service_account_file(
+              os.path.join(os.environ["RUNNER_TEMP"], "play.json"),
+              scopes=["https://www.googleapis.com/auth/androidpublisher"],
+          )
+          service = build("androidpublisher", "v3", credentials=credentials)
+          edits = service.edits()
+          edit_id = edits.insert(packageName=package, body={}).execute()["id"]
+          try:
+              tracks = edits.tracks().list(
+                  packageName=package, editId=edit_id
+              ).execute().get("tracks", [])
+          finally:
+              edits.delete(packageName=package, editId=edit_id).execute()
+
+          if not tracks:
+              raise SystemExit("No Play tracks were returned for " + package)
+
+          summary = []
+          for track in sorted(tracks, key=lambda item: item["track"]):
+              name = track["track"]
+              releases = track.get("releases", [])
+              if not releases:
+                  summary.append((name, None, []))
+                  continue
+              for release in releases:
+                  summary.append(
+                      (name, release.get("status"), release.get("versionCodes") or [])
+                  )
+
+          print(f"{package}: {len(tracks)} tracks")
+          for name, status, codes in summary:
+              codes_text = ",".join(codes) if codes else "-"
+              print(f"{name:24s} status={status or '-':12s} codes={codes_text}")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("| Track | Status | Version codes |\n")
+              handle.write("| --- | --- | --- |\n")
+              for name, status, codes in summary:
+                  codes_text = ", ".join(codes) if codes else "—"
+                  handle.write(f"| `{name}` | {status or '—'} | {codes_text} |\n")
+          PY

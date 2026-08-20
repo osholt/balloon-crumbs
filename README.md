@@ -41,6 +41,10 @@ work, not balloon features.
 See [PLAN.md](PLAN.md), [docs/architecture.md](docs/architecture.md), and
 [docs/backlog.md](docs/backlog.md).
 
+Tester release setup is documented for
+[TestFlight](docs/testflight.md) and
+[Google Play closed testing](docs/android-internal-testing.md).
+
 ## Repository layout
 
 ```text
