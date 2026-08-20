@@ -11,6 +11,7 @@ import '../domain/ride_session.dart';
 import '../domain/rider_color.dart';
 import '../domain/rider_location.dart';
 import '../features/map/craft_icon.dart';
+import '../services/fiesta_flight_loader.dart';
 import '../services/geo_calculations.dart';
 import '../services/situation_event_factory.dart';
 import 'situational_awareness_controller.dart';
@@ -66,6 +67,7 @@ class RideSimulationController extends ChangeNotifier {
     this._awarenessController, {
     required RideSession session,
     required List<GeoPoint> route,
+    BalloonFlight? balloonFlight,
     this.tickInterval = const Duration(milliseconds: 100),
     this.eventInterval = const Duration(seconds: 2),
     this.riderCount = RideSession.defaultSimulationRiderCount,
@@ -81,9 +83,18 @@ class RideSimulationController extends ChangeNotifier {
        // ignore: prefer_initializing_formals
        _rideStarted = rideStarted,
        _routeSampler = _RouteSampler(route),
+       // Keep the public constructor argument usable outside this library.
+       // ignore: prefer_initializing_formals
+       _balloonFlight = balloonFlight,
        _selectedLocalRole = session.role {
     _agents = _buildAgents(_routeSampler.totalDistanceMeters * 0.06);
   }
+
+  /// Ashton Court's field is about 60 m above sea level, and a GNSS fix reports
+  /// altitude above the ellipsoid, not above the launch field. The flight
+  /// carries height above launch because that is what a pilot flies and what
+  /// goes out over the radio, so this is added back to make the fix honest.
+  static const _launchElevationMetres = 60.0;
 
   static const offRouteRiderId = 'ride-lab-alex';
   static const backRiderId = 'ride-lab-charlie';
@@ -91,6 +102,18 @@ class RideSimulationController extends ChangeNotifier {
   final SituationalAwarenessController _awarenessController;
   final RideSession _session;
   final _RouteSampler _routeSampler;
+
+  /// The balloon's own flight, when one is bundled.
+  ///
+  /// The chase vehicles drive [_routeSampler], a road route, at a road speed.
+  /// The balloon does not: it has no steering and no throttle, so it is played
+  /// back against the clock from a track that was computed from measured winds.
+  /// Advancing it along the road with everyone else was the thing that made the
+  /// old demo a group ride with the labels changed.
+  ///
+  /// Null falls back to that older behaviour, which keeps the focused tests that
+  /// only care about group mechanics from having to carry a flight.
+  final BalloonFlight? _balloonFlight;
   final Duration tickInterval;
   final Duration eventInterval;
   final int riderCount;
@@ -468,6 +491,62 @@ class RideSimulationController extends ChangeNotifier {
     await _awarenessController.ingestRemoteEvent(event);
   }
 
+  /// Where the balloon is now, played back against the simulated clock.
+  ///
+  /// Null for a chase vehicle, and null when no flight is bundled. Heading is
+  /// the direction of drift between neighbouring samples rather than anything
+  /// the pilot chose - which is why it wanders while the balloon crosses a wind
+  /// layer and holds steady while it sits in one.
+  _SimulatedPosition? _flightPlayback(_SimulatedAgent agent) {
+    final flight = _balloonFlight;
+    if (flight == null || agent.role != RideRole.lead) return null;
+    if (!_rideStarted) {
+      return _SimulatedPosition(position: flight.launch, headingDegrees: 0);
+    }
+    final (before, after, fraction) = _flightWindow(flight);
+    final position = GeoPoint(
+      latitude:
+          before.position.latitude +
+          (after.position.latitude - before.position.latitude) * fraction,
+      longitude:
+          before.position.longitude +
+          (after.position.longitude - before.position.longitude) * fraction,
+    );
+    return _SimulatedPosition(
+      position: position,
+      headingDegrees: _RouteSampler._bearingDegrees(
+        before.position,
+        after.position,
+      ),
+    );
+  }
+
+  /// The two flight samples the clock currently sits between, and how far.
+  ///
+  /// Clamps at the end rather than wrapping: once the balloon is down it stays
+  /// down. The chase vehicles keep driving, which is the ordinary case - a crew
+  /// arriving after the envelope is on the ground is a normal retrieve, not a
+  /// missed rendezvous, so nothing here treats it as one.
+  (BalloonFlightSample, BalloonFlightSample, double) _flightWindow(
+    BalloonFlight flight,
+  ) {
+    final samples = flight.samples;
+    final elapsed = _simulatedElapsed;
+    if (elapsed >= flight.duration) {
+      return (samples.last, samples.last, 0);
+    }
+    var index = 0;
+    while (index < samples.length - 2 &&
+        samples[index + 1].elapsed <= elapsed) {
+      index += 1;
+    }
+    final before = samples[index];
+    final after = samples[index + 1];
+    final span = (after.elapsed - before.elapsed).inMicroseconds.toDouble();
+    final into = (elapsed - before.elapsed).inMicroseconds.toDouble();
+    return (before, after, span <= 0 ? 0.0 : (into / span).clamp(0.0, 1.0));
+  }
+
   /// The balloon's height and climb rate at its current point in the flight.
   ///
   /// Only the lead agent flies: it stands in for the balloon while the rest of
@@ -483,7 +562,27 @@ class RideSimulationController extends ChangeNotifier {
   /// which is what makes an altitude trail worth colouring.
   ({double altitudeMeters, double verticalSpeedMetersPerSecond})?
   _balloonFlightAt(_SimulatedAgent agent) {
-    if (agent.role != RideRole.lead || routeDistanceMeters <= 0) return null;
+    if (agent.role != RideRole.lead) return null;
+    if (_balloonFlight case final flight?) {
+      if (!_rideStarted) return null;
+      final (before, after, fraction) = _flightWindow(flight);
+      final height =
+          before.heightMetres +
+          (after.heightMetres - before.heightMetres) * fraction;
+      final seconds =
+          (after.elapsed - before.elapsed).inMicroseconds /
+          Duration.microsecondsPerSecond;
+      return (
+        altitudeMeters: height + _launchElevationMetres,
+        // Measured from the flight rather than asserted: a climb rate the
+        // track does not actually show would put a number on screen that the
+        // altitude trail contradicts.
+        verticalSpeedMetersPerSecond: seconds <= 0
+            ? 0
+            : (after.heightMetres - before.heightMetres) / seconds,
+      );
+    }
+    if (routeDistanceMeters <= 0) return null;
     final progress = (agent.progressMeters / routeDistanceMeters).clamp(
       0.0,
       1.0,
@@ -583,6 +682,7 @@ class RideSimulationController extends ChangeNotifier {
   }
 
   _SimulatedPosition _sampleAgent(_SimulatedAgent agent) {
+    if (_flightPlayback(agent) case final flown?) return flown;
     final sampled = _routeSampler.sampleAt(agent.progressMeters);
     // The synthetic off-route scenario must recover at the destination so the
     // same completion rule used by a live ride can end the demo naturally.
