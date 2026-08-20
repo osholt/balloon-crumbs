@@ -131,8 +131,7 @@ class RenderingTest(unittest.TestCase):
             "the mail and the in-app update button must use one opt-in URL",
         )
         self.assertIn(
-            "'https://github.com/osholt/balloon-crumbs/blob/main/docs/"
-            "tester-release-notes.md'",
+            "'https://github.com/osholt/balloon-crumbs/blob/main/docs/tester-release-notes.md'",
             dart,
         )
 
