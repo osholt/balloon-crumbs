@@ -90,15 +90,27 @@ them and does not pretend to.
 
 ## Build numbers
 
-The build number must be unique and increasing within the app record, and
-nothing else. `build-and-upload.sh` takes the pubspec's `+N` and adds one, or
-uses a number you pass. `manageAppVersionAndBuildNumber` is deliberately
-`false` in the export options so Xcode cannot quietly substitute a different
-one than the number the release notes name.
+The build number must be unique and increasing within the app record, and nothing
+else. Apple reserves one permanently the moment it accepts an upload, and refuses
+a repeat with an error that never mentions build numbers.
 
-The version inherited from Tail End Charlie is `1.0.1+22`. A new app record has
-no build history, so starting near 22 collides with nothing — it just means the
-first Balloon Crumbs build is not build 1.
+So nothing guesses. `tools/testflight/next_build_number.py` asks App Store
+Connect for the highest build against the bundle ID and adds one, and both the
+local script and CI call it — which is why a number cannot be spent twice by
+uploading from a laptop and then from CI. Pass a number explicitly to override.
+
+With no API key configured the local script falls back to the pubspec's `+N`
+plus one, says out loud that the number may already be taken, and prints the
+one-line command to record the key ID and issuer ID in
+`~/.config/balloon-crumbs/testflight.env` so it never has to ask again.
+
+`manageAppVersionAndBuildNumber` is deliberately `false` in the export options so
+Xcode cannot quietly substitute a different number from the one the release notes
+name.
+
+The version inherited from Tail End Charlie is `1.0.1+22`, and builds 23 and 24
+are already spent — so the pubspec is behind reality, which is exactly the drift
+that made asking Apple the better answer.
 
 ## Without a relay
 
@@ -113,16 +125,71 @@ Export the variable to point at a deployed relay when there is one.
 
 ## CI
 
-There is deliberately no TestFlight workflow yet. CI has no Apple ID signed
-into Xcode, so it cannot use automatic signing — a workflow means exporting a
-distribution `.p12`, a provisioning profile and an upload key into repository
-secrets, which is real work and real key custody for a build that one person
-currently installs. The local path needs none of it.
+`.github/workflows/testflight.yml`, run from the Actions tab. It imports the
+signing material into a temporary keychain, archives, checks the result, uploads,
+and keeps the IPA as an artefact either way.
 
-When more than one person needs builds, that trade changes. Tail End Charlie's
-`testflight.yml` is the reference: temporary keychain, imported cert and
-profile, manual signing, `xcrun altool` upload with a Developer-role key,
-retrying once on Apple's 5xx.
+Deliberately **workflow_dispatch only**. Uploading on every merge would spend a
+build number per commit and put half-finished work in front of a tester, and the
+concurrency group means two runs cannot race for the same number. Add a `push`
+trigger if that turns out to be what you want.
+
+### Secrets it needs
+
+Create these once, under Settings → Secrets and variables → Actions:
+
+| secret | what |
+| --- | --- |
+| `APPLE_DISTRIBUTION_CERTIFICATE_BASE64` | an Apple Distribution `.p12`, base64 |
+| `APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD` | its export password |
+| `APPLE_APPSTORE_PROFILE_BASE64` | an App Store provisioning profile, base64 |
+| `APPLE_CI_KEYCHAIN_PASSWORD` | any random string, for the temporary keychain |
+| `APPSTORE_CONNECT_API_KEY_ID` | the Developer-role key's ID |
+| `APPSTORE_CONNECT_API_ISSUER_ID` | the account's issuer ID |
+| `APPSTORE_CONNECT_API_PRIVATE_KEY_BASE64` | that key's `.p8`, base64 |
+
+Optionally set the `BALLOON_CRUMBS_API_BASE_URL` **variable** (not a secret) to a
+deployed relay. Without it the build warns and ships without relay access, which
+the app says on its own status card.
+
+To produce the two base64 values:
+
+```bash
+base64 -i Certificates.p12 | pbcopy
+base64 -i BalloonCrumbs_AppStore.mobileprovision | pbcopy
+```
+
+**The provisioning profile must include Associated Domains.** That capability was
+added to the App ID when automatic signing first archived locally, so download
+the profile *after* that — one generated earlier silently strips the `applinks`
+entitlement and universal links stop working, with nothing failing until a link
+is tapped on a phone. The workflow asserts the entitlement is in the signed IPA
+rather than trusting this, and fails with that question if it is missing.
+
+### Why signing is overridden on the command line
+
+The Xcode project stays on **automatic** signing, because that is what works on a
+Mac with an Apple ID and it means a local build needs no exported material at
+all. A runner has no Apple ID, so the workflow passes `CODE_SIGN_STYLE=Manual`,
+an identity and a profile name to `xcodebuild` instead of editing the project.
+
+Editing the project to suit CI is the trade the inherited setup made, and its own
+runbook then documented the consequence: the profile name had to match in three
+places, and this repository shipped a stale one — `Hot Pursuit CarPlay Navigation
+App Store`, from two product names ago. CI now reads the name out of the profile
+it just imported and writes the export options from that, so there is no second
+copy to go stale.
+
+### Build numbers
+
+Both paths call `tools/testflight/next_build_number.py`, which asks App Store
+Connect for the highest build it holds and adds one. That is why a number cannot
+be spent twice by uploading from a laptop and then from CI.
+
+Not the GitHub run number, which Tail End Charlie uses: it is monotonic per
+repository rather than per app record, and it knows nothing about builds uploaded
+by hand. This repository already had that collision — the pubspec said `+22`
+while Apple had already taken 23.
 
 ## Universal links
 
