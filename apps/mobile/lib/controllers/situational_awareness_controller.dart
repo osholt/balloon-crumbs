@@ -65,7 +65,10 @@ class SituationalAwarenessController extends ChangeNotifier {
   final Map<String, RiderLocation> _locations = {};
   final Map<String, RiderLocationEvidence> _locationEvidence = {};
   final Map<String, HazardReport> _hazards = {};
-  final List<({DateTime recordedAt, GeoPoint position})> _leaderTrail = [];
+  // Keep the complete fix here. Reducing this to position plus timestamp threw
+  // away the balloon altitude before the map could colour or describe its
+  // ground track.
+  final List<LocationSample> _leaderTrail = [];
   bool _busy = false;
   bool _refreshingStaleness = false;
   String? _errorMessage;
@@ -82,7 +85,18 @@ class SituationalAwarenessController extends ChangeNotifier {
   /// rendering can break an unknown interval instead of inventing a straight
   /// line across it (#205).
   List<({DateTime recordedAt, GeoPoint position})> get leaderTrailSamples =>
-      _leaderTrailSamplesCache ??= List.unmodifiable(_leaderTrail);
+      _leaderTrailSamplesCache ??= List.unmodifiable([
+        for (final sample in _leaderTrail)
+          (recordedAt: sample.recordedAt, position: sample.position),
+      ]);
+
+  /// Complete balloon/leader fixes for telemetry-aware map surfaces.
+  ///
+  /// The compatibility getters above intentionally remain position-only for
+  /// route-alert callers. This is the path that retains altitude source, datum,
+  /// accuracy and vertical speed for the balloon ground track.
+  List<LocationSample> get leaderLocationSamples =>
+      _leaderLocationSamplesCache ??= List.unmodifiable(_leaderTrail);
 
   List<RiderLocation> get riderLocations {
     final values = _locations.values.toList(growable: false);
@@ -431,12 +445,10 @@ class SituationalAwarenessController extends ChangeNotifier {
         !_leaderTrail[index - 1].recordedAt.isBefore(sample.recordedAt)) {
       return;
     }
-    _leaderTrail.insert(index, (
-      recordedAt: sample.recordedAt,
-      position: sample.position,
-    ));
+    _leaderTrail.insert(index, sample);
     _leaderTrailPointsCache = null;
     _leaderTrailSamplesCache = null;
+    _leaderLocationSamplesCache = null;
     // A runaway guard, not a display policy. The trail used to be truncated to
     // a 600-point recent-track limit here, which cost a
     // tester the tail of a 6 h 4 m, 112 mile ride: 600 points is roughly the
@@ -458,6 +470,7 @@ class SituationalAwarenessController extends ChangeNotifier {
 
   List<GeoPoint>? _leaderTrailPointsCache;
   List<({DateTime recordedAt, GeoPoint position})>? _leaderTrailSamplesCache;
+  List<LocationSample>? _leaderLocationSamplesCache;
 
   /// Built once per change rather than per read.
   ///
@@ -469,7 +482,7 @@ class SituationalAwarenessController extends ChangeNotifier {
   /// every follower position update. Caching it removes the per-update cost
   /// without deleting any history.
   List<GeoPoint> get _leaderTrailPoints => _leaderTrailPointsCache ??=
-      List.unmodifiable([for (final point in _leaderTrail) point.position]);
+      List.unmodifiable([for (final sample in _leaderTrail) sample.position]);
 
   void _removeExpiredHazards() {
     final now = _clock();

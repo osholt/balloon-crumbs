@@ -19,6 +19,7 @@ void main() {
       'route ahead': (4.11, 9.54, 10.27),
       'travelled': (2.81, 6.52, 7.02),
       'leader trail': (4.22, 9.78, 10.53),
+      'balloon ground track': (4.77, 11.06, 11.91),
       'route start connector': (4.77, 11.06, 11.91),
     };
 

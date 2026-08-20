@@ -14,6 +14,12 @@ enum RiderTrailKind {
   /// and is rendered on every participant's map.
   leader,
 
+  /// The aircraft's travelled path projected onto the ground.
+  ///
+  /// Kept separate from the inherited leader trail so it cannot disappear
+  /// underneath a road route or be mistaken for a chase vehicle's path.
+  balloonGroundTrack,
+
   /// The road route from where the rider is to the start of the planned route
   /// (#133). The one kind that is not recorded history: it is where the routing
   /// engine says to go next, which is why it is never produced by
@@ -51,6 +57,7 @@ class RiderTrailUpdate {
     required this.displayName,
     this.position,
     this.isLeader = false,
+    this.isBalloon = false,
     this.isEligible = true,
     this.journalTrail,
   });
@@ -62,6 +69,7 @@ class RiderTrailUpdate {
   final GeoPoint? position;
 
   final bool isLeader;
+  final bool isBalloon;
 
   /// Whether the rider's route alert says they are off route. Styling only.
 
@@ -169,7 +177,7 @@ class RiderTrailRecorder {
         RiderTrail(
           riderId: rider.riderId,
           displayName: rider.displayName,
-          kind: kindFor(isLeader: rider.isLeader),
+          kind: kindFor(isLeader: rider.isLeader, isBalloon: rider.isBalloon),
           points: journal != null && journal.length > recorded.length
               ? boundedTrail(journal)
               : recorded,
@@ -212,8 +220,14 @@ class RiderTrailRecorder {
 
   /// The leader's trail is the group's ground truth, so it is styled apart from
   /// every other craft's.
-  static RiderTrailKind kindFor({required bool isLeader}) =>
-      isLeader ? RiderTrailKind.leader : RiderTrailKind.rider;
+  static RiderTrailKind kindFor({
+    required bool isLeader,
+    bool isBalloon = false,
+  }) => isBalloon
+      ? RiderTrailKind.balloonGroundTrack
+      : isLeader
+      ? RiderTrailKind.leader
+      : RiderTrailKind.rider;
 
   /// Records [point] for [riderId] and reports whether it extended the trail.
   ///

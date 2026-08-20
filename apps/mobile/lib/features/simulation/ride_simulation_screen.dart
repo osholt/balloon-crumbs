@@ -7,6 +7,7 @@ import '../../domain/distance_unit.dart';
 import '../../domain/ride_role.dart';
 import '../../domain/ride_session.dart';
 import '../../services/measurement_formatter.dart';
+import '../map/craft_icon.dart';
 
 class RideSimulationScreen extends StatelessWidget {
   const RideSimulationScreen({
@@ -122,7 +123,7 @@ class _SimulationControls extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'SYNTHETIC RIDE',
+                    'SYNTHETIC FLIGHT',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
@@ -152,13 +153,21 @@ class _SimulationControls extends StatelessWidget {
               segments: const [
                 ButtonSegment(
                   value: RideRole.lead,
-                  icon: Icon(Icons.flag_outlined),
-                  label: Text('Leader'),
+                  icon: CraftIcon(
+                    style: CraftIconStyle.balloon,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  label: Text('Balloon'),
                 ),
                 ButtonSegment(
                   value: RideRole.rider,
-                  icon: Icon(Icons.two_wheeler),
-                  label: Text('Follower'),
+                  icon: CraftIcon(
+                    style: CraftIconStyle.fourByFour,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  label: Text('Chase'),
                 ),
               ],
               selected: {controller.localRole},
@@ -316,11 +325,14 @@ class _FleetCard extends StatelessWidget {
           for (final rider in controller.riders) ...[
             Row(
               children: [
-                Icon(
-                  rider.isLocal ? Icons.navigation : Icons.two_wheeler,
+                CraftIcon(
+                  style: rider.role == RideRole.lead
+                      ? CraftIconStyle.balloon
+                      : rider.motorcycleStyle,
                   color: rider.isOffRoute
                       ? const Color(0xFFFF4FA3)
                       : const Color(0xFF6ED89A),
+                  size: 24,
                 ),
                 const SizedBox(width: 10),
                 Expanded(

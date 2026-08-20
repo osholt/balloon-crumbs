@@ -5,6 +5,7 @@ export 'ride_map_feature.dart'
         GroupMiniMapRenderer,
         MapOverlayMarker,
         MapOverlayTrace,
+        RideMapPerspective,
         RideMapFeature,
         RideMapScreen,
         describeQuickMessageOrigin,

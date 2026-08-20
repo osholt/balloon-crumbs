@@ -112,11 +112,16 @@ jobs:
         working-directory: ${{ env.MOBILE_DIR }}
         env:
           BALLOON_CRUMBS_API_BASE_URL: ${{ vars.BALLOON_CRUMBS_API_BASE_URL }}
+          BALLOON_CRUMBS_OPENAIP_API_KEY: ${{ secrets.BALLOON_CRUMBS_OPENAIP_API_KEY }}
         run: |
           set -euo pipefail
           eval "$("$GITHUB_WORKSPACE/tools/build-identity.sh" pubspec.yaml testflight "$BUILD_NUMBER" | sed 's/^/export /')"
           if [ -z "${BALLOON_CRUMBS_API_BASE_URL:-}" ]; then
             echo "::warning::No BALLOON_CRUMBS_API_BASE_URL repository variable; this build cannot reach a relay. Nearby transport still works and the app says so on its status card."
+          fi
+          if [ -z "${BALLOON_CRUMBS_OPENAIP_API_KEY:-}" ]; then
+            echo "::error::Missing BALLOON_CRUMBS_OPENAIP_API_KEY; tester releases must include the selected advisory airspace layer." >&2
+            exit 1
           fi
           flutter pub get
           flutter build ios --release --no-codesign \
@@ -127,6 +132,7 @@ jobs:
             --dart-define=BALLOON_CRUMBS_DISTRIBUTION_TRACK="$BALLOON_CRUMBS_DISTRIBUTION_TRACK" \
             --dart-define=BALLOON_CRUMBS_BUILD_TIMESTAMP="$BALLOON_CRUMBS_BUILD_TIMESTAMP" \
             --dart-define=BALLOON_CRUMBS_API_BASE_URL="${BALLOON_CRUMBS_API_BASE_URL:-}" \
+            --dart-define=BALLOON_CRUMBS_OPENAIP_API_KEY="$BALLOON_CRUMBS_OPENAIP_API_KEY" \
             --dart-define=BALLOON_CRUMBS_PUSH_ENABLED=false \
             --dart-define=BALLOON_CRUMBS_RIDE_DIAGNOSTICS=true
 
