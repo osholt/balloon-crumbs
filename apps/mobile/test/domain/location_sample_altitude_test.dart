@@ -15,6 +15,7 @@ void main() {
   LocationSample sample({
     double? altitudeMeters,
     AltitudeSource altitudeSource = AltitudeSource.unknown,
+    AltitudeDatum altitudeDatum = AltitudeDatum.unknown,
     double? altitudeAccuracyMeters,
     double? verticalSpeedMetersPerSecond,
   }) => LocationSample(
@@ -23,6 +24,7 @@ void main() {
     accuracyMeters: 5,
     altitudeMeters: altitudeMeters,
     altitudeSource: altitudeSource,
+    altitudeDatum: altitudeDatum,
     altitudeAccuracyMeters: altitudeAccuracyMeters,
     verticalSpeedMetersPerSecond: verticalSpeedMetersPerSecond,
   );
@@ -36,6 +38,7 @@ void main() {
         expect(fix.hasAltitude, isFalse);
         expect(fix.altitudeMeters, isNull);
         expect(fix.altitudeSource, AltitudeSource.unknown);
+        expect(fix.altitudeDatum, AltitudeDatum.unknown);
         expect(fix.altitudeAccuracyMeters, isNull);
       },
     );
@@ -44,6 +47,7 @@ void main() {
       final fix = sample(
         altitudeMeters: 0,
         altitudeSource: AltitudeSource.gnss,
+        altitudeDatum: AltitudeDatum.wgs84Geoid,
         altitudeAccuracyMeters: 3,
       );
 
@@ -58,6 +62,10 @@ void main() {
       );
       expect(
         () => sample(altitudeSource: AltitudeSource.barometric),
+        throwsA(isA<AssertionError>()),
+      );
+      expect(
+        () => sample(altitudeDatum: AltitudeDatum.wgs84Ellipsoid),
         throwsA(isA<AssertionError>()),
       );
     });
@@ -75,6 +83,7 @@ void main() {
       final fix = sample(
         altitudeMeters: 412.5,
         altitudeSource: AltitudeSource.barometric,
+        altitudeDatum: AltitudeDatum.wgs84Geoid,
         altitudeAccuracyMeters: 2.5,
         verticalSpeedMetersPerSecond: -1.4,
       );
@@ -83,6 +92,7 @@ void main() {
 
       expect(decoded.altitudeMeters, 412.5);
       expect(decoded.altitudeSource, AltitudeSource.barometric);
+      expect(decoded.altitudeDatum, AltitudeDatum.wgs84Geoid);
       expect(decoded.altitudeAccuracyMeters, 2.5);
       expect(decoded.verticalSpeedMetersPerSecond, -1.4);
     });
@@ -92,6 +102,7 @@ void main() {
 
       expect(json.containsKey('altitudeMeters'), isFalse);
       expect(json.containsKey('altitudeSource'), isFalse);
+      expect(json.containsKey('altitudeDatum'), isFalse);
       expect(json.containsKey('altitudeAccuracyMeters'), isFalse);
       expect(LocationSample.fromJson(json).hasAltitude, isFalse);
     });
@@ -109,6 +120,7 @@ void main() {
 
       expect(decoded.hasAltitude, isFalse);
       expect(decoded.altitudeSource, AltitudeSource.unknown);
+      expect(decoded.altitudeDatum, AltitudeDatum.unknown);
       expect(decoded.speedMetersPerSecond, 12.0);
     });
 
@@ -125,17 +137,33 @@ void main() {
       expect(decoded.altitudeSource, AltitudeSource.unknown);
     });
 
+    test('an altitude datum this build does not know degrades', () {
+      final decoded = LocationSample.fromJson({
+        ...sample(
+          altitudeMeters: 400,
+          altitudeSource: AltitudeSource.gnss,
+          altitudeDatum: AltitudeDatum.wgs84Geoid,
+        ).toJson(),
+        'altitudeDatum': 'marsAreoid',
+      });
+
+      expect(decoded.altitudeMeters, 400);
+      expect(decoded.altitudeDatum, AltitudeDatum.unknown);
+    });
+
     test('a source or accuracy arriving without a reading is dropped', () {
       final decoded = LocationSample.fromJson({
         'position': somewhere.toJson(),
         'recordedAt': at.toIso8601String(),
         'accuracyMeters': 5.0,
         'altitudeSource': 'barometric',
+        'altitudeDatum': 'wgs84Geoid',
         'altitudeAccuracyMeters': 2.0,
       });
 
       expect(decoded.hasAltitude, isFalse);
       expect(decoded.altitudeSource, AltitudeSource.unknown);
+      expect(decoded.altitudeDatum, AltitudeDatum.unknown);
       expect(decoded.altitudeAccuracyMeters, isNull);
     });
   });

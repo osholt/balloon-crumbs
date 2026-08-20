@@ -1,7 +1,12 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:balloon_crumbs/domain/altitude.dart';
 import 'package:balloon_crumbs/domain/ride_event.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/services/gpx_exporter.dart';
+import 'package:balloon_crumbs/services/gpx_parser.dart';
 import 'package:balloon_crumbs/services/ride_summary_exporter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -43,6 +48,7 @@ void main() {
           if (altitude != null) ...{
             'altitudeMeters': altitude,
             'altitudeSource': 'gnss',
+            'altitudeDatum': 'wgs84Geoid',
             'altitudeAccuracyMeters': 6,
           },
         },
@@ -76,6 +82,17 @@ void main() {
     final gpx = const GpxExporter().export(route);
     expect(gpx, contains('<ele>60.000</ele>'));
     expect(gpx, contains('<ele>240.000</ele>'));
+
+    final imported = const GpxParser().parse(
+      Uint8List.fromList(utf8.encode(gpx)),
+      routeId: 'round-trip',
+      sourceFileName: 'flight.gpx',
+      importedAt: startedAt.add(const Duration(minutes: 2)),
+    );
+    final points = imported.paths.single.points;
+    expect(points.first.altitudeSource, AltitudeSource.gnss);
+    expect(points.first.altitudeDatum, AltitudeDatum.wgs84Geoid);
+    expect(points.first.altitudeAccuracyMeters, 6);
   });
 
   test('a fix with no altitude exports no <ele>, rather than zero', () {

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'altitude.dart';
 import 'route_preferences.dart';
 
 export 'route_preferences.dart';
@@ -11,18 +12,36 @@ class GeoPoint {
     required this.latitude,
     required this.longitude,
     this.elevationMeters,
+    this.altitudeSource = AltitudeSource.unknown,
+    this.altitudeDatum = AltitudeDatum.unknown,
+    this.altitudeAccuracyMeters,
     this.recordedAt,
-  });
+  }) : assert(
+         elevationMeters != null || altitudeSource == AltitudeSource.unknown,
+       ),
+       assert(
+         elevationMeters != null || altitudeDatum == AltitudeDatum.unknown,
+       ),
+       assert(elevationMeters != null || altitudeAccuracyMeters == null),
+       assert(altitudeAccuracyMeters == null || altitudeAccuracyMeters >= 0);
 
   final double latitude;
   final double longitude;
   final double? elevationMeters;
+  final AltitudeSource altitudeSource;
+  final AltitudeDatum altitudeDatum;
+  final double? altitudeAccuracyMeters;
   final DateTime? recordedAt;
 
   Map<String, Object?> toJson() => {
     'latitude': latitude,
     'longitude': longitude,
-    if (elevationMeters != null) 'elevationMeters': elevationMeters,
+    if (elevationMeters case final elevation?) ...{
+      'elevationMeters': elevation,
+      'altitudeSource': altitudeSource.name,
+      'altitudeDatum': altitudeDatum.name,
+      'altitudeAccuracyMeters': ?altitudeAccuracyMeters,
+    },
     if (recordedAt != null) 'recordedAt': recordedAt!.toUtc().toIso8601String(),
   };
 
@@ -38,10 +57,28 @@ class GeoPoint {
       );
     }
 
+    final elevation = _optionalFiniteNumber(json['elevationMeters']);
     return GeoPoint(
       latitude: latitude,
       longitude: longitude,
-      elevationMeters: (json['elevationMeters'] as num?)?.toDouble(),
+      elevationMeters: elevation,
+      altitudeSource: elevation == null
+          ? AltitudeSource.unknown
+          : _enumByName(
+              AltitudeSource.values,
+              json['altitudeSource'],
+              AltitudeSource.unknown,
+            ),
+      altitudeDatum: elevation == null
+          ? AltitudeDatum.unknown
+          : _enumByName(
+              AltitudeDatum.values,
+              json['altitudeDatum'],
+              AltitudeDatum.unknown,
+            ),
+      altitudeAccuracyMeters: elevation == null
+          ? null
+          : _optionalNonNegativeNumber(json['altitudeAccuracyMeters']),
       recordedAt: _optionalDateTime(json['recordedAt']),
     );
   }
@@ -511,6 +548,27 @@ double _number(Map<String, Object?> json, String key) {
     throw FormatException('$key must be a finite number.');
   }
   return value.toDouble();
+}
+
+double? _optionalFiniteNumber(Object? value) {
+  if (value == null) return null;
+  if (value is! num || !value.isFinite) {
+    throw const FormatException('Expected a finite number.');
+  }
+  return value.toDouble();
+}
+
+double? _optionalNonNegativeNumber(Object? value) {
+  final number = _optionalFiniteNumber(value);
+  if (number != null && number < 0) {
+    throw const FormatException('Expected a non-negative number.');
+  }
+  return number;
+}
+
+T _enumByName<T extends Enum>(List<T> values, Object? value, T fallback) {
+  if (value is! String) return fallback;
+  return values.where((item) => item.name == value).firstOrNull ?? fallback;
 }
 
 String _requiredString(Map<String, Object?> json, String key) {

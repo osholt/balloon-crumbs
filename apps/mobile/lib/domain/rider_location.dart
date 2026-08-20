@@ -1,26 +1,10 @@
 import '../features/map/craft_icon.dart';
+import 'altitude.dart';
 import 'geo_point.dart';
 import 'ride_role.dart';
 import 'rider_color.dart';
 
-/// Where an altitude reading came from.
-///
-/// Recorded rather than inferred because the two sources fail differently: a
-/// GNSS altitude is noisy but absolute, a barometric one is smooth but drifts
-/// with the weather and needs a reference setting. A balloon crew judging a
-/// climb rate needs to know which they are looking at.
-enum AltitudeSource {
-  /// Height from the positioning fix itself.
-  gnss,
-
-  /// Height from a pressure sensor.
-  barometric,
-
-  /// An altitude arrived with no statement of where it came from — typically an
-  /// imported file. Never used to mean "no altitude": that is a null
-  /// [LocationSample.altitudeMeters].
-  unknown,
-}
+export 'altitude.dart';
 
 class LocationSample {
   const LocationSample({
@@ -31,6 +15,7 @@ class LocationSample {
     this.headingDegrees,
     this.altitudeMeters,
     this.altitudeSource = AltitudeSource.unknown,
+    this.altitudeDatum = AltitudeDatum.unknown,
     this.altitudeAccuracyMeters,
     this.verticalSpeedMetersPerSecond,
   }) : assert(accuracyMeters >= 0),
@@ -45,7 +30,8 @@ class LocationSample {
        assert(altitudeMeters != null || altitudeAccuracyMeters == null),
        assert(
          altitudeMeters != null || altitudeSource == AltitudeSource.unknown,
-       );
+       ),
+       assert(altitudeMeters != null || altitudeDatum == AltitudeDatum.unknown);
 
   final GeoPoint position;
   final DateTime recordedAt;
@@ -53,7 +39,7 @@ class LocationSample {
   final double? speedMetersPerSecond;
   final double? headingDegrees;
 
-  /// Metres above the WGS84 geoid, or null when this fix carried no usable
+  /// Metres relative to [altitudeDatum], or null when this fix carried no usable
   /// altitude.
   ///
   /// Null and zero are different answers. A balloon on the ground reports zero;
@@ -65,6 +51,12 @@ class LocationSample {
   /// Where [altitudeMeters] came from. [AltitudeSource.unknown] whenever there
   /// is no reading.
   final AltitudeSource altitudeSource;
+
+  /// The vertical reference for [altitudeMeters].
+  ///
+  /// [AltitudeDatum.unknown] is an honest value for an imported or legacy
+  /// reading. It must never be silently upgraded to geoid or ellipsoid.
+  final AltitudeDatum altitudeDatum;
 
   /// Reported vertical accuracy in metres, when the platform supplies one.
   final double? altitudeAccuracyMeters;
@@ -99,6 +91,7 @@ class LocationSample {
     if (altitudeMeters case final altitude?) ...{
       'altitudeMeters': altitude,
       'altitudeSource': altitudeSource.name,
+      'altitudeDatum': altitudeDatum.name,
       'altitudeAccuracyMeters': ?altitudeAccuracyMeters,
     },
     'verticalSpeedMetersPerSecond': ?verticalSpeedMetersPerSecond,
@@ -121,6 +114,9 @@ class LocationSample {
       altitudeSource: altitude == null
           ? AltitudeSource.unknown
           : _altitudeSourceFromName(json['altitudeSource']),
+      altitudeDatum: altitude == null
+          ? AltitudeDatum.unknown
+          : _altitudeDatumFromName(json['altitudeDatum']),
       altitudeAccuracyMeters: altitude == null
           ? null
           : (json['altitudeAccuracyMeters'] as num?)?.toDouble(),
@@ -140,6 +136,15 @@ class LocationSample {
       if (source.name == value) return source;
     }
     return AltitudeSource.unknown;
+  }
+
+  /// Reads a datum written by another build without making a future value fatal.
+  static AltitudeDatum _altitudeDatumFromName(Object? value) {
+    if (value is! String) return AltitudeDatum.unknown;
+    for (final datum in AltitudeDatum.values) {
+      if (datum.name == value) return datum;
+    }
+    return AltitudeDatum.unknown;
   }
 }
 

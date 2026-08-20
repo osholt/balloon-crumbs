@@ -434,6 +434,9 @@ class RideSimulationController extends ChangeNotifier {
           altitudeSource: flight == null
               ? AltitudeSource.unknown
               : AltitudeSource.gnss,
+          altitudeDatum: flight == null
+              ? AltitudeDatum.unknown
+              : AltitudeDatum.relativeToLaunch,
           altitudeAccuracyMeters: flight == null ? null : 6,
           verticalSpeedMetersPerSecond: flight?.verticalSpeedMetersPerSecond,
         );

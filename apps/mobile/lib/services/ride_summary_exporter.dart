@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../domain/distance_unit.dart';
 import '../domain/geo_point.dart' as geo;
+import '../domain/altitude.dart';
 import '../domain/imported_route.dart';
 import '../domain/ride_event.dart';
 import '../domain/ride_session.dart';
@@ -23,6 +24,9 @@ typedef _TrailPoint = ({
   // in place of a missing reading is worse than an absence: it reads as sea
   // level (#16).
   double? altitudeMeters,
+  AltitudeSource altitudeSource,
+  AltitudeDatum altitudeDatum,
+  double? altitudeAccuracyMeters,
 });
 
 class RideSummary {
@@ -143,6 +147,9 @@ class RideSummaryExporter {
                   // fix that carried no altitude produces a point with no
                   // elevation rather than one claiming to be at zero.
                   elevationMeters: point.altitudeMeters,
+                  altitudeSource: point.altitudeSource,
+                  altitudeDatum: point.altitudeDatum,
+                  altitudeAccuracyMeters: point.altitudeAccuracyMeters,
                 ),
             ],
           ),
@@ -239,17 +246,44 @@ class RideSummaryExporter {
     // and a malformed altitude must cost that point its height rather than the
     // whole export.
     final altitude = sample['altitudeMeters'];
+    final hasAltitude = altitude is num && altitude.isFinite;
+    final altitudeAccuracy = sample['altitudeAccuracyMeters'];
     return (
       latitude: latitude.toDouble(),
       longitude: longitude.toDouble(),
       recordedAt: recordedAt is String
           ? (DateTime.tryParse(recordedAt)?.toLocal() ?? event.createdAt)
           : event.createdAt,
-      altitudeMeters: altitude is num && altitude.isFinite
-          ? altitude.toDouble()
+      altitudeMeters: hasAltitude ? altitude.toDouble() : null,
+      altitudeSource: hasAltitude
+          ? _enumValue(
+              AltitudeSource.values,
+              sample['altitudeSource'],
+              AltitudeSource.unknown,
+            )
+          : AltitudeSource.unknown,
+      altitudeDatum: hasAltitude
+          ? _enumValue(
+              AltitudeDatum.values,
+              sample['altitudeDatum'],
+              AltitudeDatum.unknown,
+            )
+          : AltitudeDatum.unknown,
+      altitudeAccuracyMeters:
+          hasAltitude &&
+              altitudeAccuracy is num &&
+              altitudeAccuracy.isFinite &&
+              altitudeAccuracy >= 0
+          ? altitudeAccuracy.toDouble()
           : null,
     );
   }
+
+  static T _enumValue<T extends Enum>(
+    List<T> values,
+    Object? name,
+    T fallback,
+  ) => values.where((value) => value.name == name).firstOrNull ?? fallback;
 
   static double _trailDistanceMeters(List<_TrailPoint> trail) {
     var total = 0.0;
