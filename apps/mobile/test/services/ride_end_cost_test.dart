@@ -209,6 +209,38 @@ void main() {
 
       expect(const TrailDisplaySimplifier().simplify(points), same(points));
     });
+
+    test(
+      'balloon simplification retains a vertical profile on a straight track',
+      () {
+        const simplifier = TrailDisplaySimplifier(
+          preserveAltitudeProfile: true,
+        );
+        final points = [
+          const route_domain.GeoPoint(
+            latitude: 51,
+            longitude: -2,
+            elevationMeters: 0,
+          ),
+          const route_domain.GeoPoint(
+            latitude: 51,
+            longitude: -1.99,
+            elevationMeters: 600,
+          ),
+          const route_domain.GeoPoint(
+            latitude: 51,
+            longitude: -1.98,
+            elevationMeters: 0,
+          ),
+        ];
+
+        expect(simplifier.simplify(points), points);
+        expect(const TrailDisplaySimplifier().simplify(points), [
+          points.first,
+          points.last,
+        ]);
+      },
+    );
   });
 }
 

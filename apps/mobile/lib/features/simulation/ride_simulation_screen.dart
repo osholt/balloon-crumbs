@@ -345,7 +345,8 @@ class _FleetCard extends StatelessWidget {
                       ),
                       Text(
                         '${rider.role.label} · '
-                        '${MeasurementFormatter(distanceUnit).speed(rider.speedMetersPerSecond)}',
+                        '${MeasurementFormatter(distanceUnit).speed(rider.speedMetersPerSecond)}'
+                        '${rider.altitudeMeters == null ? '' : ' · ${rider.altitudeMeters!.round()} m'}',
                         style: const TextStyle(
                           color: Color(0xFF8F9BAA),
                           fontSize: 12,

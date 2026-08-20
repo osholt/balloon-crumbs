@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:balloon_crumbs/domain/altitude.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
 import 'package:balloon_crumbs/domain/route_store.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
 import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/features/map/ride_map.dart';
 import 'package:balloon_crumbs/services/basemap_configuration.dart';
@@ -41,8 +42,14 @@ void main() {
           label: 'Balloon ground track',
           kind: RiderTrailKind.balloonGroundTrack,
           points: [
-            GeoPoint(latitude: 51.4459, longitude: -2.6413),
-            GeoPoint(latitude: 51.43, longitude: -2.70),
+            GeoPoint(
+              latitude: 51.4459,
+              longitude: -2.6413,
+              elevationMeters: 50,
+            ),
+            GeoPoint(latitude: 51.44, longitude: -2.66, elevationMeters: 250),
+            GeoPoint(latitude: 51.435, longitude: -2.68, elevationMeters: 650),
+            GeoPoint(latitude: 51.43, longitude: -2.70, elevationMeters: 1150),
           ],
         ),
       ]);
@@ -64,8 +71,13 @@ void main() {
             offlineTileCache: cache,
             navigationPosition: navigation,
             riderTrails: trails,
+            landingZone: const MapLandingZone(
+              center: GeoPoint(latitude: 51.4128, longitude: -2.7584),
+              label: 'Simulated landing zone',
+            ),
             rideStarted: true,
             perspective: RideMapPerspective.balloon,
+            distanceUnit: DistanceUnit.miles,
             localMotorcycleStyle: CraftIconStyle.fourByFour,
           ),
         ),
@@ -83,13 +95,32 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('AIRSPACE UNAVAILABLE'), findsOneWidget);
+      expect(find.byKey(const Key('balloon-altitude-legend')), findsOneWidget);
+      expect(find.text('TRACK ALTITUDE · METRES'), findsOneWidget);
+      expect(find.byKey(const Key('landing-zone-area-layer')), findsOneWidget);
+      expect(
+        find.byKey(const Key('landing-zone-marker-layer')),
+        findsOneWidget,
+      );
 
       final trackLayer = tester.widget<PolylineLayer>(
         find.byType(PolylineLayer),
       );
       expect(
         trackLayer.polylines.any(
-          (line) => line.color == RouteTrailStyle.balloonGroundTrack.color,
+          (line) => line.color == const Color(0xFF55E05B),
+        ),
+        isTrue,
+      );
+      expect(
+        trackLayer.polylines.any(
+          (line) => line.color == const Color(0xFFFFE45E),
+        ),
+        isTrue,
+      );
+      expect(
+        trackLayer.polylines.any(
+          (line) => line.color == const Color(0xFFFF4FA3),
         ),
         isTrue,
       );

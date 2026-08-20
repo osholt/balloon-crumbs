@@ -18,6 +18,7 @@ class TrailDisplaySimplifier {
   const TrailDisplaySimplifier({
     this.toleranceMeters = defaultToleranceMeters,
     this.maximumPoints = defaultMaximumPoints,
+    this.preserveAltitudeProfile = false,
   }) : assert(toleranceMeters > 0),
        assert(maximumPoints >= 2);
 
@@ -38,6 +39,7 @@ class TrailDisplaySimplifier {
 
   final double toleranceMeters;
   final int maximumPoints;
+  final bool preserveAltitudeProfile;
 
   /// The trail as it should be drawn. The first and last points are always
   /// kept, so a trail never appears to start or stop somewhere the rider was
@@ -114,6 +116,19 @@ class TrailDisplaySimplifier {
           final nearestX = offsetX - projection * spanX;
           final nearestY = offsetY - projection * spanY;
           distance = math.sqrt(nearestX * nearestX + nearestY * nearestY);
+        }
+        if (preserveAltitudeProfile) {
+          final startAltitude = points[first].elevationMeters;
+          final endAltitude = points[last].elevationMeters;
+          final altitude = points[index].elevationMeters;
+          if (startAltitude != null &&
+              endAltitude != null &&
+              altitude != null) {
+            final fraction = (index - first) / (last - first);
+            final interpolated =
+                startAltitude + (endAltitude - startAltitude) * fraction;
+            distance = math.max(distance, (altitude - interpolated).abs());
+          }
         }
         if (distance > farthestDistance) {
           farthestDistance = distance;

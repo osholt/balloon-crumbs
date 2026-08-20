@@ -63,6 +63,7 @@ import '../../services/speed_limit.dart';
 import '../../services/stored_route_library.dart';
 import '../../services/trail_direction_arrows.dart';
 import 'destination_route_sheet.dart';
+import 'balloon_altitude_style.dart';
 import 'hazard_map_symbol.dart';
 import 'map_camera_guard.dart';
 import 'maneuver_list_screen.dart';
@@ -113,6 +114,43 @@ enum _ImportedTrackChoice { cancel, followOriginal, generateNavigable }
 /// to the balloon (or the explicit Ride Lab balloon perspective) gets the
 /// aviation presentation.
 enum RideMapPerspective { chase, balloon }
+
+/// A deliberately approximate area where the balloon intends or is expected
+/// to land.
+///
+/// The label must name the source/quality (for example, "Simulated landing
+/// zone") so a map never upgrades a forecast or rehearsal area into a known
+/// touchdown point.
+class MapLandingZone {
+  const MapLandingZone({
+    required this.center,
+    required this.label,
+    this.radiusMeters = 250,
+  }) : assert(radiusMeters > 0);
+
+  final GeoPoint center;
+  final String label;
+  final double radiusMeters;
+
+  List<GeoPoint> get boundary {
+    const pointCount = 48;
+    final latitudeRadians = center.latitude * math.pi / 180;
+    final longitudeScale = math.cos(latitudeRadians).abs().clamp(0.01, 1.0);
+    final points = <GeoPoint>[];
+    for (var index = 0; index < pointCount; index += 1) {
+      final angle = index * 2 * math.pi / pointCount;
+      points.add(
+        GeoPoint(
+          latitude: center.latitude + math.cos(angle) * radiusMeters / 111320,
+          longitude:
+              center.longitude +
+              math.sin(angle) * radiusMeters / (111320 * longitudeScale),
+        ),
+      );
+    }
+    return List.unmodifiable([...points, points.first]);
+  }
+}
 
 @visibleForTesting
 Color groupMiniMapBackgroundColor(Brightness brightness) =>
@@ -177,6 +215,7 @@ class RideMapFeature extends StatefulWidget {
     this.navigationPosition,
     this.overlayMarkers,
     this.riderTrails,
+    this.landingZone,
     this.groupRiderCount,
     this.onOpenRoster,
     this.enforcementAlert,
@@ -240,6 +279,7 @@ class RideMapFeature extends StatefulWidget {
     ValueListenable<MapNavigationPosition?>? navigationPosition,
     ValueListenable<List<MapOverlayMarker>>? overlayMarkers,
     ValueListenable<List<MapOverlayTrace>>? riderTrails,
+    MapLandingZone? landingZone,
     int? groupRiderCount,
     VoidCallback? onOpenRoster,
     ValueListenable<EnforcementAlert?>? enforcementAlert,
@@ -298,6 +338,7 @@ class RideMapFeature extends StatefulWidget {
     navigationPosition: navigationPosition,
     overlayMarkers: overlayMarkers,
     riderTrails: riderTrails,
+    landingZone: landingZone,
     groupRiderCount: groupRiderCount,
     onOpenRoster: onOpenRoster,
     enforcementAlert: enforcementAlert,
@@ -359,6 +400,7 @@ class RideMapFeature extends StatefulWidget {
   final ValueListenable<MapNavigationPosition?>? navigationPosition;
   final ValueListenable<List<MapOverlayMarker>>? overlayMarkers;
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
+  final MapLandingZone? landingZone;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
@@ -560,6 +602,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         navigationPosition: widget.navigationPosition,
         overlayMarkers: widget.overlayMarkers,
         riderTrails: widget.riderTrails,
+        landingZone: widget.landingZone,
         groupRiderCount: widget.groupRiderCount,
         onOpenRoster: widget.onOpenRoster,
         enforcementAlert: widget.enforcementAlert,
@@ -645,6 +688,7 @@ class RideMapScreen extends StatefulWidget {
     this.navigationPosition,
     this.overlayMarkers,
     this.riderTrails,
+    this.landingZone,
     this.groupRiderCount,
     this.onOpenRoster,
     this.enforcementAlert,
@@ -728,6 +772,7 @@ class RideMapScreen extends StatefulWidget {
   final ValueListenable<MapNavigationPosition?>? navigationPosition;
   final ValueListenable<List<MapOverlayMarker>>? overlayMarkers;
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
+  final MapLandingZone? landingZone;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
@@ -838,6 +883,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
   static const _waypointSource = 'balloon-crumbs-waypoints';
   static const _positionSource = 'balloon-crumbs-position';
   static const _overlaySource = 'balloon-crumbs-overlays';
+  static const _landingZoneSource = 'balloon-crumbs-landing-zone';
+  static const _landingZoneImage = 'balloon-crumbs-landing-zone-flag';
   static const _aeronauticalChartSource = 'balloon-crumbs-aeronautical-chart';
   static const _aeronauticalChartLayer =
       'balloon-crumbs-aeronautical-chart-layer';
@@ -1524,12 +1571,17 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     key: const Key('balloon-altitude-position'),
                     left: overlayLeft + 12,
                     top: overlayTop + 12,
-                    child: ValueListenableBuilder<MapNavigationPosition?>(
-                      valueListenable: widget.navigationPosition!,
-                      builder: (context, fix, _) => _BalloonAltitudeCard(
-                        fix: fix,
-                        distanceUnit: widget.distanceUnit,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ValueListenableBuilder<MapNavigationPosition?>(
+                          valueListenable: widget.navigationPosition!,
+                          builder: (context, fix, _) =>
+                              _BalloonAltitudeCard(fix: fix),
+                        ),
+                        const SizedBox(height: 8),
+                        const _BalloonAltitudeLegend(),
+                      ],
                     ),
                   ),
                 if (_isBalloonView)
@@ -2417,9 +2469,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
     if (_basemap.usesMapLibre) return _buildMapLibreMap();
 
     final route = _isBalloonView ? null : _route;
-    final framingPoints = _isBalloonView
-        ? _balloonGroundTrackPoints
-        : route?.allPoints.toList(growable: false) ?? const <GeoPoint>[];
+    final framingPoints = <GeoPoint>[
+      ...(_isBalloonView
+          ? _balloonGroundTrackPoints
+          : route?.allPoints.toList(growable: false) ?? const <GeoPoint>[]),
+      ...?widget.landingZone?.boundary,
+    ];
     final points = framingPoints.map(_latLng).toList(growable: false);
     // With no route the rider's own position is the framing (#124); the UK-wide
     // overview is only for a map that has neither.
@@ -2465,8 +2520,24 @@ class _RideMapScreenState extends State<RideMapScreen> {
             urlTemplate: widget.aeronauticalChartConfiguration.tileUrlTemplate,
             userAgentPackageName: 'me.osholt.balloon_crumbs',
             tms: widget.aeronauticalChartConfiguration.usesTms,
-            tileBuilder: (context, tile, _) =>
-                Opacity(opacity: 0.82, child: tile),
+            // The combined OpenAIP layer is the aeronautical chart, including
+            // its own cartographic background. Blending it with the ordinary
+            // road map made the two views look effectively identical.
+            tileBuilder: (context, tile, _) => tile,
+          ),
+        if (widget.landingZone case final zone?)
+          CircleLayer(
+            key: const Key('landing-zone-area-layer'),
+            circles: [
+              CircleMarker(
+                point: _latLng(zone.center),
+                radius: zone.radiusMeters,
+                useRadiusInMeter: true,
+                color: const Color(0x38FFC857),
+                borderColor: const Color(0xFFFFC857),
+                borderStrokeWidth: 3,
+              ),
+            ],
           ),
         // Actual travelled trails are drawn whether or not a route is loaded,
         // and the leader's trail sits under the remaining planned route so both
@@ -2578,6 +2649,25 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   .toList(growable: false),
             ),
           ),
+        if (widget.landingZone case final zone?)
+          MarkerLayer(
+            key: const Key('landing-zone-marker-layer'),
+            markers: [
+              Marker(
+                point: _latLng(zone.center),
+                width: 42,
+                height: 42,
+                child: Tooltip(
+                  message: zone.label,
+                  child: const _IconBadge(
+                    icon: Icons.flag_rounded,
+                    badgeColor: Color(0xFFFFC857),
+                    size: 34,
+                  ),
+                ),
+              ),
+            ],
+          ),
       ],
     );
 
@@ -2618,9 +2708,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   Widget _buildMapLibreMap() {
-    final planned = _isBalloonView
-        ? _balloonGroundTrackPoints
-        : _route?.allPoints.toList(growable: false) ?? const [];
+    final planned = <GeoPoint>[
+      ...(_isBalloonView
+          ? _balloonGroundTrackPoints
+          : _route?.allPoints.toList(growable: false) ?? const []),
+      ...?widget.landingZone?.boundary,
+    ];
     // As above: no route still frames the rider rather than the whole country.
     final routePoints = planned.isNotEmpty ? planned : [?_effectivePosition];
     final initial = routePoints.isEmpty
@@ -3878,6 +3971,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await rasterizeIconGlyphPng(Icons.navigation_rounded),
       true,
     );
+    await controller.addImage(
+      _landingZoneImage,
+      await rasterizeIconGlyphPng(Icons.flag_rounded),
+      true,
+    );
     _markerImagesRegistered = true;
     await _ensureRiderSymbolImages(controller);
   }
@@ -3934,9 +4032,48 @@ class _RideMapScreenState extends State<RideMapScreen> {
         await controller.addRasterLayer(
           _aeronauticalChartSource,
           _aeronauticalChartLayer,
-          const ml.RasterLayerProperties(rasterOpacity: 0.82),
+          const ml.RasterLayerProperties(rasterOpacity: 1),
         );
       }
+      await controller.addGeoJsonSource(
+        _landingZoneSource,
+        _landingZoneGeoJson(),
+      );
+      await controller.addFillLayer(
+        _landingZoneSource,
+        'balloon-crumbs-landing-zone-fill',
+        const ml.FillLayerProperties(fillColor: '#FFC857', fillOpacity: 0.22),
+        filter: const ['==', r'$type', 'Polygon'],
+        enableInteraction: false,
+      );
+      await controller.addLineLayer(
+        _landingZoneSource,
+        'balloon-crumbs-landing-zone-outline',
+        const ml.LineLayerProperties(
+          lineColor: '#FFC857',
+          lineWidth: 3,
+          lineDasharray: [3, 2],
+          lineCap: 'round',
+          lineJoin: 'round',
+        ),
+        filter: const ['==', r'$type', 'Polygon'],
+        enableInteraction: false,
+      );
+      await controller.addSymbolLayer(
+        _landingZoneSource,
+        'balloon-crumbs-landing-zone-marker',
+        const ml.SymbolLayerProperties(
+          iconImage: _landingZoneImage,
+          iconColor: RouteTrailStyle.markerGlyphHex,
+          iconHaloColor: '#FFC857',
+          iconHaloWidth: 7,
+          iconSize: 0.18,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+        ),
+        filter: const ['==', r'$type', 'Point'],
+        enableInteraction: false,
+      );
       // Solid trails are drawn before the planned route so the leader's wider
       // trail reads as a corridor beneath it rather than hiding it.
       await controller.addGeoJsonSource(
@@ -4141,7 +4278,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
       _riderTrailSource,
       'balloon-crumbs-trail-${kind.name}-line',
       ml.LineLayerProperties(
-        lineColor: _hexColor(style.color),
+        lineColor: kind == RiderTrailKind.balloonGroundTrack
+            ? const ['get', 'color']
+            : _hexColor(style.color),
         lineWidth: style.widthPixels,
         lineDasharray: style.maplibreDashArray,
         lineCap: 'round',
@@ -4164,6 +4303,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await controller.setGeoJsonSource(
         _riderTrailSource,
         _riderTrailGeoJson(),
+      );
+      await controller.setGeoJsonSource(
+        _landingZoneSource,
+        _landingZoneGeoJson(),
       );
       await controller.setGeoJsonSource(
         _trailDirectionArrowSource,
@@ -4303,7 +4446,31 @@ class _RideMapScreenState extends State<RideMapScreen> {
               (first, second) =>
                   second.style.widthPixels.compareTo(first.style.widthPixels),
             ))
-          .map((trace) => _routePolyline(trace.points, trace.style));
+          .expand(
+            (trace) => _renderedTrailParts(trace).map(
+              (part) => _routePolyline(
+                part.points,
+                trace.style.withColor(part.color),
+              ),
+            ),
+          );
+
+  Iterable<({String id, List<GeoPoint> points, Color color})>
+  _renderedTrailParts(MapOverlayTrace trace) sync* {
+    if (trace.kind != RiderTrailKind.balloonGroundTrack) {
+      yield (id: trace.id, points: trace.points, color: trace.style.color);
+      return;
+    }
+    for (final (index, segment) in BalloonAltitudeStyle.segments(
+      trace.points,
+    ).indexed) {
+      yield (
+        id: '${trace.id}-altitude-$index',
+        points: segment.points,
+        color: segment.color,
+      );
+    }
+  }
 
   /// Which lines carry direction arrows, in priority order.
   ///
@@ -4385,21 +4552,61 @@ class _RideMapScreenState extends State<RideMapScreen> {
     'type': 'FeatureCollection',
     'features': [
       for (final trace in _visibleRiderTrails)
+        for (final part in _renderedTrailParts(trace))
+          {
+            'type': 'Feature',
+            'id': part.id,
+            // The kind selects the layer, which carries the whole style.
+            'properties': {
+              'kind': trace.kind.name,
+              'label': trace.label,
+              'color': _hexColor(part.color),
+            },
+            'geometry': {
+              'type': 'LineString',
+              'coordinates': [
+                for (final point in part.points)
+                  [point.longitude, point.latitude],
+              ],
+            },
+          },
+    ],
+  };
+
+  Map<String, dynamic> _landingZoneGeoJson() {
+    final zone = widget.landingZone;
+    if (zone == null) {
+      return const {'type': 'FeatureCollection', 'features': <Object>[]};
+    }
+    return {
+      'type': 'FeatureCollection',
+      'features': [
         {
           'type': 'Feature',
-          'id': trace.id,
-          // The kind selects the layer, which carries the whole style.
-          'properties': {'kind': trace.kind.name, 'label': trace.label},
+          'id': 'landing-zone-area',
+          'properties': {'label': zone.label},
           'geometry': {
-            'type': 'LineString',
+            'type': 'Polygon',
             'coordinates': [
-              for (final point in trace.points)
-                [point.longitude, point.latitude],
+              [
+                for (final point in zone.boundary)
+                  [point.longitude, point.latitude],
+              ],
             ],
           },
         },
-    ],
-  };
+        {
+          'type': 'Feature',
+          'id': 'landing-zone-centre',
+          'properties': {'label': zone.label},
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [zone.center.longitude, zone.center.latitude],
+          },
+        },
+      ],
+    };
+  }
 
   Map<String, dynamic> _waypointGeoJson() => MapGeoJson.points(
     (_isBalloonView ? null : _route)?.waypoints
@@ -5031,9 +5238,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
   /// fallback a route-less ride opened on a UK-wide overview and stayed there
   /// until the bike moved fast enough to arm the follow camera (#124).
   void _fitRoute() {
-    final planned = _isBalloonView
-        ? _balloonGroundTrackPoints
-        : _route?.allPoints.toList(growable: false) ?? const [];
+    final planned = <GeoPoint>[
+      ...(_isBalloonView
+          ? _balloonGroundTrackPoints
+          : _route?.allPoints.toList(growable: false) ?? const []),
+      ...?widget.landingZone?.boundary,
+    ];
     final routePoints = planned.isNotEmpty ? planned : [?_effectivePosition];
     if (_basemap.usesMapLibre) {
       final controller = _mapLibreController;
@@ -7996,11 +8206,76 @@ class _AeronauticalChartBadge extends StatelessWidget {
   }
 }
 
+class _BalloonAltitudeLegend extends StatelessWidget {
+  const _BalloonAltitudeLegend();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label:
+        'Balloon track altitude in metres: ${BalloonAltitudeStyle.bands.map((band) => band.label).join(', ')}. Grey means altitude unavailable.',
+    child: Card(
+      key: const Key('balloon-altitude-legend'),
+      color: const Color(0xE6252E39),
+      margin: EdgeInsets.zero,
+      child: SizedBox(
+        width: 248,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'TRACK ALTITUDE · METRES',
+                style: TextStyle(
+                  color: Color(0xFFCED6DF),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 5),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Row(
+                  children: [
+                    for (final band in BalloonAltitudeStyle.bands)
+                      Expanded(
+                        child: ColoredBox(
+                          color: band.color,
+                          child: const SizedBox(height: 8),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 3),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('<150', style: TextStyle(fontSize: 9)),
+                  Text('300', style: TextStyle(fontSize: 9)),
+                  Text('600', style: TextStyle(fontSize: 9)),
+                  Text('900+ m', style: TextStyle(fontSize: 9)),
+                ],
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Grey = altitude unavailable',
+                style: TextStyle(color: Color(0xFFB7C4D1), fontSize: 9),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class _BalloonAltitudeCard extends StatelessWidget {
-  const _BalloonAltitudeCard({required this.fix, required this.distanceUnit});
+  const _BalloonAltitudeCard({required this.fix});
 
   final MapNavigationPosition? fix;
-  final DistanceUnit distanceUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -8013,18 +8288,13 @@ class _BalloonAltitudeCard extends StatelessWidget {
               .abs();
     final primary = altitude == null
         ? 'Altitude unavailable'
-        : distanceUnit == DistanceUnit.miles
-        ? '${(altitude * 3.28084).round()} ft'
         : '${altitude.round()} m';
     final trend = _trend(reading?.verticalSpeedMetersPerSecond);
     final accuracy = reading?.altitudeAccuracyMeters;
     final details = [
       if (reading != null && altitude != null) _source(reading.altitudeSource),
       if (reading != null && altitude != null) _datum(reading.altitudeDatum),
-      if (accuracy != null)
-        distanceUnit == DistanceUnit.miles
-            ? '±${(accuracy * 3.28084).round()} ft'
-            : '±${accuracy.round()} m',
+      if (accuracy != null) '±${accuracy.round()} m',
       if (age != null) _age(age),
     ];
     return Semantics(
@@ -8118,9 +8388,7 @@ class _BalloonAltitudeCard extends StatelessWidget {
         ? '↓'
         : '→';
     final magnitude = metresPerSecond.abs();
-    return distanceUnit == DistanceUnit.miles
-        ? '$arrow ${(magnitude * 196.8504).round()} ft/min'
-        : '$arrow ${magnitude.toStringAsFixed(1)} m/s';
+    return '$arrow ${magnitude.toStringAsFixed(1)} m/s';
   }
 
   static String _source(AltitudeSource source) => switch (source) {

@@ -1,8 +1,13 @@
 # Aeronautical chart source
 
 OpenAIP is the selected advisory aeronautical layer for tester builds. The app
-uses OpenAIP's combined raster TMS layer and visibly attributes it as
+uses OpenAIP's combined raster aeronautical chart and visibly attributes it as
 `© openAIP contributors · CC BY-NC 4.0`.
+
+The service describes itself as TMS, but OpenAIP's current first-party
+MapLibre style consumes the published `{z}/{x}/{y}` coordinates as XYZ. The app
+matches that live contract and renders the combined chart opaquely instead of
+blending it into the ordinary road basemap.
 
 Release workflows require this Actions secret:
 

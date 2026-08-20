@@ -49,23 +49,29 @@ void main() {
     expect(stale.explanationAt(now), contains('hidden until refreshed'));
   });
 
-  test('OpenAIP is selected with TMS tiles and a bounded build lifetime', () {
-    final configured = DateTime.utc(2026, 8, 20, 9, 30);
-    final openAip = AeronauticalChartConfiguration.openAip(
-      apiKey: 'key with symbols/+',
-      configuredAt: configured,
-    );
+  test(
+    'OpenAIP uses its current XYZ contract and a bounded build lifetime',
+    () {
+      final configured = DateTime.utc(2026, 8, 20, 9, 30);
+      final openAip = AeronauticalChartConfiguration.openAip(
+        apiKey: 'key with symbols/+',
+        configuredAt: configured,
+      );
 
-    expect(openAip.providerName, 'openAIP');
-    expect(openAip.tileScheme, AeronauticalTileScheme.tms);
-    expect(openAip.tileUrlTemplate, contains('/openaip/{z}/{x}/{y}.png'));
-    expect(openAip.tileUrlTemplate, contains('apiKey=key+with+symbols%2F%2B'));
-    expect(openAip.attribution, contains('CC BY-NC 4.0'));
-    expect(openAip.expiresAt, configured.add(const Duration(days: 28)));
-    expect(openAip.isCurrentAt(DateTime.utc(2026, 9, 1)), isTrue);
-    expect(openAip.limitations, contains('NOTAMs'));
-    expect(openAip.limitations, contains('Not for primary navigation'));
-  });
+      expect(openAip.providerName, 'openAIP');
+      expect(openAip.tileScheme, AeronauticalTileScheme.xyz);
+      expect(openAip.tileUrlTemplate, contains('/openaip/{z}/{x}/{y}.png'));
+      expect(
+        openAip.tileUrlTemplate,
+        contains('apiKey=key+with+symbols%2F%2B'),
+      );
+      expect(openAip.attribution, contains('CC BY-NC 4.0'));
+      expect(openAip.expiresAt, configured.add(const Duration(days: 28)));
+      expect(openAip.isCurrentAt(DateTime.utc(2026, 9, 1)), isTrue);
+      expect(openAip.limitations, contains('NOTAMs'));
+      expect(openAip.limitations, contains('Not for primary navigation'));
+    },
+  );
 
   test('OpenAIP remains unavailable without an API key or build timestamp', () {
     expect(
