@@ -22,8 +22,8 @@ Usage:
 
     python3 tools/tester_notify/notify_testers.py \\
       --track alpha --app-version 1.0.1 --build-number 31 \\
-      --commit "$GITHUB_SHA" --repository osholt/tailendcharlie \\
-      --run-url https://github.com/osholt/tailendcharlie/actions/runs/1 \\
+      --commit "$GITHUB_SHA" --repository osholt/balloon-crumbs \\
+      --run-url https://github.com/osholt/balloon-crumbs/actions/runs/1 \\
       --changes-file changes.md --changes-baseline 'build 30' \\
       --recipient "$TESTER_GROUP" --mode auto
 """

@@ -30,7 +30,7 @@ from tools.tester_notify.notify_testers import (  # noqa: E402
 # stores one. Named so no scanner mistakes it for real material.
 FAKE_LOGIN_VALUE = "placeholder-value-never-a-credential"
 LOGIN_ENV = "TESTER_NOTIFY_SMTP_PASSWORD"
-RECIPIENT = "tailendcharlie-testers@example.invalid"
+RECIPIENT = "balloon-crumbs-testers@example.invalid"
 
 
 def smtp_env(**overrides: str) -> dict:
@@ -51,8 +51,8 @@ def context(**overrides) -> ReleaseContext:
         "app_version": "1.0.1",
         "build_number": "31",
         "commit": "ce39e51ab0d4f6e8c1b2a3d4e5f60718293a4b5c",
-        "repository": "osholt/tailendcharlie",
-        "run_url": "https://github.com/osholt/tailendcharlie/actions/runs/12345",
+        "repository": "osholt/balloon-crumbs",
+        "run_url": "https://github.com/osholt/balloon-crumbs/actions/runs/12345",
         "changes": (
             "- reroute off-course riders back to the route (ce39e51)",
             "- correct roundabout and lane guidance (6b56c7b)",
@@ -69,8 +69,8 @@ def cli_args(**overrides) -> list:
         "--app-version": "1.0.1",
         "--build-number": "31",
         "--commit": "ce39e51ab0d4f6e8c1b2a3d4e5f60718293a4b5c",
-        "--repository": "osholt/tailendcharlie",
-        "--run-url": "https://github.com/osholt/tailendcharlie/actions/runs/1",
+        "--repository": "osholt/balloon-crumbs",
+        "--run-url": "https://github.com/osholt/balloon-crumbs/actions/runs/1",
         "--recipient": RECIPIENT,
         "--mode": "auto",
     }
@@ -96,7 +96,7 @@ class RenderingTest(unittest.TestCase):
             "Android",
             "Play closed testing (alpha)",
             "ce39e51",
-            "https://github.com/osholt/tailendcharlie/commit/ce39e51",
+            "https://github.com/osholt/balloon-crumbs/commit/ce39e51",
             "https://play.google.com/apps/testing/dev.osholt.ballooncrumbs",
             "About & build",
             "Distribution track  Play closed testing (alpha)",
@@ -130,6 +130,10 @@ class RenderingTest(unittest.TestCase):
             dart,
             "the mail and the in-app update button must use one opt-in URL",
         )
+        self.assertIn(
+            "'https://github.com/osholt/balloon-crumbs/blob/main/docs/tester-release-notes.md'",
+            dart,
+        )
 
 
 class SafetyTest(unittest.TestCase):
@@ -145,7 +149,7 @@ class SafetyTest(unittest.TestCase):
         with self.assertRaises(UnsafeContentError):
             assert_safe("http://play.google.com/apps/testing/dev.osholt.ballooncrumbs")
         with self.assertRaises(UnsafeContentError):
-            assert_safe("https://user:pass@github.com/osholt/tailendcharlie")
+            assert_safe("https://user:pass@github.com/osholt/balloon-crumbs")
 
     def test_a_relay_url_smuggled_through_the_changelog_is_caught(self) -> None:
         with self.assertRaises(UnsafeContentError):
@@ -284,7 +288,7 @@ class MainTest(unittest.TestCase):
         output = self.out.getvalue()
         self.assertNotIn(FAKE_LOGIN_VALUE, output)
         self.assertNotIn(RECIPIENT, output)
-        self.assertIn("t***@example.invalid", output)
+        self.assertIn("b***@example.invalid", output)
 
     def test_refuses_to_mail_an_unidentified_build(self) -> None:
         code = main(
@@ -320,7 +324,7 @@ class MainTest(unittest.TestCase):
         )
 
         self.assertNotIn(RECIPIENT, markdown)
-        self.assertIn("t***@example.invalid", markdown)
+        self.assertIn("b***@example.invalid", markdown)
         self.assertIn("Sent to", markdown)
 
     def test_builds_a_plain_text_message(self) -> None:
