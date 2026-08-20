@@ -6,6 +6,7 @@ import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/services/fiesta_flight_loader.dart';
 import 'package:balloon_crumbs/services/geo_calculations.dart';
+import 'package:balloon_crumbs/services/open_meteo_wind.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The balloon flies its own air track; the chase drives a road.
@@ -58,7 +59,10 @@ void main() {
     );
   }
 
-  Future<RideSimulationController> build({bool rideStarted = true}) async {
+  Future<RideSimulationController> build({
+    bool rideStarted = true,
+    WindForecastController? windForecastController,
+  }) async {
     final store = InMemoryEventStore();
     final session = RideSession(
       rideId: 'fiesta',
@@ -82,6 +86,7 @@ void main() {
       session: session,
       route: chaseRoute,
       balloonFlight: flight(),
+      windForecastController: windForecastController,
       tickInterval: const Duration(days: 1),
       rideStarted: rideStarted,
     );
@@ -149,6 +154,54 @@ void main() {
     expect(altitude(), closeTo(0, 0.1));
   });
 
+  test(
+    'forecast wind drives direction while altitude stays scripted',
+    () async {
+      final wind = WindForecastController(
+        const _UnusedWindProvider(),
+        initialField: WindForecastField(
+          columns: const [
+            WindForecastColumn(
+              position: launch,
+              vectors: [
+                WindForecastVector(
+                  altitudeMetersMsl: 20,
+                  fromDegrees: 0,
+                  speedKmh: 36,
+                ),
+                WindForecastVector(
+                  altitudeMetersMsl: 500,
+                  fromDegrees: 0,
+                  speedKmh: 36,
+                ),
+              ],
+            ),
+          ],
+          validAt: DateTime.utc(2026, 8, 21, 10),
+          fetchedAt: DateTime.utc(2026, 8, 21, 10),
+          origin: WindForecastOrigin.bundledFallback,
+          sourceLabel: 'Test wind',
+        ),
+      );
+      addTearDown(wind.dispose);
+      final simulation = await build(windForecastController: wind);
+      addTearDown(simulation.dispose);
+
+      await simulation.advance(const Duration(minutes: 10));
+
+      final balloon = simulation.riders.singleWhere(
+        (rider) => rider.role == RideRole.lead,
+      );
+      expect(balloon.position.latitude, lessThan(launch.latitude - 0.04));
+      expect(balloon.position.longitude, closeTo(launch.longitude, 0.001));
+      expect(balloon.altitudeMeters, closeTo(69.2, 0.2));
+      expect(
+        simulation.predictedLandingZone?.latitude,
+        lessThan(balloon.position.latitude),
+      );
+    },
+  );
+
   test('a chase trail keeps more than the old 180-point window', () async {
     final simulation = await build();
     addTearDown(simulation.dispose);
@@ -188,7 +241,22 @@ void main() {
     // a missed rendezvous. Nothing should stop them or flag it.
     final simulation = await build();
     addTearDown(simulation.dispose);
-    await simulation.advance(const Duration(minutes: 52));
+    await simulation.advance(const Duration(minutes: 47));
+    final chaseBeforeReroute = simulation.riders
+        .where((rider) => rider.role != RideRole.lead)
+        .map((rider) => rider.position)
+        .toList();
+
+    // A landing-zone update creates a fresh road route from the Land Rover's
+    // actual position. It must not rewind the balloon or stop the retrieve.
+    simulation.replaceChaseRoute([
+      chaseBeforeReroute.single,
+      GeoPoint(
+        latitude: chaseBeforeReroute.single.latitude - 0.1,
+        longitude: chaseBeforeReroute.single.longitude - 0.1,
+      ),
+    ]);
+    await simulation.advance(const Duration(minutes: 5));
     final chaseAtLanding = simulation.riders
         .where((rider) => rider.role != RideRole.lead)
         .map((rider) => rider.position)
@@ -214,4 +282,14 @@ void main() {
       reason: 'at least one chase vehicle should still be moving',
     );
   });
+}
+
+class _UnusedWindProvider implements WindForecastProvider {
+  const _UnusedWindProvider();
+
+  @override
+  Future<WindForecastField> fetch({
+    required GeoPoint center,
+    required DateTime at,
+  }) => throw UnimplementedError();
 }

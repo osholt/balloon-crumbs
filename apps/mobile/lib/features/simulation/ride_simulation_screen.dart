@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../controllers/ride_simulation_controller.dart';
 import '../../domain/distance_unit.dart';
 import '../../domain/ride_role.dart';
-import '../../domain/ride_session.dart';
 import '../../services/measurement_formatter.dart';
 import '../map/craft_icon.dart';
 
@@ -57,7 +56,6 @@ class RideSimulationScreen extends StatelessWidget {
             final controls = _SimulationControls(
               controller: controller,
               onRoleChanged: onRoleChanged,
-              onRiderCountChanged: onRiderCountChanged,
             );
             final fleet = _FleetCard(
               controller: controller,
@@ -91,12 +89,10 @@ class _SimulationControls extends StatelessWidget {
   const _SimulationControls({
     required this.controller,
     required this.onRoleChanged,
-    required this.onRiderCountChanged,
   });
 
   final RideSimulationController controller;
   final Future<void> Function(RideRole role) onRoleChanged;
-  final Future<void> Function(int riderCount) onRiderCountChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -132,9 +128,9 @@ class _SimulationControls extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              '${controller.riderCount} virtual craft use the real navigation '
-              'and off-course logic. Device GPS, internet relay and nearby '
-              'radios are off.',
+              'One balloon and one Land Rover use the production map and '
+              'navigation pipeline. The balloon keeps its scripted altitude '
+              'profile while forecast wind drives its horizontal track.',
               style: const TextStyle(color: Color(0xFFADB7C4), height: 1.35),
             ),
             const SizedBox(height: 14),
@@ -178,44 +174,9 @@ class _SimulationControls extends StatelessWidget {
             LinearProgressIndicator(value: controller.progress),
             const SizedBox(height: 8),
             Text(
-              '${(controller.progress * 100).round()}% route · '
+              '${(controller.progress * 100).round()}% flight · '
               '${_duration(controller.simulatedElapsed)} simulated',
               style: const TextStyle(color: Color(0xFF8F9BAA)),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Virtual riders',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                DropdownButton<int>(
-                  key: const Key('simulation-rider-count'),
-                  value: controller.riderCount,
-                  items: [
-                    for (
-                      var count = RideSession.minimumSimulationRiderCount;
-                      count <= RideSession.maximumSimulationRiderCount;
-                      count += 1
-                    )
-                      DropdownMenuItem(
-                        value: count,
-                        child: Text('$count riders'),
-                      ),
-                  ],
-                  onChanged: (count) {
-                    if (count != null && count != controller.riderCount) {
-                      unawaited(onRiderCountChanged(count));
-                    }
-                  },
-                ),
-              ],
-            ),
-            const Text(
-              'Changing the fleet starts a clean simulation.',
-              style: TextStyle(color: Color(0xFF8F9BAA), fontSize: 12),
             ),
             const SizedBox(height: 16),
             Row(
@@ -264,34 +225,12 @@ class _SimulationControls extends StatelessWidget {
               ],
             ),
             const Divider(height: 28),
-            SwitchListTile.adaptive(
-              key: const Key('simulation-off-route'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Send Alex off route'),
-              subtitle: const Text('Builds the magenta trail and leader alert'),
-              value: controller.alexOffRoute,
-              onChanged: controller.setAlexOffRoute,
-            ),
-            SwitchListTile.adaptive(
-              key: const Key('simulation-tec-delay'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Delay the back rider'),
-              subtitle: const Text('Increases the lead-to-TEC gap'),
-              value: controller.backRiderDelayed,
-              onChanged: controller.setBackRiderDelayed,
-            ),
-            const SizedBox(height: 6),
-            OutlinedButton.icon(
-              key: const Key('simulation-hazard'),
-              onPressed: () => unawaited(controller.reportRoadworks()),
-              icon: const Icon(Icons.warning_amber_rounded),
-              label: const Text('Drop roadworks 450 m ahead'),
-            ),
-            const SizedBox(height: 8),
             const Text(
-              'Open the Map tab to watch the production UI respond.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF7F8A98), fontSize: 12),
+              'On the Map tab, the forecast landing area moves with the '
+              'balloon and the Land Rover recalculates its road route from its '
+              'actual position. Use the wind control there to change the '
+              'displayed altitude or hide the layer.',
+              style: TextStyle(color: Color(0xFF8F9BAA), height: 1.35),
             ),
           ],
         ),
@@ -320,7 +259,10 @@ class _FleetCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('VIRTUAL FLEET', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'LIVE DEMO CRAFT',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 12),
           for (final rider in controller.riders) ...[
             Row(

@@ -51,6 +51,7 @@ import '../../services/navigation_export.dart';
 import '../../services/navigation_camera.dart';
 import '../../services/navigation_heading.dart';
 import '../../services/offline_tile_cache.dart';
+import '../../services/open_meteo_wind.dart';
 import '../../services/received_quick_message.dart';
 import '../../services/rider_trail_recorder.dart';
 import '../../services/road_routing.dart';
@@ -216,6 +217,7 @@ class RideMapFeature extends StatefulWidget {
     this.overlayMarkers,
     this.riderTrails,
     this.landingZone,
+    this.landingZoneUpdates,
     this.groupRiderCount,
     this.onOpenRoster,
     this.enforcementAlert,
@@ -271,6 +273,7 @@ class RideMapFeature extends StatefulWidget {
     this.perspective = RideMapPerspective.chase,
     this.aeronauticalChartConfiguration =
         const AeronauticalChartConfiguration(),
+    this.windForecastController,
   });
 
   factory RideMapFeature.fromEnvironment({
@@ -280,6 +283,7 @@ class RideMapFeature extends StatefulWidget {
     ValueListenable<List<MapOverlayMarker>>? overlayMarkers,
     ValueListenable<List<MapOverlayTrace>>? riderTrails,
     MapLandingZone? landingZone,
+    ValueListenable<MapLandingZone?>? landingZoneUpdates,
     int? groupRiderCount,
     VoidCallback? onOpenRoster,
     ValueListenable<EnforcementAlert?>? enforcementAlert,
@@ -332,6 +336,7 @@ class RideMapFeature extends StatefulWidget {
     Color localBadgeColor = const Color(0xFF2F80ED),
     RideMapPerspective perspective = RideMapPerspective.chase,
     AeronauticalChartConfiguration? aeronauticalChartConfiguration,
+    WindForecastController? windForecastController,
   }) => RideMapFeature(
     key: key,
     currentPosition: currentPosition,
@@ -339,6 +344,7 @@ class RideMapFeature extends StatefulWidget {
     overlayMarkers: overlayMarkers,
     riderTrails: riderTrails,
     landingZone: landingZone,
+    landingZoneUpdates: landingZoneUpdates,
     groupRiderCount: groupRiderCount,
     onOpenRoster: onOpenRoster,
     enforcementAlert: enforcementAlert,
@@ -394,6 +400,7 @@ class RideMapFeature extends StatefulWidget {
     aeronauticalChartConfiguration:
         aeronauticalChartConfiguration ??
         AeronauticalChartConfiguration.fromEnvironment(),
+    windForecastController: windForecastController,
   );
 
   final ValueListenable<GeoPoint?>? currentPosition;
@@ -401,6 +408,7 @@ class RideMapFeature extends StatefulWidget {
   final ValueListenable<List<MapOverlayMarker>>? overlayMarkers;
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
   final MapLandingZone? landingZone;
+  final ValueListenable<MapLandingZone?>? landingZoneUpdates;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
@@ -492,6 +500,7 @@ class RideMapFeature extends StatefulWidget {
   final Color localBadgeColor;
   final RideMapPerspective perspective;
   final AeronauticalChartConfiguration aeronauticalChartConfiguration;
+  final WindForecastController? windForecastController;
 
   @override
   State<RideMapFeature> createState() => _RideMapFeatureState();
@@ -603,6 +612,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         overlayMarkers: widget.overlayMarkers,
         riderTrails: widget.riderTrails,
         landingZone: widget.landingZone,
+        landingZoneUpdates: widget.landingZoneUpdates,
         groupRiderCount: widget.groupRiderCount,
         onOpenRoster: widget.onOpenRoster,
         enforcementAlert: widget.enforcementAlert,
@@ -651,6 +661,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         localBadgeColor: widget.localBadgeColor,
         perspective: widget.perspective,
         aeronauticalChartConfiguration: widget.aeronauticalChartConfiguration,
+        windForecastController: widget.windForecastController,
       );
     },
   );
@@ -689,6 +700,7 @@ class RideMapScreen extends StatefulWidget {
     this.overlayMarkers,
     this.riderTrails,
     this.landingZone,
+    this.landingZoneUpdates,
     this.groupRiderCount,
     this.onOpenRoster,
     this.enforcementAlert,
@@ -749,6 +761,7 @@ class RideMapScreen extends StatefulWidget {
     this.perspective = RideMapPerspective.chase,
     this.aeronauticalChartConfiguration =
         const AeronauticalChartConfiguration(),
+    this.windForecastController,
   });
 
   final RouteStore routeStore;
@@ -773,6 +786,7 @@ class RideMapScreen extends StatefulWidget {
   final ValueListenable<List<MapOverlayMarker>>? overlayMarkers;
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
   final MapLandingZone? landingZone;
+  final ValueListenable<MapLandingZone?>? landingZoneUpdates;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
@@ -869,6 +883,7 @@ class RideMapScreen extends StatefulWidget {
   final Color localBadgeColor;
   final RideMapPerspective perspective;
   final AeronauticalChartConfiguration aeronauticalChartConfiguration;
+  final WindForecastController? windForecastController;
 
   @override
   State<RideMapScreen> createState() => _RideMapScreenState();
@@ -885,6 +900,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
   static const _overlaySource = 'balloon-crumbs-overlays';
   static const _landingZoneSource = 'balloon-crumbs-landing-zone';
   static const _landingZoneImage = 'balloon-crumbs-landing-zone-flag';
+  static const _windForecastSource = 'balloon-crumbs-wind-forecast';
+  static const _windForecastImage = 'balloon-crumbs-wind-arrow';
   static const _aeronauticalChartSource = 'balloon-crumbs-aeronautical-chart';
   static const _aeronauticalChartLayer =
       'balloon-crumbs-aeronautical-chart-layer';
@@ -899,6 +916,17 @@ class _RideMapScreenState extends State<RideMapScreen> {
   bool get _showAeronauticalChart =>
       _isBalloonView &&
       widget.aeronauticalChartConfiguration.isCurrentAt(DateTime.now());
+
+  bool get _showWindForecast {
+    final controller = widget.windForecastController;
+    return _isBalloonView &&
+        controller != null &&
+        controller.enabled &&
+        controller.field != null;
+  }
+
+  MapLandingZone? get _landingZone =>
+      widget.landingZoneUpdates?.value ?? widget.landingZone;
 
   bool get _shouldAutoFollow =>
       _isBalloonView ? _effectivePosition != null : _isMoving;
@@ -1204,6 +1232,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
     widget.navigationPosition?.addListener(_onPositionChanged);
     widget.overlayMarkers?.addListener(_onOverlayDataChanged);
     widget.riderTrails?.addListener(_onOverlayDataChanged);
+    widget.landingZoneUpdates?.addListener(_onLandingZoneChanged);
+    widget.windForecastController?.addListener(_onWindForecastChanged);
     _connectorProgressGeometry = _connectorProgressTracker.update(
       _connectorRoute,
       _effectivePosition,
@@ -1240,6 +1270,16 @@ class _RideMapScreenState extends State<RideMapScreen> {
     if (oldWidget.riderTrails != widget.riderTrails) {
       oldWidget.riderTrails?.removeListener(_onOverlayDataChanged);
       widget.riderTrails?.addListener(_onOverlayDataChanged);
+    }
+    if (oldWidget.landingZoneUpdates != widget.landingZoneUpdates) {
+      oldWidget.landingZoneUpdates?.removeListener(_onLandingZoneChanged);
+      widget.landingZoneUpdates?.addListener(_onLandingZoneChanged);
+      _onLandingZoneChanged();
+    }
+    if (oldWidget.windForecastController != widget.windForecastController) {
+      oldWidget.windForecastController?.removeListener(_onWindForecastChanged);
+      widget.windForecastController?.addListener(_onWindForecastChanged);
+      _onWindForecastChanged();
     }
     if (oldWidget.speedLimitDisplay != widget.speedLimitDisplay) {
       if (_ownsSpeedLimitDisplay) _speedLimitDisplay.dispose();
@@ -1285,6 +1325,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
     widget.navigationPosition?.removeListener(_onPositionChanged);
     widget.overlayMarkers?.removeListener(_onOverlayDataChanged);
     widget.riderTrails?.removeListener(_onOverlayDataChanged);
+    widget.landingZoneUpdates?.removeListener(_onLandingZoneChanged);
+    widget.windForecastController?.removeListener(_onWindForecastChanged);
     _mapLibreController?.onFeatureTapped.remove(_onMapLibreFeatureTapped);
     _mapLibreController?.removeListener(_scheduleCameraFramingRefresh);
     _mapController.dispose();
@@ -1570,33 +1612,33 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   Positioned(
                     key: const Key('balloon-altitude-position'),
                     left: overlayLeft + 12,
-                    top: overlayTop + 12,
+                    // The clock is the first item in the balloon viewport. Keep
+                    // telemetry below it so the time never appears to belong to
+                    // the altitude card or gets covered by that wider surface.
+                    top: overlayTop + (widget.rideStarted ? 48 : 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ValueListenableBuilder<MapNavigationPosition?>(
                           valueListenable: widget.navigationPosition!,
-                          builder: (context, fix, _) =>
-                              _BalloonAltitudeCard(fix: fix),
+                          builder: (context, fix, _) => _BalloonAltitudeCard(
+                            fix: fix,
+                            onShowMapInformation: _showBalloonMapInformation,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         const _BalloonAltitudeLegend(),
                       ],
                     ),
                   ),
-                if (_isBalloonView)
+                if (_isBalloonView && widget.windForecastController != null)
                   Positioned(
-                    key: const Key('aeronautical-chart-status-position'),
+                    key: const Key('wind-forecast-control-position'),
+                    left: overlayLeft + 12,
                     right: overlayRight + 12,
-                    top: overlayTop + (landscape ? 12 : 118),
-                    child: _AeronauticalChartBadge(
-                      configuration: widget.aeronauticalChartConfiguration,
-                      now: DateTime.now(),
-                      onTap: () => _showMessage(
-                        widget.aeronauticalChartConfiguration.explanationAt(
-                          DateTime.now(),
-                        ),
-                      ),
+                    bottom: overlayBottom + 84,
+                    child: _WindForecastControl(
+                      controller: widget.windForecastController!,
                     ),
                   ),
                 Positioned.fill(
@@ -2332,7 +2374,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
             Positioned(
               left: safeLeft,
               right: safeRight,
-              top: safeTop + 154,
+              // Balloon crews need the clock at the top of the viewport, above
+              // aircraft telemetry. The road view retains its established
+              // portrait placement clear of the route header and mini-map.
+              top: safeTop + (_isBalloonView ? 12 : 154),
               child: IgnorePointer(
                 child: Center(child: RideClock(darkMap: _basemap.dark)),
               ),
@@ -2473,7 +2518,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       ...(_isBalloonView
           ? _balloonGroundTrackPoints
           : route?.allPoints.toList(growable: false) ?? const <GeoPoint>[]),
-      ...?widget.landingZone?.boundary,
+      ...?_landingZone?.boundary,
     ];
     final points = framingPoints.map(_latLng).toList(growable: false);
     // With no route the rider's own position is the framing (#124); the UK-wide
@@ -2525,7 +2570,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
             // road map made the two views look effectively identical.
             tileBuilder: (context, tile, _) => tile,
           ),
-        if (widget.landingZone case final zone?)
+        if (_showWindForecast)
+          MarkerLayer(
+            key: const Key('wind-forecast-layer'),
+            markers: _windForecastMarkers(),
+          ),
+        if (_landingZone case final zone?)
           CircleLayer(
             key: const Key('landing-zone-area-layer'),
             circles: [
@@ -2649,7 +2699,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   .toList(growable: false),
             ),
           ),
-        if (widget.landingZone case final zone?)
+        if (_landingZone case final zone?)
           MarkerLayer(
             key: const Key('landing-zone-marker-layer'),
             markers: [
@@ -2712,7 +2762,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       ...(_isBalloonView
           ? _balloonGroundTrackPoints
           : _route?.allPoints.toList(growable: false) ?? const []),
-      ...?widget.landingZone?.boundary,
+      ...?_landingZone?.boundary,
     ];
     // As above: no route still frames the rider rather than the whole country.
     final routePoints = planned.isNotEmpty ? planned : [?_effectivePosition];
@@ -3381,6 +3431,32 @@ class _RideMapScreenState extends State<RideMapScreen> {
     unawaited(_publishGroupPipSnapshot());
   }
 
+  void _onWindForecastChanged() {
+    if (!mounted) return;
+    setState(() {});
+    final controller = _mapLibreController;
+    if (_mapLibreStyleReady && controller != null) {
+      unawaited(
+        controller.setGeoJsonSource(
+          _windForecastSource,
+          _windForecastGeoJson(),
+        ),
+      );
+    }
+  }
+
+  void _onLandingZoneChanged() {
+    if (!mounted) return;
+    setState(() {});
+    final controller = _mapLibreController;
+    if (_mapLibreStyleReady && controller != null) {
+      unawaited(
+        controller.setGeoJsonSource(_landingZoneSource, _landingZoneGeoJson()),
+      );
+    }
+    _scheduleCameraFramingRefresh();
+  }
+
   void _onFlutterMapEvent(MapEvent event) {
     if (event.source == MapEventSource.nonRotatedSizeChange) return;
     if ((event.camera.rotation - _mapBearing.value).abs() >= 0.25) {
@@ -3911,6 +3987,58 @@ class _RideMapScreenState extends State<RideMapScreen> {
   /// MapLibre images are baked from - and answers a tap the way the native
   /// renderer does, so the two behave the same rather than one of them needing a
   /// long press to reveal a tooltip (#141).
+  List<WindForecastSample> _visibleWindForecastVectors() {
+    final controller = widget.windForecastController;
+    final field = controller?.field;
+    if (!_showWindForecast || controller == null || field == null) {
+      return const [];
+    }
+    return field.vectorsAt(controller.selectedAltitudeMetersMsl.toDouble());
+  }
+
+  List<Marker> _windForecastMarkers() => [
+    for (final sample in _visibleWindForecastVectors())
+      Marker(
+        point: LatLng(sample.position.latitude, sample.position.longitude),
+        width: 52,
+        height: 48,
+        child: Semantics(
+          label:
+              'Forecast wind from ${sample.vector.fromDegrees.round()} degrees '
+              'at ${sample.vector.speedKmh.round()} kilometres per hour',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Transform.rotate(
+                angle: sample.vector.towardDegrees * math.pi / 180,
+                child: const Icon(
+                  Icons.navigation_rounded,
+                  color: Color(0xFF64D8FF),
+                  size: 25,
+                  shadows: [Shadow(color: Color(0xFF07131C), blurRadius: 5)],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xD907131C),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '${sample.vector.speedKmh.round()}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+  ];
+
   Widget _overlayMarkerChild(MapOverlayMarker overlay) {
     final hazard = overlay.hazardSymbol;
     if (hazard != null) {
@@ -3919,6 +4047,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         child: HazardMapSymbolBadge(symbol: hazard),
       );
     }
+
     final style = overlay.motorcycleStyle;
     return style == null
         ? _IconBadge(icon: overlay.icon, badgeColor: overlay.color, size: 34)
@@ -3974,6 +4103,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
     await controller.addImage(
       _landingZoneImage,
       await rasterizeIconGlyphPng(Icons.flag_rounded),
+      true,
+    );
+    await controller.addImage(
+      _windForecastImage,
+      await rasterizeIconGlyphPng(Icons.navigation_rounded),
       true,
     );
     _markerImagesRegistered = true;
@@ -4035,6 +4169,35 @@ class _RideMapScreenState extends State<RideMapScreen> {
           const ml.RasterLayerProperties(rasterOpacity: 1),
         );
       }
+      await controller.addGeoJsonSource(
+        _windForecastSource,
+        _windForecastGeoJson(),
+      );
+      await controller.addSymbolLayer(
+        _windForecastSource,
+        'balloon-crumbs-wind-forecast-arrows',
+        const ml.SymbolLayerProperties(
+          iconImage: _windForecastImage,
+          iconColor: '#64D8FF',
+          iconHaloColor: '#07131C',
+          iconHaloWidth: 2,
+          iconSize: 0.17,
+          iconRotate: ['get', 'toward'],
+          iconRotationAlignment: 'map',
+          iconPitchAlignment: 'map',
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          textField: ['get', 'speedLabel'],
+          textColor: '#FFFFFF',
+          textHaloColor: '#07131C',
+          textHaloWidth: 2,
+          textSize: 10,
+          textOffset: [0, 1.7],
+          textAllowOverlap: true,
+          textIgnorePlacement: true,
+        ),
+        enableInteraction: false,
+      );
       await controller.addGeoJsonSource(
         _landingZoneSource,
         _landingZoneGeoJson(),
@@ -4309,6 +4472,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
         _landingZoneGeoJson(),
       );
       await controller.setGeoJsonSource(
+        _windForecastSource,
+        _windForecastGeoJson(),
+      );
+      await controller.setGeoJsonSource(
         _trailDirectionArrowSource,
         _trailDirectionArrowGeoJson(),
       );
@@ -4574,7 +4741,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   };
 
   Map<String, dynamic> _landingZoneGeoJson() {
-    final zone = widget.landingZone;
+    final zone = _landingZone;
     if (zone == null) {
       return const {'type': 'FeatureCollection', 'features': <Object>[]};
     }
@@ -4607,6 +4774,29 @@ class _RideMapScreenState extends State<RideMapScreen> {
       ],
     };
   }
+
+  Map<String, dynamic> _windForecastGeoJson() => {
+    'type': 'FeatureCollection',
+    'features': [
+      for (final sample in _visibleWindForecastVectors())
+        {
+          'type': 'Feature',
+          'properties': {
+            'toward': sample.vector.towardDegrees,
+            'from': sample.vector.fromDegrees,
+            'speedKmh': sample.vector.speedKmh,
+            'speedLabel': '${sample.vector.speedKmh.round()}',
+          },
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [
+              sample.position.longitude,
+              sample.position.latitude,
+            ],
+          },
+        },
+    ],
+  };
 
   Map<String, dynamic> _waypointGeoJson() => MapGeoJson.points(
     (_isBalloonView ? null : _route)?.waypoints
@@ -5242,7 +5432,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       ...(_isBalloonView
           ? _balloonGroundTrackPoints
           : _route?.allPoints.toList(growable: false) ?? const []),
-      ...?widget.landingZone?.boundary,
+      ...?_landingZone?.boundary,
     ];
     final routePoints = planned.isNotEmpty ? planned : [?_effectivePosition];
     if (_basemap.usesMapLibre) {
@@ -5554,6 +5744,19 @@ class _RideMapScreenState extends State<RideMapScreen> {
         ),
       ) ??
       false;
+
+  Future<void> _showBalloonMapInformation() async {
+    final now = DateTime.now();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) => _BalloonMapInformationSheet(
+        configuration: widget.aeronauticalChartConfiguration,
+        now: now,
+      ),
+    );
+  }
 
   void _showMessage(String message) {
     if (!mounted) return;
@@ -8128,82 +8331,385 @@ class _EnforcementEmphasis extends StatelessWidget {
   }
 }
 
-class _AeronauticalChartBadge extends StatelessWidget {
-  const _AeronauticalChartBadge({
+class _WindForecastControl extends StatelessWidget {
+  const _WindForecastControl({required this.controller});
+
+  final WindForecastController controller;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, _) {
+      final field = controller.field;
+      final selectedIndex = openMeteoWindAltitudeLevels.indexOf(
+        controller.selectedAltitudeMetersMsl,
+      );
+      final validAt = field?.validAt.toLocal();
+      final localizations = MaterialLocalizations.of(context);
+      final validTime = validAt == null
+          ? null
+          : '${localizations.formatShortDate(validAt)} '
+                '${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(validAt))}';
+      final status = field == null
+          ? controller.loading
+                ? 'Loading latest forecast…'
+                : 'Forecast unavailable'
+          : field.isLiveForecast
+          ? '${field.sourceLabel} · valid $validTime'
+          : '${field.sourceLabel} · reference $validTime';
+      return Card(
+        key: const Key('wind-forecast-control'),
+        margin: EdgeInsets.zero,
+        color: const Color(0xE6252E39),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 9),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Switch.adaptive(
+                    key: const Key('wind-forecast-toggle'),
+                    value: controller.enabled,
+                    onChanged: controller.setEnabled,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'FORECAST WIND · '
+                          '${controller.selectedAltitudeMetersMsl} M MSL',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.35,
+                          ),
+                        ),
+                        Text(
+                          status,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFB7C4D1),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (controller.loading && field != null)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8),
+                      child: SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                ],
+              ),
+              if (controller.enabled) ...[
+                Row(
+                  children: [
+                    const Text('20', style: TextStyle(fontSize: 9)),
+                    Expanded(
+                      child: Slider(
+                        key: const Key('wind-altitude-slider'),
+                        min: 0,
+                        max: (openMeteoWindAltitudeLevels.length - 1)
+                            .toDouble(),
+                        divisions: openMeteoWindAltitudeLevels.length - 1,
+                        value: selectedIndex.clamp(0, 100).toDouble(),
+                        label: '${controller.selectedAltitudeMetersMsl} m MSL',
+                        onChanged: (value) => controller.setSelectedAltitude(
+                          openMeteoWindAltitudeLevels[value.round()].toDouble(),
+                        ),
+                      ),
+                    ),
+                    const Text('2000 m', style: TextStyle(fontSize: 9)),
+                  ],
+                ),
+                const Row(
+                  children: [
+                    Icon(Icons.navigation_rounded, size: 13),
+                    SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        'Arrow points downwind · number is km/h · forecast '
+                        'model only, not an aviation briefing',
+                        style: TextStyle(color: Color(0xFFB7C4D1), fontSize: 9),
+                      ),
+                    ),
+                  ],
+                ),
+                if (field?.origin == WindForecastOrigin.openMeteoUkmo)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: InkWell(
+                      key: const Key('open-meteo-attribution-link'),
+                      onTap: () => unawaited(
+                        launchUrl(
+                          OpenMeteoWindProvider.attributionUri,
+                          mode: LaunchMode.externalApplication,
+                        ),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.only(top: 5),
+                        child: Text(
+                          OpenMeteoWindProvider.attribution,
+                          style: TextStyle(
+                            color: Color(0xFF8DCBFF),
+                            fontSize: 9,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _BalloonMapInformationSheet extends StatelessWidget {
+  const _BalloonMapInformationSheet({
     required this.configuration,
     required this.now,
-    required this.onTap,
   });
 
   final AeronauticalChartConfiguration configuration;
   final DateTime now;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final current = configuration.isCurrentAt(now);
-    return Semantics(
-      button: true,
-      label: configuration.explanationAt(now),
-      child: Material(
-        key: const Key('aeronautical-chart-status'),
-        color: current ? const Color(0xE6252E39) : const Color(0xE63B3030),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 170),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        current ? Icons.layers_outlined : Icons.layers_clear,
-                        size: 16,
-                        color: current
-                            ? const Color(0xFF6ED89A)
-                            : const Color(0xFFFFC857),
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          configuration.statusLabelAt(now),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (current) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      configuration.attribution,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFC6D0DA),
-                        fontSize: 9,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+        child: Column(
+          key: const Key('balloon-map-information-sheet'),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Map information',
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
-          ),
+            const SizedBox(height: 20),
+            Row(
+              key: const Key('aeronautical-chart-information'),
+              children: [
+                Icon(
+                  current ? Icons.layers_outlined : Icons.layers_clear,
+                  color: current
+                      ? const Color(0xFF6ED89A)
+                      : const Color(0xFFFFC857),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    configuration.statusLabelAt(now),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(configuration.explanationAt(now)),
+            if (configuration.attribution.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                configuration.attribution,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: const Color(0xFFB7C4D1)),
+              ),
+            ],
+            const Divider(height: 36),
+            const _AeronauticalChartKey(),
+            const Divider(height: 36),
+            Row(
+              children: [
+                const Icon(Icons.height),
+                const SizedBox(width: 10),
+                Text(
+                  'Altitude and track',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Balloon altitude and the coloured ground track are shown in '
+              'metres. GNSS altitude is not terrain clearance. Grey track '
+              'segments have no usable altitude.',
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+class _AeronauticalChartKey extends StatelessWidget {
+  const _AeronauticalChartKey();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    key: const Key('aeronautical-chart-key'),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          const Icon(Icons.map_outlined),
+          const SizedBox(width: 10),
+          Text(
+            'Aeronautical chart key',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      const Text(
+        'Common markings in OpenAIP’s default chart. Colours group airspace '
+        'types; a colour alone does not say whether an area is active or safe '
+        'to enter.',
+      ),
+      const SizedBox(height: 14),
+      const _AeronauticalLegendRow(
+        borderColor: Color(0xFF9A0E0E),
+        fillColor: Color(0x339A0E0E),
+        title: 'Red / red hatching',
+        description:
+            'Prohibited, restricted, danger, and some temporary-use areas. '
+            'Check the named area and its current status.',
+      ),
+      const _AeronauticalLegendRow(
+        borderColor: Color(0xFF339E2F),
+        fillColor: Color(0x33339E2F),
+        title: 'Green',
+        description:
+            'Controlled airspace classes A–D. Clearance and operating rules '
+            'may apply.',
+      ),
+      const _AeronauticalLegendRow(
+        borderColor: Color(0xFF154D9A),
+        fillColor: Color(0x55DA6F86),
+        title: 'Blue / pink',
+        description:
+            'Control, traffic, and mandatory zones such as CTR, TMA, TMZ, and '
+            'RMZ. Blue also marks some Class E–G boundaries.',
+      ),
+      const _AeronauticalLegendRow(
+        borderColor: Color(0xFF9335C9),
+        fillColor: Color(0x33FF9200),
+        title: 'Orange / purple',
+        description:
+            'Military training, alert, warning, protected, or overflight '
+            'areas. Read the area label for its exact meaning.',
+      ),
+      const _AeronauticalLegendRow(
+        borderColor: Color(0xFF008BAF),
+        fillColor: Color(0x55FFD700),
+        title: 'Yellow / cyan',
+        description:
+            'Gliding, VFR, aerial sporting, or recreational activity areas.',
+      ),
+      const _AeronauticalLegendRow(
+        borderColor: Color(0xFF707070),
+        fillColor: Color(0x33575757),
+        title: 'Grey',
+        description: 'Airways and their boundaries.',
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'LINES AND LABELS',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: const Color(0xFFCED6DF),
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
+        ),
+      ),
+      const SizedBox(height: 6),
+      const Text(
+        'Dashed or hatched boundaries distinguish zone types; they do not '
+        'prove that a zone is active. Labels show the upper limit above the '
+        'lower limit. GND means the surface, MSL means above mean sea level, '
+        'and FL is a pressure-based flight level.',
+      ),
+      const SizedBox(height: 10),
+      const Text(
+        'If in doubt, treat the boundary as significant and confirm it with '
+        'the official AIP, current NOTAMs, and the flight’s responsible pilot.',
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
+    ],
+  );
+}
+
+class _AeronauticalLegendRow extends StatelessWidget {
+  const _AeronauticalLegendRow({
+    required this.borderColor,
+    required this.fillColor,
+    required this.title,
+    required this.description,
+  });
+
+  final Color borderColor;
+  final Color fillColor;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          label: '$title chart marking',
+          child: Container(
+            width: 38,
+            height: 20,
+            margin: const EdgeInsets.only(top: 2),
+            decoration: BoxDecoration(
+              color: fillColor,
+              border: Border.all(color: borderColor, width: 2),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFFCED6DF),
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BalloonAltitudeLegend extends StatelessWidget {
@@ -8273,9 +8779,13 @@ class _BalloonAltitudeLegend extends StatelessWidget {
 }
 
 class _BalloonAltitudeCard extends StatelessWidget {
-  const _BalloonAltitudeCard({required this.fix});
+  const _BalloonAltitudeCard({
+    required this.fix,
+    required this.onShowMapInformation,
+  });
 
   final MapNavigationPosition? fix;
+  final VoidCallback onShowMapInformation;
 
   @override
   Widget build(BuildContext context) {
@@ -8317,16 +8827,29 @@ class _BalloonAltitudeCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'BALLOON ALTITUDE',
-                  style: TextStyle(
-                    color: Color(0xFF9EABB9),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'BALLOON ALTITUDE',
+                        style: TextStyle(
+                          color: Color(0xFF9EABB9),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      key: const Key('balloon-map-info-button'),
+                      tooltip: 'Map information',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      onPressed: onShowMapInformation,
+                      icon: const Icon(Icons.info_outline, size: 20),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.baseline,
