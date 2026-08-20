@@ -18,6 +18,11 @@ typedef _TrailPoint = ({
   double latitude,
   double longitude,
   DateTime recordedAt,
+  // Nullable, and stays nullable all the way to the file. A balloon flight
+  // exported without its vertical dimension is not a balloon flight, but a zero
+  // in place of a missing reading is worse than an absence: it reads as sea
+  // level (#16).
+  double? altitudeMeters,
 });
 
 class RideSummary {
@@ -134,6 +139,10 @@ class RideSummaryExporter {
                   latitude: point.latitude,
                   longitude: point.longitude,
                   recordedAt: point.recordedAt,
+                  // The exporter writes `<ele>` only when this is present, so a
+                  // fix that carried no altitude produces a point with no
+                  // elevation rather than one claiming to be at zero.
+                  elevationMeters: point.altitudeMeters,
                 ),
             ],
           ),
@@ -226,12 +235,19 @@ class RideSummaryExporter {
     final longitude = position['longitude'];
     if (latitude is! num || longitude is! num) return null;
     final recordedAt = sample['recordedAt'];
+    // Read defensively like the rest of this walk: a relayed fix is untrusted,
+    // and a malformed altitude must cost that point its height rather than the
+    // whole export.
+    final altitude = sample['altitudeMeters'];
     return (
       latitude: latitude.toDouble(),
       longitude: longitude.toDouble(),
       recordedAt: recordedAt is String
           ? (DateTime.tryParse(recordedAt)?.toLocal() ?? event.createdAt)
           : event.createdAt,
+      altitudeMeters: altitude is num && altitude.isFinite
+          ? altitude.toDouble()
+          : null,
     );
   }
 
