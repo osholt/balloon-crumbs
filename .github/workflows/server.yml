@@ -37,8 +37,8 @@ jobs:
         run: uv run pip-audit --skip-editable
       - run: uv run ruff format --check .
       - run: uv run ruff check .
-      - run: uv run ruff format --check ../../tools/road-data ../../tools/tester_notify
-      - run: uv run ruff check ../../tools/road-data ../../tools/tester_notify
+      - run: uv run ruff format --check ../../tools/road-data ../../tools/tester_notify ../../tools/simulation
+      - run: uv run ruff check ../../tools/road-data ../../tools/tester_notify ../../tools/simulation
       - run: cd ../.. && python3 -m unittest discover -s tools/road-data/tests -v
       - run: cd ../.. && python3 -m unittest discover -s tools/tester_notify/tests -v
       - run: uv run pytest --cov=balloon_crumbs_server --cov-report=term-missing --cov-fail-under=80

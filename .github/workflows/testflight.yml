@@ -1,0 +1,233 @@
+name: TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'Build number to use. Defaults to the next one App Store Connect has free.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Uploads must not overlap: two runs racing for the same build number both lose.
+concurrency:
+  group: testflight-upload
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: 3.44.6
+  MOBILE_DIR: apps/mobile
+  BUNDLE_ID: dev.osholt.ballooncrumbs
+
+jobs:
+  upload:
+    name: Build and upload to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install signing materials
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_CI_KEYCHAIN_PASSWORD }}
+          PROFILE_BASE64: ${{ secrets.APPLE_APPSTORE_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          for required in CERTIFICATE_BASE64 CERTIFICATE_PASSWORD KEYCHAIN_PASSWORD PROFILE_BASE64; do
+            if [ -z "${!required}" ]; then
+              echo "::error::Missing secret $required. See docs/testflight.md." >&2
+              exit 1
+            fi
+          done
+          certificate="$RUNNER_TEMP/distribution.p12"
+          profile="$RUNNER_TEMP/appstore.mobileprovision"
+          keychain="$RUNNER_TEMP/balloon-crumbs.keychain-db"
+          printf '%s' "$CERTIFICATE_BASE64" | base64 -D > "$certificate"
+          printf '%s' "$PROFILE_BASE64" | base64 -D > "$profile"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychain -d user -s "$keychain" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$keychain"
+
+          # The profile's own name, read from the profile rather than written
+          # down anywhere. Tail End Charlie's runbook records that the name has
+          # to match in three places, and a stale copy fails the archive with
+          # "No profile found" - which is exactly the bug this repository had
+          # before, naming a profile from two product names ago. Reading it here
+          # means there is no second copy to go stale.
+          profile_name="$(security cms -D -i "$profile" | plutil -extract Name raw -)"
+          profile_uuid="$(security cms -D -i "$profile" | plutil -extract UUID raw -)"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$profile" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
+          echo "PROFILE_NAME=$profile_name" >> "$GITHUB_ENV"
+          echo "Imported provisioning profile: $profile_name"
+
+          # Fail here rather than after a twenty-minute archive.
+          if ! security find-identity -v -p codesigning "$keychain" | grep -q "Apple Distribution"; then
+            echo "::error::The imported certificate is not an Apple Distribution certificate." >&2
+            exit 1
+          fi
+
+      - name: Resolve the build number
+        env:
+          APPSTORE_CONNECT_API_KEY_ID: ${{ secrets.APPSTORE_CONNECT_API_KEY_ID }}
+          APPSTORE_CONNECT_API_ISSUER_ID: ${{ secrets.APPSTORE_CONNECT_API_ISSUER_ID }}
+          APPSTORE_CONNECT_API_PRIVATE_KEY_BASE64: ${{ secrets.APPSTORE_CONNECT_API_PRIVATE_KEY_BASE64 }}
+          REQUESTED: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          if [ -n "$REQUESTED" ]; then
+            echo "BUILD_NUMBER=$REQUESTED" >> "$GITHUB_ENV"
+            echo "Using the requested build number $REQUESTED."
+            exit 0
+          fi
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s' "$APPSTORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 -D \
+            > "$HOME/.appstoreconnect/private_keys/AuthKey_$APPSTORE_CONNECT_API_KEY_ID.p8"
+          chmod 600 "$HOME/.appstoreconnect/private_keys/AuthKey_$APPSTORE_CONNECT_API_KEY_ID.p8"
+          python3 -m pip install --quiet --disable-pip-version-check cryptography
+          # The same script a local build uses, so a number cannot be spent twice
+          # by uploading from a laptop and from CI. Deliberately not the run
+          # number: that is monotonic per repository, not per app record, and it
+          # knows nothing about builds uploaded by hand.
+          number="$(python3 tools/testflight/next_build_number.py "$BUNDLE_ID")"
+          echo "BUILD_NUMBER=$number" >> "$GITHUB_ENV"
+          echo "App Store Connect's next free build number is $number."
+
+      - name: Build the App Store IPA
+        working-directory: ${{ env.MOBILE_DIR }}
+        env:
+          BALLOON_CRUMBS_API_BASE_URL: ${{ vars.BALLOON_CRUMBS_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          eval "$("$GITHUB_WORKSPACE/tools/build-identity.sh" pubspec.yaml testflight "$BUILD_NUMBER" | sed 's/^/export /')"
+          if [ -z "${BALLOON_CRUMBS_API_BASE_URL:-}" ]; then
+            echo "::warning::No BALLOON_CRUMBS_API_BASE_URL repository variable; this build cannot reach a relay. Nearby transport still works and the app says so on its status card."
+          fi
+          flutter pub get
+          flutter build ios --release --no-codesign \
+            --build-name="$BALLOON_CRUMBS_APP_VERSION" \
+            --build-number="$BALLOON_CRUMBS_APP_BUILD" \
+            --dart-define=BALLOON_CRUMBS_APP_VERSION="$BALLOON_CRUMBS_APP_VERSION" \
+            --dart-define=BALLOON_CRUMBS_APP_BUILD="$BALLOON_CRUMBS_APP_BUILD" \
+            --dart-define=BALLOON_CRUMBS_DISTRIBUTION_TRACK="$BALLOON_CRUMBS_DISTRIBUTION_TRACK" \
+            --dart-define=BALLOON_CRUMBS_BUILD_TIMESTAMP="$BALLOON_CRUMBS_BUILD_TIMESTAMP" \
+            --dart-define=BALLOON_CRUMBS_API_BASE_URL="${BALLOON_CRUMBS_API_BASE_URL:-}" \
+            --dart-define=BALLOON_CRUMBS_PUSH_ENABLED=false \
+            --dart-define=BALLOON_CRUMBS_RIDE_DIAGNOSTICS=true
+
+          # Signing is overridden on the command line rather than in the project.
+          # The Xcode project stays on automatic signing because that is what
+          # works on a Mac with an Apple ID; a runner has none, so it has to be
+          # told the identity and the profile explicitly. Editing the project to
+          # suit CI would break the local path, which is the trade the inherited
+          # setup made and then documented as a trap.
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$PWD/build/ios/archive/Runner.xcarchive" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            archive
+
+          # Written here, from the profile CI actually imported, for the same
+          # reason: no stale name can survive in a checked-in file.
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>teamID</key><string>UY4624PH6X</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>provisioningProfiles</key>
+            <dict><key>$BUNDLE_ID</key><string>$PROFILE_NAME</string></dict>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$PWD/build/ios/archive/Runner.xcarchive" \
+            -exportPath "$PWD/build/ios/ipa" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Check the build carries what it should
+        working-directory: ${{ env.MOBILE_DIR }}
+        run: |
+          set -euo pipefail
+          ipa="$(ls -t build/ios/ipa/*.ipa | head -1)"
+          work="$(mktemp -d)"
+          unzip -q "$ipa" -d "$work"
+          app="$(ls -d "$work"/Payload/*.app)"
+          entitlements="$(codesign -d --entitlements :- "$app" 2>/dev/null)"
+          # Asserted because it is the one thing a signed build can silently
+          # lose: a profile without Associated Domains strips the entitlement
+          # and universal links stop working, with nothing failing until a link
+          # is tapped on a phone.
+          if ! grep -q 'applinks:balloon-crumbs.tailendcharlie.app' <<<"$entitlements"; then
+            echo "::error::The IPA has no applinks entitlement. Does the provisioning profile include Associated Domains?" >&2
+            exit 1
+          fi
+          if ! codesign -dv --verbose=2 "$app" 2>&1 | grep -q "Authority=Apple Distribution"; then
+            echo "::error::The IPA is not signed for distribution." >&2
+            exit 1
+          fi
+          echo "Signed for distribution, applinks entitlement present, build $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")."
+
+      - name: Upload to TestFlight
+        working-directory: ${{ env.MOBILE_DIR }}
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPSTORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          ipa="$(ls -t build/ios/ipa/*.ipa | head -1)"
+          log="$(mktemp)"
+          for attempt in 1 2; do
+            set +e
+            xcrun altool --upload-app -f "$ipa" -t ios \
+              --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID" 2>&1 | tee "$log"
+            status="${PIPESTATUS[0]}"
+            set -e
+            if [ "$status" -eq 0 ]; then
+              echo "Uploaded build $BUILD_NUMBER. Internal testers get it once Apple finishes processing; no beta review is involved."
+              exit 0
+            fi
+            # Already registered is success, not failure: a retried run must not
+            # fail because the first attempt actually worked.
+            if grep -Eq "previousBundleVersion[[:space:]]*:[[:space:]]*$BUILD_NUMBER([[:space:]]|$)" "$log"; then
+              echo "Build $BUILD_NUMBER is already registered in App Store Connect."
+              exit 0
+            fi
+            if [ "$attempt" -eq 1 ] && grep -Eq "status code 5[0-9]{2}|STATE_ERROR\.UPDATING|try again later" "$log"; then
+              echo "::warning::App Store Connect is temporarily unavailable; retrying in 90 seconds."
+              sleep 90
+              continue
+            fi
+            exit "$status"
+          done
+
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: balloon-crumbs-app-store-ipa
+          path: ${{ env.MOBILE_DIR }}/build/ios/ipa/*.ipa
+          if-no-files-found: ignore
