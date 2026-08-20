@@ -2035,6 +2035,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }) {
     final awareness = _awarenessController;
     if (awareness == null) return;
+    final balloonDeviceIds = _isSimulation
+        ? const <String>{}
+        : (widget.rideController
+                  .resolveCraftRoster()
+                  .balloon
+                  ?.deviceIds
+                  .toSet() ??
+              const <String>{});
     // One reconciled model for both ride phases and both transports, so nobody
     // disappears at the `rideStarted` transition, a late joiner appears at once,
     // and the count can never disagree with the drawn markers (#132).
@@ -2090,12 +2098,23 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         ? route_domain.GeoPoint(
             latitude: simulatedLocal.position.latitude,
             longitude: simulatedLocal.position.longitude,
+            elevationMeters: localMapSample?.altitudeMeters,
+            altitudeSource:
+                localMapSample?.altitudeSource ?? AltitudeSource.unknown,
+            altitudeDatum:
+                localMapSample?.altitudeDatum ?? AltitudeDatum.unknown,
+            altitudeAccuracyMeters: localMapSample?.altitudeAccuracyMeters,
+            recordedAt: localMapSample?.recordedAt,
           )
         : localMapSample == null
         ? null
         : route_domain.GeoPoint(
             latitude: localMapSample.position.latitude,
             longitude: localMapSample.position.longitude,
+            elevationMeters: localMapSample.altitudeMeters,
+            altitudeSource: localMapSample.altitudeSource,
+            altitudeDatum: localMapSample.altitudeDatum,
+            altitudeAccuracyMeters: localMapSample.altitudeAccuracyMeters,
             recordedAt: localMapSample.recordedAt,
           );
     final navigationRecordedAt = simulatedLocal == null
@@ -2127,6 +2146,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                   simulatedLocal?.headingDegrees ??
                   localMapSample!.headingDegrees,
               accuracyMeters: localMapSample?.accuracyMeters,
+              altitudeMeters: localMapSample?.altitudeMeters,
+              altitudeSource:
+                  localMapSample?.altitudeSource ?? AltitudeSource.unknown,
+              altitudeDatum:
+                  localMapSample?.altitudeDatum ?? AltitudeDatum.unknown,
+              altitudeAccuracyMeters: localMapSample?.altitudeAccuracyMeters,
+              verticalSpeedMetersPerSecond:
+                  localMapSample?.verticalSpeedMetersPerSecond,
+              altitudeRecordedAt: localMapSample?.recordedAt,
             );
       _mapPosition.value = mapPoint;
     }
@@ -2173,7 +2201,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                         riderId: location.riderId,
                         displayName: location.displayName,
                         role: location.role,
-                        motorcycleStyle: location.motorcycleStyle,
+                        motorcycleStyle:
+                            balloonDeviceIds.contains(location.riderId)
+                            ? CraftIconStyle.balloon
+                            : location.motorcycleStyle,
                         riderSymbol: location.riderSymbol,
                         riderColor: location.riderColor,
                         point: route_domain.GeoPoint(
@@ -2190,7 +2221,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                         riderId: rider.id,
                         displayName: rider.displayName,
                         role: rider.role,
-                        motorcycleStyle: rider.motorcycleStyle,
+                        motorcycleStyle: rider.role == RideRole.lead
+                            ? CraftIconStyle.balloon
+                            : rider.motorcycleStyle,
                         riderSymbol: rider.riderSymbol,
                         riderColor: rider.riderColor,
                         point: route_domain.GeoPoint(
@@ -2201,6 +2234,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                     ))
           .map((location) {
             final isLead = location.role == RideRole.lead;
+            final isBalloonCraft = _isSimulation
+                ? isLead
+                : balloonDeviceIds.contains(location.riderId);
             // A position past its freshness threshold is demoted explicitly in
             // the label. The identity fill remains stable across surfaces.
             final freshness =
@@ -2219,6 +2255,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             final raised = quickMessagesBySender[location.riderId];
             final roleSuffix = raised != null
                 ? raised.label
+                : isBalloonCraft
+                ? 'Balloon'
                 : isLead
                 ? 'Lead'
                 : null;
@@ -2583,19 +2621,28 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   /// Ride Lab drives the same trail model as a real ride, so the simulator can
   /// no longer show a leader track the live path never builds (#100).
-  void _updateSimulationRiderTrails(
-    List<SimulatedRiderSnapshot> riders,
-  ) => _publishRiderTrails([
-    for (final rider in riders)
-      RiderTrail(
-        riderId: rider.id,
-        displayName: rider.displayName,
-        kind: RiderTrailRecorder.kindFor(isLeader: rider.role == RideRole.lead),
-        // Ride Lab maintains its own ephemeral history; the same per-rider
-        // cap is applied here so the simulator and a real ride agree.
-        points: _trailRecorder.boundedTrail(_routePoints(rider.travelTrail)),
-      ),
-  ]);
+  void _updateSimulationRiderTrails(List<SimulatedRiderSnapshot> riders) {
+    final balloonSamples =
+        _awarenessController?.leaderLocationSamples ?? const <LocationSample>[];
+    _publishRiderTrails([
+      for (final rider in riders)
+        RiderTrail(
+          riderId: rider.id,
+          displayName: rider.displayName,
+          kind: rider.role == RideRole.lead
+              ? RiderTrailKind.balloonGroundTrack
+              : RiderTrailKind.rider,
+          // The balloon uses its authenticated emitted fixes rather than the
+          // chase route's synthetic display trail. Besides showing where it
+          // really drifted, this retains altitude metadata for the map.
+          points: _trailRecorder.boundedTrail(
+            rider.role == RideRole.lead
+                ? _locationSamplePoints(balloonSamples)
+                : _routePoints(rider.travelTrail),
+          ),
+        ),
+    ]);
+  }
 
   /// Records and publishes every eligible rider's travelled trail from position
   /// history alone.
@@ -2611,6 +2658,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       _publishRiderTrails(const []);
       return;
     }
+    final balloonDeviceIds =
+        widget.rideController.resolveCraftRoster().balloon?.deviceIds.toSet() ??
+        const <String>{};
     _publishRiderTrails(
       _trailRecorder.update([
         for (final location in awareness.riderLocations)
@@ -2620,9 +2670,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             position: route_domain.GeoPoint(
               latitude: location.sample.position.latitude,
               longitude: location.sample.position.longitude,
+              elevationMeters: location.sample.altitudeMeters,
+              altitudeSource: location.sample.altitudeSource,
+              altitudeDatum: location.sample.altitudeDatum,
+              altitudeAccuracyMeters: location.sample.altitudeAccuracyMeters,
               recordedAt: location.sample.recordedAt,
             ),
             isLeader: location.role == RideRole.lead,
+            isBalloon: balloonDeviceIds.contains(location.riderId),
             isEligible:
                 widget.rideController
                     .participantFor(location.riderId)
@@ -2630,10 +2685,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 true,
             journalTrail: location.role == RideRole.lead
                 ? [
-                    for (final sample in awareness.leaderTrailSamples)
+                    for (final sample in awareness.leaderLocationSamples)
                       route_domain.GeoPoint(
                         latitude: sample.position.latitude,
                         longitude: sample.position.longitude,
+                        elevationMeters: sample.altitudeMeters,
+                        altitudeSource: sample.altitudeSource,
+                        altitudeDatum: sample.altitudeDatum,
+                        altitudeAccuracyMeters: sample.altitudeAccuracyMeters,
                         recordedAt: sample.recordedAt,
                       ),
                   ]
@@ -2653,6 +2712,21 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       ),
   ];
 
+  static List<route_domain.GeoPoint> _locationSamplePoints(
+    Iterable<LocationSample> samples,
+  ) => [
+    for (final sample in samples)
+      route_domain.GeoPoint(
+        latitude: sample.position.latitude,
+        longitude: sample.position.longitude,
+        elevationMeters: sample.altitudeMeters,
+        altitudeSource: sample.altitudeSource,
+        altitudeDatum: sample.altitudeDatum,
+        altitudeAccuracyMeters: sample.altitudeAccuracyMeters,
+        recordedAt: sample.recordedAt,
+      ),
+  ];
+
   void _publishRiderTrails(List<RiderTrail> trails) {
     _recordedTrailTraces = List.unmodifiable([
       for (final trail in trails.where((trail) => trail.isRenderable))
@@ -2668,6 +2742,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             points: points,
             label: switch (trail.kind) {
               RiderTrailKind.leader => '${trail.displayName} leader trail',
+              RiderTrailKind.balloonGroundTrack =>
+                '${trail.displayName} balloon ground track',
               RiderTrailKind.rider => '${trail.displayName} trail',
               // RiderTrailRecorder only records where riders have been, so it
               // never produces a route-start connector; the map composes that
@@ -3256,10 +3332,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (routeStore == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    final session = widget.rideController.session;
+    final isBalloonView = _isSimulation
+        ? session?.role == RideRole.lead
+        : widget.rideController.localCraft?.isBalloon == true;
     return RideMapFeature.fromEnvironment(
       key: ValueKey(
         'ride-map:${_appliedAuthoritativeRouteRevision ?? 'local'}:'
-        '${_activeRoute?.id ?? 'none'}',
+        '${_activeRoute?.id ?? 'none'}:'
+        '${isBalloonView ? 'balloon' : 'chase'}',
       ),
       currentPosition: _mapPosition,
       completedRideStore: widget.completedRideStore,
@@ -3270,7 +3351,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       onOpenRoster: _openRoster,
       // Deliberately not `onOpenRideMenu`. The control that reaches the other
       // tabs is rendered by this shell instead — see _openRideMenu and #404.
-      enforcementAlert: _enforcementAlert,
+      enforcementAlert: isBalloonView ? null : _enforcementAlert,
       rideCompletionSuggestion: _rideCompletionSuggestion,
       onEndRideForEveryone: _endRideFromCompletionSuggestion,
       onDismissRideCompletion: _dismissRideCompletionSuggestion,
@@ -3285,7 +3366,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       initialRouteStartConnector: _routeStartConnector,
       onRouteStartConnectorChanged: (connector) =>
           _routeStartConnector = connector,
-      onReportHazard: _awarenessController == null
+      onReportHazard: isBalloonView || _awarenessController == null
           ? null
           : _reportHazardFromMap,
       emergencyContacts: _emergencyContacts,
@@ -3297,11 +3378,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       rideStarted: widget.rideController.rideStarted,
       onLeaveRide: _confirmLeaveRideFromMap,
       onRouteCommitted: _onRouteChanged,
-      onNavigationGuidanceChanged: _onNavigationGuidanceChanged,
-      onNavigationViewportChanged: (viewport) {
-        final bridge = _carPlayBridge;
-        if (bridge != null) unawaited(bridge.publishViewport(viewport));
-      },
+      onNavigationGuidanceChanged: isBalloonView
+          ? null
+          : _onNavigationGuidanceChanged,
+      onNavigationViewportChanged: isBalloonView
+          ? null
+          : (viewport) {
+              final bridge = _carPlayBridge;
+              if (bridge != null) unawaited(bridge.publishViewport(viewport));
+            },
       onMapStyleResolved: (styleJson) {
         if (!mounted) return;
         _carPlayMapStyleJson = styleJson;
@@ -3329,23 +3414,29 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           ? () async => _mapPosition.value
           : _acquireCurrentPosition,
       routeStore: routeStore,
-      canEditRoute: _isSimulation || widget.rideController.isLocalRideLeader,
+      canEditRoute:
+          !isBalloonView &&
+          (_isSimulation || widget.rideController.isLocalRideLeader),
       distanceUnit: widget.distanceUnits.value,
-      speedLimitDisplay: widget.speedLimitDisplay,
+      speedLimitDisplay: isBalloonView ? null : widget.speedLimitDisplay,
       chaseVehicle: widget.chaseVehicle?.vehicle ?? ChaseVehicle.unspecified,
-      showRouteProgress: widget.routeProgressDisplay?.enabled ?? true,
+      showRouteProgress:
+          !isBalloonView && (widget.routeProgressDisplay?.enabled ?? true),
       darkMapStyle: widget.mapStyleMode.resolveDark(
         MediaQuery.platformBrightnessOf(context),
       ),
       restrainedLightMapStyle:
           widget.mapStyleMode.dayStyle == DayMapStyle.restrained,
-      localMotorcycleStyle:
-          widget.rideController.session?.motorcycleStyle ??
-          craftIconStyleDefault,
+      localMotorcycleStyle: isBalloonView
+          ? CraftIconStyle.balloon
+          : session?.motorcycleStyle ?? craftIconStyleDefault,
       localRiderSymbol:
           widget.rideController.session?.riderSymbol ?? riderSymbolDefault,
       localDisplayName: widget.rideController.session?.displayName ?? 'You',
       localBadgeColor: _localBadgeColor,
+      perspective: isBalloonView
+          ? RideMapPerspective.balloon
+          : RideMapPerspective.chase,
     );
   }
 
@@ -4553,6 +4644,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final controller = _simulationController;
     if (controller == null) return;
     controller.setLocalRole(role);
+    if (role == RideRole.lead) {
+      _latestNavigationGuidance = null;
+      _guidanceManeuverIdentity = null;
+      _lastGuidanceManeuverPosition = null;
+      _passedManeuverPosition = null;
+      unawaited(_spokenGuidance?.stop());
+    }
     await widget.rideController.setRole(role);
   }
 

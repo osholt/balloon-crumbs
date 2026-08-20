@@ -75,6 +75,10 @@ certificate cannot sign an App Store archive, so the first archive would have
 failed on that too. It is removed, and automatic signing picks the distribution
 certificate.
 
+The local uploader also requires `BALLOON_CRUMBS_OPENAIP_API_KEY` in its
+environment and passes it as a `--dart-define`, matching the GitHub workflow.
+Keep it transient or in a credential store; never write it into this repository.
+
 ## Why the entitlements shrank
 
 Both entitlement files claimed an Associated Domain of
@@ -147,6 +151,7 @@ Create these once, under Settings → Secrets and variables → Actions:
 | `APPSTORE_CONNECT_API_KEY_ID` | the Developer-role key's ID |
 | `APPSTORE_CONNECT_API_ISSUER_ID` | the account's issuer ID |
 | `APPSTORE_CONNECT_API_PRIVATE_KEY_BASE64` | that key's `.p8`, base64 |
+| `BALLOON_CRUMBS_OPENAIP_API_KEY` | OpenAIP third-party application key for the advisory airspace layer |
 
 Optionally set the `BALLOON_CRUMBS_API_BASE_URL` **variable** (not a secret) to a
 deployed relay. Without it the build warns and ships without relay access, which

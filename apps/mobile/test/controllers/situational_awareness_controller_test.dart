@@ -42,6 +42,28 @@ void main() {
     );
   });
 
+  test('the balloon trail retains complete altitude evidence', () async {
+    await controller.recordLocalLocation(
+      LocationSample(
+        position: const GeoPoint(latitude: 51.002, longitude: -0.995),
+        recordedAt: now,
+        accuracyMeters: 5,
+        altitudeMeters: 226,
+        altitudeSource: AltitudeSource.gnss,
+        altitudeDatum: AltitudeDatum.wgs84Geoid,
+        altitudeAccuracyMeters: 6,
+        verticalSpeedMetersPerSecond: 1.2,
+      ),
+    );
+
+    final fix = controller.leaderLocationSamples.single;
+    expect(fix.altitudeMeters, 226);
+    expect(fix.altitudeSource, AltitudeSource.gnss);
+    expect(fix.altitudeDatum, AltitudeDatum.wgs84Geoid);
+    expect(fix.altitudeAccuracyMeters, 6);
+    expect(fix.verticalSpeedMetersPerSecond, 1.2);
+  });
+
   test(
     'stored situational events are projected into the shared journal',
     () async {

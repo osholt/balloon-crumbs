@@ -126,7 +126,8 @@ void main() {
     expect(find.text('Charlie'), findsOneWidget);
     expect(find.byKey(const Key('simulation-off-route')), findsOneWidget);
     expect(find.byKey(const Key('simulation-role')), findsOneWidget);
-    expect(find.text('Follower'), findsOneWidget);
+    expect(find.text('Chase'), findsOneWidget);
+    expect(find.text('Balloon'), findsOneWidget);
     expect(find.byKey(const Key('simulation-rider-count')), findsOneWidget);
 
     await tester.ensureVisible(find.byKey(const Key('simulation-off-route')));
@@ -135,8 +136,8 @@ void main() {
     await tester.pump();
     expect(simulation.alexOffRoute, isTrue);
 
-    await tester.ensureVisible(find.text('Follower'));
-    await tester.tap(find.text('Follower'));
+    await tester.ensureVisible(find.text('Chase'));
+    await tester.tap(find.text('Chase'));
     await tester.pump();
     expect(simulation.localRole, RideRole.rider);
 

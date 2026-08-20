@@ -148,6 +148,15 @@ class RouteTrailStyle {
     casingWidthPixels: 12,
   );
 
+  /// The balloon's travelled path over the ground. Bright cyan remains legible
+  /// over both configured basemap themes; the extra width and direction arrows
+  /// are the non-colour cue that distinguishes it from chase trails.
+  static const balloonGroundTrack = RouteLineStyle(
+    color: Color(0xFF00E5FF),
+    widthPixels: 7,
+    casingWidthPixels: 11,
+  );
+
   /// The road route to the start of the planned route (#133), which claimed this
   /// cyan and renders it dashed. Declared here so the palette stays one table and
   /// the widths and dash runs stay distinct from every other line.
@@ -174,6 +183,7 @@ class RouteTrailStyle {
   static RouteLineStyle forTrail(RiderTrailKind kind) => switch (kind) {
     RiderTrailKind.rider => travelled,
     RiderTrailKind.leader => leaderTrail,
+    RiderTrailKind.balloonGroundTrack => balloonGroundTrack,
     RiderTrailKind.routeStartConnector => routeStartConnectorLine,
   };
 
@@ -228,6 +238,7 @@ class RouteTrailStyle {
     'route ahead': routeAhead,
     'travelled': travelled,
     'leader trail': leaderTrail,
+    'balloon ground track': balloonGroundTrack,
     'route start connector': routeStartConnectorLine,
   };
 

@@ -18,6 +18,7 @@ import '../../data/json_file_completed_ride_store.dart';
 import '../../data/json_file_recorded_route_store.dart';
 import '../../data/json_file_route_store.dart';
 import '../../domain/completed_ride_store.dart';
+import '../../domain/altitude.dart';
 import '../../domain/distance_unit.dart';
 import '../../domain/hazard.dart';
 import '../../domain/imported_route.dart';
@@ -28,6 +29,7 @@ import '../../domain/rider_color.dart';
 import '../../domain/route_store.dart';
 import '../../internet/plan_directory.dart';
 import '../../services/basemap_configuration.dart';
+import '../../services/aeronautical_chart_configuration.dart';
 import '../../services/basemap_status.dart';
 import '../../services/demo_route_loader.dart';
 import '../../services/enforcement_alert_detector.dart';
@@ -103,6 +105,14 @@ enum GroupMiniMapRenderer {
 }
 
 enum _ImportedTrackChoice { cancel, followOriginal, generateNavigable }
+
+/// Which craft owns this map viewport.
+///
+/// This is deliberately separate from the inherited ride leader role. A route
+/// coordinator can be a leader without being airborne; only a device attached
+/// to the balloon (or the explicit Ride Lab balloon perspective) gets the
+/// aviation presentation.
+enum RideMapPerspective { chase, balloon }
 
 @visibleForTesting
 Color groupMiniMapBackgroundColor(Brightness brightness) =>
@@ -219,6 +229,9 @@ class RideMapFeature extends StatefulWidget {
     this.localRiderSymbol = riderSymbolDefault,
     this.localDisplayName = 'You',
     this.localBadgeColor = const Color(0xFF2F80ED),
+    this.perspective = RideMapPerspective.chase,
+    this.aeronauticalChartConfiguration =
+        const AeronauticalChartConfiguration(),
   });
 
   factory RideMapFeature.fromEnvironment({
@@ -277,6 +290,8 @@ class RideMapFeature extends StatefulWidget {
     RiderSymbol localRiderSymbol = riderSymbolDefault,
     String localDisplayName = 'You',
     Color localBadgeColor = const Color(0xFF2F80ED),
+    RideMapPerspective perspective = RideMapPerspective.chase,
+    AeronauticalChartConfiguration? aeronauticalChartConfiguration,
   }) => RideMapFeature(
     key: key,
     currentPosition: currentPosition,
@@ -334,6 +349,10 @@ class RideMapFeature extends StatefulWidget {
     localRiderSymbol: localRiderSymbol,
     localDisplayName: localDisplayName,
     localBadgeColor: localBadgeColor,
+    perspective: perspective,
+    aeronauticalChartConfiguration:
+        aeronauticalChartConfiguration ??
+        AeronauticalChartConfiguration.fromEnvironment(),
   );
 
   final ValueListenable<GeoPoint?>? currentPosition;
@@ -429,6 +448,8 @@ class RideMapFeature extends StatefulWidget {
   final RiderSymbol localRiderSymbol;
   final String localDisplayName;
   final Color localBadgeColor;
+  final RideMapPerspective perspective;
+  final AeronauticalChartConfiguration aeronauticalChartConfiguration;
 
   @override
   State<RideMapFeature> createState() => _RideMapFeatureState();
@@ -585,6 +606,8 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         localRiderSymbol: widget.localRiderSymbol,
         localDisplayName: widget.localDisplayName,
         localBadgeColor: widget.localBadgeColor,
+        perspective: widget.perspective,
+        aeronauticalChartConfiguration: widget.aeronauticalChartConfiguration,
       );
     },
   );
@@ -679,6 +702,9 @@ class RideMapScreen extends StatefulWidget {
     this.localRiderSymbol = riderSymbolDefault,
     this.localDisplayName = 'You',
     this.localBadgeColor = const Color(0xFF2F80ED),
+    this.perspective = RideMapPerspective.chase,
+    this.aeronauticalChartConfiguration =
+        const AeronauticalChartConfiguration(),
   });
 
   final RouteStore routeStore;
@@ -796,6 +822,8 @@ class RideMapScreen extends StatefulWidget {
   final RiderSymbol localRiderSymbol;
   final String localDisplayName;
   final Color localBadgeColor;
+  final RideMapPerspective perspective;
+  final AeronauticalChartConfiguration aeronauticalChartConfiguration;
 
   @override
   State<RideMapScreen> createState() => _RideMapScreenState();
@@ -810,8 +838,23 @@ class _RideMapScreenState extends State<RideMapScreen> {
   static const _waypointSource = 'balloon-crumbs-waypoints';
   static const _positionSource = 'balloon-crumbs-position';
   static const _overlaySource = 'balloon-crumbs-overlays';
+  static const _aeronauticalChartSource = 'balloon-crumbs-aeronautical-chart';
+  static const _aeronauticalChartLayer =
+      'balloon-crumbs-aeronautical-chart-layer';
   static const _trailDirectionArrowImage =
       'balloon-crumbs-trail-direction-arrow';
+
+  bool get _isBalloonView => widget.perspective == RideMapPerspective.balloon;
+
+  CraftIconStyle get _localCraftStyle =>
+      _isBalloonView ? CraftIconStyle.balloon : widget.localMotorcycleStyle;
+
+  bool get _showAeronauticalChart =>
+      _isBalloonView &&
+      widget.aeronauticalChartConfiguration.isCurrentAt(DateTime.now());
+
+  bool get _shouldAutoFollow =>
+      _isBalloonView ? _effectivePosition != null : _isMoving;
 
   /// How many of the direction arrows the planned route may claim before the
   /// live cues take the rest. Half the budget: enough to read the route's
@@ -1233,7 +1276,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         // Riding without a GPX is a first-class mode (#124), so following the
         // rider is driven by position and heading alone. A route changes what is
         // drawn, never whether the camera tracks the bike.
-        _navigationMode = _isMoving;
+        _navigationMode = _shouldAutoFollow;
         // A route load reframes the map, so any viewport follow mode had is gone.
         _releaseNavigationViewport();
         // Once we have a position, keep the map canvas at its navigation size.
@@ -1287,15 +1330,19 @@ class _RideMapScreenState extends State<RideMapScreen> {
     // The group mini-map owns its own ValueListenableBuilder below. This
     // avoids relying on a parent platform-map rebuild to notice rider updates,
     // which left the portrait mini-map absent in the live simulator.
-    final canShowGroupMiniMap = widget.overlayMarkers != null;
+    final canShowGroupMiniMap =
+        !_isBalloonView && widget.overlayMarkers != null;
     final groupMiniMapWidth = landscape ? 196.0 : 150.0;
     final groupMiniMapHeight = landscape ? 116.0 : 104.0;
     final showRideMenu = hideChrome && widget.onOpenRideMenu != null;
     // A route can contain manoeuvres before the device has a usable location.
     // The guidance banner is only composed into the band while guidance is
     // actually visible, so nothing reserves space for a banner that is absent.
-    final routeStartOfferDistance = _routeStartOfferDistance;
+    final routeStartOfferDistance = _isBalloonView
+        ? null
+        : _routeStartOfferDistance;
     final hasGuidance =
+        !_isBalloonView &&
         routeStartOfferDistance == null &&
         widget.rideStarted &&
         _navigationGuidance.value.isVisible;
@@ -1311,7 +1358,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               toolbarHeight: landscape ? 42 : 52,
               titleSpacing: 12,
               title: Text(
-                _route?.name ?? 'Navigation',
+                _isBalloonView ? 'Balloon' : (_route?.name ?? 'Navigation'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: landscape
@@ -1319,7 +1366,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     : null,
               ),
               actions: [
-                if (widget.canEditRoute)
+                if (!_isBalloonView && widget.canEditRoute)
                   IconButton(
                     tooltip: 'Plan a destination',
                     visualDensity: compactDensity,
@@ -1333,7 +1380,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   ),
                 // Route-derived: importing is the action that creates a
                 // route, so it is offered only while there is none.
-                if (widget.canEditRoute && _route == null)
+                if (!_isBalloonView && widget.canEditRoute && _route == null)
                   IconButton(
                     tooltip: 'Import GPX route',
                     visualDensity: compactDensity,
@@ -1347,7 +1394,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   ),
                 // Route-derived: there is nothing to hand to another
                 // navigation app or write to a GPX without one.
-                if (_route != null)
+                if (!_isBalloonView && _route != null)
                   IconButton(
                     tooltip: 'Navigate or export route',
                     visualDensity: compactDensity,
@@ -1364,7 +1411,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   visualDensity: compactDensity,
                   // Route-derived: fitting the whole plan needs a plan. The
                   // rider's own framing is the follow camera's job.
-                  onPressed: _route == null ? null : _showWholeRoute,
+                  onPressed: _isBalloonView || _route == null
+                      ? null
+                      : _showWholeRoute,
                   icon: const Icon(Icons.fit_screen),
                 ),
                 PopupMenuButton<_MapAction>(
@@ -1375,7 +1424,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                       : const EdgeInsets.all(8),
                   onSelected: _handleMenuAction,
                   itemBuilder: (context) => [
-                    if (widget.canEditRoute) ...[
+                    if (!_isBalloonView && widget.canEditRoute) ...[
                       PopupMenuItem(
                         value: _MapAction.importGpx,
                         // Route-derived wording only: the action itself is
@@ -1391,26 +1440,26 @@ class _RideMapScreenState extends State<RideMapScreen> {
                         child: Text('Load demo route'),
                       ),
                     ],
-                    PopupMenuItem(
-                      value: _MapAction.speedLimitDisplay,
-                      child: Row(
-                        children: [
-                          Icon(
-                            _speedLimitDisplay.enabled
-                                ? Icons.check_box
-                                : Icons.check_box_outline_blank,
-                          ),
-                          const SizedBox(width: 10),
-                          // A popup menu constrains its items, and this label
-                          // was wide enough to be clipped without flexing.
-                          const Expanded(
-                            child: Text('Show mapped speed limit'),
-                          ),
-                        ],
+                    if (!_isBalloonView)
+                      PopupMenuItem(
+                        value: _MapAction.speedLimitDisplay,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _speedLimitDisplay.enabled
+                                  ? Icons.check_box
+                                  : Icons.check_box_outline_blank,
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text('Show mapped speed limit'),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     // Route-derived: both read manoeuvres off the plan.
-                    if (_route?.maneuvers.isNotEmpty ?? false) ...[
+                    if (!_isBalloonView &&
+                        (_route?.maneuvers.isNotEmpty ?? false)) ...[
                       const PopupMenuItem(
                         value: _MapAction.maneuverList,
                         child: Text('All turns for this route'),
@@ -1424,7 +1473,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                       ),
                     // Route-derived: the offline region is the route corridor,
                     // so there is no bounded area to download without one.
-                    if (_route != null)
+                    if (!_isBalloonView && _route != null)
                       PopupMenuItem(
                         value: _MapAction.downloadOffline,
                         enabled:
@@ -1441,7 +1490,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
                       child: Text('Clear downloaded map data'),
                     ),
                     // Route-derived: nothing to remove without one.
-                    if (widget.canEditRoute && _route != null)
+                    if (!_isBalloonView &&
+                        widget.canEditRoute &&
+                        _route != null)
                       const PopupMenuItem(
                         value: _MapAction.removeRoute,
                         child: Text('Remove route'),
@@ -1468,6 +1519,34 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     child: _buildMap(),
                   ),
                 ),
+                if (_isBalloonView && widget.navigationPosition != null)
+                  Positioned(
+                    key: const Key('balloon-altitude-position'),
+                    left: overlayLeft + 12,
+                    top: overlayTop + 12,
+                    child: ValueListenableBuilder<MapNavigationPosition?>(
+                      valueListenable: widget.navigationPosition!,
+                      builder: (context, fix, _) => _BalloonAltitudeCard(
+                        fix: fix,
+                        distanceUnit: widget.distanceUnit,
+                      ),
+                    ),
+                  ),
+                if (_isBalloonView)
+                  Positioned(
+                    key: const Key('aeronautical-chart-status-position'),
+                    right: overlayRight + 12,
+                    top: overlayTop + (landscape ? 12 : 118),
+                    child: _AeronauticalChartBadge(
+                      configuration: widget.aeronauticalChartConfiguration,
+                      now: DateTime.now(),
+                      onTap: () => _showMessage(
+                        widget.aeronauticalChartConfiguration.explanationAt(
+                          DateTime.now(),
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned.fill(
                   child: _buildRideChrome(
                     landscape: landscape,
@@ -1493,7 +1572,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
                 // it gives way. Route entry stays reachable from the ride
                 // menu's "Change route" and from the app bar whenever this card
                 // is showing.
-                if (_route == null &&
+                if (!_isBalloonView &&
+                    _route == null &&
                     !hideChrome &&
                     !widget.rideStarted &&
                     !_waitingRoutePromptDismissed)
@@ -1520,7 +1600,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                 // that announces it and a border that holds for the rest of the
                 // approach (#446). The announcement sits at the top-centre,
                 // clear of the rider marker and the bottom navigation rails.
-                if (widget.enforcementAlert != null)
+                if (!_isBalloonView && widget.enforcementAlert != null)
                   Positioned.fill(
                     child: ValueListenableBuilder<EnforcementAlert?>(
                       valueListenable: widget.enforcementAlert!,
@@ -1731,7 +1811,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
             )
           : null;
       final routeProgressPanel =
-          !widget.showRouteProgress ||
+          _isBalloonView ||
+              !widget.showRouteProgress ||
               _route == null ||
               _progressGeometry.totalMeters <= 0
           ? null
@@ -1955,7 +2036,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       // The speed sign owns its own slot at the edge of the band, clear of the
       // action row: portrait puts it under the actions and hard right, landscape
       // in the right-hand rail away from the centre column (#125).
-      final speedLimit = !widget.rideStarted
+      final speedLimit = !widget.rideStarted || _isBalloonView
           ? null
           : KeyedSubtree(
               key: const Key('posted-speed-limit-position'),
@@ -2319,7 +2400,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       currentPosition: _effectivePosition,
       riders: groupRiders,
       riderCount: groupSize,
-      localMotorcycleStyle: widget.localMotorcycleStyle,
+      localMotorcycleStyle: _localCraftStyle,
       localRiderSymbol: widget.localRiderSymbol,
       localDisplayName: widget.localDisplayName,
       onTap: widget.onOpenRoster,
@@ -2335,8 +2416,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
   Widget _buildMap() {
     if (_basemap.usesMapLibre) return _buildMapLibreMap();
 
-    final route = _route;
-    final points = route?.allPoints.map(_latLng).toList(growable: false) ?? [];
+    final route = _isBalloonView ? null : _route;
+    final framingPoints = _isBalloonView
+        ? _balloonGroundTrackPoints
+        : route?.allPoints.toList(growable: false) ?? const <GeoPoint>[];
+    final points = framingPoints.map(_latLng).toList(growable: false);
     // With no route the rider's own position is the framing (#124); the UK-wide
     // overview is only for a map that has neither.
     final rider = _effectivePosition;
@@ -2353,7 +2437,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
             initialCenter:
                 points.firstOrNull ??
                 (rider == null ? const LatLng(54.5, -3.2) : _latLng(rider)),
-            initialZoom: points.isEmpty && rider == null ? 5 : 14,
+            initialZoom: points.isEmpty && rider == null
+                ? 5
+                : _isBalloonView
+                ? 11
+                : 14,
             onMapEvent: _onFlutterMapEvent,
           );
 
@@ -2371,6 +2459,15 @@ class _RideMapScreenState extends State<RideMapScreen> {
               cache: widget.offlineTileCache,
             ),
           ),
+        if (_showAeronauticalChart)
+          TileLayer(
+            key: const Key('aeronautical-chart-tile-layer'),
+            urlTemplate: widget.aeronauticalChartConfiguration.tileUrlTemplate,
+            userAgentPackageName: 'me.osholt.balloon_crumbs',
+            tms: widget.aeronauticalChartConfiguration.usesTms,
+            tileBuilder: (context, tile, _) =>
+                Opacity(opacity: 0.82, child: tile),
+          ),
         // Actual travelled trails are drawn whether or not a route is loaded,
         // and the leader's trail sits under the remaining planned route so both
         // stay readable where they coincide. Completed *planned* geometry is
@@ -2380,9 +2477,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
           PolylineLayer(
             polylines: [
               ..._trailPolylines(dashed: false),
-              ..._progressGeometry.remainingPaths.map(
-                (path) => _routePolyline(path, RouteTrailStyle.routeAhead),
-              ),
+              if (!_isBalloonView)
+                ..._progressGeometry.remainingPaths.map(
+                  (path) => _routePolyline(path, RouteTrailStyle.routeAhead),
+                ),
               ..._trailPolylines(dashed: true),
             ],
           ),
@@ -2447,7 +2545,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   // The marker follows the bike, not the plan (#124).
                   navigationMode: _isMoving,
                   headingDegrees: _lastHeadingDegrees,
-                  style: widget.localMotorcycleStyle,
+                  style: _localCraftStyle,
                   symbol: widget.localRiderSymbol,
                   displayName: widget.localDisplayName,
                   badgeColor: widget.localBadgeColor,
@@ -2520,7 +2618,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   Widget _buildMapLibreMap() {
-    final planned = _route?.allPoints.toList(growable: false) ?? const [];
+    final planned = _isBalloonView
+        ? _balloonGroundTrackPoints
+        : _route?.allPoints.toList(growable: false) ?? const [];
     // As above: no route still frames the rider rather than the whole country.
     final routePoints = planned.isNotEmpty ? planned : [?_effectivePosition];
     final initial = routePoints.isEmpty
@@ -2530,7 +2630,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               routePoints.first.latitude,
               routePoints.first.longitude,
             ),
-            zoom: routePoints.length == 1 ? 14 : 11,
+            zoom: routePoints.length == 1 ? (_isBalloonView ? 11 : 14) : 11,
           );
     return Stack(
       children: [
@@ -3065,14 +3165,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
             const Duration(milliseconds: 250);
     if (refreshMapLibrePosition) _lastMapLibrePositionSyncAt = progressNow;
 
-    if (!_isMoving) _autoFollowSuppressed = false;
+    if (!_shouldAutoFollow) _autoFollowSuppressed = false;
     final offerEmergencyActions =
         _emergencyAlertSent &&
         !_isMoving &&
         !_emergencyActionsOpen &&
         !_emergencyActionsDismissed;
     // Both are driven by the bike, not by whether a route was imported (#124).
-    final autoFollow = _isMoving && !_autoFollowSuppressed;
+    final autoFollow = _shouldAutoFollow && !_autoFollowSuppressed;
     final enableNavigationMode = autoFollow && !_navigationMode;
     final activateNavigationCanvas =
         position != null && !_navigationCanvasActive;
@@ -3127,6 +3227,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   /// reported accuracy and heading, and a position without them cannot be tested
   /// for confidence at all (#126).
   void _observeSpeedLimit(MapNavigationPosition? fix) {
+    if (_isBalloonView) return;
     if (fix == null) return;
     final location = SpeedLimitLocation(
       point: fix.point,
@@ -3144,6 +3245,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   void _updateNavigationGuidance(GeoPoint? position) {
+    if (_isBalloonView) {
+      final current = _navigationGuidance.value;
+      if (current.state != NavigationGuidanceState.noRoute) {
+        _navigationGuidance.value =
+            const NavigationGuidanceAssessment.noRoute();
+      }
+      return;
+    }
     final navigationRoute = _connectorRoute ?? _route;
     final next = _navigationGuidancePlanner.assess(
       route: navigationRoute,
@@ -3190,7 +3299,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
             event.source == MapEventSource.multiFingerGestureStart ||
             event.source == MapEventSource.doubleTap ||
             event.source == MapEventSource.scrollWheel)) {
-      _stopFollowing(suppressAutomatic: _isMoving);
+      _stopFollowing(suppressAutomatic: _shouldAutoFollow);
     }
     // Every camera change, including the ones this app asked for: the framing is
     // measured, so the button appears and disappears from where the map actually
@@ -3230,13 +3339,13 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   void _suppressFollowForMapGesture() {
     if (_navigationMode) {
-      _stopFollowing(suppressAutomatic: _isMoving);
+      _stopFollowing(suppressAutomatic: _shouldAutoFollow);
     }
   }
 
   Future<void> _toggleNavigationMode() async {
     if (_navigationMode) {
-      _stopFollowing(suppressAutomatic: _isMoving);
+      _stopFollowing(suppressAutomatic: _shouldAutoFollow);
       return;
     }
     if (_effectivePosition == null) {
@@ -3484,7 +3593,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   void _showWholeRoute() {
-    _stopFollowing(suppressAutomatic: _isMoving);
+    _stopFollowing(suppressAutomatic: _shouldAutoFollow);
     _fitRoute();
   }
 
@@ -3492,6 +3601,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
     bool force = false,
     Duration? transitionDuration,
   }) async {
+    if (_isBalloonView) {
+      return _followBalloonCamera(
+        force: force,
+        transitionDuration: transitionDuration,
+      );
+    }
     if (!_navigationMode) return;
     final position = _effectivePosition;
     if (position == null) return;
@@ -3617,6 +3732,86 @@ class _RideMapScreenState extends State<RideMapScreen> {
     }
   }
 
+  /// A balloon needs geographic context, not a tilted road corridor. It stays
+  /// north-up at a deliberately wider scale, centred on the aircraft, while a
+  /// pan still hands control back to the pilot until they tap Follow me.
+  Future<void> _followBalloonCamera({
+    bool force = false,
+    Duration? transitionDuration,
+  }) async {
+    if (!_navigationMode) return;
+    final position = _effectivePosition;
+    if (position == null) return;
+    if (_cameraUpdateInFlight) {
+      _cameraUpdateQueued = true;
+      return;
+    }
+    final now = DateTime.now();
+    final previous = _lastCameraUpdateAt;
+    if (!force &&
+        previous != null &&
+        now.difference(previous) < const Duration(milliseconds: 700)) {
+      return;
+    }
+    _lastCameraUpdateAt = now;
+    _cameraUpdateInFlight = true;
+    const zoom = 11.0;
+    _commandedViewport = (target: position, zoom: zoom);
+    widget.onNavigationViewportChanged?.call(
+      NavigationCameraViewport(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        zoom: zoom,
+        tilt: 0,
+        bearing: 0,
+        sourceViewportHeightPixels: _mapViewportHeightPixels,
+        sourceViewportWidthPixels: _mapViewportWidthPixels,
+        riderViewportFraction: 0.5,
+        riderHorizontalViewportFraction: 0.5,
+        leftHandTraffic: true,
+        mapStyleUrl: _basemap.styleUrl,
+        mapStyleJson: widget.mapStyleString,
+      ),
+    );
+    try {
+      if (_basemap.usesMapLibre) {
+        final controller = _mapLibreController;
+        if (controller == null) return;
+        await controller.easeCamera(
+          ml.CameraUpdate.newCameraPosition(
+            ml.CameraPosition(
+              target: ml.LatLng(position.latitude, position.longitude),
+              zoom: zoom,
+              tilt: 0,
+              bearing: 0,
+            ),
+          ),
+          duration: transitionDuration ?? const Duration(milliseconds: 480),
+        );
+      } else {
+        _mapController.moveAndRotateAnimatedRaw(
+          _latLng(position),
+          zoom,
+          0,
+          offset: Offset.zero,
+          duration: transitionDuration ?? const Duration(milliseconds: 480),
+          curve: Curves.easeInOutCubic,
+          hasGesture: false,
+          source: MapEventSource.mapController,
+        );
+      }
+    } on StateError {
+      // The first fix can precede attachment of the fallback map.
+    } finally {
+      _cameraUpdateInFlight = false;
+      _scheduleCameraFramingRefresh();
+      if (_cameraUpdateQueued) {
+        _cameraUpdateQueued = false;
+        if (mounted) unawaited(_followBalloonCamera(force: true));
+      }
+    }
+  }
+
   /// The badge for one overlay marker in the flutter_map fallback.
   ///
   /// A reported hazard draws [HazardMapSymbolPainter] - the same painter the
@@ -3695,7 +3890,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           (
             symbol: widget.localRiderSymbol,
             displayName: widget.localDisplayName,
-            style: widget.localMotorcycleStyle,
+            style: _localCraftStyle,
           ),
           for (final overlay
               in widget.overlayMarkers?.value ?? const <MapOverlayMarker>[])
@@ -3725,6 +3920,23 @@ class _RideMapScreenState extends State<RideMapScreen> {
     _mapLibreStyleReady = false;
     try {
       await _registerMarkerImages(controller);
+      if (_showAeronauticalChart) {
+        final chart = widget.aeronauticalChartConfiguration;
+        await controller.addSource(
+          _aeronauticalChartSource,
+          ml.RasterSourceProperties(
+            tiles: [chart.tileUrlTemplate],
+            tileSize: 256,
+            scheme: chart.tileScheme.mapLibreValue,
+            attribution: chart.attribution,
+          ),
+        );
+        await controller.addRasterLayer(
+          _aeronauticalChartSource,
+          _aeronauticalChartLayer,
+          const ml.RasterLayerProperties(rasterOpacity: 0.82),
+        );
+      }
       // Solid trails are drawn before the planned route so the leader's wider
       // trail reads as a corridor beneath it rather than hiding it.
       await controller.addGeoJsonSource(
@@ -3732,6 +3944,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         _riderTrailGeoJson(),
       );
       await _addTrailLayers(controller, RiderTrailKind.leader);
+      await _addTrailLayers(controller, RiderTrailKind.balloonGroundTrack);
       await _addTrailLayers(controller, RiderTrailKind.rider);
       await controller.addGeoJsonSource(
         _remainingRouteSource,
@@ -3816,7 +4029,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         ml.SymbolLayerProperties(
           iconImage: widget.localRiderSymbol.imageName(
             widget.localDisplayName,
-            widget.localMotorcycleStyle,
+            _localCraftStyle,
           ),
           // Dark on a light badge: see [RouteTrailStyle.markerGlyph] (#133).
           iconColor: RouteTrailStyle.markerGlyphHex,
@@ -4037,7 +4250,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   Map<String, dynamic> _remainingRouteGeoJson() => MapGeoJson.lines(
-    _progressGeometry.remainingPaths,
+    _isBalloonView
+        ? const <List<GeoPoint>>[]
+        : _progressGeometry.remainingPaths,
     idPrefix: 'remaining-route',
   );
 
@@ -4047,7 +4262,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     final connector = _routeStartConnector;
     return [
       ...(widget.riderTrails?.value ?? const <MapOverlayTrace>[]),
-      if (connector != null)
+      if (!_isBalloonView && connector != null)
         MapOverlayTrace(
           id: 'route-start-connector',
           points: connector.paths
@@ -4058,6 +4273,13 @@ class _RideMapScreenState extends State<RideMapScreen> {
         ),
     ].where((trace) => trace.points.length >= 2).toList(growable: false);
   }
+
+  /// The aircraft's actual path projected onto the ground, never the chase
+  /// road route. This is the geometry the wider balloon viewport frames.
+  List<GeoPoint> get _balloonGroundTrackPoints => [
+    for (final trace in _visibleRiderTrails)
+      if (trace.kind == RiderTrailKind.balloonGroundTrack) ...trace.points,
+  ];
 
   Polyline _routePolyline(List<GeoPoint> path, RouteLineStyle style) =>
       Polyline(
@@ -4105,15 +4327,16 @@ class _RideMapScreenState extends State<RideMapScreen> {
     final selected = selectTrailDirectionArrows<_TrailArrowStyle>(
       sampler: _trailDirectionArrowSampler,
       sources: [
-        TrailDirectionArrowSource(
-          paths: _progressGeometry.remainingPaths,
-          reserve: _plannedRouteArrowReserve,
-          style: _TrailArrowStyle(
-            color: RouteTrailStyle.routeAhead.color,
-            idPrefix: 'route-ahead',
-            semanticLabel: 'Route direction',
+        if (!_isBalloonView)
+          TrailDirectionArrowSource(
+            paths: _progressGeometry.remainingPaths,
+            reserve: _plannedRouteArrowReserve,
+            style: _TrailArrowStyle(
+              color: RouteTrailStyle.routeAhead.color,
+              idPrefix: 'route-ahead',
+              semanticLabel: 'Route direction',
+            ),
           ),
-        ),
         for (final trace in byImportance)
           TrailDirectionArrowSource(
             paths: [trace.points],
@@ -4140,6 +4363,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     // The route-start connector is the rider's own live instruction, so its
     // direction arrows are the last thing the budget may drop.
     RiderTrailKind.routeStartConnector => 0,
+    RiderTrailKind.balloonGroundTrack => 1,
     RiderTrailKind.leader => 1,
     RiderTrailKind.rider => 3,
   };
@@ -4178,7 +4402,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   };
 
   Map<String, dynamic> _waypointGeoJson() => MapGeoJson.points(
-    _route?.waypoints
+    (_isBalloonView ? null : _route)?.waypoints
             .take(500)
             .indexed
             .map(
@@ -4641,7 +4865,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         _effectivePosition,
       );
       _initialCameraPositioned = false;
-      if (_isMoving && !_autoFollowSuppressed) {
+      if (_shouldAutoFollow && !_autoFollowSuppressed) {
         _navigationMode = true;
         _navigationCanvasActive = true;
       }
@@ -4807,7 +5031,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
   /// fallback a route-less ride opened on a UK-wide overview and stayed there
   /// until the bike moved fast enough to arm the follow camera (#124).
   void _fitRoute() {
-    final planned = _route?.allPoints.toList(growable: false) ?? const [];
+    final planned = _isBalloonView
+        ? _balloonGroundTrackPoints
+        : _route?.allPoints.toList(growable: false) ?? const [];
     final routePoints = planned.isNotEmpty ? planned : [?_effectivePosition];
     if (_basemap.usesMapLibre) {
       final controller = _mapLibreController;
@@ -4818,7 +5044,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         if (!MapCameraCommand.isUsable(
           latitude: only.latitude,
           longitude: only.longitude,
-          zoom: 14,
+          zoom: _isBalloonView ? 11 : 14,
         )) {
           return;
         }
@@ -4826,7 +5052,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           controller.animateCamera(
             ml.CameraUpdate.newLatLngZoom(
               ml.LatLng(only.latitude, only.longitude),
-              14,
+              _isBalloonView ? 11 : 14,
             ),
           ),
         );
@@ -4851,7 +5077,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     if (points.isEmpty) return;
     _initialCameraPositioned = true;
     if (points.length == 1) {
-      _mapController.move(points.single, 14);
+      _mapController.move(points.single, _isBalloonView ? 11 : 14);
     } else {
       _mapController.fitCamera(
         CameraFit.bounds(
@@ -5301,6 +5527,12 @@ class MapNavigationPosition {
     this.speedMetersPerSecond,
     this.headingDegrees,
     this.accuracyMeters,
+    this.altitudeMeters,
+    this.altitudeSource = AltitudeSource.unknown,
+    this.altitudeDatum = AltitudeDatum.unknown,
+    this.altitudeAccuracyMeters,
+    this.verticalSpeedMetersPerSecond,
+    this.altitudeRecordedAt,
   });
 
   final GeoPoint point;
@@ -5308,6 +5540,12 @@ class MapNavigationPosition {
   final double? speedMetersPerSecond;
   final double? headingDegrees;
   final double? accuracyMeters;
+  final double? altitudeMeters;
+  final AltitudeSource altitudeSource;
+  final AltitudeDatum altitudeDatum;
+  final double? altitudeAccuracyMeters;
+  final double? verticalSpeedMetersPerSecond;
+  final DateTime? altitudeRecordedAt;
 
   bool get isMoving => (speedMetersPerSecond ?? 0) >= 2.5;
 
@@ -5319,7 +5557,13 @@ class MapNavigationPosition {
       recordedAt == other.recordedAt &&
       speedMetersPerSecond == other.speedMetersPerSecond &&
       headingDegrees == other.headingDegrees &&
-      accuracyMeters == other.accuracyMeters;
+      accuracyMeters == other.accuracyMeters &&
+      altitudeMeters == other.altitudeMeters &&
+      altitudeSource == other.altitudeSource &&
+      altitudeDatum == other.altitudeDatum &&
+      altitudeAccuracyMeters == other.altitudeAccuracyMeters &&
+      verticalSpeedMetersPerSecond == other.verticalSpeedMetersPerSecond &&
+      altitudeRecordedAt == other.altitudeRecordedAt;
 
   @override
   int get hashCode => Object.hash(
@@ -5329,6 +5573,12 @@ class MapNavigationPosition {
     speedMetersPerSecond,
     headingDegrees,
     accuracyMeters,
+    altitudeMeters,
+    altitudeSource,
+    altitudeDatum,
+    altitudeAccuracyMeters,
+    verticalSpeedMetersPerSecond,
+    altitudeRecordedAt,
   );
 }
 
@@ -7665,6 +7915,232 @@ class _EnforcementEmphasis extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _AeronauticalChartBadge extends StatelessWidget {
+  const _AeronauticalChartBadge({
+    required this.configuration,
+    required this.now,
+    required this.onTap,
+  });
+
+  final AeronauticalChartConfiguration configuration;
+  final DateTime now;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = configuration.isCurrentAt(now);
+    return Semantics(
+      button: true,
+      label: configuration.explanationAt(now),
+      child: Material(
+        key: const Key('aeronautical-chart-status'),
+        color: current ? const Color(0xE6252E39) : const Color(0xE63B3030),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 170),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        current ? Icons.layers_outlined : Icons.layers_clear,
+                        size: 16,
+                        color: current
+                            ? const Color(0xFF6ED89A)
+                            : const Color(0xFFFFC857),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          configuration.statusLabelAt(now),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (current) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      configuration.attribution,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFC6D0DA),
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BalloonAltitudeCard extends StatelessWidget {
+  const _BalloonAltitudeCard({required this.fix, required this.distanceUnit});
+
+  final MapNavigationPosition? fix;
+  final DistanceUnit distanceUnit;
+
+  @override
+  Widget build(BuildContext context) {
+    final reading = fix;
+    final altitude = reading?.altitudeMeters;
+    final age = reading == null
+        ? null
+        : DateTime.now()
+              .difference(reading.altitudeRecordedAt ?? reading.recordedAt)
+              .abs();
+    final primary = altitude == null
+        ? 'Altitude unavailable'
+        : distanceUnit == DistanceUnit.miles
+        ? '${(altitude * 3.28084).round()} ft'
+        : '${altitude.round()} m';
+    final trend = _trend(reading?.verticalSpeedMetersPerSecond);
+    final accuracy = reading?.altitudeAccuracyMeters;
+    final details = [
+      if (reading != null && altitude != null) _source(reading.altitudeSource),
+      if (reading != null && altitude != null) _datum(reading.altitudeDatum),
+      if (accuracy != null)
+        distanceUnit == DistanceUnit.miles
+            ? '±${(accuracy * 3.28084).round()} ft'
+            : '±${accuracy.round()} m',
+      if (age != null) _age(age),
+    ];
+    return Semantics(
+      container: true,
+      label: [
+        'Balloon altitude $primary',
+        ?trend,
+        ...details,
+        'Not terrain clearance',
+      ].join(', '),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 248),
+        child: Card(
+          key: const Key('balloon-altitude-card'),
+          color: const Color(0xE6252E39),
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 11, 14, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'BALLOON ALTITUDE',
+                  style: TextStyle(
+                    color: Color(0xFF9EABB9),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        primary,
+                        key: const Key('balloon-altitude-value'),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                    ),
+                    if (trend != null) ...[
+                      const SizedBox(width: 10),
+                      Text(
+                        trend,
+                        key: const Key('balloon-vertical-trend'),
+                        style: const TextStyle(
+                          color: Color(0xFF6ED89A),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (details.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    details.join(' · '),
+                    key: const Key('balloon-altitude-quality'),
+                    style: const TextStyle(
+                      color: Color(0xFFD3DAE2),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 3),
+                const Text(
+                  'Not terrain clearance',
+                  style: TextStyle(color: Color(0xFFFFC857), fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _trend(double? metresPerSecond) {
+    if (metresPerSecond == null) return null;
+    final arrow = metresPerSecond > 0.15
+        ? '↑'
+        : metresPerSecond < -0.15
+        ? '↓'
+        : '→';
+    final magnitude = metresPerSecond.abs();
+    return distanceUnit == DistanceUnit.miles
+        ? '$arrow ${(magnitude * 196.8504).round()} ft/min'
+        : '$arrow ${magnitude.toStringAsFixed(1)} m/s';
+  }
+
+  static String _source(AltitudeSource source) => switch (source) {
+    AltitudeSource.gnss => 'GNSS',
+    AltitudeSource.barometric => 'barometric',
+    AltitudeSource.unknown => 'source unknown',
+  };
+
+  static String _datum(AltitudeDatum datum) => switch (datum) {
+    AltitudeDatum.wgs84Geoid => 'MSL geoid',
+    AltitudeDatum.wgs84Ellipsoid => 'WGS84 ellipsoid',
+    AltitudeDatum.relativeToLaunch => 'relative to launch',
+    AltitudeDatum.unknown => 'datum unknown',
+  };
+
+  static String _age(Duration age) {
+    if (age.inSeconds < 2) return 'fix now';
+    if (age.inMinutes < 1) return 'fix ${age.inSeconds}s ago';
+    if (age.inHours < 1) return 'fix ${age.inMinutes}m ago';
+    return 'fix ${age.inHours}h ago';
   }
 }
 

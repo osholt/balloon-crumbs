@@ -91,6 +91,11 @@ if [ -z "${BALLOON_CRUMBS_API_BASE_URL:-}" ]; then
   echo "warning: BALLOON_CRUMBS_API_BASE_URL is unset - this build cannot reach a relay." >&2
   echo "         Nearby transport still works. Export it to point at a deployed relay." >&2
 fi
+if [ -z "${BALLOON_CRUMBS_OPENAIP_API_KEY:-}" ]; then
+  echo "build-and-upload: BALLOON_CRUMBS_OPENAIP_API_KEY is required for tester releases." >&2
+  echo "  Supply it transiently from the OpenAIP API client; never commit it." >&2
+  exit 1
+fi
 
 cd "$mobile_dir"
 flutter pub get
@@ -104,6 +109,7 @@ flutter build ipa \
   --dart-define=BALLOON_CRUMBS_DISTRIBUTION_TRACK="$BALLOON_CRUMBS_DISTRIBUTION_TRACK" \
   --dart-define=BALLOON_CRUMBS_BUILD_TIMESTAMP="$BALLOON_CRUMBS_BUILD_TIMESTAMP" \
   --dart-define=BALLOON_CRUMBS_API_BASE_URL="${BALLOON_CRUMBS_API_BASE_URL:-}" \
+  --dart-define=BALLOON_CRUMBS_OPENAIP_API_KEY="$BALLOON_CRUMBS_OPENAIP_API_KEY" \
   --dart-define=BALLOON_CRUMBS_PUSH_ENABLED=false \
   --dart-define=BALLOON_CRUMBS_RIDE_DIAGNOSTICS=true
 
