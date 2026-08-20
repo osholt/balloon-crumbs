@@ -26,10 +26,42 @@ for argument in "$@"; do
 done
 [ "$build_number" = "--no-upload" ] && build_number=""
 
+# Remembered identifiers, so the key id and issuer are set once rather than
+# exported before every build. Neither is a secret; the private key stays in
+# ~/.appstoreconnect and is never read by this file.
+config="${XDG_CONFIG_HOME:-$HOME/.config}/balloon-crumbs/testflight.env"
+if [ -f "$config" ]; then
+  # shellcheck disable=SC1090
+  . "$config"
+  export APPSTORE_CONNECT_API_KEY_ID APPSTORE_CONNECT_API_ISSUER_ID
+fi
+
 if [ -z "$build_number" ]; then
-  # The build number only has to be unique and increasing within the app record.
-  build_number="$(awk -F'+' '/^version:/ {print $2 + 1}' "$mobile_dir/pubspec.yaml")"
-  echo "No build number given; using $build_number (pubspec + 1)."
+  # Apple is the only thing that knows which numbers are already spent, so ask
+  # it rather than guessing from the pubspec. Tail End Charlie uses the GitHub
+  # run number for this, which is monotonic because CI increments it; there is no
+  # CI upload path here.
+  if build_number="$("$repo_root/apps/server/.venv/bin/python" \
+      "$repo_root/tools/testflight/next_build_number.py" "$bundle_id" 2>/tmp/next-build.log)"; then
+    echo "Next unused build number, per App Store Connect: $build_number"
+  else
+    sed 's/^/  /' /tmp/next-build.log >&2
+    # The pubspec is a guess, and a wrong guess is rejected on upload with an
+    # error that does not mention build numbers. Say so rather than pretend.
+    build_number="$(awk -F'+' '/^version:/ {print $2 + 1}' "$mobile_dir/pubspec.yaml")"
+    echo "warning: falling back to pubspec + 1 = $build_number, which may already be taken." >&2
+    if [ -d "$HOME/.appstoreconnect/private_keys" ]; then
+      echo "  Keys available:" >&2
+      for key in "$HOME/.appstoreconnect/private_keys"/AuthKey_*.p8; do
+        [ -f "$key" ] || continue
+        id="$(basename "$key" .p8)"; id="${id#AuthKey_}"
+        echo "    $id" >&2
+      done
+      echo "  Record the one to use, once:" >&2
+      echo "    mkdir -p \"$(dirname "$config")\"" >&2
+      echo "    printf 'APPSTORE_CONNECT_API_KEY_ID=%s\\nAPPSTORE_CONNECT_API_ISSUER_ID=%s\\n' <KEY_ID> <ISSUER_ID> > \"$config\"" >&2
+    fi
+  fi
 fi
 
 case "$build_number" in

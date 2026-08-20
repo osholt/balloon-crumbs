@@ -51,7 +51,6 @@ import argparse
 import json
 import math
 import pathlib
-import sys
 import urllib.request
 
 # Ashton Court launch field, the Fiesta's main ascent site.
@@ -180,7 +179,9 @@ def bearing_deg(first: tuple[float, float], second: tuple[float, float]) -> floa
     lat2, lon2 = math.radians(second[0]), math.radians(second[1])
     delta = lon2 - lon1
     y = math.sin(delta) * math.cos(lat2)
-    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(delta)
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(
+        delta
+    )
     return (math.degrees(math.atan2(y, x)) + 360) % 360
 
 
@@ -231,7 +232,9 @@ def road_route(
                 entry["exit"] = step["maneuver"]["exit"]
             maneuvers.append(entry)
     print(f"  {len(maneuvers)} turn manoeuvres")
-    return [(point[1], point[0]) for point in route["geometry"]["coordinates"]], maneuvers
+    return [
+        (point[1], point[0]) for point in route["geometry"]["coordinates"]
+    ], maneuvers
 
 
 def gpx_track(name: str, description: str, points: list[dict[str, float]]) -> str:
@@ -252,7 +255,7 @@ def gpx_track(name: str, description: str, points: list[dict[str, float]]) -> st
             f'      <trkpt lat="{point["latitude"]:.6f}" lon="{point["longitude"]:.6f}">'
         )
         if "elevation" in point:
-            lines.append(f'        <ele>{point["elevation"]:.1f}</ele>')
+            lines.append(f"        <ele>{point['elevation']:.1f}</ele>")
         lines.append("      </trkpt>")
     lines += ["    </trkseg>", "  </trk>", "</gpx>", ""]
     return "\n".join(lines)
@@ -287,9 +290,13 @@ def main(argv: list[str] | None = None) -> int:
         f"  {straight / 1000:.2f} km from launch on a bearing of "
         f"{bearing_deg(LAUNCH, landing):.0f} degrees"
     )
-    print(f"  {flown / 1000:.2f} km flown through the air over "
-          f"{track[-1]['seconds'] / 60:.0f} minutes")
-    print(f"  peak height {max(p['height'] for p in track):.0f} m above the launch field")
+    print(
+        f"  {flown / 1000:.2f} km flown through the air over "
+        f"{track[-1]['seconds'] / 60:.0f} minutes"
+    )
+    print(
+        f"  peak height {max(p['height'] for p in track):.0f} m above the launch field"
+    )
 
     (assets / "fiesta_balloon_flight.json").write_text(
         json.dumps(
