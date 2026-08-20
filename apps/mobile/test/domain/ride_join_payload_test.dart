@@ -60,13 +60,13 @@ void main() {
     });
 
     test('a malformed ride code', () {
-      expectRejected('tec1:93489:ride-1:$secret:$joinToken');
-      expectRejected('tec1:abcdef:ride-1:$secret:$joinToken');
-      expectRejected('tec1:9348931:ride-1:$secret:$joinToken');
+      expectRejected('bc1:93489:ride-1:$secret:$joinToken');
+      expectRejected('bc1:abcdef:ride-1:$secret:$joinToken');
+      expectRejected('bc1:9348931:ride-1:$secret:$joinToken');
     });
 
     test('a missing ride', () {
-      expectRejected('tec1:934893::$secret:$joinToken');
+      expectRejected('bc1:934893::$secret:$joinToken');
     });
 
     test('a secret too short to drive authenticated transport', () {
@@ -74,19 +74,48 @@ void main() {
       // same 16-character floor. Accepting less would produce a session that looks
       // joined and silently cannot talk to anybody.
       expectRejected(
-        'tec1:934893:ride-1:tooshort:$joinToken',
+        'bc1:934893:ride-1:tooshort:$joinToken',
         because:
             'a short secret cannot authenticate, so joining would be a lie',
       );
     });
 
     test('a join token too short', () {
-      expectRejected('tec1:934893:ride-1:$secret:short');
+      expectRejected('bc1:934893:ride-1:$secret:short');
     });
 
     test('too few or too many fields', () {
-      expectRejected('tec1:934893:ride-1:$secret');
-      expectRejected('tec1:934893:ride-1:$secret:$joinToken:extra');
+      expectRejected('bc1:934893:ride-1:$secret');
+      expectRejected('bc1:934893:ride-1:$secret:$joinToken:extra');
     });
+  });
+
+  test('an invitation written under the old name still joins', () {
+    // The rename from `tec1` cannot orphan an invitation that is already on a
+    // QR code or in somebody's messages. The format is identical, so only the
+    // label needs recognising - and every other check still has to run.
+    const secret = 'invite-secret-long-enough';
+    const joinToken = 'join-token-0123456789';
+    final legacy = RideJoinPayload.decode(
+      'tec1:934893:ride-1:$secret:$joinToken',
+    );
+    expect(legacy.rideCode, '934893');
+    expect(legacy.rideId, 'ride-1');
+    expect(legacy.inviteSecret, secret);
+    expect(legacy.joinToken, joinToken);
+
+    // Re-encoding moves it to the current name rather than preserving the old
+    // one, so an invitation only ever travels backwards once.
+    expect(legacy.encode(), startsWith('bc1:'));
+  });
+
+  test('the old name is accepted, not merely tolerated in place of checks', () {
+    // A legacy prefix must not become a way past the bounds. If it did, an
+    // attacker printing a QR code would just use the old label.
+    const joinToken = 'join-token-0123456789';
+    expect(
+      () => RideJoinPayload.decode('tec1:93489:ride-1:short:$joinToken'),
+      throwsFormatException,
+    );
   });
 }

@@ -29,10 +29,13 @@ class ObserverAccessConfiguration {
   });
 
   factory ObserverAccessConfiguration.fromEnvironment() {
-    const webValue = String.fromEnvironment(
-      'OBSERVER_WEB_BASE_URL',
-      defaultValue: 'https://relay.balloon-crumbs.invalid/observer.html',
-    );
+    // No default. This used to be `https://relay.balloon-crumbs.invalid/...`,
+    // a host RFC 2606 guarantees can never resolve - and one that could not have
+    // worked anyway, because [configurationError] requires the observer origin
+    // to match the deployed relay's. Absent produces "Observer links require an
+    // absolute HTTPS web address", which is true and actionable; a fake host
+    // produces a link that looks configured and fails when somebody taps it.
+    const webValue = String.fromEnvironment('OBSERVER_WEB_BASE_URL');
     return ObserverAccessConfiguration(
       relay: InternetRelayConfiguration.fromEnvironment(),
       webBaseUri: Uri.tryParse(webValue.trim()),
