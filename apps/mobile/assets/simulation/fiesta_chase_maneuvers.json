@@ -1,0 +1,114 @@
+{
+  "source": "OSRM navigation steps for Ashton Court to the landing field at West Town, Backwell",
+  "maneuvers": [
+    {
+      "type": "fork",
+      "latitude": 51.443748,
+      "longitude": -2.639738,
+      "modifier": "slight left"
+    },
+    {
+      "type": "new name",
+      "latitude": 51.444325,
+      "longitude": -2.636903,
+      "modifier": "slight left",
+      "name": "Kennel Lodge Road"
+    },
+    {
+      "type": "end of road",
+      "latitude": 51.44303,
+      "longitude": -2.628556,
+      "modifier": "right",
+      "name": "Clanage Road",
+      "ref": "A369"
+    },
+    {
+      "type": "turn",
+      "latitude": 51.441497,
+      "longitude": -2.626974,
+      "modifier": "slight right"
+    },
+    {
+      "type": "fork",
+      "latitude": 51.441343,
+      "longitude": -2.626971,
+      "modifier": "slight left",
+      "name": "Winterstoke Underpass",
+      "ref": "A369"
+    },
+    {
+      "type": "end of road",
+      "latitude": 51.441034,
+      "longitude": -2.624373,
+      "modifier": "right",
+      "ref": "A3029"
+    },
+    {
+      "type": "fork",
+      "latitude": 51.440934,
+      "longitude": -2.624418,
+      "modifier": "slight right",
+      "name": "Ashton Road",
+      "ref": "A3029"
+    },
+    {
+      "type": "merge",
+      "latitude": 51.440714,
+      "longitude": -2.624887,
+      "modifier": "slight left",
+      "name": "Winterstoke Underpass",
+      "ref": "A3029"
+    },
+    {
+      "type": "off ramp",
+      "latitude": 51.440685,
+      "longitude": -2.625407,
+      "modifier": "straight",
+      "name": "Ashton Road",
+      "ref": "A3029"
+    },
+    {
+      "type": "merge",
+      "latitude": 51.440029,
+      "longitude": -2.629076,
+      "modifier": "slight right",
+      "name": "Brunel Way",
+      "ref": "A370"
+    },
+    {
+      "type": "rotary",
+      "latitude": 51.433507,
+      "longitude": -2.641731,
+      "modifier": "left",
+      "ref": "A370"
+    },
+    {
+      "type": "exit rotary",
+      "latitude": 51.433046,
+      "longitude": -2.642055,
+      "modifier": "slight left",
+      "ref": "A370"
+    },
+    {
+      "type": "turn",
+      "latitude": 51.413995,
+      "longitude": -2.73914,
+      "modifier": "right",
+      "name": "Station Road"
+    },
+    {
+      "type": "turn",
+      "latitude": 51.418933,
+      "longitude": -2.748862,
+      "modifier": "left",
+      "name": "Moor Lane"
+    },
+    {
+      "type": "fork",
+      "latitude": 51.417812,
+      "longitude": -2.750136,
+      "modifier": "slight right",
+      "name": "Moor Lane"
+    }
+  ]
+}

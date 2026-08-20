@@ -8,6 +8,7 @@ import '../domain/geo_point.dart';
 // the plain domain one, so the route's is hidden rather than prefixed here.
 import '../domain/imported_route.dart' hide GeoPoint;
 import 'gpx_parser.dart';
+import 'road_routing.dart';
 
 /// One moment of the balloon's flight: where it was, how high, and when.
 class BalloonFlightSample {
@@ -93,13 +94,46 @@ class BundledFiestaFlightLoader {
   /// track - it crosses the Ashton Court estate, the A370, farmland and a
   /// railway - so the route they navigate is 13.4 km of road against 8.9 km of
   /// drift. Loading one and pretending it serves both is what the old demo did.
+  static const chaseManeuverAsset =
+      'assets/simulation/fiesta_chase_maneuvers.json';
+
   Future<ImportedRoute> loadChaseRoute() async {
     final data = await rootBundle.load(chaseRouteAsset);
-    return const GpxParser().parse(
+    final route = const GpxParser().parse(
       data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
       routeId: const Uuid().v4(),
       sourceFileName: 'fiesta_chase_route.gpx',
       importedAt: DateTime.now(),
+    );
+    return ImportedRoute(
+      id: route.id,
+      name: route.name,
+      description: route.description,
+      importedAt: route.importedAt,
+      sourceFileName: route.sourceFileName,
+      paths: route.paths,
+      waypoints: route.waypoints,
+      maneuvers: await loadChaseManeuvers(),
+    );
+  }
+
+  /// Turn instructions for the chase route, generated from OSRM steps at
+  /// authoring time.
+  ///
+  /// Bundled for the same reason the inherited demo bundles its own: a route
+  /// with no manoeuvres falls back to "follow the line on the map", and a chase
+  /// crew reading a line while driving is the situation turn prompts exist to
+  /// avoid. Fetching them at runtime would need the signal the simulator is
+  /// there to rehearse doing without.
+  Future<List<RoadRouteManeuver>> loadChaseManeuvers() async {
+    final decoded = jsonDecode(await rootBundle.loadString(chaseManeuverAsset));
+    if (decoded is! Map || decoded['maneuvers'] is! List) {
+      throw const FormatException('Bundled chase manoeuvres are invalid.');
+    }
+    return List.unmodifiable(
+      (decoded['maneuvers'] as List).whereType<Map>().map(
+        (item) => RoadRouteManeuver.fromJson(Map<String, Object?>.from(item)),
+      ),
     );
   }
 

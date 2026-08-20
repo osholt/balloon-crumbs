@@ -184,7 +184,9 @@ def bearing_deg(first: tuple[float, float], second: tuple[float, float]) -> floa
     return (math.degrees(math.atan2(y, x)) + 360) % 360
 
 
-def road_route(start: tuple[float, float], end: tuple[float, float]) -> list[tuple[float, float]]:
+def road_route(
+    start: tuple[float, float], end: tuple[float, float]
+) -> tuple[list[tuple[float, float]], list[dict[str, object]]]:
     """A driving route from the launch field to the landing field.
 
     Fetched once at authoring time rather than at runtime: the simulator has to
@@ -193,7 +195,7 @@ def road_route(start: tuple[float, float], end: tuple[float, float]) -> list[tup
     url = (
         "https://router.project-osrm.org/route/v1/driving/"
         f"{start[1]:.6f},{start[0]:.6f};{end[1]:.6f},{end[0]:.6f}"
-        "?overview=full&geometries=geojson"
+        "?overview=full&geometries=geojson&steps=true"
     )
     with urllib.request.urlopen(url, timeout=30) as response:
         payload = json.load(response)
@@ -204,7 +206,32 @@ def road_route(start: tuple[float, float], end: tuple[float, float]) -> list[tup
         f"  road route: {route['distance'] / 1000:.1f} km, "
         f"{route['duration'] / 60:.0f} min driving"
     )
-    return [(point[1], point[0]) for point in route["geometry"]["coordinates"]]
+    maneuvers = []
+    for leg in route.get("legs", []):
+        for step in leg.get("steps", []):
+            maneuver = step.get("maneuver", {})
+            location = maneuver.get("location")
+            kind = maneuver.get("type")
+            # Depart and arrive are not decisions a driver makes at a junction,
+            # and the inherited demo's manoeuvre list does not carry them.
+            if not location or kind in (None, "depart", "arrive"):
+                continue
+            entry = {
+                "type": kind,
+                "latitude": round(location[1], 6),
+                "longitude": round(location[0], 6),
+            }
+            if maneuver.get("modifier"):
+                entry["modifier"] = maneuver["modifier"]
+            if step.get("name"):
+                entry["name"] = step["name"]
+            if step.get("ref"):
+                entry["ref"] = step["ref"]
+            if kind == "roundabout" and step.get("maneuver", {}).get("exit"):
+                entry["exit"] = step["maneuver"]["exit"]
+            maneuvers.append(entry)
+    print(f"  {len(maneuvers)} turn manoeuvres")
+    return [(point[1], point[0]) for point in route["geometry"]["coordinates"]], maneuvers
 
 
 def gpx_track(name: str, description: str, points: list[dict[str, float]]) -> str:
@@ -313,7 +340,23 @@ def main(argv: list[str] | None = None) -> int:
         print("  skipped the chase road route as asked")
         return 0
 
-    road = road_route(LAUNCH, landing)
+    road, maneuvers = road_route(LAUNCH, landing)
+    # Bundled beside the route for the same reason the inherited demo bundles
+    # its own: without them the chase gets "follow the line on the map" instead
+    # of turn prompts, which is a worse demo than the one this replaced.
+    (assets / "fiesta_chase_maneuvers.json").write_text(
+        json.dumps(
+            {
+                "source": (
+                    "OSRM navigation steps for Ashton Court to the landing "
+                    "field at West Town, Backwell"
+                ),
+                "maneuvers": maneuvers,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     (assets / "fiesta_chase_route.gpx").write_text(
         gpx_track(
             "Fiesta chase, Ashton Court to the landing field",
