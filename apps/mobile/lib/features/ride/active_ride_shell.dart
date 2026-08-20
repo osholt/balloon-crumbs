@@ -971,6 +971,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   final _carPlayRouteProgressTracker = RouteProgressTracker();
   final _carPlayJourneyProgressTracker = RouteJourneyProgressTracker();
   final _trailSimplifier = const TrailDisplaySimplifier();
+  final _balloonTrailSimplifier = const TrailDisplaySimplifier(
+    preserveAltitudeProfile: true,
+  );
   final _enforcementAlert = ValueNotifier<EnforcementAlert?>(null);
 
   /// The arrival being offered to the rider, or null when there is nothing to
@@ -2207,6 +2210,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                             : location.motorcycleStyle,
                         riderSymbol: location.riderSymbol,
                         riderColor: location.riderColor,
+                        altitudeMeters: location.sample.altitudeMeters,
                         point: route_domain.GeoPoint(
                           latitude: location.sample.position.latitude,
                           longitude: location.sample.position.longitude,
@@ -2226,6 +2230,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                             : rider.motorcycleStyle,
                         riderSymbol: rider.riderSymbol,
                         riderColor: rider.riderColor,
+                        altitudeMeters: rider.altitudeMeters,
                         point: route_domain.GeoPoint(
                           latitude: rider.position.latitude,
                           longitude: rider.position.longitude,
@@ -2263,6 +2268,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             final label = [
               location.displayName,
               ?roleSuffix,
+              if (isBalloonCraft && location.altitudeMeters != null)
+                '${location.altitudeMeters!.round()} m',
               ?ageSuffix,
             ].join(' · ');
             // The roster, both maps and trails share this one identity colour.
@@ -2768,7 +2775,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   MapOverlayTrace _simplifiedForDisplay(MapOverlayTrace trace) {
-    final simplified = _trailSimplifier.simplify(trace.points);
+    final simplified =
+        (trace.kind == RiderTrailKind.balloonGroundTrack
+                ? _balloonTrailSimplifier
+                : _trailSimplifier)
+            .simplify(trace.points);
     if (simplified.length == trace.points.length) return trace;
     return MapOverlayTrace(
       id: trace.id,
@@ -3347,6 +3358,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       navigationPosition: _mapNavigationPosition,
       overlayMarkers: _mapOverlays,
       riderTrails: _riderTrails,
+      landingZone: _isSimulation && _balloonFlight != null
+          ? MapLandingZone(
+              center: route_domain.GeoPoint(
+                latitude: _balloonFlight!.landing.latitude,
+                longitude: _balloonFlight!.landing.longitude,
+              ),
+              label: 'Simulated landing zone · wind-model endpoint',
+            )
+          : null,
       groupRiderCount: widget.rideController.liveParticipants.length,
       onOpenRoster: _openRoster,
       // Deliberately not `onOpenRideMenu`. The control that reaches the other

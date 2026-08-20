@@ -42,7 +42,11 @@ class AeronauticalChartConfiguration {
           'Advisory community data. It may be incomplete or omit current '
           'NOTAMs and temporary restrictions. Verify the official NATS AIS '
           'briefing before flight. Not for primary navigation.',
-      tileScheme: AeronauticalTileScheme.tms,
+      // OpenAIP calls this a TMS service in its API description, but its own
+      // current MapLibre style consumes these z/x/y coordinates as ordinary
+      // XYZ tiles. Flipping Y here requested the wrong hemisphere and made the
+      // chart look indistinguishable from the basemap underneath it.
+      tileScheme: AeronauticalTileScheme.xyz,
     );
   }
 

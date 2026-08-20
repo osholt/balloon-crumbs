@@ -33,6 +33,8 @@ class SimulatedRiderSnapshot {
     required this.travelTrail,
     required this.motorcycleStyle,
     required this.riderColor,
+    this.altitudeMeters,
+    this.verticalSpeedMetersPerSecond,
     this.riderSymbol = riderSymbolDefault,
   });
 
@@ -48,6 +50,8 @@ class SimulatedRiderSnapshot {
   final CraftIconStyle motorcycleStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
+  final double? altitudeMeters;
+  final double? verticalSpeedMetersPerSecond;
 
   /// Ephemeral visual trace for the current simulation run. Keeping this out
   /// of the durable awareness history prevents an older demo route from being
@@ -89,12 +93,6 @@ class RideSimulationController extends ChangeNotifier {
        _selectedLocalRole = session.role {
     _agents = _buildAgents(_routeSampler.totalDistanceMeters * 0.06);
   }
-
-  /// Ashton Court's field is about 60 m above sea level, and a GNSS fix reports
-  /// altitude above the ellipsoid, not above the launch field. The flight
-  /// carries height above launch because that is what a pilot flies and what
-  /// goes out over the radio, so this is added back to make the fix honest.
-  static const _launchElevationMetres = 60.0;
 
   static const offRouteRiderId = 'ride-lab-alex';
   static const backRiderId = 'ride-lab-charlie';
@@ -147,6 +145,7 @@ class RideSimulationController extends ChangeNotifier {
   List<SimulatedRiderSnapshot> get riders => List.unmodifiable(
     _agents.map((agent) {
       final sampled = _sampleAgent(agent);
+      final flight = _balloonFlightAt(agent);
       return SimulatedRiderSnapshot(
         id: agent.id,
         displayName: agent.isLocal ? _localPerspectiveName : agent.displayName,
@@ -162,6 +161,8 @@ class RideSimulationController extends ChangeNotifier {
         motorcycleStyle: agent.motorcycleStyle,
         riderSymbol: agent.riderSymbol,
         riderColor: agent.riderColor,
+        altitudeMeters: flight?.altitudeMeters,
+        verticalSpeedMetersPerSecond: flight?.verticalSpeedMetersPerSecond,
       );
     }),
   );
@@ -401,9 +402,11 @@ class RideSimulationController extends ChangeNotifier {
       _recordTravelTrail(agent);
       if (agent.isOffRoute) _recordOffRouteTrail(agent);
     }
-    final completed = _agents.every(
-      (agent) => agent.progressMeters >= routeDistanceMeters,
-    );
+    final flightCompleted =
+        _balloonFlight == null || _simulatedElapsed >= _balloonFlight.duration;
+    final completed =
+        flightCompleted &&
+        _agents.every((agent) => agent.progressMeters >= routeDistanceMeters);
     if (completed) _state = RideSimulationState.completed;
     if (completed) {
       _timer?.cancel();
@@ -576,7 +579,7 @@ class RideSimulationController extends ChangeNotifier {
           (after.elapsed - before.elapsed).inMicroseconds /
           Duration.microsecondsPerSecond;
       return (
-        altitudeMeters: height + _launchElevationMetres,
+        altitudeMeters: height,
         // Measured from the flight rather than asserted: a climb rate the
         // track does not actually show would put a number on screen that the
         // altitude trail contradicts.
@@ -659,7 +662,6 @@ class RideSimulationController extends ChangeNotifier {
     if (trail.isEmpty ||
         GeoCalculations.distanceMeters(trail.last, point) >= 2) {
       trail.add(point);
-      if (trail.length > 180) trail.removeRange(0, trail.length - 180);
     }
   }
 

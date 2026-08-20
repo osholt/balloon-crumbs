@@ -134,6 +134,37 @@ void main() {
     );
   });
 
+  test('the balloon climbs and descends in metric altitude', () async {
+    final simulation = await build();
+    addTearDown(simulation.dispose);
+
+    double? altitude() => simulation.riders
+        .firstWhere((rider) => rider.role == RideRole.lead)
+        .altitudeMeters;
+
+    expect(altitude(), 0);
+    await simulation.advance(const Duration(minutes: 26));
+    expect(altitude(), closeTo(180, 0.1));
+    await simulation.advance(const Duration(minutes: 26));
+    expect(altitude(), closeTo(0, 0.1));
+  });
+
+  test('a chase trail keeps more than the old 180-point window', () async {
+    final simulation = await build();
+    addTearDown(simulation.dispose);
+    simulation.setBaseSpeedMetersPerSecond(25);
+
+    for (var index = 0; index < 220; index += 1) {
+      await simulation.advance(const Duration(seconds: 1));
+    }
+
+    final longestChaseTrail = simulation.riders
+        .where((rider) => rider.role != RideRole.lead)
+        .map((rider) => rider.travelTrail.length)
+        .reduce((first, second) => first > second ? first : second);
+    expect(longestChaseTrail, greaterThan(180));
+  });
+
   test('the balloon lands where the winds put it, and stays down', () async {
     final simulation = await build();
     addTearDown(simulation.dispose);

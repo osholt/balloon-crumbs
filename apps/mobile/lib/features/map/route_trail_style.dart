@@ -24,6 +24,13 @@ class RouteLineStyle {
 
   bool get isDashed => dashPixels != null;
 
+  RouteLineStyle withColor(Color nextColor) => RouteLineStyle(
+    color: nextColor,
+    widthPixels: widthPixels,
+    casingWidthPixels: casingWidthPixels,
+    dashPixels: dashPixels,
+  );
+
   /// MapLibre expresses `line-dasharray` in multiples of the line width, so the
   /// pixel run lengths are converted here rather than being restated per layer.
   List<double>? get maplibreDashArray => _dashArrayFor(widthPixels);
