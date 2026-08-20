@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:balloon_crumbs/domain/altitude.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
 import 'package:balloon_crumbs/services/gpx_exporter.dart';
 import 'package:balloon_crumbs/services/gpx_parser.dart';
@@ -23,6 +24,9 @@ void main() {
               latitude: 53.1,
               longitude: -1.2,
               elevationMeters: 240,
+              altitudeSource: AltitudeSource.gnss,
+              altitudeDatum: AltitudeDatum.wgs84Geoid,
+              altitudeAccuracyMeters: 5.5,
               recordedAt: DateTime.utc(2026, 7, 16, 8, 1),
             ),
             const GeoPoint(latitude: 53.2, longitude: -1.3),
@@ -52,9 +56,23 @@ void main() {
     );
 
     expect(exported, contains('xmlns="http://www.topografix.com/GPX/1/1"'));
+    expect(exported, contains('xmlns:bc='));
+    expect(
+      exported,
+      contains(
+        '<bc:altitude source="gnss" datum="wgs84Geoid" '
+        'accuracy-meters="5.500"/>',
+      ),
+    );
     expect(parsed.paths, hasLength(2));
     expect(parsed.pathPointCount, 3);
     expect(parsed.waypoints.single.name, 'Fuel & food');
+    expect(parsed.paths.first.points.first.altitudeSource, AltitudeSource.gnss);
+    expect(
+      parsed.paths.first.points.first.altitudeDatum,
+      AltitudeDatum.wgs84Geoid,
+    );
+    expect(parsed.paths.first.points.first.altitudeAccuracyMeters, 5.5);
     expect(exporter.fileName(route), 'peaks-dales.gpx');
   });
 }

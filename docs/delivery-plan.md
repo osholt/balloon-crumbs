@@ -28,10 +28,13 @@ currently the larger half of the app.
 ### Already done
 
 - **WP1** — the Tail End Charlie sweep role is deleted, on both client and relay.
-- **WP2 (part)** — `LocationSample` carries altitude, altitude source, vertical
-  accuracy and vertical speed; capture gates on vertical accuracy so a missing
-  altitude is never presented as a measured zero; Ride Lab flies a real climb /
-  cruise / descent profile.
+- **WP2** — `LocationSample` carries altitude, source, datum, vertical accuracy
+  and vertical speed; capture gates on vertical accuracy so a missing altitude
+  is never presented as a measured zero; Ride Lab flies a real climb / cruise /
+  descent profile. Native capture keeps Core Location's mean-sea-level datum
+  distinct from Android's WGS84-ellipsoid datum. Flight GPX preserves source,
+  datum and accuracy per fix in the `bc:` extension, while a third-party `<ele>`
+  without that evidence stays explicitly unknown.
 - The product, bundle identifiers, packages and icon are renamed.
 
 ## Who the app is for
@@ -478,10 +481,12 @@ artwork nobody has seen.
 
 ### WP5 — Altitude, the ground track, and the crumb trail
 
-The feature the product is named after. Finishes WP2.
+The feature the product is named after. Builds the first visible surface on the
+completed WP2 telemetry.
 
-- Altitude into the recorded track so flight GPX carries `<ele>` (issue #16);
-  altitude source and accuracy in the GPX extension namespace.
+- **Landed:** altitude reaches the recorded track and flight GPX `<ele>`; source,
+  datum and accuracy round-trip per point in the GPX extension namespace
+  (issue #16).
 - Ground track coloured by altitude, with a documented palette, a non-colour cue
   and a legend that tracks metric/imperial.
 - A segment may only be coloured when both endpoints have valid altitude.

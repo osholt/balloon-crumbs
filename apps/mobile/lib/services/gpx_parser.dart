@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:xml/xml.dart';
 
+import '../domain/altitude.dart';
+import '../domain/app_links.dart';
 import '../domain/imported_route.dart';
 
 class GpxParser {
@@ -64,6 +66,7 @@ class GpxParser {
       final latitude = _coordinate(element, 'lat', -90, 90);
       final longitude = _coordinate(element, 'lon', -180, 180);
       final elevation = _optionalDouble(_childText(element, 'ele'));
+      final altitudeMetadata = _altitudeMetadata(element, elevation);
       final timeText = _childText(element, 'time');
       DateTime? recordedAt;
       if (timeText != null) {
@@ -73,6 +76,9 @@ class GpxParser {
         latitude: latitude,
         longitude: longitude,
         elevationMeters: elevation,
+        altitudeSource: altitudeMetadata.source,
+        altitudeDatum: altitudeMetadata.datum,
+        altitudeAccuracyMeters: altitudeMetadata.accuracyMeters,
         recordedAt: recordedAt,
       );
     }
@@ -202,6 +208,59 @@ class GpxParser {
     );
   }
 }
+
+({AltitudeSource source, AltitudeDatum datum, double? accuracyMeters})
+_altitudeMetadata(XmlElement point, double? elevation) {
+  // Metadata without a reading describes nothing. In particular, never let an
+  // extension turn an absent `<ele>` into a fabricated zero altitude.
+  if (elevation == null) {
+    return (
+      source: AltitudeSource.unknown,
+      datum: AltitudeDatum.unknown,
+      accuracyMeters: null,
+    );
+  }
+  final altitude = _children(point, 'extensions')
+      .expand((extensions) => extensions.childElements)
+      .where(
+        (element) =>
+            element.name.local.toLowerCase() == 'altitude' &&
+            element.name.namespaceUri == 'https://$appLinkHost/gpx/1',
+      )
+      .firstOrNull;
+  if (altitude == null) {
+    // A third-party `<ele>` is still useful, but neither its source nor its
+    // datum/accuracy is knowable from the standard element alone.
+    return (
+      source: AltitudeSource.unknown,
+      datum: AltitudeDatum.unknown,
+      accuracyMeters: null,
+    );
+  }
+  String? attribute(String name) => altitude.attributes
+      .where((item) => item.name.local.toLowerCase() == name)
+      .map((item) => item.value.trim())
+      .firstOrNull;
+  final accuracy = double.tryParse(attribute('accuracy-meters') ?? '');
+  return (
+    source: _enumAttribute(
+      AltitudeSource.values,
+      attribute('source'),
+      AltitudeSource.unknown,
+    ),
+    datum: _enumAttribute(
+      AltitudeDatum.values,
+      attribute('datum'),
+      AltitudeDatum.unknown,
+    ),
+    accuracyMeters: accuracy != null && accuracy.isFinite && accuracy >= 0
+        ? accuracy
+        : null,
+  );
+}
+
+T _enumAttribute<T extends Enum>(List<T> values, String? name, T fallback) =>
+    values.where((value) => value.name == name).firstOrNull ?? fallback;
 
 /// Reads the preferences a Balloon Crumbs route was planned with.
 ///

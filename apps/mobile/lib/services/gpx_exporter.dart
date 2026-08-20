@@ -1,6 +1,7 @@
 import 'package:xml/xml.dart';
 
 import '../domain/app_links.dart';
+import '../domain/altitude.dart';
 import '../domain/imported_route.dart';
 
 class GpxExporter {
@@ -15,7 +16,8 @@ class GpxExporter {
         'version': '1.1',
         'creator': 'Balloon Crumbs',
         'xmlns': 'http://www.topografix.com/GPX/1/1',
-        if (route.preferences != null) 'xmlns:bc': 'https://$appLinkHost/gpx/1',
+        if (route.preferences != null || _hasAltitudeMetadata(route))
+          'xmlns:bc': 'https://$appLinkHost/gpx/1',
       },
       nest: () {
         builder.element(
@@ -138,5 +140,30 @@ class GpxExporter {
     if (point.recordedAt case final recordedAt?) {
       builder.element('time', nest: recordedAt.toUtc().toIso8601String());
     }
+    if (_pointHasAltitudeMetadata(point)) {
+      builder.element(
+        'extensions',
+        nest: () => builder.element(
+          'bc:altitude',
+          attributes: {
+            'source': point.altitudeSource.name,
+            'datum': point.altitudeDatum.name,
+            if (point.altitudeAccuracyMeters case final accuracy?)
+              'accuracy-meters': accuracy.toStringAsFixed(3),
+          },
+        ),
+      );
+    }
   }
+
+  static bool _pointHasAltitudeMetadata(GeoPoint point) =>
+      point.elevationMeters != null &&
+      (point.altitudeSource != AltitudeSource.unknown ||
+          point.altitudeDatum != AltitudeDatum.unknown ||
+          point.altitudeAccuracyMeters != null);
+
+  static bool _hasAltitudeMetadata(ImportedRoute route) => [
+    ...route.paths.expand((path) => path.points),
+    ...route.waypoints.map((waypoint) => waypoint.point),
+  ].any(_pointHasAltitudeMetadata);
 }

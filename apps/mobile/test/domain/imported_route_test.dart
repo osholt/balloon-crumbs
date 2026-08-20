@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:balloon_crumbs/domain/altitude.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
 
 void main() {
@@ -18,6 +19,9 @@ void main() {
               latitude: 53.1,
               longitude: -1.4,
               elevationMeters: 210,
+              altitudeSource: AltitudeSource.gnss,
+              altitudeDatum: AltitudeDatum.wgs84Geoid,
+              altitudeAccuracyMeters: 4.5,
               recordedAt: DateTime.utc(2026, 7, 16, 9, 1),
             ),
             const GeoPoint(latitude: 53.2, longitude: -1.5),
@@ -59,6 +63,15 @@ void main() {
     expect(restored.pathPointCount, 2);
     expect(restored.paths.single.kind, RoutePathKind.track);
     expect(restored.paths.single.points.first.elevationMeters, 210);
+    expect(
+      restored.paths.single.points.first.altitudeSource,
+      AltitudeSource.gnss,
+    );
+    expect(
+      restored.paths.single.points.first.altitudeDatum,
+      AltitudeDatum.wgs84Geoid,
+    );
+    expect(restored.paths.single.points.first.altitudeAccuracyMeters, 4.5);
     expect(restored.waypoints.single.name, 'Fuel');
     expect(restored.maneuvers.single.type, 'roundabout');
     expect(restored.maneuvers.single.modifier, 'right');
@@ -103,6 +116,14 @@ void main() {
     expect(restored.maneuvers.single.bearingBeforeDegrees, isNull);
     expect(restored.maneuvers.single.bearingAfterDegrees, isNull);
     expect(restored.maneuvers.single.exitNumber, 2);
+    expect(
+      restored.paths.single.points.first.altitudeSource,
+      AltitudeSource.unknown,
+    );
+    expect(
+      restored.paths.single.points.first.altitudeDatum,
+      AltitudeDatum.unknown,
+    );
   });
 
   test('migrates the planned duration from a build 60 destination route', () {

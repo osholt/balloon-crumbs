@@ -114,9 +114,12 @@ class GeolocatorDeviceLocationPlatform implements DeviceLocationPlatform {
   static const platformDistanceFilterMeters = 10;
 
   @override
-  Stream<LocationSample> positionStream() => Geolocator.getPositionStream(
-    locationSettings: rideLocationSettings(defaultTargetPlatform),
-  ).map(_mapPosition);
+  Stream<LocationSample> positionStream() {
+    final platform = defaultTargetPlatform;
+    return Geolocator.getPositionStream(
+      locationSettings: rideLocationSettings(platform),
+    ).map((position) => locationSampleFromPosition(position, platform));
+  }
 
   /// Settings that keep fixes arriving while the app is not in the foreground.
   ///
@@ -178,7 +181,11 @@ class GeolocatorDeviceLocationPlatform implements DeviceLocationPlatform {
         LocationPermission.unableToDetermine => DeviceLocationPermission.denied,
       };
 
-  static LocationSample _mapPosition(Position position) {
+  @visibleForTesting
+  static LocationSample locationSampleFromPosition(
+    Position position,
+    TargetPlatform platform,
+  ) {
     // Both platforms report altitude 0.0 when they have none, and a balloon
     // sitting in the launch field genuinely reports 0.0 — so the reading cannot
     // tell the two apart. The vertical accuracy can: CoreLocation documents a
@@ -205,6 +212,19 @@ class GeolocatorDeviceLocationPlatform implements DeviceLocationPlatform {
       altitudeSource: hasAltitude
           ? AltitudeSource.gnss
           : AltitudeSource.unknown,
+      // Core Location exposes orthometric height above mean sea level. Android
+      // Location exposes height above the WGS84 ellipsoid. Geolocator carries
+      // the number but not that distinction, so retain the platform fact here
+      // rather than labelling both as the same datum. Other platforms stay
+      // unknown until their native contract is verified.
+      altitudeDatum: !hasAltitude
+          ? AltitudeDatum.unknown
+          : switch (platform) {
+              TargetPlatform.iOS ||
+              TargetPlatform.macOS => AltitudeDatum.wgs84Geoid,
+              TargetPlatform.android => AltitudeDatum.wgs84Ellipsoid,
+              _ => AltitudeDatum.unknown,
+            },
       altitudeAccuracyMeters: hasAltitude ? position.altitudeAccuracy : null,
     );
   }

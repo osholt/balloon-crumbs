@@ -53,6 +53,35 @@ void main() {
         );
       }
     });
+
+    test('native altitude keeps the platform datum explicit', () {
+      final position = Position(
+        longitude: -2.59,
+        latitude: 51.45,
+        timestamp: DateTime.utc(2026, 8, 20),
+        accuracy: 4,
+        altitude: 123,
+        altitudeAccuracy: 6,
+        heading: 90,
+        headingAccuracy: 2,
+        speed: 4,
+        speedAccuracy: 1,
+      );
+
+      final apple = GeolocatorDeviceLocationPlatform.locationSampleFromPosition(
+        position,
+        TargetPlatform.iOS,
+      );
+      final android =
+          GeolocatorDeviceLocationPlatform.locationSampleFromPosition(
+            position,
+            TargetPlatform.android,
+          );
+
+      expect(apple.altitudeDatum, AltitudeDatum.wgs84Geoid);
+      expect(android.altitudeDatum, AltitudeDatum.wgs84Ellipsoid);
+      expect(apple.altitudeMeters, android.altitudeMeters);
+    });
   });
 
   test('inspection reports denial without prompting', () async {

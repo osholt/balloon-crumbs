@@ -7,7 +7,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | Order | Priority | Work | WP | Depends on |
 |---:|:---:|---|:---:|---|
 | 1 | P0 | ~~Isolate inherited TEC baseline and keep CI green~~ **done** | WP1 | — |
-| 2 | P0 | Balloon-capable telemetry: altitude, source, vertical speed | WP2 | 1 |
+| 2 | P0 | ~~Balloon-capable telemetry: altitude, source, datum, accuracy, vertical speed~~ **done** | WP2 | 1 |
 | 3 | P0 | Craft model, flight roles, and pilot authority | WP3 | 2 |
 | 4 | P0 | ~~Delete the motorcycle domain~~ **done**; vocabulary rename deferred to after 6, 7 | WP4 | 3 |
 | 4a | P0 | Replace the 15 motorcycle map markers with craft icons (#18) | WP4 | 6, 7 |
@@ -21,7 +21,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 10 | P0 | Landing-phase basemap (OS topographic / aerial) | WP6b | 6 |
 | 11 | P0 | Balloon/chase simulator and replay matrix | WP10 | 3–9 |
 | 12 | P0 | Security, privacy, retention, and field-test gates | WP12 | 3–11 |
-| 13 | P1 | Carry balloon altitude through GPX export and import (#16) | WP5 | 2 |
+| 13 | P1 | ~~Carry balloon altitude through GPX export and import (#16)~~ **done** | WP5 | 2 |
 | 14 | P1 | Retarget speed limits, camera and enforcement alerts at the chase driver | WP7 | 3 |
 | 15 | P1 | Pilot aeronautical context: airspace, notices, restrictions | WP10b | 5 |
 | 16 | P1 | Flight plan / notification: research the UK position, then attach or generate | WP10b | 15 |

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:balloon_crumbs/domain/altitude.dart';
 import 'package:balloon_crumbs/services/gpx_parser.dart';
 
 void main() {
@@ -33,8 +34,96 @@ void main() {
     expect(route.paths, hasLength(2));
     expect(route.pathPointCount, 3);
     expect(route.paths.first.points.first.elevationMeters, 200);
+    expect(
+      route.paths.first.points.first.altitudeSource,
+      AltitudeSource.unknown,
+      reason: 'a third-party <ele> does not state how it was measured',
+    );
+    expect(
+      route.paths.first.points.first.altitudeDatum,
+      AltitudeDatum.unknown,
+      reason: 'the parser must not fabricate a geoid/ellipsoid datum',
+    );
+    expect(route.paths.first.points.first.altitudeAccuracyMeters, isNull);
     expect(route.paths.first.points.first.recordedAt, isNotNull);
     expect(route.waypoints.single.name, 'Fuel');
+  });
+
+  test('round-trips Balloon Crumbs altitude evidence per point', () {
+    final route = parser.parse(
+      _bytes('''
+        <gpx version="1.1"
+             xmlns="http://www.topografix.com/GPX/1/1"
+             xmlns:bc="https://balloon-crumbs.tailendcharlie.app/gpx/1">
+          <trk><trkseg>
+            <trkpt lat="51.45" lon="-2.59">
+              <ele>123.4</ele>
+              <extensions>
+                <bc:altitude source="gnss" datum="wgs84Ellipsoid"
+                             accuracy-meters="7.25"/>
+              </extensions>
+            </trkpt>
+          </trkseg></trk>
+        </gpx>
+      '''),
+      routeId: 'altitude',
+      sourceFileName: 'altitude.gpx',
+      importedAt: DateTime.utc(2026, 8, 20),
+    );
+
+    final point = route.paths.single.points.single;
+    expect(point.elevationMeters, 123.4);
+    expect(point.altitudeSource, AltitudeSource.gnss);
+    expect(point.altitudeDatum, AltitudeDatum.wgs84Ellipsoid);
+    expect(point.altitudeAccuracyMeters, 7.25);
+  });
+
+  test('malformed altitude evidence degrades without losing <ele>', () {
+    final route = parser.parse(
+      _bytes('''
+        <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"
+             xmlns:bc="https://balloon-crumbs.tailendcharlie.app/gpx/1">
+          <trk><trkseg><trkpt lat="51.45" lon="-2.59">
+            <ele>123.4</ele>
+            <extensions><bc:altitude source="future-sensor"
+              datum="future-datum" accuracy-meters="-4"/></extensions>
+          </trkpt></trkseg></trk>
+        </gpx>
+      '''),
+      routeId: 'future',
+      sourceFileName: 'future.gpx',
+      importedAt: DateTime.utc(2026, 8, 20),
+    );
+
+    final point = route.paths.single.points.single;
+    expect(point.elevationMeters, 123.4);
+    expect(point.altitudeSource, AltitudeSource.unknown);
+    expect(point.altitudeDatum, AltitudeDatum.unknown);
+    expect(point.altitudeAccuracyMeters, isNull);
+  });
+
+  test('does not mistake another vendor altitude extension for ours', () {
+    final route = parser.parse(
+      _bytes('''
+        <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"
+             xmlns:other="https://example.com/gpx">
+          <trk><trkseg><trkpt lat="51.45" lon="-2.59">
+            <ele>123.4</ele>
+            <extensions><other:altitude source="gnss"
+              datum="wgs84Geoid" accuracy-meters="1"/></extensions>
+          </trkpt></trkseg></trk>
+        </gpx>
+      '''),
+      routeId: 'other-vendor',
+      sourceFileName: 'other.gpx',
+      importedAt: DateTime.utc(2026, 8, 20),
+    );
+
+    final point = route.paths.single.points.single;
+    expect(point.elevationMeters, 123.4);
+    expect(point.altitudeSource, AltitudeSource.unknown);
+    expect(point.altitudeDatum, AltitudeDatum.unknown);
+    expect(point.altitudeAccuracyMeters, isNull);
   });
 
   test('rejects invalid coordinates and excessive point counts', () {
