@@ -179,9 +179,7 @@ def bearing_deg(first: tuple[float, float], second: tuple[float, float]) -> floa
     lat2, lon2 = math.radians(second[0]), math.radians(second[1])
     delta = lon2 - lon1
     y = math.sin(delta) * math.cos(lat2)
-    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(
-        delta
-    )
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(delta)
     return (math.degrees(math.atan2(y, x)) + 360) % 360
 
 
@@ -198,14 +196,18 @@ def road_route(
         f"{start[1]:.6f},{start[0]:.6f};{end[1]:.6f},{end[0]:.6f}"
         "?overview=full&geometries=geojson&steps=true"
     )
-    with urllib.request.urlopen(url, timeout=30) as response:
+    # The scheme is checked rather than assumed. ruff's S310 asks for this, and
+    # it is a fair ask: `urlopen` will happily open `file:`, so a URL that ever
+    # becomes configurable should not be able to read the disk instead.
+    if not url.startswith("https://"):
+        raise SystemExit(f"refusing to fetch a non-HTTPS routing URL: {url}")
+    with urllib.request.urlopen(url, timeout=30) as response:  # noqa: S310
         payload = json.load(response)
     if payload.get("code") != "Ok" or not payload.get("routes"):
         raise SystemExit(f"routing failed: {payload.get('code')}")
     route = payload["routes"][0]
     print(
-        f"  road route: {route['distance'] / 1000:.1f} km, "
-        f"{route['duration'] / 60:.0f} min driving"
+        f"  road route: {route['distance'] / 1000:.1f} km, {route['duration'] / 60:.0f} min driving"
     )
     maneuvers = []
     for leg in route.get("legs", []):
@@ -232,16 +234,13 @@ def road_route(
                 entry["exit"] = step["maneuver"]["exit"]
             maneuvers.append(entry)
     print(f"  {len(maneuvers)} turn manoeuvres")
-    return [
-        (point[1], point[0]) for point in route["geometry"]["coordinates"]
-    ], maneuvers
+    return [(point[1], point[0]) for point in route["geometry"]["coordinates"]], maneuvers
 
 
 def gpx_track(name: str, description: str, points: list[dict[str, float]]) -> str:
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
-        '<gpx version="1.1" creator="Balloon Crumbs" '
-        'xmlns="http://www.topografix.com/GPX/1/1">',
+        '<gpx version="1.1" creator="Balloon Crumbs" xmlns="http://www.topografix.com/GPX/1/1">',
         "  <metadata>",
         f"    <name>{name}</name>",
         f"    <desc>{description}</desc>",
@@ -251,9 +250,7 @@ def gpx_track(name: str, description: str, points: list[dict[str, float]]) -> st
         "    <trkseg>",
     ]
     for point in points:
-        lines.append(
-            f'      <trkpt lat="{point["latitude"]:.6f}" lon="{point["longitude"]:.6f}">'
-        )
+        lines.append(f'      <trkpt lat="{point["latitude"]:.6f}" lon="{point["longitude"]:.6f}">')
         if "elevation" in point:
             lines.append(f"        <ele>{point['elevation']:.1f}</ele>")
         lines.append("      </trkpt>")
@@ -294,9 +291,7 @@ def main(argv: list[str] | None = None) -> int:
         f"  {flown / 1000:.2f} km flown through the air over "
         f"{track[-1]['seconds'] / 60:.0f} minutes"
     )
-    print(
-        f"  peak height {max(p['height'] for p in track):.0f} m above the launch field"
-    )
+    print(f"  peak height {max(p['height'] for p in track):.0f} m above the launch field")
 
     (assets / "fiesta_balloon_flight.json").write_text(
         json.dumps(
@@ -309,8 +304,7 @@ def main(argv: list[str] | None = None) -> int:
                     "elevationMetres": LAUNCH_ELEVATION_M,
                 },
                 "windLayers": [
-                    {"heightMetres": h, "fromDegrees": d, "speedKmh": s}
-                    for h, d, s in WIND_LAYERS
+                    {"heightMetres": h, "fromDegrees": d, "speedKmh": s} for h, d, s in WIND_LAYERS
                 ],
                 "source": (
                     "Open-Meteo, measured winds over Ashton Court for the dawn "

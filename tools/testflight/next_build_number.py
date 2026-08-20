@@ -55,9 +55,7 @@ def token(key_id: str, issuer_id: str, key_path: pathlib.Path) -> str:
     integers. A DER signature here fails as "invalid token" with nothing to say
     the encoding is the problem.
     """
-    private_key = serialization.load_pem_private_key(
-        key_path.read_bytes(), password=None
-    )
+    private_key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
     if not isinstance(private_key, ec.EllipticCurvePrivateKey):
         raise SystemExit("the App Store Connect key is not an EC private key")
 
@@ -70,9 +68,7 @@ def token(key_id: str, issuer_id: str, key_path: pathlib.Path) -> str:
         "exp": now + 600,
         "aud": "appstoreconnect-v1",
     }
-    signing_input = (
-        f"{_b64(json.dumps(header).encode())}.{_b64(json.dumps(claims).encode())}"
-    )
+    signing_input = f"{_b64(json.dumps(header).encode())}.{_b64(json.dumps(claims).encode())}"
     der = private_key.sign(signing_input.encode(), ec.ECDSA(hashes.SHA256()))
     r, s = decode_dss_signature(der)
     signature = r.to_bytes(32, "big") + s.to_bytes(32, "big")
@@ -80,10 +76,13 @@ def token(key_id: str, issuer_id: str, key_path: pathlib.Path) -> str:
 
 
 def get(path: str, bearer: str) -> dict:
-    request = urllib.request.Request(
-        f"{API_ROOT}{path}", headers={"Authorization": f"Bearer {bearer}"}
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
+    url = f"{API_ROOT}{path}"
+    # Same reasoning as the simulation generator: `urlopen` accepts `file:`, and
+    # a bearer token must never be handed to a scheme that is not Apple's API.
+    if not url.startswith("https://api.appstoreconnect.apple.com/"):
+        raise SystemExit(f"refusing to send a token to {url}")
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {bearer}"})
+    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
         return json.load(response)
 
 
@@ -97,15 +96,12 @@ def main(argv: list[str]) -> int:
     issuer_id = os.environ.get("APPSTORE_CONNECT_API_ISSUER_ID", "")
     if not key_id or not issuer_id:
         print(
-            "next_build_number: set APPSTORE_CONNECT_API_KEY_ID and "
-            "APPSTORE_CONNECT_API_ISSUER_ID",
+            "next_build_number: set APPSTORE_CONNECT_API_KEY_ID and APPSTORE_CONNECT_API_ISSUER_ID",
             file=sys.stderr,
         )
         return 1
 
-    key_path = (
-        pathlib.Path.home() / ".appstoreconnect/private_keys" / f"AuthKey_{key_id}.p8"
-    )
+    key_path = pathlib.Path.home() / ".appstoreconnect/private_keys" / f"AuthKey_{key_id}.p8"
     if not key_path.is_file():
         print(f"next_build_number: no private key at {key_path}", file=sys.stderr)
         return 1
