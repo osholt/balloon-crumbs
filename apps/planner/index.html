@@ -37,9 +37,26 @@
             <span>1</span>
             <div>
               <h2 id="launch-title">Launch</h2>
-              <p>Click the map, or use this device’s location.</p>
+              <p>Search for a place, click the map, or use this device’s location.</p>
             </div>
           </div>
+          <form class="place-search" id="place-search-form">
+            <label for="place-search">Find a UK place</label>
+            <div>
+              <input
+                type="search"
+                id="place-search"
+                minlength="2"
+                maxlength="100"
+                autocomplete="off"
+                placeholder="e.g. Tuckers Grave"
+              />
+              <button type="submit" id="place-search-submit" disabled>Search</button>
+            </div>
+          </form>
+          <p class="status" id="place-search-status" role="status"></p>
+          <ul class="place-search-results" id="place-search-results" aria-label="Place search results" hidden></ul>
+          <p class="small muted place-search-credit">Submit-only search using © OpenStreetMap contributors, ODbL. Do not enter personal or confidential information.</p>
           <div class="button-row">
             <button type="button" id="set-launch">Set on map</button>
             <button type="button" id="use-location">Use my location</button>

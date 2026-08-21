@@ -24,6 +24,7 @@ test("only bounded relay and provider paths are proxied", () => {
     "/health/ready",
     "/metrics",
     "/weather/v1/forecast/extra",
+    "/geocode/v1/search",
     "/maps/other/example",
     "/plan/",
   ]) {
@@ -36,6 +37,7 @@ test("unrecognised backend paths cannot fall through to the static site", async 
     "/health/ready",
     "/metrics",
     "/weather/v1/forecast/extra",
+    "/geocode/v1/other",
     "/maps/other/example",
   ]) {
     assert.equal(worker.isReservedBackendPath(pathname), true, pathname);
@@ -45,6 +47,116 @@ test("unrecognised backend paths cannot fall through to the static site", async 
     );
     assert.equal(response.status, 404, pathname);
   }
+});
+
+test("place search builds a bounded UK Nominatim query", () => {
+  assert.equal(worker.isGeocodePath("/geocode/v1/search"), true);
+  assert.equal(worker.isGeocodePath("/geocode/v1/search/extra"), false);
+  const url = worker.geocodeSearchUrl(
+    "https://balloon-crumbs.pages.dev/geocode/v1/search?q=%20Tuckers%20%20Grave%20",
+  );
+  assert.equal(url.origin, "https://nominatim.openstreetmap.org");
+  assert.equal(url.pathname, "/search");
+  assert.equal(url.searchParams.get("q"), "Tuckers Grave");
+  assert.equal(url.searchParams.get("format"), "jsonv2");
+  assert.equal(url.searchParams.get("limit"), "5");
+  assert.equal(url.searchParams.get("countrycodes"), "gb");
+  assert.throws(
+    () => worker.geocodeSearchUrl("https://balloon-crumbs.pages.dev/geocode/v1/search?q=x"),
+    /between 2 and 100/,
+  );
+});
+
+test("place search identifies the planner, sanitises results and caches them", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCaches = globalThis.caches;
+  let upstreamRequest;
+  let cachedRequest;
+  let cachedResponse;
+  const backgroundTasks = [];
+  globalThis.fetch = async (request) => {
+    upstreamRequest = request;
+    return Response.json([
+      {
+        display_name: "Tuckers Grave Inn, Faulkland, Somerset, England",
+        lat: "51.30312",
+        lon: "-2.34762",
+        ignored: "provider-specific data",
+      },
+      { display_name: "Invalid", lat: "not-a-number", lon: "-2.3" },
+    ]);
+  };
+  globalThis.caches = {
+    default: {
+      async match() {
+        return null;
+      },
+      async put(request, response) {
+        cachedRequest = request;
+        cachedResponse = response;
+      },
+    },
+  };
+
+  try {
+    const response = await worker.default.fetch(
+      new Request("https://balloon-crumbs.pages.dev/geocode/v1/search?q=Tuckers%20Grave"),
+      { ASSETS: { fetch: assert.fail } },
+      { waitUntil(task) { backgroundTasks.push(task); } },
+    );
+    await Promise.all(backgroundTasks);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("Cache-Control"), /s-maxage=604800/);
+    assert.equal(upstreamRequest.headers.get("Referer"), "https://balloon-crumbs.pages.dev/");
+    assert.match(upstreamRequest.headers.get("User-Agent"), /BalloonCrumbsPlanner/);
+    assert.equal(
+      new URL(upstreamRequest.url).searchParams.get("countrycodes"),
+      "gb",
+    );
+    assert.deepEqual(await response.json(), {
+      results: [
+        {
+          displayName: "Tuckers Grave Inn, Faulkland, Somerset, England",
+          latitude: 51.30312,
+          longitude: -2.34762,
+        },
+      ],
+    });
+    assert.equal(
+      cachedRequest.url,
+      "https://balloon-crumbs.pages.dev/geocode/v1/search?q=tuckers+grave",
+    );
+    assert.deepEqual(await cachedResponse.json(), {
+      results: [
+        {
+          displayName: "Tuckers Grave Inn, Faulkland, Somerset, England",
+          latitude: 51.30312,
+          longitude: -2.34762,
+        },
+      ],
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCaches === undefined) delete globalThis.caches;
+    else globalThis.caches = originalCaches;
+  }
+});
+
+test("place search rejects invalid queries and non-GET requests", async () => {
+  const env = { ASSETS: { fetch: assert.fail } };
+  const invalid = await worker.default.fetch(
+    new Request("https://balloon-crumbs.pages.dev/geocode/v1/search?q=x"),
+    env,
+  );
+  assert.equal(invalid.status, 400);
+  const post = await worker.default.fetch(
+    new Request("https://balloon-crumbs.pages.dev/geocode/v1/search?q=Tuckers", {
+      method: "POST",
+    }),
+    env,
+  );
+  assert.equal(post.status, 405);
+  assert.equal(post.headers.get("Allow"), "GET");
 });
 
 test("the proxy preserves the bounded path and query on the Oracle origin", () => {
