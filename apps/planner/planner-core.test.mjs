@@ -215,6 +215,57 @@ test("launch-only forecast reports a representative track and flight details", (
   assert.ok(route.landing.longitude > route.track[0].longitude);
 });
 
+test("maximum altitude constrains the representative track and landing envelope", () => {
+  const source = payload();
+  for (const altitude of WIND_LEVELS_METRES_MSL) {
+    source.hourly[`wind_direction_${altitude}m`] =
+      altitude <= 100 ? [270, 270] : [180, 180];
+  }
+  const field = parseOpenMeteoForecast(source, new Date("2026-08-21T08:00:00Z"));
+  const launch = { latitude: 51.5, longitude: -2.5 };
+  const representative = forecastRepresentativeRoute({
+    field,
+    launch,
+    launchElevationMetresMsl: 100,
+    altitudeCeilingMetresMsl: 300,
+  });
+  assert.equal(representative.peakAltitudeMetresMsl, 300);
+  assert.ok(
+    representative.track.every((point) => point.altitudeMetresMsl <= 300),
+  );
+
+  const lowEnvelope = forecastLandingEnvelope({
+    field,
+    launch,
+    launchElevationMetresMsl: 100,
+    altitudeCeilingMetresMsl: 100,
+    minimumDurationMinutes: 40,
+    maximumDurationMinutes: 40,
+  });
+  const highEnvelope = forecastLandingEnvelope({
+    field,
+    launch,
+    launchElevationMetresMsl: 100,
+    altitudeCeilingMetresMsl: 1000,
+    minimumDurationMinutes: 40,
+    maximumDurationMinutes: 40,
+  });
+  assert.ok(lowEnvelope.candidates.every((candidate) => candidate.peakAltitudeMetresMsl <= 100));
+  assert.ok(highEnvelope.candidates.some((candidate) => candidate.peakAltitudeMetresMsl > 100));
+  assert.notDeepEqual(lowEnvelope.boundary, highEnvelope.boundary);
+  const constrainedRoute = planWindRouteToDestination({
+    field,
+    launch,
+    destination: highEnvelope.candidates.at(-1).landing,
+    launchElevationMetresMsl: 100,
+    altitudeCeilingMetresMsl: 300,
+    minimumDurationMinutes: 40,
+    maximumDurationMinutes: 40,
+  });
+  assert.ok(constrainedRoute.peakAltitudeMetresMsl <= 300);
+  assert.ok(constrainedRoute.controlAltitudesMetresMsl.every((altitude) => altitude <= 300));
+});
+
 test("wind routing chooses duration automatically and refines a reachable endpoint within 100 m", () => {
   const launch = { latitude: 51.5, longitude: -2.5 };
   const vector = { altitudeMetresMsl: 100, speedKmh: 36, fromDegrees: 270 };

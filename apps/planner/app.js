@@ -1,6 +1,8 @@
 import {
+  ROUTE_CONTROL_FRACTIONS,
   WIND_GRID_SPAN_METRES,
   WIND_LEVELS_METRES_MSL,
+  altitudeForFlightFraction,
   buildFlightPlanGpx,
   circlePolygon,
   forecastDistanceMetres,
@@ -67,11 +69,15 @@ const elements = Object.fromEntries(
     "forecast-distance",
     "forecast-summary",
     "forecast-validity",
+    "flight-profile",
+    "flight-profile-title",
     "generate-code",
     "generate-status",
     "launch-elevation",
     "launch-status",
     "landing-status",
+    "max-altitude",
+    "max-altitude-label",
     "map",
     "map-prompt",
     "map-status",
@@ -85,9 +91,14 @@ const elements = Object.fromEntries(
     "place-search-results",
     "place-search-status",
     "place-search-submit",
+    "profile-duration",
+    "profile-landing",
+    "profile-limit",
+    "profile-stages",
+    "profile-start",
+    "profile-window",
     "retry-map",
     "route-status",
-    "route-strategy",
     "set-landing",
     "set-launch",
     "theme-label",
@@ -568,10 +579,12 @@ function addPlannerLayers(map) {
 function markerElement(kind, label) {
   const element = document.createElement("div");
   element.className = `map-marker ${kind}`;
-  const draggable = kind === "launch" || kind === "intended";
+  const draggable =
+    kind === "launch" || kind === "intended" || (kind === "forecast" && !state.manualLanding);
   if (draggable) element.classList.add("draggable");
-  element.title = draggable ? `${label} — drag to move` : label;
-  element.setAttribute("aria-label", draggable ? `${label}; drag to move` : label);
+  const dragInstruction = kind === "forecast" ? "drag to choose destination" : "drag to move";
+  element.title = draggable ? `${label} — ${dragInstruction}` : label;
+  element.setAttribute("aria-label", draggable ? `${label}; ${dragInstruction}` : label);
   return element;
 }
 
@@ -581,7 +594,8 @@ function setMarker(kind, point, label) {
     delete state.markers[kind];
     return;
   }
-  const draggable = kind === "launch" || kind === "intended";
+  const draggable =
+    kind === "launch" || kind === "intended" || (kind === "forecast" && !state.manualLanding);
   const marker = new maplibregl.Marker({
     element: markerElement(kind, label),
     draggable,
@@ -598,6 +612,13 @@ function setMarker(kind, point, label) {
   } else if (kind === "intended") {
     marker.on("dragstart", () => {
       setStatus(elements.landing_status, "Moving destination…");
+    });
+    marker.on("dragend", () => {
+      void chooseLanding(marker.getLngLat(), { fit: false });
+    });
+  } else if (kind === "forecast" && draggable) {
+    marker.on("dragstart", () => {
+      setStatus(elements.landing_status, "Drag the yellow endpoint to your intended destination…");
     });
     marker.on("dragend", () => {
       void chooseLanding(marker.getLngLat(), { fit: false });
@@ -722,6 +743,19 @@ function fitForecast() {
   if (!bounds.isEmpty()) state.map.fitBounds(bounds, { padding: 90, maxZoom: 11, duration: 700 });
 }
 
+function syncMaxAltitudeControl() {
+  const launchElevationMetresMsl = Number(elements.launch_elevation.value);
+  const minimum = Number.isFinite(launchElevationMetresMsl)
+    ? Math.min(2000, Math.max(100, Math.ceil(launchElevationMetresMsl / 50) * 50))
+    : 100;
+  elements.max_altitude.min = String(minimum);
+  if (Number(elements.max_altitude.value) < minimum) {
+    elements.max_altitude.value = String(minimum);
+  }
+  elements.max_altitude_label.textContent =
+    `${Number(elements.max_altitude.value).toLocaleString("en-GB")} m MSL`;
+}
+
 function validLaunchSettings() {
   const launchElevationMetresMsl = Number(elements.launch_elevation.value);
   if (
@@ -731,13 +765,92 @@ function validLaunchSettings() {
   ) {
     throw new Error("Choose a valid launch elevation in metres MSL.");
   }
-  return { launchElevationMetresMsl };
+  const altitudeCeilingMetresMsl = Number(elements.max_altitude.value);
+  if (
+    !Number.isFinite(altitudeCeilingMetresMsl) ||
+    altitudeCeilingMetresMsl < launchElevationMetresMsl ||
+    altitudeCeilingMetresMsl > 2000
+  ) {
+    throw new Error("Choose a maximum altitude between launch elevation and 2,000 m MSL.");
+  }
+  return { launchElevationMetresMsl, altitudeCeilingMetresMsl };
 }
 
 function formatMissDistance(distanceMetres) {
   return distanceMetres < 1000
     ? `${Math.round(distanceMetres)} m`
     : `${(distanceMetres / 1000).toFixed(1)} km`;
+}
+
+function renderFlightProfile() {
+  if (!state.routePlan) {
+    elements.flight_profile.hidden = true;
+    elements.profile_stages.replaceChildren();
+    return;
+  }
+  const { launchElevationMetresMsl, altitudeCeilingMetresMsl } = validLaunchSettings();
+  const departureAt = state.routePlan.departureAt;
+  const durationMinutes = state.routePlan.durationMinutes;
+  const landingAt = new Date(departureAt.getTime() + durationMinutes * 60_000);
+  const altitudes =
+    state.routePlan.kind === "representative"
+      ? ROUTE_CONTROL_FRACTIONS.map((fraction) =>
+          altitudeForFlightFraction({
+            fraction,
+            launchElevationMetresMsl,
+            maximumAltitudeMetresMsl: state.routePlan.peakAltitudeMetresMsl,
+          }),
+        )
+      : [
+          launchElevationMetresMsl,
+          ...state.routePlan.controlAltitudesMetresMsl,
+          launchElevationMetresMsl,
+        ];
+  const labels = ["Launch", "20%", "40%", "60%", "80%", "Landing"];
+  elements.flight_profile_title.textContent =
+    state.routePlan.kind === "representative" ? "Representative forecast" : "Optimised forecast";
+  elements.profile_limit.textContent =
+    `Maximum ${altitudeCeilingMetresMsl.toLocaleString("en-GB")} m MSL`;
+  elements.profile_start.textContent = formatLocalDateTime(departureAt);
+  elements.profile_landing.textContent = formatLocalDateTime(landingAt);
+  elements.profile_duration.textContent = `${durationMinutes.toFixed(1)} min`;
+  const window = state.routePlan.departureWindow;
+  elements.profile_window.hidden = !window;
+  elements.profile_window.textContent = window
+    ? window.startOffsetMinutes === window.endOffsetMinutes
+      ? `Matching start: ${formatLocalTime(window.startAt)}`
+      : `Matching start window: ${formatLocalTime(window.startAt)}–${formatLocalTime(window.endAt)}`
+    : "";
+  elements.profile_stages.replaceChildren();
+  for (const [index, fraction] of ROUTE_CONTROL_FRACTIONS.entries()) {
+    const row = document.createElement("tr");
+    const stage = document.createElement("td");
+    const time = document.createElement("td");
+    const altitude = document.createElement("td");
+    const change = document.createElement("td");
+    const roundedAltitude = Math.round(altitudes[index]);
+    stage.textContent = labels[index];
+    time.textContent = formatLocalTime(
+      new Date(departureAt.getTime() + durationMinutes * fraction * 60_000),
+    );
+    altitude.textContent = `${roundedAltitude.toLocaleString("en-GB")} m`;
+    if (index === 0) {
+      change.textContent = "—";
+      change.className = "level";
+    } else {
+      const difference = roundedAltitude - Math.round(altitudes[index - 1]);
+      change.textContent =
+        difference > 0
+          ? `↑ ${difference.toLocaleString("en-GB")} m`
+          : difference < 0
+            ? `↓ ${Math.abs(difference).toLocaleString("en-GB")} m`
+            : "—";
+      change.className = difference > 0 ? "climb" : difference < 0 ? "descent" : "level";
+    }
+    row.append(stage, time, altitude, change);
+    elements.profile_stages.append(row);
+  }
+  elements.flight_profile.hidden = false;
 }
 
 function recomputeTrack({ fit = false } = {}) {
@@ -759,22 +872,6 @@ function recomputeTrack({ fit = false } = {}) {
       state.landingEnvelope = state.routePlan.boundary;
       state.landingCandidateCount = state.routePlan.candidateCount;
       const missDistance = formatMissDistance(state.routePlan.missDistanceMetres);
-      const duration = Number.isInteger(state.routePlan.durationMinutes)
-        ? state.routePlan.durationMinutes.toFixed(0)
-        : state.routePlan.durationMinutes.toFixed(1);
-      const profile = state.routePlan.controlAltitudesMetresMsl
-        .map((altitude) => `${Math.round(altitude)} m`)
-        .join(" → ");
-      const window = state.routePlan.departureWindow;
-      const windowText = window
-        ? window.startOffsetMinutes === window.endOffsetMinutes
-          ? ` · matching start ${formatLocalTime(window.startAt)}`
-          : ` · matching window ${formatLocalTime(window.startAt)}–${formatLocalTime(window.endAt)}`
-        : "";
-      elements.route_strategy.hidden = false;
-      elements.route_strategy.textContent =
-        `Best forecast · ${formatLocalDateTime(state.routePlan.departureAt)} · ${duration} min · ` +
-        `peak ${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL · profile ${profile} → land${windowText}`;
       setStatus(
         elements.route_status,
         state.routePlan.reachesDestination
@@ -783,8 +880,10 @@ function recomputeTrack({ fit = false } = {}) {
         state.routePlan.reachesDestination ? "good" : "error",
       );
       state.forecastLanding = state.track.at(-1);
-      setMarker("forecast", state.forecastLanding, "Forecast landing");
+      setMarker("forecast", state.forecastLanding, "Calculated forecast landing");
       setMarker("intended", state.intendedLanding, "Destination");
+      state.mode = null;
+      elements.map_prompt.hidden = true;
     } else {
       const envelope = forecastLandingEnvelope(settings);
       state.routePlan = forecastRepresentativeRoute({
@@ -795,13 +894,11 @@ function recomputeTrack({ fit = false } = {}) {
       state.forecastLanding = state.routePlan.landing;
       state.landingEnvelope = envelope.boundary;
       state.landingCandidateCount = envelope.candidates.length;
-      elements.route_strategy.hidden = false;
-      elements.route_strategy.textContent =
-        `Representative · ${formatLocalDateTime(state.routePlan.departureAt)} · ` +
-        `${state.routePlan.durationMinutes.toFixed(0)} min · peak ` +
-        `${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL · returns to launch elevation`;
-      setMarker("forecast", state.forecastLanding, "Forecast landing");
+      setMarker("forecast", state.forecastLanding, "Forecast endpoint");
       setMarker("intended", null);
+      state.mode = "landing";
+      elements.map_prompt.hidden = false;
+      elements.map_prompt.textContent = "Click map or drag yellow endpoint";
       setStatus(
         elements.route_status,
         "Representative drift shown. Place a destination to optimise the flight.",
@@ -821,6 +918,7 @@ function recomputeTrack({ fit = false } = {}) {
         `${state.routePlan.durationMinutes.toFixed(1)} min · ` +
         `${state.manualLanding ? "optimised" : "representative"} · hourly wind interpolation`;
     }
+    renderFlightProfile();
     setStatus(
       elements.landing_status,
       state.manualLanding
@@ -849,7 +947,7 @@ function recomputeTrack({ fit = false } = {}) {
     elements.set_landing.disabled = true;
     elements.clear_destination.disabled = true;
     elements.forecast_summary.hidden = true;
-    elements.route_strategy.hidden = true;
+    renderFlightProfile();
     updateSources();
     setStatus(elements.wind_status, error.message, "error");
     setStatus(elements.route_status, "No route calculation is available with these settings.", "error");
@@ -897,7 +995,7 @@ async function refreshForecast({ fit = true } = {}) {
     elements.set_landing.disabled = true;
     elements.clear_destination.disabled = true;
     elements.forecast_summary.hidden = true;
-    elements.route_strategy.hidden = true;
+    renderFlightProfile();
     setStatus(
       elements.wind_status,
       `No usable live wind forecast: ${error.message} Do not substitute a guessed track.`,
@@ -927,7 +1025,7 @@ function chooseLaunch(point, { preserveDestination = false, fit = true } = {}) {
   elements.set_landing.disabled = true;
   elements.generate_code.disabled = true;
   elements.forecast_summary.hidden = true;
-  elements.route_strategy.hidden = true;
+  renderFlightProfile();
   setMarker("launch", state.launch, "Launch");
   setMarker("forecast", null);
   if (!retainDestination) setMarker("intended", null);
@@ -1065,7 +1163,12 @@ function bindControls() {
     }
   });
   elements.departure_time.addEventListener("change", () => void refreshForecast());
-  elements.launch_elevation.addEventListener("change", () => recomputeTrack({ fit: false }));
+  elements.launch_elevation.addEventListener("change", () => {
+    syncMaxAltitudeControl();
+    recomputeTrack({ fit: false });
+  });
+  elements.max_altitude.addEventListener("input", syncMaxAltitudeControl);
+  elements.max_altitude.addEventListener("change", () => recomputeTrack({ fit: true }));
   elements.generate_code.addEventListener("click", () => void generatePlanCode());
   elements.copy_code.addEventListener("click", () => void copyPlanCode());
 }
@@ -1074,6 +1177,7 @@ async function start() {
   elements.theme_toggle.checked = window.matchMedia("(prefers-color-scheme: dark)").matches;
   applyMapTheme();
   configureDepartureInput();
+  syncMaxAltitudeControl();
   updateClock();
   window.setInterval(updateClock, 1_000);
   bindControls();
