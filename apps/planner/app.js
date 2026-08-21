@@ -78,6 +78,10 @@ const elements = Object.fromEntries(
     "landing-status",
     "max-altitude",
     "max-altitude-label",
+    "max-ascent-rate",
+    "max-ascent-rate-label",
+    "max-descent-rate",
+    "max-descent-rate-label",
     "map",
     "map-prompt",
     "map-status",
@@ -756,6 +760,13 @@ function syncMaxAltitudeControl() {
     `${Number(elements.max_altitude.value).toLocaleString("en-GB")} m MSL`;
 }
 
+function syncVerticalRateControls() {
+  elements.max_ascent_rate_label.textContent =
+    `${Number(elements.max_ascent_rate.value).toFixed(1)} m/s`;
+  elements.max_descent_rate_label.textContent =
+    `${Number(elements.max_descent_rate.value).toFixed(1)} m/s`;
+}
+
 function validLaunchSettings() {
   const launchElevationMetresMsl = Number(elements.launch_elevation.value);
   if (
@@ -773,7 +784,24 @@ function validLaunchSettings() {
   ) {
     throw new Error("Choose a maximum altitude between launch elevation and 2,000 m MSL.");
   }
-  return { launchElevationMetresMsl, altitudeCeilingMetresMsl };
+  const maximumAscentRateMetresPerSecond = Number(elements.max_ascent_rate.value);
+  const maximumDescentRateMetresPerSecond = Number(elements.max_descent_rate.value);
+  if (
+    !Number.isFinite(maximumAscentRateMetresPerSecond) ||
+    maximumAscentRateMetresPerSecond < 0.1 ||
+    maximumAscentRateMetresPerSecond > 10 ||
+    !Number.isFinite(maximumDescentRateMetresPerSecond) ||
+    maximumDescentRateMetresPerSecond < 0.1 ||
+    maximumDescentRateMetresPerSecond > 10
+  ) {
+    throw new Error("Choose maximum ascent and descent rates between 0.1 and 10.0 m/s.");
+  }
+  return {
+    launchElevationMetresMsl,
+    altitudeCeilingMetresMsl,
+    maximumAscentRateMetresPerSecond,
+    maximumDescentRateMetresPerSecond,
+  };
 }
 
 function formatMissDistance(distanceMetres) {
@@ -788,7 +816,12 @@ function renderFlightProfile() {
     elements.profile_stages.replaceChildren();
     return;
   }
-  const { launchElevationMetresMsl, altitudeCeilingMetresMsl } = validLaunchSettings();
+  const {
+    launchElevationMetresMsl,
+    altitudeCeilingMetresMsl,
+    maximumAscentRateMetresPerSecond,
+    maximumDescentRateMetresPerSecond,
+  } = validLaunchSettings();
   const departureAt = state.routePlan.departureAt;
   const durationMinutes = state.routePlan.durationMinutes;
   const landingAt = new Date(departureAt.getTime() + durationMinutes * 60_000);
@@ -810,7 +843,9 @@ function renderFlightProfile() {
   elements.flight_profile_title.textContent =
     state.routePlan.kind === "representative" ? "Representative forecast" : "Optimised forecast";
   elements.profile_limit.textContent =
-    `Maximum ${altitudeCeilingMetresMsl.toLocaleString("en-GB")} m MSL`;
+    `Ceiling ${altitudeCeilingMetresMsl.toLocaleString("en-GB")} m · ` +
+    `↑ ${maximumAscentRateMetresPerSecond.toFixed(1)} · ` +
+    `↓ ${maximumDescentRateMetresPerSecond.toFixed(1)} m/s`;
   elements.profile_start.textContent = formatLocalDateTime(departureAt);
   elements.profile_landing.textContent = formatLocalDateTime(landingAt);
   elements.profile_duration.textContent = `${durationMinutes.toFixed(1)} min`;
@@ -839,11 +874,13 @@ function renderFlightProfile() {
       change.className = "level";
     } else {
       const difference = roundedAltitude - Math.round(altitudes[index - 1]);
+      const rateMetresPerSecond =
+        Math.abs(difference) / (durationMinutes * 60 * 0.2);
       change.textContent =
         difference > 0
-          ? `↑ ${difference.toLocaleString("en-GB")} m`
+          ? `↑ ${difference.toLocaleString("en-GB")} m · ${rateMetresPerSecond.toFixed(1)} m/s`
           : difference < 0
-            ? `↓ ${Math.abs(difference).toLocaleString("en-GB")} m`
+            ? `↓ ${Math.abs(difference).toLocaleString("en-GB")} m · ${rateMetresPerSecond.toFixed(1)} m/s`
             : "—";
       change.className = difference > 0 ? "climb" : difference < 0 ? "descent" : "level";
     }
@@ -1169,6 +1206,10 @@ function bindControls() {
   });
   elements.max_altitude.addEventListener("input", syncMaxAltitudeControl);
   elements.max_altitude.addEventListener("change", () => recomputeTrack({ fit: true }));
+  elements.max_ascent_rate.addEventListener("input", syncVerticalRateControls);
+  elements.max_ascent_rate.addEventListener("change", () => recomputeTrack({ fit: true }));
+  elements.max_descent_rate.addEventListener("input", syncVerticalRateControls);
+  elements.max_descent_rate.addEventListener("change", () => recomputeTrack({ fit: true }));
   elements.generate_code.addEventListener("click", () => void generatePlanCode());
   elements.copy_code.addEventListener("click", () => void copyPlanCode());
 }
@@ -1178,6 +1219,7 @@ async function start() {
   applyMapTheme();
   configureDepartureInput();
   syncMaxAltitudeControl();
+  syncVerticalRateControls();
   updateClock();
   window.setInterval(updateClock, 1_000);
   bindControls();

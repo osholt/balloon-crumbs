@@ -14,8 +14,9 @@ pretend a balloon follows a road route:
 - the destination optimiser searches start times across the selected day,
   10–180 minute durations and four changing altitude controls up to the highest
   pilot-selected maximum altitude, bounded by the highest 2,000 m MSL forecast
-  layer; the same ceiling constrains the representative track and landing
-  envelope;
+  layer; independent pilot-selected maximum ascent and descent rates constrain
+  every altitude stage, and the same ceiling and rate limits constrain the
+  representative track and landing envelope;
 - start time, an approximate matching window for the selected profile, duration,
   altitude profile and resulting peak altitude are optimiser outputs rather than
   pilot-supplied route inputs;
@@ -27,8 +28,9 @@ pretend a balloon follows a road route:
   destination reruns the optimiser without a separate placement action;
 - after launch, the next map click sets the destination directly, while dragging
   the initial yellow forecast endpoint converts it into the intended destination;
-- a flight-profile pane lists launch and landing times, duration, the altitude at
-  each 20% stage and each climb, level or descent change;
+- a flight-profile pane lists launch and landing times, duration, selected
+  vertical-rate limits, the altitude at each 20% stage and each climb, level or
+  descent rate;
 - the compact control panel keeps route inputs and results together, with wind,
   chart and sharing controls grouped below and longer guidance in disclosures;
 - the basemap and planner controls can switch between light and dark themes,
@@ -70,5 +72,6 @@ These are forecasts, not aviation briefings or primary navigation. The planner
 does not present a track as controllable, and it does not hide missing forecast
 data behind a synthetic fallback. The landing envelope is not a safe-landing
 assessment and does not mean that every point inside it is reachable. The
-destination search does not account for airspace, terrain, legal limits, burner
-fuel, or the balloon's actual climb and descent performance.
+destination search does not account for airspace, terrain, legal limits or
+burner fuel. Its ascent and descent limits are pilot inputs; it cannot determine
+whether those values suit a balloon, conditions or phase of flight.

@@ -6,6 +6,8 @@ const EARTH_RADIUS_METRES = 6_371_000;
 const DEFAULT_STEP_SECONDS = 60;
 export const WIND_GRID_SIDE_POINTS = 5;
 export const WIND_GRID_SPAN_METRES = 120_000;
+export const DEFAULT_MAXIMUM_ASCENT_RATE_METRES_PER_SECOND = 5;
+export const DEFAULT_MAXIMUM_DESCENT_RATE_METRES_PER_SECOND = 5;
 export const ROUTE_SEARCH_LIMITS = Object.freeze({
   minimumDurationMinutes: 10,
   maximumDurationMinutes: 180,
@@ -22,6 +24,32 @@ function finiteNumber(value, label) {
   const number = Number(value);
   if (!Number.isFinite(number)) throw new TypeError(`${label} must be finite.`);
   return number;
+}
+
+function verticalRateLimits(options) {
+  const legacyLimit = options.maximumVerticalRateMetresPerSecond;
+  const maximumAscentRateMetresPerSecond = finiteNumber(
+    options.maximumAscentRateMetresPerSecond ??
+      legacyLimit ??
+      DEFAULT_MAXIMUM_ASCENT_RATE_METRES_PER_SECOND,
+    "maximum ascent rate",
+  );
+  const maximumDescentRateMetresPerSecond = finiteNumber(
+    options.maximumDescentRateMetresPerSecond ??
+      legacyLimit ??
+      DEFAULT_MAXIMUM_DESCENT_RATE_METRES_PER_SECOND,
+    "maximum descent rate",
+  );
+  if (
+    maximumAscentRateMetresPerSecond <= 0 ||
+    maximumDescentRateMetresPerSecond <= 0
+  ) {
+    throw new RangeError("Maximum ascent and descent rates must be greater than zero.");
+  }
+  return {
+    maximumAscentRateMetresPerSecond,
+    maximumDescentRateMetresPerSecond,
+  };
 }
 
 function validPoint(point, label = "point") {
@@ -482,6 +510,9 @@ export function forecastRepresentativeRoute({
   departureOffsetMinutes = 0,
   durationMinutes = REPRESENTATIVE_FORECAST_DEFAULTS.durationMinutes,
   cruiseAltitudeMetresMsl = REPRESENTATIVE_FORECAST_DEFAULTS.cruiseAltitudeMetresMsl,
+  maximumAscentRateMetresPerSecond,
+  maximumDescentRateMetresPerSecond,
+  maximumVerticalRateMetresPerSecond,
   stepSeconds = DEFAULT_STEP_SECONDS,
 }) {
   const launchElevation = finiteNumber(launchElevationMetresMsl, "launch elevation");
@@ -491,11 +522,22 @@ export function forecastRepresentativeRoute({
   }
   const departureOffset = finiteNumber(departureOffsetMinutes, "departure offset");
   if (departureOffset < 0) throw new RangeError("Departure offset must not be negative.");
+  const duration = finiteNumber(durationMinutes, "flight duration");
+  const rateLimits = verticalRateLimits({
+    maximumAscentRateMetresPerSecond,
+    maximumDescentRateMetresPerSecond,
+    maximumVerticalRateMetresPerSecond,
+  });
+  const maximumRateLimitedGainMetres = Math.min(
+    rateLimits.maximumAscentRateMetresPerSecond * duration * 60 * 0.2,
+    rateLimits.maximumDescentRateMetresPerSecond * duration * 60 * 0.3,
+  );
   const peakAltitudeMetresMsl = Math.max(
     launchElevation,
     Math.min(
       altitudeCeiling,
       finiteNumber(cruiseAltitudeMetresMsl, "representative cruise altitude"),
+      launchElevation + maximumRateLimitedGainMetres,
     ),
   );
   const track = forecastFlightTrack({
@@ -503,7 +545,7 @@ export function forecastRepresentativeRoute({
     launch,
     launchElevationMetresMsl: launchElevation,
     maximumAltitudeMetresMsl: peakAltitudeMetresMsl,
-    durationMinutes,
+    durationMinutes: duration,
     departureOffsetSeconds: departureOffset * 60,
     stepSeconds,
   });
@@ -520,9 +562,10 @@ export function forecastRepresentativeRoute({
     kind: "representative",
     departureOffsetMinutes: departureOffset,
     departureAt: new Date(forecastStart.getTime() + departureOffset * 60_000),
-    durationMinutes: finiteNumber(durationMinutes, "flight duration"),
+    durationMinutes: duration,
     altitudeCeilingMetresMsl: altitudeCeiling,
     peakAltitudeMetresMsl,
+    ...rateLimits,
     track,
     landing: track.at(-1),
   });
@@ -626,7 +669,8 @@ function profileIsFeasible({
   launchElevationMetresMsl,
   altitudeCeilingMetresMsl,
   durationMinutes,
-  maximumVerticalRateMetresPerSecond,
+  maximumAscentRateMetresPerSecond,
+  maximumDescentRateMetresPerSecond,
 }) {
   const launch = finiteNumber(launchElevationMetresMsl, "launch elevation");
   const ceiling = finiteNumber(altitudeCeilingMetresMsl, "altitude ceiling");
@@ -639,11 +683,13 @@ function profileIsFeasible({
   ) {
     return false;
   }
-  return altitudes.slice(1).every(
-    (altitude, index) =>
-      Math.abs(altitude - altitudes[index]) / segmentSeconds <=
-      maximumVerticalRateMetresPerSecond,
-  );
+  return altitudes.slice(1).every((altitude, index) => {
+    const changeMetres = altitude - altitudes[index];
+    const rateMetresPerSecond = Math.abs(changeMetres) / segmentSeconds;
+    return changeMetres >= 0
+      ? rateMetresPerSecond <= maximumAscentRateMetresPerSecond
+      : rateMetresPerSecond <= maximumDescentRateMetresPerSecond;
+  });
 }
 
 function convexHull(points) {
@@ -683,7 +729,8 @@ function coarseLandingCandidates({
   minimumDurationMinutes,
   maximumDurationMinutes,
   altitudeCeilingMetresMsl,
-  maximumVerticalRateMetresPerSecond,
+  maximumAscentRateMetresPerSecond,
+  maximumDescentRateMetresPerSecond,
   departureOffsetMinutes = 0,
   stepSeconds = DEFAULT_STEP_SECONDS,
 }) {
@@ -709,7 +756,8 @@ function coarseLandingCandidates({
             launchElevationMetresMsl,
             altitudeCeilingMetresMsl,
             durationMinutes,
-            maximumVerticalRateMetresPerSecond,
+            maximumAscentRateMetresPerSecond,
+            maximumDescentRateMetresPerSecond,
           })
         ) {
           continue;
@@ -746,7 +794,8 @@ function coarseFlexibleStartCandidates({
   minimumDurationMinutes,
   maximumDurationMinutes,
   altitudeCeilingMetresMsl,
-  maximumVerticalRateMetresPerSecond,
+  maximumAscentRateMetresPerSecond,
+  maximumDescentRateMetresPerSecond,
   minimumDepartureOffsetMinutes,
   maximumDepartureOffsetMinutes,
   departureSearchStepMinutes,
@@ -771,7 +820,8 @@ function coarseFlexibleStartCandidates({
             launchElevationMetresMsl,
             altitudeCeilingMetresMsl,
             durationMinutes,
-            maximumVerticalRateMetresPerSecond,
+            maximumAscentRateMetresPerSecond,
+            maximumDescentRateMetresPerSecond,
           })
         ) {
           continue;
@@ -807,7 +857,7 @@ function routeSearchSettings(options) {
     options.maximumDurationMinutes ?? ROUTE_SEARCH_LIMITS.maximumDurationMinutes;
   const altitudeCeilingMetresMsl =
     options.altitudeCeilingMetresMsl ?? ROUTE_SEARCH_LIMITS.altitudeCeilingMetresMsl;
-  const maximumVerticalRateMetresPerSecond = options.maximumVerticalRateMetresPerSecond ?? 5;
+  const rateLimits = verticalRateLimits(options);
   const minimumDepartureOffsetMinutes = options.minimumDepartureOffsetMinutes ?? 0;
   const maximumDepartureOffsetMinutes =
     options.maximumDepartureOffsetMinutes ?? minimumDepartureOffsetMinutes;
@@ -825,7 +875,7 @@ function routeSearchSettings(options) {
     minimumDurationMinutes,
     maximumDurationMinutes,
     altitudeCeilingMetresMsl,
-    maximumVerticalRateMetresPerSecond,
+    ...rateLimits,
     minimumDepartureOffsetMinutes,
     maximumDepartureOffsetMinutes,
     departureSearchStepMinutes,
@@ -941,7 +991,10 @@ export function planWindRouteToDestination(options) {
         launchElevationMetresMsl,
         altitudeCeilingMetresMsl: settings.altitudeCeilingMetresMsl,
         durationMinutes: boundedDurationMinutes,
-        maximumVerticalRateMetresPerSecond: settings.maximumVerticalRateMetresPerSecond,
+        maximumAscentRateMetresPerSecond:
+          settings.maximumAscentRateMetresPerSecond,
+        maximumDescentRateMetresPerSecond:
+          settings.maximumDescentRateMetresPerSecond,
       })
     ) {
       evaluationCache.set(key, null);
