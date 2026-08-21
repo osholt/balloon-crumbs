@@ -3,7 +3,6 @@ import {
   buildFlightPlanGpx,
   circlePolygon,
   forecastDistanceMetres,
-  forecastFlightTrack,
   forecastLandingEnvelope,
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
@@ -62,7 +61,6 @@ const elements = Object.fromEntries(
     "copy-code",
     "clear-destination",
     "departure-time",
-    "duration-minutes",
     "forecast-distance",
     "forecast-summary",
     "forecast-validity",
@@ -75,7 +73,6 @@ const elements = Object.fromEntries(
     "map-prompt",
     "map-status",
     "map-status-text",
-    "maximum-altitude",
     "open-in-app",
     "plan-code",
     "plan-expiry",
@@ -473,42 +470,40 @@ function updateSources() {
 }
 
 function fitForecast() {
-  if (!state.track?.length) return;
   const bounds = new maplibregl.LngLatBounds();
-  for (const point of state.track) bounds.extend([point.longitude, point.latitude]);
+  if (state.launch) bounds.extend([state.launch.longitude, state.launch.latitude]);
+  for (const point of state.track ?? []) bounds.extend([point.longitude, point.latitude]);
   if (state.intendedLanding) {
     bounds.extend([state.intendedLanding.longitude, state.intendedLanding.latitude]);
   }
   for (const point of state.landingEnvelope) {
     bounds.extend([point.longitude, point.latitude]);
   }
-  state.map.fitBounds(bounds, { padding: 90, maxZoom: 11, duration: 700 });
+  if (!bounds.isEmpty()) state.map.fitBounds(bounds, { padding: 90, maxZoom: 11, duration: 700 });
 }
 
-function validFlightSettings() {
-  const durationMinutes = Number(elements.duration_minutes.value);
+function validLaunchSettings() {
   const launchElevationMetresMsl = Number(elements.launch_elevation.value);
-  const maximumAltitudeMetresMsl = Number(elements.maximum_altitude.value);
-  if (!Number.isFinite(durationMinutes) || durationMinutes < 10 || durationMinutes > 180) {
-    throw new Error("Flight duration must be between 10 and 180 minutes.");
-  }
-  if (!Number.isFinite(launchElevationMetresMsl) || launchElevationMetresMsl < -50) {
+  if (
+    !Number.isFinite(launchElevationMetresMsl) ||
+    launchElevationMetresMsl < -50 ||
+    launchElevationMetresMsl > 1000
+  ) {
     throw new Error("Choose a valid launch elevation in metres MSL.");
   }
-  if (
-    !Number.isFinite(maximumAltitudeMetresMsl) ||
-    maximumAltitudeMetresMsl < launchElevationMetresMsl ||
-    maximumAltitudeMetresMsl > 2500
-  ) {
-    throw new Error("Maximum altitude must be above launch and no more than 2,500 m MSL.");
-  }
-  return { durationMinutes, launchElevationMetresMsl, maximumAltitudeMetresMsl };
+  return { launchElevationMetresMsl };
+}
+
+function formatMissDistance(distanceMetres) {
+  return distanceMetres < 1000
+    ? `${Math.round(distanceMetres)} m`
+    : `${(distanceMetres / 1000).toFixed(1)} km`;
 }
 
 function recomputeTrack({ fit = false } = {}) {
   if (!state.field || !state.launch) return;
   try {
-    const settings = { field: state.field, launch: state.launch, ...validFlightSettings() };
+    const settings = { field: state.field, launch: state.launch, ...validLaunchSettings() };
     if (state.manualLanding && state.intendedLanding) {
       state.routePlan = planWindRouteToDestination({
         ...settings,
@@ -517,58 +512,62 @@ function recomputeTrack({ fit = false } = {}) {
       state.track = state.routePlan.track;
       state.landingEnvelope = state.routePlan.boundary;
       state.landingCandidateCount = state.routePlan.candidateCount;
-      const missKilometres = (state.routePlan.missDistanceMetres / 1000).toFixed(1);
-      const toleranceKilometres = (
-        state.routePlan.acceptedMissDistanceMetres / 1000
-      ).toFixed(1);
-      const firstAltitude = Math.round(state.routePlan.firstCruiseAltitudeMetresMsl);
-      const secondAltitude = Math.round(state.routePlan.secondCruiseAltitudeMetresMsl);
+      const missDistance = formatMissDistance(state.routePlan.missDistanceMetres);
+      const duration = Number.isInteger(state.routePlan.durationMinutes)
+        ? state.routePlan.durationMinutes.toFixed(0)
+        : state.routePlan.durationMinutes.toFixed(1);
+      const profile = state.routePlan.controlAltitudesMetresMsl
+        .map((altitude) => `${Math.round(altitude)} m`)
+        .join(" → ");
       elements.route_strategy.hidden = false;
       elements.route_strategy.textContent =
-        firstAltitude === secondAltitude
-          ? `Closest tested height plan: hold near ${firstAltitude} m MSL, then descend.`
-          : `Closest tested height plan: ${firstAltitude} m, then ${secondAltitude} m MSL, then descend.`;
+        `Optimised forecast: ${duration} min · peak ${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL · ` +
+        `heights at 20/40/60/80%: ${profile}, then land at launch elevation.`;
       setStatus(
         elements.route_status,
         state.routePlan.reachesDestination
-          ? `The closest forecast endpoint is ${missKilometres} km from the destination, inside the ${toleranceKilometres} km planning tolerance.`
-          : `The winds do not support this destination in the tested height plans. The closest forecast endpoint still misses by ${missKilometres} km; the shown track is best-effort only.`,
+          ? `The optimised forecast endpoint is ${missDistance} from the destination, within the 100 m acceptance distance.`
+          : `The forecast winds do not support this destination inside the search limits. The closest endpoint still misses by ${missDistance}; the shown track is best-effort only.`,
         state.routePlan.reachesDestination ? "good" : "error",
       );
+      state.forecastLanding = state.track.at(-1);
+      setMarker("forecast", state.forecastLanding, "Forecast landing");
+      setMarker("intended", state.intendedLanding, "Destination");
     } else {
       state.routePlan = null;
-      state.track = forecastFlightTrack(settings);
+      state.track = null;
+      state.forecastLanding = null;
       const envelope = forecastLandingEnvelope(settings);
       state.landingEnvelope = envelope.boundary;
       state.landingCandidateCount = envelope.candidates.length;
       elements.route_strategy.hidden = true;
+      setMarker("forecast", null);
+      setMarker("intended", null);
       setStatus(
         elements.route_status,
-        "Set a destination to test two-stage altitude plans against the forecast wind layers.",
+        "Set a destination to optimise flight duration and four in-flight altitude controls.",
       );
     }
-    state.forecastLanding = state.track.at(-1);
-    if (!state.manualLanding || !state.intendedLanding) state.intendedLanding = state.forecastLanding;
-    setMarker("forecast", state.forecastLanding, "Forecast landing");
-    setMarker("intended", state.intendedLanding, "Destination");
     updateSources();
     updateWindMarkers();
     elements.set_landing.disabled = false;
     elements.clear_destination.disabled = !state.manualLanding;
-    elements.generate_code.disabled = false;
-    elements.forecast_summary.hidden = false;
-    elements.forecast_distance.textContent = `${(forecastDistanceMetres(state.track) / 1000).toFixed(1)} km forecast drift`;
-    elements.forecast_validity.textContent = `Wind valid ${formatUtc(state.field.validAt)}`;
+    elements.generate_code.disabled = !state.track;
+    elements.forecast_summary.hidden = !state.track;
+    if (state.track) {
+      elements.forecast_distance.textContent = `${(forecastDistanceMetres(state.track) / 1000).toFixed(1)} km forecast drift`;
+      elements.forecast_validity.textContent = `${state.routePlan.durationMinutes.toFixed(1)} min · hourly wind from departure`;
+    }
     setStatus(
       elements.landing_status,
       state.manualLanding
-        ? "Destination retained. The forecast landing and height strategy update separately."
-        : `The purple envelope bounds endpoints from ${state.landingCandidateCount} two-stage height plans. It is not a safe-landing assessment.`,
+        ? `Destination retained. ${state.routePlan.evaluatedCandidateCount} duration and height refinements were evaluated.`
+        : `The purple envelope bounds ${state.landingCandidateCount} coarse duration and height forecasts. It is not a safe-landing assessment.`,
       "good",
     );
     setStatus(
       elements.wind_status,
-      `UKMO wind valid ${formatUtc(state.field.validAt)} · forecast model, not an observation.`,
+      `Hourly UKMO wind forecast starts ${formatUtc(state.field.validAt)} · model data, not an observation.`,
       "good",
     );
     if (fit) fitForecast();
@@ -594,7 +593,7 @@ async function refreshForecast() {
   let departure;
   try {
     departure = selectedDeparture();
-    validFlightSettings();
+    validLaunchSettings();
   } catch (error) {
     setStatus(elements.wind_status, error.message, "error");
     return;
@@ -671,7 +670,7 @@ function chooseLaunch(point) {
   void refreshForecast();
 }
 
-function chooseLanding(point) {
+async function chooseLanding(point) {
   state.intendedLanding = { latitude: point.lat, longitude: point.lng };
   state.manualLanding = true;
   setMarker("intended", state.intendedLanding, "Destination");
@@ -681,9 +680,12 @@ function chooseLanding(point) {
   elements.clear_destination.disabled = false;
   setStatus(
     elements.landing_status,
-    `Destination set at ${state.intendedLanding.latitude.toFixed(5)}, ${state.intendedLanding.longitude.toFixed(5)}. Testing forecast height plans…`,
+    `Destination set at ${state.intendedLanding.latitude.toFixed(5)}, ${state.intendedLanding.longitude.toFixed(5)}. Optimising duration and altitude profile…`,
     "good",
   );
+  await new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
+  });
   recomputeTrack({ fit: true });
 }
 
@@ -788,9 +790,7 @@ function bindControls() {
     }
   });
   elements.departure_time.addEventListener("change", () => void refreshForecast());
-  for (const input of [elements.duration_minutes, elements.launch_elevation, elements.maximum_altitude]) {
-    input.addEventListener("change", () => recomputeTrack({ fit: false }));
-  }
+  elements.launch_elevation.addEventListener("change", () => recomputeTrack({ fit: false }));
   elements.generate_code.addEventListener("click", () => void generatePlanCode());
   elements.copy_code.addEventListener("click", () => void copyPlanCode());
 }
@@ -839,7 +839,7 @@ async function start() {
       updateSources();
       state.map.on("click", (event) => {
         if (state.mode === "launch") chooseLaunch(event.lngLat);
-        else if (state.mode === "landing") chooseLanding(event.lngLat);
+        else if (state.mode === "landing") void chooseLanding(event.lngLat);
       });
     });
   } catch (error) {
