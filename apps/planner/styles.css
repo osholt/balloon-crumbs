@@ -55,6 +55,8 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 .site-header h1 { margin: 0.05rem 0 0; font-size: clamp(1.35rem, 3vw, 2rem); letter-spacing: -0.025em; }
 .eyebrow { margin: 0; color: var(--sky); text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.72rem; font-weight: 850; }
 .clock { margin: 0; font-variant-numeric: tabular-nums; font-size: 1rem; color: var(--muted); }
+.header-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; justify-content: flex-end; }
+.theme-switch { min-width: 7.6rem; }
 
 .advisory {
   padding: 0.75rem clamp(1rem, 3vw, 2.5rem);
@@ -101,6 +103,7 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 .status { min-height: 1.25rem; margin: 0.7rem 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
 .status.error { color: #ffaaa0; }
 .status.good { color: #9be5bb; }
+.route-strategy { margin: 0.7rem 0 0; padding: 0.7rem 0.8rem; border: 1px solid #655a84; border-radius: 0.65rem; background: #1d1928; color: #d9cdf7; font-size: 0.8rem; line-height: 1.4; font-weight: 750; }
 .muted { color: var(--muted); }
 .small { font-size: 0.75rem; line-height: 1.45; }
 
@@ -153,7 +156,7 @@ summary { cursor: pointer; font-weight: 750; font-size: 0.82rem; }
 
 .map-shell { position: relative; min-height: 42rem; background: #11141a; overflow: hidden; }
 .map { position: absolute; inset: 0; }
-.map-prompt, .forecast-summary, .map-legend {
+.map-prompt, .forecast-summary, .map-legend, .map-status {
   position: absolute;
   z-index: 2;
   background: rgb(17 21 28 / 0.93);
@@ -162,6 +165,10 @@ summary { cursor: pointer; font-weight: 750; font-size: 0.82rem; }
   backdrop-filter: blur(8px);
 }
 .map-prompt { left: 50%; top: 1rem; transform: translateX(-50%); border-radius: 2rem; padding: 0.65rem 1rem; font-size: 0.82rem; font-weight: 750; }
+.map-status { left: 1rem; top: 1rem; border-radius: 0.7rem; padding: 0.48rem 0.65rem; display: flex; align-items: center; gap: 0.55rem; color: var(--muted); font-size: 0.72rem; }
+.map-status.good { color: #9be5bb; }
+.map-status.error { color: #ffaaa0; border-color: #8f4844; }
+.map-status button { padding: 0.28rem 0.5rem; font-size: 0.68rem; }
 .forecast-summary { top: 1rem; right: 1rem; border-radius: 0.75rem; padding: 0.7rem 0.85rem; display: grid; gap: 0.15rem; }
 .forecast-summary strong { color: var(--sky); }
 .forecast-summary span { color: var(--muted); font-size: 0.72rem; }
@@ -172,6 +179,7 @@ summary { cursor: pointer; font-weight: 750; font-size: 0.82rem; }
 .legend-dot.forecast { background: var(--sun); color: var(--sun); }
 .legend-dot.intended { background: var(--green); color: var(--green); }
 .legend-line { width: 1.4rem; height: 0.25rem; border-radius: 1rem; background: linear-gradient(90deg, #4ea5ff, #55e1d2, #ffd45e, #ff6f8c); }
+.legend-envelope { width: 1.4rem; height: 0.65rem; border: 2px dashed var(--purple); background: color-mix(in srgb, var(--purple) 18%, transparent); }
 
 .map-marker { width: 1.2rem; height: 1.2rem; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid #10141a; box-shadow: 0 2px 8px rgb(0 0 0 / 0.45); }
 .map-marker.launch { background: var(--sky); }
@@ -184,10 +192,60 @@ summary { cursor: pointer; font-weight: 750; font-size: 0.82rem; }
 
 .maplibregl-ctrl-group { background: #20252e; }
 .maplibregl-ctrl-group button { background: transparent; border: 0; border-radius: 0; }
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); }
 .maplibregl-ctrl-attrib { background: rgb(17 21 28 / 0.88) !important; color: #d8dce3; }
 .maplibregl-ctrl-attrib a { color: #a7e9f4; }
 
 footer { min-height: 2.7rem; padding: 0.75rem 1rem; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; color: #858e9d; font-size: 0.68rem; border-top: 1px solid #272c36; }
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink: #24212a;
+  --muted: #655f69;
+  --panel: #f7f4ef;
+  --panel-raised: #eee9e2;
+  --line: #c8c0b8;
+  --sky: #087f96;
+  --sun: #a66a00;
+  --green: #16784a;
+  --purple: #6650a4;
+  --shadow: 0 16px 45px rgb(41 34 31 / 0.18);
+  background: #e8e4de;
+}
+
+:root[data-theme="light"] body { background: #e8e4de; }
+:root[data-theme="light"] button { background: #e5dfd7; }
+:root[data-theme="light"] button:hover:not(:disabled) { background: #d9e9ec; }
+:root[data-theme="light"] .site-header { background: linear-gradient(135deg, #f7f4ef, #eef4f5 55%, #eee8f4); border-color: #d2cbc4; }
+:root[data-theme="light"] .advisory { background: #fff3d8; border-color: #d6b66d; color: #5c4616; }
+:root[data-theme="light"] .advisory strong { color: #3b2d0d; }
+:root[data-theme="light"] .planner-panel { border-color: #cbc4bc; }
+:root[data-theme="light"] .panel-section { border-color: #d7d0c8; }
+:root[data-theme="light"] .section-heading > span { background: #dce7e9; }
+:root[data-theme="light"] input[type="text"],
+:root[data-theme="light"] input[type="number"],
+:root[data-theme="light"] input[type="datetime-local"],
+:root[data-theme="light"] .input-with-unit { background: #ffffff; }
+:root[data-theme="light"] details { background: #ffffff; }
+:root[data-theme="light"] .generate-section { background: #eee9e2; }
+:root[data-theme="light"] .code-result { background: #f8fbfc; }
+:root[data-theme="light"] .route-strategy { background: #eee9f7; color: #493b72; border-color: #a89acb; }
+:root[data-theme="light"] .status.good,
+:root[data-theme="light"] .map-status.good { color: #14683f; }
+:root[data-theme="light"] .status.error,
+:root[data-theme="light"] .map-status.error { color: #a22929; }
+:root[data-theme="light"] .map-status.error { border-color: #b75b55; }
+:root[data-theme="light"] .map-shell { background: #e2e6e9; }
+:root[data-theme="light"] .map-prompt,
+:root[data-theme="light"] .forecast-summary,
+:root[data-theme="light"] .map-legend,
+:root[data-theme="light"] .map-status { background: rgb(255 255 255 / 0.92); color: #49434d; }
+:root[data-theme="light"] .map-legend { color: #3b3640; }
+:root[data-theme="light"] .maplibregl-ctrl-group { background: #ffffff; }
+:root[data-theme="light"] .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: none; }
+:root[data-theme="light"] .maplibregl-ctrl-attrib { background: rgb(255 255 255 / 0.9) !important; color: #45404a; }
+:root[data-theme="light"] .maplibregl-ctrl-attrib a { color: #176b7a; }
+:root[data-theme="light"] footer { color: #635d67; border-color: #cbc4bc; }
 
 @media (max-width: 850px) {
   .planner-shell { grid-template-columns: 1fr; }
@@ -197,6 +255,7 @@ footer { min-height: 2.7rem; padding: 0.75rem 1rem; display: flex; justify-conte
 
 @media (max-width: 460px) {
   .site-header { align-items: flex-start; }
+  .header-actions { display: grid; justify-items: end; gap: 0.45rem; }
   .field-grid { grid-template-columns: 1fr; }
   .map-legend { right: 0.65rem; left: 0.65rem; bottom: 0.65rem; }
   .forecast-summary { top: 3.8rem; right: 0.65rem; }

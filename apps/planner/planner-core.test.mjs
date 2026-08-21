@@ -4,11 +4,14 @@ import test from "node:test";
 import {
   WIND_LEVELS_METRES_MSL,
   altitudeForFlightFraction,
+  altitudeForStrategyFraction,
   buildFlightPlanGpx,
   circlePolygon,
+  forecastLandingEnvelope,
   forecastFlightTrack,
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
+  planWindRouteToDestination,
   vectorAtAltitude,
   windForecastGrid,
 } from "./planner-core.mjs";
@@ -64,6 +67,19 @@ test("flight profile climbs, cruises and returns to launch elevation", () => {
   assert.ok(Math.abs(altitudeForFlightFraction({ fraction: 1, ...settings }) - 80) < 1e-9);
 });
 
+test("destination strategy can use two different cruise wind layers and still land", () => {
+  const settings = {
+    launchElevationMetresMsl: 100,
+    firstCruiseAltitudeMetresMsl: 300,
+    secondCruiseAltitudeMetresMsl: 900,
+  };
+  assert.equal(altitudeForStrategyFraction({ fraction: 0, ...settings }), 100);
+  assert.equal(altitudeForStrategyFraction({ fraction: 0.3, ...settings }), 300);
+  assert.equal(altitudeForStrategyFraction({ fraction: 0.5, ...settings }), 600);
+  assert.equal(altitudeForStrategyFraction({ fraction: 0.6, ...settings }), 900);
+  assert.equal(altitudeForStrategyFraction({ fraction: 1, ...settings }), 100);
+});
+
 test("forecast track follows wind while maintaining its own altitude profile", () => {
   const field = parseOpenMeteoForecast(payload(), new Date("2026-08-21T08:00:00Z"));
   const track = forecastFlightTrack({
@@ -78,6 +94,50 @@ test("forecast track follows wind while maintaining its own altitude profile", (
   assert.ok(Math.abs(track.at(-1).latitude - track[0].latitude) < 0.001);
   assert.equal(track[0].altitudeMetresMsl, 100);
   assert.ok(Math.abs(track.at(-1).altitudeMetresMsl - 100) < 1e-9);
+});
+
+test("wind routing chooses a closest altitude strategy and reports impossible targets", () => {
+  const launch = { latitude: 51.5, longitude: -2.5 };
+  const field = {
+    columns: [
+      {
+        position: launch,
+        vectors: [
+          { altitudeMetresMsl: 100, speedKmh: 36, fromDegrees: 270 },
+          { altitudeMetresMsl: 1000, speedKmh: 36, fromDegrees: 180 },
+        ],
+      },
+    ],
+  };
+  const settings = {
+    field,
+    launch,
+    launchElevationMetresMsl: 100,
+    maximumAltitudeMetresMsl: 1000,
+    durationMinutes: 60,
+    stepSeconds: 300,
+  };
+  const envelope = forecastLandingEnvelope(settings);
+  assert.ok(envelope.candidates.length > 20);
+  assert.ok(envelope.boundary.length >= 3);
+
+  const possible = planWindRouteToDestination({
+    ...settings,
+    destination: { latitude: 51.64, longitude: -2.36 },
+    toleranceMetres: 8_000,
+  });
+  assert.equal(possible.reachesDestination, true);
+  assert.equal(possible.track.at(-1).altitudeMetresMsl, 100);
+  assert.ok(possible.firstCruiseAltitudeMetresMsl <= 1000);
+  assert.ok(possible.secondCruiseAltitudeMetresMsl <= 1000);
+
+  const impossible = planWindRouteToDestination({
+    ...settings,
+    destination: { latitude: 51.5, longitude: -3.0 },
+    toleranceMetres: 1_000,
+  });
+  assert.equal(impossible.reachesDestination, false);
+  assert.ok(impossible.missDistanceMetres > 20_000);
 });
 
 test("generated GPX names the forecast and intended landing without claiming a route", () => {

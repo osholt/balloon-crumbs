@@ -4,8 +4,10 @@ import {
   circlePolygon,
   forecastDistanceMetres,
   forecastFlightTrack,
+  forecastLandingEnvelope,
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
+  planWindRouteToDestination,
   vectorAtAltitude,
 } from "./planner-core.mjs";
 
@@ -15,6 +17,42 @@ const APP_LINK_ORIGIN = "https://balloon-crumbs.tailendcharlie.app";
 const FORECAST_AREA_RADIUS_METRES = 750;
 const INTENDED_AREA_RADIUS_METRES = 400;
 const DEFAULT_CENTER = [-2.5, 54.4];
+const MAP_PALETTES = Object.freeze({
+  dark: {
+    background: "#14111b",
+    landcover: "#17201c",
+    park: "#17201c",
+    residential: "#181420",
+    water: "#1b2436",
+    building: "#201b29",
+    boundary: "#3a3247",
+    path: "#241f2e",
+    minor: "#2a2434",
+    tertiary: "#352e42",
+    primary: "#40374f",
+    motorway: "#4d4260",
+    label: "#8d84a0",
+    place: "#c4b9c0",
+    halo: "#14111b",
+  },
+  light: {
+    background: "#f1eee7",
+    landcover: "#dce8d5",
+    park: "#d4e6cd",
+    residential: "#e9e3dc",
+    water: "#b9dced",
+    building: "#ddd4ca",
+    boundary: "#a89bab",
+    path: "#d2c9bf",
+    minor: "#c7bdb2",
+    tertiary: "#b6a99e",
+    primary: "#9d8d83",
+    motorway: "#8d7b87",
+    label: "#514958",
+    place: "#302b34",
+    halo: "#f1eee7",
+  },
+});
 
 const elements = Object.fromEntries(
   [
@@ -22,6 +60,7 @@ const elements = Object.fromEntries(
     "clock",
     "code-result",
     "copy-code",
+    "clear-destination",
     "departure-time",
     "duration-minutes",
     "forecast-distance",
@@ -34,13 +73,20 @@ const elements = Object.fromEntries(
     "landing-status",
     "map",
     "map-prompt",
+    "map-status",
+    "map-status-text",
     "maximum-altitude",
     "open-in-app",
     "plan-code",
     "plan-expiry",
     "plan-name",
+    "retry-map",
+    "route-status",
+    "route-strategy",
     "set-landing",
     "set-launch",
+    "theme-label",
+    "theme-toggle",
     "use-location",
     "wind-altitude",
     "wind-altitude-label",
@@ -58,10 +104,14 @@ const state = {
   forecastLanding: null,
   intendedLanding: null,
   manualLanding: false,
+  landingEnvelope: [],
+  landingCandidateCount: 0,
+  routePlan: null,
   markers: {},
   windMarkers: [],
   forecastRequest: null,
   forecastGeneration: 0,
+  mapTileFailures: 0,
 };
 
 function setStatus(element, message, kind = "") {
@@ -132,6 +182,74 @@ async function loadMapStyle() {
   return style;
 }
 
+function selectedMapTheme() {
+  return elements.theme_toggle.checked ? "dark" : "light";
+}
+
+function themePaintUpdates(themeName) {
+  const palette = MAP_PALETTES[themeName];
+  return [
+    ["background", "background-color", palette.background],
+    ["landcover-green", "fill-color", palette.landcover],
+    ["park", "fill-color", palette.park],
+    ["landuse-residential", "fill-color", palette.residential],
+    ["water", "fill-color", palette.water],
+    ["waterway", "line-color", palette.water],
+    ["building", "fill-color", palette.building],
+    ["boundary-admin", "line-color", palette.boundary],
+    ["road-path", "line-color", palette.path],
+    ["road-minor", "line-color", palette.minor],
+    ["road-tertiary", "line-color", palette.tertiary],
+    ["road-primary", "line-color", palette.primary],
+    ["road-motorway", "line-color", palette.motorway],
+    ["road-label", "text-color", palette.label],
+    ["road-label", "text-halo-color", palette.halo],
+    ["place-label", "text-color", palette.place],
+    ["place-label", "text-halo-color", palette.halo],
+  ];
+}
+
+function themeStyle(style, themeName) {
+  const layers = new Map((style.layers ?? []).map((layer) => [layer.id, layer]));
+  for (const [layerId, property, value] of themePaintUpdates(themeName)) {
+    const layer = layers.get(layerId);
+    if (layer) layer.paint = { ...(layer.paint ?? {}), [property]: value };
+  }
+  return style;
+}
+
+function applyMapTheme() {
+  const themeName = selectedMapTheme();
+  document.documentElement.dataset.theme = themeName;
+  elements.theme_label.textContent = themeName === "dark" ? "Dark map" : "Light map";
+  if (!state.map?.isStyleLoaded()) return;
+  for (const [layerId, property, value] of themePaintUpdates(themeName)) {
+    if (state.map.getLayer(layerId)) state.map.setPaintProperty(layerId, property, value);
+  }
+  if (state.map.getLayer("openaip-chart")) {
+    state.map.setPaintProperty(
+      "openaip-chart",
+      "raster-opacity",
+      themeName === "dark" ? 0.76 : 0.62,
+    );
+  }
+  if (state.map.getLayer("forecast-track-casing")) {
+    state.map.setPaintProperty(
+      "forecast-track-casing",
+      "line-color",
+      themeName === "dark" ? "#11151c" : "#ffffff",
+    );
+  }
+}
+
+function setMapStatus(message, kind = "", retry = false) {
+  elements.map_status.hidden = false;
+  elements.map_status.classList.toggle("error", kind === "error");
+  elements.map_status.classList.toggle("good", kind === "good");
+  elements.map_status_text.textContent = message;
+  elements.retry_map.hidden = !retry;
+}
+
 function lineCollection(track) {
   if (!track || track.length < 2) return { type: "FeatureCollection", features: [] };
   return {
@@ -167,6 +285,25 @@ function polygonFeature(center, radiusMetres) {
   };
 }
 
+function landingEnvelopeFeature(boundary) {
+  if (!Array.isArray(boundary) || boundary.length === 0) {
+    return { type: "FeatureCollection", features: [] };
+  }
+  const coordinates = boundary.map((point) => [point.longitude, point.latitude]);
+  let geometry;
+  if (coordinates.length >= 3) {
+    geometry = { type: "Polygon", coordinates: [[...coordinates, coordinates[0]]] };
+  } else if (coordinates.length === 2) {
+    geometry = { type: "LineString", coordinates };
+  } else {
+    geometry = { type: "Point", coordinates: coordinates[0] };
+  }
+  return {
+    type: "FeatureCollection",
+    features: [{ type: "Feature", properties: {}, geometry }],
+  };
+}
+
 function addPlannerLayers(map) {
   const firstSymbol = map.getStyle().layers.find((layer) => layer.type === "symbol")?.id;
   map.addSource("openaip-chart", {
@@ -182,17 +319,45 @@ function addPlannerLayers(map) {
       source: "openaip-chart",
       minzoom: 4,
       maxzoom: 14,
-      paint: { "raster-opacity": 0.76, "raster-fade-duration": 180 },
+      paint: {
+        "raster-opacity": selectedMapTheme() === "dark" ? 0.76 : 0.62,
+        "raster-fade-duration": 180,
+      },
     },
     firstSymbol,
   );
+
+  map.addSource("landing-envelope", {
+    type: "geojson",
+    data: landingEnvelopeFeature(null),
+  });
+  map.addLayer({
+    id: "landing-envelope-fill",
+    type: "fill",
+    source: "landing-envelope",
+    paint: { "fill-color": "#a78bfa", "fill-opacity": 0.14 },
+  });
+  map.addLayer({
+    id: "landing-envelope-outline",
+    type: "line",
+    source: "landing-envelope",
+    paint: {
+      "line-color": "#a78bfa",
+      "line-width": 2.5,
+      "line-dasharray": [3, 2],
+    },
+  });
 
   map.addSource("forecast-track", { type: "geojson", data: lineCollection(null) });
   map.addLayer({
     id: "forecast-track-casing",
     type: "line",
     source: "forecast-track",
-    paint: { "line-color": "#11151c", "line-width": 9, "line-opacity": 0.8 },
+    paint: {
+      "line-color": selectedMapTheme() === "dark" ? "#11151c" : "#ffffff",
+      "line-width": 9,
+      "line-opacity": 0.8,
+    },
     layout: { "line-cap": "round", "line-join": "round" },
   });
   map.addLayer({
@@ -297,6 +462,9 @@ function updateSources() {
   if (!state.map?.isStyleLoaded()) return;
   state.map.getSource("forecast-track")?.setData(lineCollection(state.track));
   state.map
+    .getSource("landing-envelope")
+    ?.setData(landingEnvelopeFeature(state.landingEnvelope));
+  state.map
     .getSource("forecast-area")
     ?.setData(polygonFeature(state.forecastLanding, FORECAST_AREA_RADIUS_METRES));
   state.map
@@ -310,6 +478,9 @@ function fitForecast() {
   for (const point of state.track) bounds.extend([point.longitude, point.latitude]);
   if (state.intendedLanding) {
     bounds.extend([state.intendedLanding.longitude, state.intendedLanding.latitude]);
+  }
+  for (const point of state.landingEnvelope) {
+    bounds.extend([point.longitude, point.latitude]);
   }
   state.map.fitBounds(bounds, { padding: 90, maxZoom: 11, duration: 700 });
 }
@@ -337,14 +508,53 @@ function validFlightSettings() {
 function recomputeTrack({ fit = false } = {}) {
   if (!state.field || !state.launch) return;
   try {
-    state.track = forecastFlightTrack({ field: state.field, launch: state.launch, ...validFlightSettings() });
+    const settings = { field: state.field, launch: state.launch, ...validFlightSettings() };
+    if (state.manualLanding && state.intendedLanding) {
+      state.routePlan = planWindRouteToDestination({
+        ...settings,
+        destination: state.intendedLanding,
+      });
+      state.track = state.routePlan.track;
+      state.landingEnvelope = state.routePlan.boundary;
+      state.landingCandidateCount = state.routePlan.candidateCount;
+      const missKilometres = (state.routePlan.missDistanceMetres / 1000).toFixed(1);
+      const toleranceKilometres = (
+        state.routePlan.acceptedMissDistanceMetres / 1000
+      ).toFixed(1);
+      const firstAltitude = Math.round(state.routePlan.firstCruiseAltitudeMetresMsl);
+      const secondAltitude = Math.round(state.routePlan.secondCruiseAltitudeMetresMsl);
+      elements.route_strategy.hidden = false;
+      elements.route_strategy.textContent =
+        firstAltitude === secondAltitude
+          ? `Closest tested height plan: hold near ${firstAltitude} m MSL, then descend.`
+          : `Closest tested height plan: ${firstAltitude} m, then ${secondAltitude} m MSL, then descend.`;
+      setStatus(
+        elements.route_status,
+        state.routePlan.reachesDestination
+          ? `The closest forecast endpoint is ${missKilometres} km from the destination, inside the ${toleranceKilometres} km planning tolerance.`
+          : `The winds do not support this destination in the tested height plans. The closest forecast endpoint still misses by ${missKilometres} km; the shown track is best-effort only.`,
+        state.routePlan.reachesDestination ? "good" : "error",
+      );
+    } else {
+      state.routePlan = null;
+      state.track = forecastFlightTrack(settings);
+      const envelope = forecastLandingEnvelope(settings);
+      state.landingEnvelope = envelope.boundary;
+      state.landingCandidateCount = envelope.candidates.length;
+      elements.route_strategy.hidden = true;
+      setStatus(
+        elements.route_status,
+        "Set a destination to test two-stage altitude plans against the forecast wind layers.",
+      );
+    }
     state.forecastLanding = state.track.at(-1);
     if (!state.manualLanding || !state.intendedLanding) state.intendedLanding = state.forecastLanding;
     setMarker("forecast", state.forecastLanding, "Forecast landing");
-    setMarker("intended", state.intendedLanding, "Pilot intended landing area");
+    setMarker("intended", state.intendedLanding, "Destination");
     updateSources();
     updateWindMarkers();
     elements.set_landing.disabled = false;
+    elements.clear_destination.disabled = !state.manualLanding;
     elements.generate_code.disabled = false;
     elements.forecast_summary.hidden = false;
     elements.forecast_distance.textContent = `${(forecastDistanceMetres(state.track) / 1000).toFixed(1)} km forecast drift`;
@@ -352,8 +562,8 @@ function recomputeTrack({ fit = false } = {}) {
     setStatus(
       elements.landing_status,
       state.manualLanding
-        ? "Pilot landing area retained. Forecast landing has updated separately."
-        : "Pilot landing area currently follows the forecast endpoint.",
+        ? "Destination retained. The forecast landing and height strategy update separately."
+        : `The purple envelope bounds endpoints from ${state.landingCandidateCount} two-stage height plans. It is not a safe-landing assessment.`,
       "good",
     );
     setStatus(
@@ -365,11 +575,17 @@ function recomputeTrack({ fit = false } = {}) {
   } catch (error) {
     state.track = null;
     state.forecastLanding = null;
+    state.landingEnvelope = [];
+    state.landingCandidateCount = 0;
+    state.routePlan = null;
     elements.generate_code.disabled = true;
     elements.set_landing.disabled = true;
+    elements.clear_destination.disabled = true;
     elements.forecast_summary.hidden = true;
+    elements.route_strategy.hidden = true;
     updateSources();
     setStatus(elements.wind_status, error.message, "error");
+    setStatus(elements.route_status, "No route calculation is available with these settings.", "error");
   }
 }
 
@@ -405,17 +621,23 @@ async function refreshForecast() {
     state.field = null;
     state.track = null;
     state.forecastLanding = null;
+    state.landingEnvelope = [];
+    state.landingCandidateCount = 0;
+    state.routePlan = null;
     clearWindMarkers();
     updateSources();
     elements.generate_code.disabled = true;
     elements.set_landing.disabled = true;
+    elements.clear_destination.disabled = true;
     elements.forecast_summary.hidden = true;
+    elements.route_strategy.hidden = true;
     setStatus(
       elements.wind_status,
       `No usable live wind forecast: ${error.message} Do not substitute a guessed track.`,
       "error",
     );
     setStatus(elements.landing_status, "Waiting for a usable wind forecast.");
+    setStatus(elements.route_status, "No route calculation is available without wind data.", "error");
   }
 }
 
@@ -423,7 +645,20 @@ function chooseLaunch(point) {
   state.launch = { latitude: point.lat, longitude: point.lng };
   state.manualLanding = false;
   state.intendedLanding = null;
+  state.track = null;
+  state.forecastLanding = null;
+  state.landingEnvelope = [];
+  state.landingCandidateCount = 0;
+  state.routePlan = null;
+  elements.clear_destination.disabled = true;
+  elements.set_landing.disabled = true;
+  elements.generate_code.disabled = true;
+  elements.forecast_summary.hidden = true;
+  elements.route_strategy.hidden = true;
   setMarker("launch", state.launch, "Launch");
+  setMarker("forecast", null);
+  setMarker("intended", null);
+  updateSources();
   setStatus(
     elements.launch_status,
     `${state.launch.latitude.toFixed(5)}, ${state.launch.longitude.toFixed(5)}`,
@@ -431,28 +666,42 @@ function chooseLaunch(point) {
   );
   state.mode = null;
   elements.map_prompt.hidden = true;
+  setStatus(elements.landing_status, "Waiting for the wind forecast.");
+  setStatus(elements.route_status, "Calculating the landing envelope from this launch point…");
   void refreshForecast();
 }
 
 function chooseLanding(point) {
   state.intendedLanding = { latitude: point.lat, longitude: point.lng };
   state.manualLanding = true;
-  setMarker("intended", state.intendedLanding, "Pilot intended landing area");
+  setMarker("intended", state.intendedLanding, "Destination");
   updateSources();
   state.mode = null;
   elements.map_prompt.hidden = true;
+  elements.clear_destination.disabled = false;
   setStatus(
     elements.landing_status,
-    `Pilot landing area set at ${state.intendedLanding.latitude.toFixed(5)}, ${state.intendedLanding.longitude.toFixed(5)}. It can be updated again.`,
+    `Destination set at ${state.intendedLanding.latitude.toFixed(5)}, ${state.intendedLanding.longitude.toFixed(5)}. Testing forecast height plans…`,
     "good",
   );
+  recomputeTrack({ fit: true });
+}
+
+function clearDestination() {
+  state.manualLanding = false;
+  state.intendedLanding = null;
+  state.routePlan = null;
+  elements.clear_destination.disabled = true;
+  recomputeTrack({ fit: true });
 }
 
 function beginMapChoice(mode) {
   state.mode = mode;
   elements.map_prompt.hidden = false;
   elements.map_prompt.textContent =
-    mode === "launch" ? "Click the map to set the launch point" : "Click the map to move the intended landing area";
+    mode === "launch"
+      ? "Click the map to set the launch point"
+      : "Click the map to set the intended destination";
 }
 
 function useDeviceLocation() {
@@ -523,7 +772,10 @@ async function copyPlanCode() {
 function bindControls() {
   elements.set_launch.addEventListener("click", () => beginMapChoice("launch"));
   elements.set_landing.addEventListener("click", () => beginMapChoice("landing"));
+  elements.clear_destination.addEventListener("click", clearDestination);
   elements.use_location.addEventListener("click", useDeviceLocation);
+  elements.theme_toggle.addEventListener("change", applyMapTheme);
+  elements.retry_map.addEventListener("click", () => window.location.reload());
   elements.wind_altitude.addEventListener("input", updateWindMarkers);
   elements.wind_toggle.addEventListener("change", updateWindMarkers);
   elements.airspace_toggle.addEventListener("change", () => {
@@ -544,13 +796,16 @@ function bindControls() {
 }
 
 async function start() {
+  elements.theme_toggle.checked = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  applyMapTheme();
   configureDepartureInput();
   updateClock();
   window.setInterval(updateClock, 1_000);
   bindControls();
   updateWindMarkers();
   try {
-    const style = await loadMapStyle();
+    setMapStatus("Loading basemap tiles…");
+    const style = themeStyle(await loadMapStyle(), selectedMapTheme());
     state.map = new maplibregl.Map({
       container: "map",
       style,
@@ -560,8 +815,27 @@ async function start() {
     });
     state.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     state.map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+    state.map.on("sourcedata", (event) => {
+      if (event.sourceId === "basemap" && event.isSourceLoaded) {
+        state.mapTileFailures = 0;
+        setMapStatus("Basemap tiles loaded", "good");
+      }
+    });
+    state.map.on("error", (event) => {
+      const sourceId = event.sourceId ?? event.source?.id;
+      if (sourceId !== "basemap" && sourceId !== "openaip-chart") return;
+      state.mapTileFailures += 1;
+      setMapStatus(
+        sourceId === "basemap"
+          ? "Some basemap tiles failed to load."
+          : "Some OpenAIP chart tiles failed to load.",
+        "error",
+        true,
+      );
+    });
     state.map.on("load", () => {
       addPlannerLayers(state.map);
+      applyMapTheme();
       updateSources();
       state.map.on("click", (event) => {
         if (state.mode === "launch") chooseLaunch(event.lngLat);
@@ -570,6 +844,7 @@ async function start() {
     });
   } catch (error) {
     elements.map.textContent = `Map unavailable: ${error.message}`;
+    setMapStatus("The basemap could not start.", "error", true);
     setStatus(elements.wind_status, "The map could not start, so no flight forecast was made.", "error");
   }
 }

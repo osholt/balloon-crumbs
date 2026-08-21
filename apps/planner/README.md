@@ -9,9 +9,14 @@ pretend a balloon follows a road route:
   levels used by the mobile app;
 - the forecast track integrates the balloon through its own climb, cruise and
   descent profile;
+- the basemap and planner controls can switch between light and dark themes,
+  with an explicit tile-load indicator and retry action;
 - OpenAIP's combined aeronautical chart is visible with a plain-language key;
-- a forecast landing area and a separately editable pilot-intended landing area
-  are shown; and
+- the purple landing envelope is the convex boundary of endpoints produced by
+  the tested two-stage altitude strategies;
+- an optional destination search ranks those strategies by forecast miss
+  distance and clearly reports when none gets within the planning tolerance;
+- the forecast landing area and separately editable destination are shown; and
 - the resulting forecast track can be stored through `/api/v1/plans` and loaded
   in the app with the returned short code.
 
@@ -38,4 +43,7 @@ node --check apps/planner/app.js
 
 These are forecasts, not aviation briefings or primary navigation. The planner
 does not present a track as controllable, and it does not hide missing forecast
-data behind a synthetic fallback.
+data behind a synthetic fallback. The landing envelope is not a safe-landing
+assessment and does not mean that every point inside it is reachable. The
+destination search does not account for airspace, terrain, legal limits, burner
+fuel, or the balloon's actual climb and descent performance.
