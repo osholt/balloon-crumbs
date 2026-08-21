@@ -57,6 +57,10 @@ docs/                        Product, architecture, source, and backlog notes
 .github/workflows/           Mobile and server CI only
 ```
 
+The pilot planner is published at
+[`balloon-crumbs.pages.dev`](https://balloon-crumbs.pages.dev/). Its bounded
+Pages proxy keeps the Oracle relay and provider credentials out of browser code.
+
 ## Local verification
 
 ```bash
