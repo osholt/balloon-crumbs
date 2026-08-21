@@ -4,6 +4,13 @@ export const WIND_LEVELS_METRES_MSL = Object.freeze([
 
 const EARTH_RADIUS_METRES = 6_371_000;
 const DEFAULT_STEP_SECONDS = 60;
+export const ROUTE_SEARCH_LIMITS = Object.freeze({
+  minimumDurationMinutes: 10,
+  maximumDurationMinutes: 180,
+  altitudeCeilingMetresMsl: 2000,
+  acceptedMissDistanceMetres: 100,
+});
+export const ROUTE_CONTROL_FRACTIONS = Object.freeze([0, 0.2, 0.4, 0.6, 0.8, 1]);
 
 function finiteNumber(value, label) {
   const number = Number(value);
@@ -70,8 +77,7 @@ export function parseOpenMeteoForecast(payload, requestedAt) {
   const target = requestedAt instanceof Date ? requestedAt : new Date(requestedAt);
   if (Number.isNaN(target.getTime())) throw new TypeError("Forecast time is invalid.");
   const entries = Array.isArray(payload) ? payload : [payload];
-  const columns = [];
-  let validAt = null;
+  const slicesByTime = new Map();
 
   for (const entry of entries) {
     if (!entry || typeof entry !== "object" || !entry.hourly) continue;
@@ -87,29 +93,41 @@ export function parseOpenMeteoForecast(payload, requestedAt) {
     const rawTimes = Array.isArray(entry.hourly.time) ? entry.hourly.time : [];
     const times = rawTimes.map(parseUtcHour);
     if (times.length === 0 || times.some((time) => time === null)) continue;
-    const timeIndex = nearestTimeIndex(times, target);
-    const vectors = [];
-    for (const altitudeMetresMsl of WIND_LEVELS_METRES_MSL) {
-      const speeds = entry.hourly[`wind_speed_${altitudeMetresMsl}m`];
-      const directions = entry.hourly[`wind_direction_${altitudeMetresMsl}m`];
-      const speedKmh = Number(Array.isArray(speeds) ? speeds[timeIndex] : NaN);
-      const fromDegrees = Number(Array.isArray(directions) ? directions[timeIndex] : NaN);
-      if (!Number.isFinite(speedKmh) || speedKmh < 0 || !Number.isFinite(fromDegrees)) continue;
-      vectors.push({
-        altitudeMetresMsl,
-        speedKmh,
-        fromDegrees: ((fromDegrees % 360) + 360) % 360,
-      });
+    for (let timeIndex = 0; timeIndex < times.length; timeIndex += 1) {
+      const vectors = [];
+      for (const altitudeMetresMsl of WIND_LEVELS_METRES_MSL) {
+        const speeds = entry.hourly[`wind_speed_${altitudeMetresMsl}m`];
+        const directions = entry.hourly[`wind_direction_${altitudeMetresMsl}m`];
+        const speedKmh = Number(Array.isArray(speeds) ? speeds[timeIndex] : NaN);
+        const fromDegrees = Number(Array.isArray(directions) ? directions[timeIndex] : NaN);
+        if (!Number.isFinite(speedKmh) || speedKmh < 0 || !Number.isFinite(fromDegrees)) continue;
+        vectors.push({
+          altitudeMetresMsl,
+          speedKmh,
+          fromDegrees: ((fromDegrees % 360) + 360) % 360,
+        });
+      }
+      if (vectors.length === 0) continue;
+      const epoch = times[timeIndex].getTime();
+      const slice = slicesByTime.get(epoch) ?? { validAt: times[timeIndex], columns: [] };
+      slice.columns.push({ position, vectors });
+      slicesByTime.set(epoch, slice);
     }
-    if (vectors.length === 0) continue;
-    validAt ??= times[timeIndex];
-    columns.push({ position, vectors });
   }
 
-  if (columns.length === 0 || validAt === null) {
+  const timeSlices = [...slicesByTime.values()]
+    .filter((slice) => slice.columns.length > 0)
+    .sort((first, second) => first.validAt - second.validAt);
+  if (timeSlices.length === 0) {
     throw new Error("Open-Meteo returned no usable wind profiles for this time and place.");
   }
-  return { columns, validAt, requestedAt: target };
+  const selected = timeSlices[nearestTimeIndex(timeSlices.map((slice) => slice.validAt), target)];
+  return {
+    columns: selected.columns,
+    validAt: selected.validAt,
+    requestedAt: target,
+    timeSlices,
+  };
 }
 
 function components(vector) {
@@ -173,15 +191,49 @@ export function distanceMetres(first, second) {
   return 2 * EARTH_RADIUS_METRES * Math.asin(Math.sqrt(haversine));
 }
 
-export function vectorAtPosition(field, position, altitudeMetresMsl) {
-  const columns = field?.columns ?? [];
+function vectorInColumns(columns, position, altitudeMetresMsl) {
   if (columns.length === 0) return null;
-  const nearest = columns.reduce((best, candidate) =>
-    distanceMetres(candidate.position, position) < distanceMetres(best.position, position)
-      ? candidate
-      : best,
-  );
+  let nearest = columns[0];
+  let nearestDistance = distanceMetres(nearest.position, position);
+  for (let index = 1; index < columns.length; index += 1) {
+    const candidateDistance = distanceMetres(columns[index].position, position);
+    if (candidateDistance >= nearestDistance) continue;
+    nearest = columns[index];
+    nearestDistance = candidateDistance;
+  }
   return vectorAtAltitude(nearest, altitudeMetresMsl);
+}
+
+export function vectorAtPosition(field, position, altitudeMetresMsl, elapsedSeconds = 0) {
+  const slices = field?.timeSlices ?? [];
+  if (slices.length === 0) {
+    return vectorInColumns(field?.columns ?? [], position, altitudeMetresMsl);
+  }
+  const requestedAt = field.requestedAt instanceof Date ? field.requestedAt : field.validAt;
+  const targetTime = requestedAt.getTime() + finiteNumber(elapsedSeconds, "elapsed seconds") * 1000;
+  let upperIndex = slices.findIndex((slice) => slice.validAt.getTime() >= targetTime);
+  if (upperIndex < 0) upperIndex = slices.length - 1;
+  const lowerIndex = Math.max(0, upperIndex - 1);
+  const lower = slices[lowerIndex];
+  const upper = slices[upperIndex];
+  const lowerVector = vectorInColumns(lower.columns, position, altitudeMetresMsl);
+  const upperVector = vectorInColumns(upper.columns, position, altitudeMetresMsl);
+  if (!lowerVector) return upperVector;
+  if (!upperVector || lowerIndex === upperIndex) return lowerVector;
+  const interval = upper.validAt.getTime() - lower.validAt.getTime();
+  const fraction =
+    interval <= 0
+      ? 0
+      : Math.max(0, Math.min(1, (targetTime - lower.validAt.getTime()) / interval));
+  const lowerComponents = components(lowerVector);
+  const upperComponents = components(upperVector);
+  return vectorFromComponents(
+    altitudeMetresMsl,
+    lowerComponents.eastMetresPerSecond +
+      (upperComponents.eastMetresPerSecond - lowerComponents.eastMetresPerSecond) * fraction,
+    lowerComponents.northMetresPerSecond +
+      (upperComponents.northMetresPerSecond - lowerComponents.northMetresPerSecond) * fraction,
+  );
 }
 
 export function altitudeForFlightFraction({
@@ -220,6 +272,29 @@ export function altitudeForStrategyFraction({
   return launch + (second - launch) * ((1 - progress) / 0.3);
 }
 
+export function altitudeForProfileFraction({
+  fraction,
+  launchElevationMetresMsl,
+  controlAltitudesMetresMsl,
+}) {
+  const progress = Math.max(0, Math.min(1, finiteNumber(fraction, "flight fraction")));
+  const launch = finiteNumber(launchElevationMetresMsl, "launch elevation");
+  if (!Array.isArray(controlAltitudesMetresMsl) || controlAltitudesMetresMsl.length !== 4) {
+    throw new RangeError("An altitude profile requires four in-flight control heights.");
+  }
+  const altitudes = [
+    launch,
+    ...controlAltitudesMetresMsl.map((altitude, index) =>
+      Math.max(launch, finiteNumber(altitude, `control altitude ${index + 1}`)),
+    ),
+    launch,
+  ];
+  if (progress >= 1) return launch;
+  const segment = Math.min(4, Math.floor(progress / 0.2));
+  const segmentProgress = (progress - ROUTE_CONTROL_FRACTIONS[segment]) / 0.2;
+  return altitudes[segment] + (altitudes[segment + 1] - altitudes[segment]) * segmentProgress;
+}
+
 export function moveWithWind(position, vector, seconds) {
   const origin = validPoint(position);
   const elapsed = finiteNumber(seconds, "elapsed seconds");
@@ -251,15 +326,17 @@ function forecastTrackWithAltitudeProfile({
     throw new RangeError("Flight duration or forecast step is outside the supported range.");
   }
   const points = [];
-  for (let elapsedSeconds = 0; elapsedSeconds <= durationSeconds; elapsedSeconds += step) {
+  let elapsedSeconds = 0;
+  while (true) {
     const fraction = elapsedSeconds / durationSeconds;
     const altitudeMetresMsl = altitudeAtFraction(fraction);
-    const vector = vectorAtPosition(field, position, altitudeMetresMsl);
+    const vector = vectorAtPosition(field, position, altitudeMetresMsl, elapsedSeconds);
     if (!vector) throw new Error("The wind field does not cover the forecast flight.");
     points.push({ ...position, altitudeMetresMsl, elapsedSeconds, wind: vector });
-    if (elapsedSeconds < durationSeconds) {
-      position = moveWithWind(position, vector, Math.min(step, durationSeconds - elapsedSeconds));
-    }
+    if (elapsedSeconds >= durationSeconds) break;
+    const nextElapsedSeconds = Math.min(durationSeconds, elapsedSeconds + step);
+    position = moveWithWind(position, vector, nextElapsedSeconds - elapsedSeconds);
+    elapsedSeconds = nextElapsedSeconds;
   }
   return Object.freeze(points);
 }
@@ -310,13 +387,73 @@ export function forecastAltitudeStrategyTrack({
   });
 }
 
-function strategyAltitudes(launchElevationMetresMsl, maximumAltitudeMetresMsl) {
+export function forecastAltitudeProfileTrack({
+  field,
+  launch,
+  launchElevationMetresMsl,
+  controlAltitudesMetresMsl,
+  durationMinutes,
+  stepSeconds = DEFAULT_STEP_SECONDS,
+}) {
+  return forecastTrackWithAltitudeProfile({
+    field,
+    launch,
+    durationMinutes,
+    stepSeconds,
+    altitudeAtFraction: (fraction) =>
+      altitudeForProfileFraction({
+        fraction,
+        launchElevationMetresMsl,
+        controlAltitudesMetresMsl,
+      }),
+  });
+}
+
+function strategyAltitudes(launchElevationMetresMsl, altitudeCeilingMetresMsl) {
   const launch = finiteNumber(launchElevationMetresMsl, "launch elevation");
-  const maximum = finiteNumber(maximumAltitudeMetresMsl, "maximum altitude");
-  if (maximum < launch) throw new RangeError("Maximum altitude must not be below launch.");
-  return [...new Set([launch, maximum, ...WIND_LEVELS_METRES_MSL])]
-    .filter((altitude) => altitude >= launch && altitude <= maximum)
+  const ceiling = finiteNumber(altitudeCeilingMetresMsl, "altitude ceiling");
+  if (ceiling < launch) throw new RangeError("Altitude ceiling must not be below launch.");
+  return [...new Set([launch, ceiling, ...WIND_LEVELS_METRES_MSL])]
+    .filter((altitude) => altitude >= launch && altitude <= ceiling)
     .sort((first, second) => first - second);
+}
+
+function routeDurations(minimumDurationMinutes, maximumDurationMinutes, stepMinutes = 10) {
+  const minimum = finiteNumber(minimumDurationMinutes, "minimum route duration");
+  const maximum = finiteNumber(maximumDurationMinutes, "maximum route duration");
+  const step = finiteNumber(stepMinutes, "route duration step");
+  if (minimum < 10 || maximum > 180 || minimum > maximum || step <= 0) {
+    throw new RangeError("Route duration search is outside the supported range.");
+  }
+  const durations = [];
+  for (let duration = minimum; duration <= maximum; duration += step) durations.push(duration);
+  if (durations.at(-1) !== maximum) durations.push(maximum);
+  return durations;
+}
+
+function profileIsFeasible({
+  controlAltitudesMetresMsl,
+  launchElevationMetresMsl,
+  altitudeCeilingMetresMsl,
+  durationMinutes,
+  maximumVerticalRateMetresPerSecond,
+}) {
+  const launch = finiteNumber(launchElevationMetresMsl, "launch elevation");
+  const ceiling = finiteNumber(altitudeCeilingMetresMsl, "altitude ceiling");
+  const segmentSeconds = (finiteNumber(durationMinutes, "flight duration") * 60) / 5;
+  const altitudes = [launch, ...controlAltitudesMetresMsl, launch];
+  if (
+    altitudes.some(
+      (altitude) => !Number.isFinite(altitude) || altitude < launch || altitude > ceiling,
+    )
+  ) {
+    return false;
+  }
+  return altitudes.slice(1).every(
+    (altitude, index) =>
+      Math.abs(altitude - altitudes[index]) / segmentSeconds <=
+      maximumVerticalRateMetresPerSecond,
+  );
 }
 
 function convexHull(points) {
@@ -348,82 +485,254 @@ function convexHull(points) {
   return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
 
-export function forecastLandingEnvelope({
+function coarseLandingCandidates({
   field,
   launch,
   launchElevationMetresMsl,
-  maximumAltitudeMetresMsl,
-  durationMinutes,
+  destination,
+  minimumDurationMinutes,
+  maximumDurationMinutes,
+  altitudeCeilingMetresMsl,
+  maximumVerticalRateMetresPerSecond,
   stepSeconds = DEFAULT_STEP_SECONDS,
 }) {
-  const altitudes = strategyAltitudes(
-    launchElevationMetresMsl,
-    maximumAltitudeMetresMsl,
+  const target = destination ? validPoint(destination, "destination") : null;
+  const altitudes = strategyAltitudes(launchElevationMetresMsl, altitudeCeilingMetresMsl);
+  const durations = routeDurations(
+    minimumDurationMinutes,
+    maximumDurationMinutes,
   );
   const candidates = [];
-  for (const firstCruiseAltitudeMetresMsl of altitudes) {
-    for (const secondCruiseAltitudeMetresMsl of altitudes) {
-      const track = forecastAltitudeStrategyTrack({
-        field,
-        launch,
-        launchElevationMetresMsl,
-        firstCruiseAltitudeMetresMsl,
-        secondCruiseAltitudeMetresMsl,
-        durationMinutes,
-        stepSeconds,
-      });
-      candidates.push({
-        firstCruiseAltitudeMetresMsl,
-        secondCruiseAltitudeMetresMsl,
-        track,
-        landing: track.at(-1),
-      });
+  for (const durationMinutes of durations) {
+    for (const firstAltitude of altitudes) {
+      for (const secondAltitude of altitudes) {
+        const controlAltitudesMetresMsl = [
+          firstAltitude,
+          firstAltitude,
+          secondAltitude,
+          secondAltitude,
+        ];
+        if (
+          !profileIsFeasible({
+            controlAltitudesMetresMsl,
+            launchElevationMetresMsl,
+            altitudeCeilingMetresMsl,
+            durationMinutes,
+            maximumVerticalRateMetresPerSecond,
+          })
+        ) {
+          continue;
+        }
+        const track = forecastAltitudeProfileTrack({
+          field,
+          launch,
+          launchElevationMetresMsl,
+          controlAltitudesMetresMsl,
+          durationMinutes,
+          stepSeconds,
+        });
+        const landing = track.at(-1);
+        candidates.push({
+          durationMinutes,
+          controlAltitudesMetresMsl,
+          peakAltitudeMetresMsl: Math.max(launchElevationMetresMsl, ...controlAltitudesMetresMsl),
+          landing,
+          ...(target ? { missDistanceMetres: distanceMetres(landing, target) } : {}),
+        });
+      }
     }
   }
+  return candidates;
+}
+
+function routeSearchSettings(options) {
+  const minimumDurationMinutes =
+    options.minimumDurationMinutes ?? ROUTE_SEARCH_LIMITS.minimumDurationMinutes;
+  const maximumDurationMinutes =
+    options.maximumDurationMinutes ?? ROUTE_SEARCH_LIMITS.maximumDurationMinutes;
+  const altitudeCeilingMetresMsl =
+    options.altitudeCeilingMetresMsl ?? ROUTE_SEARCH_LIMITS.altitudeCeilingMetresMsl;
+  const maximumVerticalRateMetresPerSecond = options.maximumVerticalRateMetresPerSecond ?? 5;
+  routeDurations(minimumDurationMinutes, maximumDurationMinutes);
+  if (altitudeCeilingMetresMsl < options.launchElevationMetresMsl) {
+    throw new RangeError("Altitude ceiling must not be below launch.");
+  }
+  return {
+    minimumDurationMinutes,
+    maximumDurationMinutes,
+    altitudeCeilingMetresMsl,
+    maximumVerticalRateMetresPerSecond,
+  };
+}
+
+export function forecastLandingEnvelope(options) {
+  const settings = routeSearchSettings(options);
+  const candidates = coarseLandingCandidates({ ...options, ...settings });
   return Object.freeze({
     candidates: Object.freeze(candidates),
     boundary: Object.freeze(convexHull(candidates.map((candidate) => candidate.landing))),
+    ...settings,
   });
 }
 
-export function planWindRouteToDestination({
-  field,
-  launch,
-  destination,
-  launchElevationMetresMsl,
-  maximumAltitudeMetresMsl,
-  durationMinutes,
-  stepSeconds = DEFAULT_STEP_SECONDS,
-  toleranceMetres,
-}) {
-  const target = validPoint(destination, "destination");
-  const envelope = forecastLandingEnvelope({
+function routeCandidateKey(durationMinutes, controlAltitudesMetresMsl) {
+  return `${Math.round(durationMinutes * 60)}:${controlAltitudesMetresMsl
+    .map((altitude) => Math.round(altitude))
+    .join(",")}`;
+}
+
+function bestUniqueCandidates(candidates, limit) {
+  const unique = new Map();
+  for (const candidate of candidates) {
+    const key = routeCandidateKey(candidate.durationMinutes, candidate.controlAltitudesMetresMsl);
+    const existing = unique.get(key);
+    if (!existing || candidate.missDistanceMetres < existing.missDistanceMetres) {
+      unique.set(key, candidate);
+    }
+  }
+  return [...unique.values()]
+    .sort((first, second) => first.missDistanceMetres - second.missDistanceMetres)
+    .slice(0, limit);
+}
+
+export function planWindRouteToDestination(options) {
+  const {
     field,
     launch,
+    destination,
     launchElevationMetresMsl,
-    maximumAltitudeMetresMsl,
-    durationMinutes,
+    stepSeconds = DEFAULT_STEP_SECONDS,
+  } = options;
+  const target = validPoint(destination, "destination");
+  const settings = routeSearchSettings(options);
+  const coarseCandidates = coarseLandingCandidates({
+    ...options,
+    ...settings,
+    destination: target,
     stepSeconds,
   });
-  const ranked = envelope.candidates
-    .map((candidate) => ({
-      ...candidate,
-      missDistanceMetres: distanceMetres(candidate.landing, target),
-    }))
-    .sort((first, second) => first.missDistanceMetres - second.missDistanceMetres);
-  const best = ranked[0];
+  if (coarseCandidates.length === 0) {
+    throw new Error("No feasible altitude profiles were available inside the route-search limits.");
+  }
+  const altitudeLevels = strategyAltitudes(
+    launchElevationMetresMsl,
+    settings.altitudeCeilingMetresMsl,
+  );
+  const evaluationCache = new Map();
+  const evaluate = (durationMinutes, controlAltitudesMetresMsl) => {
+    const boundedDurationMinutes = Math.max(
+      settings.minimumDurationMinutes,
+      Math.min(settings.maximumDurationMinutes, Math.round(durationMinutes * 60) / 60),
+    );
+    const boundedAltitudes = controlAltitudesMetresMsl.map((altitude) =>
+      Math.max(
+        launchElevationMetresMsl,
+        Math.min(settings.altitudeCeilingMetresMsl, Math.round(altitude)),
+      ),
+    );
+    const key = routeCandidateKey(boundedDurationMinutes, boundedAltitudes);
+    if (evaluationCache.has(key)) return evaluationCache.get(key);
+    if (
+      !profileIsFeasible({
+        controlAltitudesMetresMsl: boundedAltitudes,
+        launchElevationMetresMsl,
+        altitudeCeilingMetresMsl: settings.altitudeCeilingMetresMsl,
+        durationMinutes: boundedDurationMinutes,
+        maximumVerticalRateMetresPerSecond: settings.maximumVerticalRateMetresPerSecond,
+      })
+    ) {
+      evaluationCache.set(key, null);
+      return null;
+    }
+    const track = forecastAltitudeProfileTrack({
+      field,
+      launch,
+      launchElevationMetresMsl,
+      controlAltitudesMetresMsl: boundedAltitudes,
+      durationMinutes: boundedDurationMinutes,
+      stepSeconds,
+    });
+    const landing = track.at(-1);
+    const candidate = {
+      durationMinutes: boundedDurationMinutes,
+      controlAltitudesMetresMsl: boundedAltitudes,
+      peakAltitudeMetresMsl: Math.max(launchElevationMetresMsl, ...boundedAltitudes),
+      track,
+      landing,
+      missDistanceMetres: distanceMetres(landing, target),
+    };
+    evaluationCache.set(key, candidate);
+    return candidate;
+  };
+
+  let beam = bestUniqueCandidates(coarseCandidates, 10)
+    .map((candidate) =>
+      evaluate(candidate.durationMinutes, candidate.controlAltitudesMetresMsl),
+    )
+    .filter(Boolean);
+  for (let pass = 0; pass < 2; pass += 1) {
+    for (let controlIndex = 0; controlIndex < 4; controlIndex += 1) {
+      const expanded = [...beam];
+      for (const seed of beam) {
+        for (const altitude of altitudeLevels) {
+          const controlAltitudes = [...seed.controlAltitudesMetresMsl];
+          controlAltitudes[controlIndex] = altitude;
+          const candidate = evaluate(seed.durationMinutes, controlAltitudes);
+          if (candidate) expanded.push(candidate);
+        }
+      }
+      beam = bestUniqueCandidates(expanded, 10);
+    }
+  }
+
+  const refinementScales = [
+    [300, 200],
+    [120, 100],
+    [60, 50],
+    [30, 20],
+    [10, 10],
+    [5, 5],
+    [1, 1],
+  ];
+  const refined = [];
+  for (const seed of beam.slice(0, 4)) {
+    let best = seed;
+    for (const [durationStepSeconds, altitudeStepMetres] of refinementScales) {
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const neighbours = [best];
+        for (const direction of [-1, 1]) {
+          const durationCandidate = evaluate(
+            best.durationMinutes + (direction * durationStepSeconds) / 60,
+            best.controlAltitudesMetresMsl,
+          );
+          if (durationCandidate) neighbours.push(durationCandidate);
+          for (let controlIndex = 0; controlIndex < 4; controlIndex += 1) {
+            const controlAltitudes = [...best.controlAltitudesMetresMsl];
+            controlAltitudes[controlIndex] += direction * altitudeStepMetres;
+            const altitudeCandidate = evaluate(best.durationMinutes, controlAltitudes);
+            if (altitudeCandidate) neighbours.push(altitudeCandidate);
+          }
+        }
+        const nextBest = bestUniqueCandidates(neighbours, 1)[0];
+        if (nextBest.missDistanceMetres >= best.missDistanceMetres - 0.01) break;
+        best = nextBest;
+      }
+    }
+    refined.push(best);
+  }
+  const best = bestUniqueCandidates([...beam, ...refined], 1)[0];
   const directDistanceMetres = distanceMetres(launch, target);
-  const acceptedMissDistanceMetres = Number.isFinite(Number(toleranceMetres))
-    ? Math.max(100, Number(toleranceMetres))
-    : Math.max(1_000, Math.min(3_000, directDistanceMetres * 0.1));
+  const acceptedMissDistanceMetres = ROUTE_SEARCH_LIMITS.acceptedMissDistanceMetres;
   return Object.freeze({
     ...best,
     destination: target,
     directDistanceMetres,
     acceptedMissDistanceMetres,
     reachesDestination: best.missDistanceMetres <= acceptedMissDistanceMetres,
-    boundary: envelope.boundary,
-    candidateCount: envelope.candidates.length,
+    boundary: Object.freeze(convexHull(coarseCandidates.map((candidate) => candidate.landing))),
+    candidateCount: coarseCandidates.length,
+    evaluatedCandidateCount: [...evaluationCache.values()].filter(Boolean).length,
+    ...settings,
   });
 }
 

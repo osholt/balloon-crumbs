@@ -104,6 +104,7 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 .status.error { color: #ffaaa0; }
 .status.good { color: #9be5bb; }
 .route-strategy { margin: 0.7rem 0 0; padding: 0.7rem 0.8rem; border: 1px solid #655a84; border-radius: 0.65rem; background: #1d1928; color: #d9cdf7; font-size: 0.8rem; line-height: 1.4; font-weight: 750; }
+.search-limits { margin: 0.75rem 0 0; padding: 0.65rem 0.75rem; border-left: 3px solid var(--purple); background: color-mix(in srgb, var(--purple) 9%, transparent); color: var(--muted); }
 .muted { color: var(--muted); }
 .small { font-size: 0.75rem; line-height: 1.45; }
 

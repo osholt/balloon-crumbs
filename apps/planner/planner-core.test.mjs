@@ -4,15 +4,19 @@ import test from "node:test";
 import {
   WIND_LEVELS_METRES_MSL,
   altitudeForFlightFraction,
+  altitudeForProfileFraction,
   altitudeForStrategyFraction,
   buildFlightPlanGpx,
   circlePolygon,
+  forecastAltitudeProfileTrack,
   forecastLandingEnvelope,
   forecastFlightTrack,
+  moveWithWind,
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
   planWindRouteToDestination,
   vectorAtAltitude,
+  vectorAtPosition,
   windForecastGrid,
 } from "./planner-core.mjs";
 
@@ -43,6 +47,20 @@ test("forecast parser chooses the hour nearest the pilot's departure", () => {
   const field = parseOpenMeteoForecast(source, new Date("2026-08-21T08:52:00Z"));
   assert.equal(field.validAt.toISOString(), "2026-08-21T09:00:00.000Z");
   assert.equal(vectorAtAltitude(field.columns[0], 500).speedKmh, 28);
+});
+
+test("wind vectors interpolate between hourly forecast slices during the flight", () => {
+  const source = payload();
+  source.hourly.wind_direction_500m = [270, 180];
+  const field = parseOpenMeteoForecast(source, new Date("2026-08-21T08:00:00Z"));
+  const vector = vectorAtPosition(
+    field,
+    { latitude: 51.5, longitude: -2.5 },
+    500,
+    30 * 60,
+  );
+  assert.ok(Math.abs(vector.fromDegrees - 225) < 0.1);
+  assert.ok(Math.abs(vector.speedKmh - 25.46) < 0.1);
 });
 
 test("vertical interpolation crosses north without wrapping south", () => {
@@ -80,6 +98,19 @@ test("destination strategy can use two different cruise wind layers and still la
   assert.equal(altitudeForStrategyFraction({ fraction: 1, ...settings }), 100);
 });
 
+test("multi-stage altitude profiles interpolate four controls and return to launch", () => {
+  const settings = {
+    launchElevationMetresMsl: 100,
+    controlAltitudesMetresMsl: [300, 700, 500, 900],
+  };
+  assert.equal(altitudeForProfileFraction({ fraction: 0, ...settings }), 100);
+  assert.equal(altitudeForProfileFraction({ fraction: 0.1, ...settings }), 200);
+  assert.equal(altitudeForProfileFraction({ fraction: 0.2, ...settings }), 300);
+  assert.equal(altitudeForProfileFraction({ fraction: 0.4, ...settings }), 700);
+  assert.equal(altitudeForProfileFraction({ fraction: 0.8, ...settings }), 900);
+  assert.equal(altitudeForProfileFraction({ fraction: 1, ...settings }), 100);
+});
+
 test("forecast track follows wind while maintaining its own altitude profile", () => {
   const field = parseOpenMeteoForecast(payload(), new Date("2026-08-21T08:00:00Z"));
   const track = forecastFlightTrack({
@@ -96,7 +127,36 @@ test("forecast track follows wind while maintaining its own altitude profile", (
   assert.ok(Math.abs(track.at(-1).altitudeMetresMsl - 100) < 1e-9);
 });
 
-test("wind routing chooses a closest altitude strategy and reports impossible targets", () => {
+test("wind routing chooses duration automatically and refines a reachable endpoint within 100 m", () => {
+  const launch = { latitude: 51.5, longitude: -2.5 };
+  const vector = { altitudeMetresMsl: 100, speedKmh: 36, fromDegrees: 270 };
+  const field = {
+    columns: [
+      {
+        position: launch,
+        vectors: [vector, { ...vector, altitudeMetresMsl: 1000 }],
+      },
+    ],
+  };
+  const destination = moveWithWind(launch, vector, 1000);
+  const result = planWindRouteToDestination({
+    field,
+    launch,
+    destination,
+    launchElevationMetresMsl: 100,
+    minimumDurationMinutes: 10,
+    maximumDurationMinutes: 30,
+    altitudeCeilingMetresMsl: 1000,
+  });
+  assert.equal(result.reachesDestination, true);
+  assert.equal(result.acceptedMissDistanceMetres, 100);
+  assert.ok(result.missDistanceMetres < 1);
+  assert.ok(Math.abs(result.durationMinutes - 1000 / 60) < 0.02);
+  assert.equal(result.controlAltitudesMetresMsl.length, 4);
+  assert.equal(result.track.at(-1).elapsedSeconds, 1000);
+});
+
+test("wind routing changes a multi-stage altitude profile and reports impossible targets", () => {
   const launch = { latitude: 51.5, longitude: -2.5 };
   const field = {
     columns: [
@@ -113,28 +173,37 @@ test("wind routing chooses a closest altitude strategy and reports impossible ta
     field,
     launch,
     launchElevationMetresMsl: 100,
-    maximumAltitudeMetresMsl: 1000,
-    durationMinutes: 60,
-    stepSeconds: 300,
+    minimumDurationMinutes: 40,
+    maximumDurationMinutes: 100,
+    altitudeCeilingMetresMsl: 1000,
   };
+  const knownTrack = forecastAltitudeProfileTrack({
+    field,
+    launch,
+    launchElevationMetresMsl: 100,
+    controlAltitudesMetresMsl: [100, 1000, 100, 1000],
+    durationMinutes: 73,
+  });
   const envelope = forecastLandingEnvelope(settings);
-  assert.ok(envelope.candidates.length > 20);
+  assert.ok(envelope.candidates.length > 100);
   assert.ok(envelope.boundary.length >= 3);
 
   const possible = planWindRouteToDestination({
     ...settings,
-    destination: { latitude: 51.64, longitude: -2.36 },
-    toleranceMetres: 8_000,
+    destination: knownTrack.at(-1),
   });
   assert.equal(possible.reachesDestination, true);
+  assert.ok(possible.missDistanceMetres < 100);
   assert.equal(possible.track.at(-1).altitudeMetresMsl, 100);
-  assert.ok(possible.firstCruiseAltitudeMetresMsl <= 1000);
-  assert.ok(possible.secondCruiseAltitudeMetresMsl <= 1000);
+  assert.equal(possible.controlAltitudesMetresMsl.length, 4);
+  assert.equal(
+    possible.peakAltitudeMetresMsl,
+    Math.max(100, ...possible.controlAltitudesMetresMsl),
+  );
 
   const impossible = planWindRouteToDestination({
     ...settings,
     destination: { latitude: 51.5, longitude: -3.0 },
-    toleranceMetres: 1_000,
   });
   assert.equal(impossible.reachesDestination, false);
   assert.ok(impossible.missDistanceMetres > 20_000);

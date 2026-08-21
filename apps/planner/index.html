@@ -51,37 +51,22 @@
           <div class="section-heading">
             <span>2</span>
             <div>
-              <h2 id="flight-title">Flight shape</h2>
-              <p>The balloon climbs, cruises, then descends through forecast layers.</p>
+              <h2 id="flight-title">Forecast setup</h2>
+              <p>Set only what the optimiser cannot choose: departure and ground elevation.</p>
             </div>
           </div>
           <label class="field">
             <span>Departure (local time)</span>
             <input type="datetime-local" id="departure-time" />
           </label>
-          <div class="field-grid">
-            <label class="field">
-              <span>Duration</span>
-              <span class="input-with-unit">
-                <input type="number" id="duration-minutes" min="10" max="180" step="5" value="60" />
-                <i>min</i>
-              </span>
-            </label>
-            <label class="field">
-              <span>Launch elevation</span>
-              <span class="input-with-unit">
-                <input type="number" id="launch-elevation" min="-50" max="1000" step="10" value="100" />
-                <i>m MSL</i>
-              </span>
-            </label>
-          </div>
           <label class="field">
-            <span>Planned maximum altitude</span>
+            <span>Launch elevation</span>
             <span class="input-with-unit">
-              <input type="number" id="maximum-altitude" min="100" max="2500" step="50" value="1000" />
+              <input type="number" id="launch-elevation" min="-50" max="1000" step="10" value="100" />
               <i>m MSL</i>
             </span>
           </label>
+          <p class="search-limits small">The destination search chooses a 10–180 minute duration and four altitude controls between launch elevation and 2,000 m MSL. Its resulting peak altitude is an output, not an input.</p>
         </section>
 
         <section class="panel-section" aria-labelledby="wind-title">
@@ -110,7 +95,7 @@
             <span>4</span>
             <div>
               <h2 id="landing-title">Destination and landing envelope</h2>
-              <p>Test whether forecast winds at different heights can approach a chosen destination.</p>
+              <p>Optimise duration and a changing altitude profile toward a chosen destination.</p>
             </div>
           </div>
           <div class="button-row">
@@ -120,7 +105,7 @@
           <p class="status" id="landing-status">Waiting for a wind forecast.</p>
           <p class="status" id="route-status" role="status">Set a launch point to calculate the landing envelope.</p>
           <p class="route-strategy" id="route-strategy" hidden></p>
-          <p class="small muted">The purple boundary is a convex envelope of tested forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. The height solver does not assess airspace, terrain, legal limits, fuel or actual climb/descent performance.</p>
+          <p class="small muted">The purple boundary is a convex envelope of coarse forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. A result within 100 m is marked as a forecast match. The optimiser does not assess airspace, terrain, legal limits, fuel or the balloon’s actual climb/descent performance.</p>
         </section>
 
         <section class="panel-section" aria-labelledby="airspace-title">
