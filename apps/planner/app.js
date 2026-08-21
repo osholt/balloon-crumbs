@@ -9,6 +9,8 @@ import {
   vectorAtAltitude,
 } from "./planner-core.mjs";
 
+// Keep the installed-app hand-off on its already-shipped associated domain.
+// The planner itself is hosted at balloon-crumbs.pages.dev.
 const APP_LINK_ORIGIN = "https://balloon-crumbs.tailendcharlie.app";
 const FORECAST_AREA_RADIUS_METRES = 750;
 const INTENDED_AREA_RADIUS_METRES = 400;

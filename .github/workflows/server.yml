@@ -44,8 +44,11 @@ jobs:
       - name: Test pilot planner forecast logic
         run: |
           cd ../..
-          node --test apps/planner/planner-core.test.mjs
+          node --test \
+            apps/planner/planner-core.test.mjs \
+            apps/planner/pages-worker.test.mjs
           node --check apps/planner/app.js
+          node --check apps/planner/_worker.js
       - run: uv run pytest --cov=balloon_crumbs_server --cov-report=term-missing --cov-fail-under=80
 
   postgres-migration:

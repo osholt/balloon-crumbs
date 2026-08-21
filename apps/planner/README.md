@@ -15,10 +15,12 @@ pretend a balloon follows a road route:
 - the resulting forecast track can be stored through `/api/v1/plans` and loaded
   in the app with the returned short code.
 
-The page is served at `/plan/` by the relay. Browser calls are same-origin:
-`deploy/Caddyfile.oracle` proxies the bounded Open-Meteo path, OpenFreeMap
-resources and OpenAIP tiles. The OpenAIP key stays in the host environment and
-is attached as a request header by Caddy; it is never shipped to browser code.
+The public page is served at `https://balloon-crumbs.pages.dev/`. Its Pages
+Worker keeps browser calls same-origin and proxies only the relay, health,
+Open-Meteo, OpenFreeMap and OpenAIP paths needed by the planner to the isolated
+Oracle deployment. The origin also serves `/plan/` as a recovery path. The
+OpenAIP key stays in the host environment and is attached as a request header
+by Caddy; it is never shipped to Pages or browser code.
 
 The vendored MapLibre GL JS distribution and licence are copied from the pinned
 5.24.0 assets already used by the Tail End Charlie website.
@@ -30,6 +32,7 @@ UK Met Office data obtained through Open-Meteo is attributed under CC BY-SA
 
 ```bash
 node --test apps/planner/planner-core.test.mjs
+node --test apps/planner/pages-worker.test.mjs
 node --check apps/planner/app.js
 ```
 
