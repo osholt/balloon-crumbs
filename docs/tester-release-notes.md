@@ -5,6 +5,16 @@ version, Play version code, commit, destination track, and recent changes. Copy
 the tester-facing entry here after each release so an installed build can be
 matched to its changes.
 
+## Next tester build
+
+- Adds **Plan a balloon flight** to the home map's More menu and opens the live
+  planner in the iOS/Android in-app browser.
+- Includes the planner's maximum-altitude landing envelope, draggable launch
+  and destination points, wind-route search, and timed altitude profile without
+  maintaining a second forecast implementation in the app.
+- Keeps the planner's Open-Meteo/OpenAIP source labels and advisory safety
+  warning visible.
+
 ## 1.0.1 (Play build 26 / TestFlight build 27) — 21 August 2026
 
 - Adds UKMO forecast wind from Open-Meteo to the balloon map, with downwind

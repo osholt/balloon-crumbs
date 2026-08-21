@@ -34,6 +34,7 @@ import '../../services/build_identity.dart';
 import '../../services/basemap_configuration.dart';
 import '../../services/carplay_bridge.dart';
 import '../../services/gpx_import_source.dart';
+import '../../services/flight_planner_launcher.dart';
 import '../../services/stored_route_library.dart';
 import '../map/stored_route_picker.dart';
 import '../ride/previous_rides_screen.dart';
@@ -66,6 +67,7 @@ class HomeScreen extends StatefulWidget {
     this.openJoinGroup = false,
     this.onJoinGroupOpened,
     this.enableNativeServices = true,
+    this.flightPlannerLauncher = const FlightPlannerLauncher(),
   });
 
   final RideController controller;
@@ -106,6 +108,11 @@ class HomeScreen extends StatefulWidget {
   /// False in widget tests and plugin-less builds; the map backdrop stands
   /// down rather than waiting on a platform map that will never load.
   final bool enableNativeServices;
+
+  /// Opens the shared production pilot planner in the platform browser view.
+  /// Injected in tests so discoverability and failure handling do not require a
+  /// native browser plugin.
+  final FlightPlannerLauncher flightPlannerLauncher;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -488,9 +495,21 @@ class _HomeScreenState extends State<HomeScreen> {
       useSafeArea: true,
       backgroundColor: const Color(0xFF171D25),
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: ListView(
+          shrinkWrap: true,
           children: [
+            ListTile(
+              key: const Key('open-flight-planner'),
+              leading: const Icon(Icons.air_outlined),
+              title: const Text('Plan a balloon flight'),
+              subtitle: const Text(
+                'Wind route, landing envelope and timed altitude profile',
+              ),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                unawaited(_openFlightPlanner());
+              },
+            ),
             ListTile(
               key: const Key('start-ride-simulator'),
               leading: const Icon(Icons.science_outlined),
@@ -545,6 +564,23 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFlightPlanner() async {
+    var opened = false;
+    try {
+      opened = await widget.flightPlannerLauncher.open();
+    } on Object {
+      opened = false;
+    }
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Could not open the flight planner. Check your connection and try again.',
         ),
       ),
     );
