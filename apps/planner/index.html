@@ -14,7 +14,14 @@
         <p class="eyebrow">Balloon Crumbs</p>
         <h1>Pilot flight planner</h1>
       </div>
-      <p class="clock" id="clock" aria-label="Current UTC time"></p>
+      <div class="header-actions">
+        <label class="switch theme-switch" title="Switch the planner and basemap theme">
+          <input type="checkbox" id="theme-toggle" checked />
+          <span aria-hidden="true"></span>
+          <b id="theme-label">Dark map</b>
+        </label>
+        <p class="clock" id="clock" aria-label="Current UTC time"></p>
+      </div>
     </header>
 
     <div class="advisory" role="note">
@@ -102,12 +109,18 @@
           <div class="section-heading">
             <span>4</span>
             <div>
-              <h2 id="landing-title">Intended landing area</h2>
-              <p>The forecast endpoint is selected initially. The pilot can move it.</p>
+              <h2 id="landing-title">Destination and landing envelope</h2>
+              <p>Test whether forecast winds at different heights can approach a chosen destination.</p>
             </div>
           </div>
-          <button type="button" id="set-landing" disabled>Move landing area on map</button>
+          <div class="button-row">
+            <button type="button" id="set-landing" disabled>Set destination on map</button>
+            <button type="button" id="clear-destination" disabled>Clear destination</button>
+          </div>
           <p class="status" id="landing-status">Waiting for a wind forecast.</p>
+          <p class="status" id="route-status" role="status">Set a launch point to calculate the landing envelope.</p>
+          <p class="route-strategy" id="route-strategy" hidden></p>
+          <p class="small muted">The purple boundary is a convex envelope of tested forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. The height solver does not assess airspace, terrain, legal limits, fuel or actual climb/descent performance.</p>
         </section>
 
         <section class="panel-section" aria-labelledby="airspace-title">
@@ -161,6 +174,10 @@
       <section class="map-shell" aria-label="Forecast flight map">
         <div id="map" class="map"></div>
         <div class="map-prompt" id="map-prompt">Click the map to set the launch point</div>
+        <div class="map-status" id="map-status" role="status">
+          <span id="map-status-text">Loading basemap tiles…</span>
+          <button type="button" id="retry-map" hidden>Retry</button>
+        </div>
         <div class="forecast-summary" id="forecast-summary" hidden>
           <strong id="forecast-distance"></strong>
           <span id="forecast-validity"></span>
@@ -168,8 +185,9 @@
         <div class="map-legend" aria-label="Map legend">
           <span><i class="legend-dot launch"></i>Launch</span>
           <span><i class="legend-dot forecast"></i>Forecast landing</span>
-          <span><i class="legend-dot intended"></i>Pilot landing area</span>
+          <span><i class="legend-dot intended"></i>Destination</span>
           <span><i class="legend-line"></i>Altitude-coloured forecast track</span>
+          <span><i class="legend-envelope"></i>Forecast landing envelope</span>
         </div>
       </section>
     </main>
