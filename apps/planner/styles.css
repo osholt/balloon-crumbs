@@ -121,6 +121,9 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 .compact-fields { margin-top: 0.1rem; }
 .compact-fields .field { margin-top: 0.65rem; }
 .ceiling-field { margin-top: 0.7rem; padding-top: 0.65rem; border-top: 1px solid var(--line); }
+.vertical-rate-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.vertical-rate-fields .range-field > span { display: grid; gap: 0.08rem; }
+.vertical-rate-fields .range-field strong { font-variant-numeric: tabular-nums; }
 input[type="text"], input[type="search"], input[type="number"], input[type="date"] {
   width: 100%;
   min-width: 0;

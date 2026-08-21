@@ -215,6 +215,22 @@ test("launch-only forecast reports a representative track and flight details", (
   assert.ok(route.landing.longitude > route.track[0].longitude);
 });
 
+test("representative forecast respects independent ascent and descent limits", () => {
+  const field = parseOpenMeteoForecast(payload(), new Date("2026-08-21T08:00:00Z"));
+  const route = forecastRepresentativeRoute({
+    field,
+    launch: { latitude: 51.5, longitude: -2.5 },
+    launchElevationMetresMsl: 100,
+    durationMinutes: 60,
+    cruiseAltitudeMetresMsl: 1000,
+    maximumAscentRateMetresPerSecond: 0.2,
+    maximumDescentRateMetresPerSecond: 0.1,
+  });
+  assert.equal(route.peakAltitudeMetresMsl, 208);
+  assert.equal(route.maximumAscentRateMetresPerSecond, 0.2);
+  assert.equal(route.maximumDescentRateMetresPerSecond, 0.1);
+});
+
 test("maximum altitude constrains the representative track and landing envelope", () => {
   const source = payload();
   for (const altitude of WIND_LEVELS_METRES_MSL) {
@@ -264,6 +280,63 @@ test("maximum altitude constrains the representative track and landing envelope"
   });
   assert.ok(constrainedRoute.peakAltitudeMetresMsl <= 300);
   assert.ok(constrainedRoute.controlAltitudesMetresMsl.every((altitude) => altitude <= 300));
+});
+
+test("landing envelope applies adjustable ascent and descent limits independently", () => {
+  const field = parseOpenMeteoForecast(payload(), new Date("2026-08-21T08:00:00Z"));
+  const settings = {
+    field,
+    launch: { latitude: 51.5, longitude: -2.5 },
+    launchElevationMetresMsl: 100,
+    altitudeCeilingMetresMsl: 1000,
+    minimumDurationMinutes: 10,
+    maximumDurationMinutes: 10,
+  };
+  const ascentLimited = forecastLandingEnvelope({
+    ...settings,
+    maximumAscentRateMetresPerSecond: 0.5,
+    maximumDescentRateMetresPerSecond: 10,
+  });
+  const descentLimited = forecastLandingEnvelope({
+    ...settings,
+    maximumAscentRateMetresPerSecond: 10,
+    maximumDescentRateMetresPerSecond: 0.5,
+  });
+  const segmentSeconds = 120;
+  const rates = (candidate) => {
+    const altitudes = [100, ...candidate.controlAltitudesMetresMsl, 100];
+    return altitudes.slice(1).map(
+      (altitude, index) => (altitude - altitudes[index]) / segmentSeconds,
+    );
+  };
+  assert.ok(
+    ascentLimited.candidates.every((candidate) =>
+      rates(candidate).every((rate) => rate <= 0.5 + Number.EPSILON),
+    ),
+  );
+  assert.ok(
+    ascentLimited.candidates.some((candidate) =>
+      rates(candidate).some((rate) => rate < -0.5),
+    ),
+  );
+  assert.ok(
+    descentLimited.candidates.every((candidate) =>
+      rates(candidate).every((rate) => rate >= -0.5 - Number.EPSILON),
+    ),
+  );
+  assert.ok(
+    descentLimited.candidates.some((candidate) =>
+      rates(candidate).some((rate) => rate > 0.5),
+    ),
+  );
+  assert.throws(
+    () =>
+      forecastLandingEnvelope({
+        ...settings,
+        maximumAscentRateMetresPerSecond: 0,
+      }),
+    /greater than zero/,
+  );
 });
 
 test("wind routing chooses duration automatically and refines a reachable endpoint within 100 m", () => {

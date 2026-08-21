@@ -78,6 +78,16 @@
             <span>Maximum altitude <strong id="max-altitude-label">2,000 m MSL</strong></span>
             <input type="range" id="max-altitude" min="100" max="2000" step="50" value="2000" />
           </label>
+          <div class="vertical-rate-fields" aria-label="Vertical rate limits">
+            <label class="range-field">
+              <span>Maximum ascent <strong id="max-ascent-rate-label">5.0 m/s</strong></span>
+              <input type="range" id="max-ascent-rate" min="0.1" max="10" step="0.1" value="5" />
+            </label>
+            <label class="range-field">
+              <span>Maximum descent <strong id="max-descent-rate-label">5.0 m/s</strong></span>
+              <input type="range" id="max-descent-rate" min="0.1" max="10" step="0.1" value="5" />
+            </label>
+          </div>
           <div class="subsection-heading">
             <strong>Destination</strong>
             <span>Click the map directly or drag the yellow endpoint</span>
@@ -90,7 +100,7 @@
           <p class="status" id="route-status" role="status">Set a launch point to calculate the landing envelope.</p>
           <details class="panel-help">
             <summary>Planner help, safety and data</summary>
-            <p class="small muted">The search varies the remaining start times on the selected day, a 10–180 minute duration and four altitude controls up to the selected maximum altitude. The purple boundary is a convex envelope of coarse forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. A result within 100 m is marked as a forecast match. The optimiser does not assess airspace, terrain, legal limits, fuel or the balloon’s actual climb/descent performance.</p>
+            <p class="small muted">The search varies the remaining start times on the selected day, a 10–180 minute duration and four altitude controls up to the selected maximum altitude, while respecting the selected maximum ascent and descent rates. The purple boundary is a convex envelope of coarse forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. A result within 100 m is marked as a forecast match. The rate limits are pilot inputs: the planner cannot verify that they suit the balloon, conditions or phase of flight, and it does not assess airspace, terrain, legal limits or fuel.</p>
             <p class="small muted place-search-credit">Submit-only search using © OpenStreetMap contributors, ODbL. Do not enter personal or confidential information.</p>
           </details>
         </section>
