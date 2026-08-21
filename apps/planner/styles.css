@@ -100,6 +100,14 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 .split-heading { grid-template-columns: 1.8rem 1fr auto; }
 
 .button-row { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.place-search { display: grid; gap: 0.36rem; margin-bottom: 0.2rem; }
+.place-search > label { color: var(--muted); font-size: 0.78rem; font-weight: 700; }
+.place-search > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.45rem; }
+.place-search > div button { padding-inline: 0.8rem; }
+.place-search-results { display: grid; gap: 0.4rem; list-style: none; margin: 0.55rem 0 0.7rem; padding: 0; }
+.place-search-results button { width: 100%; text-align: left; font-size: 0.76rem; line-height: 1.35; font-weight: 650; }
+.place-search-results button strong { display: block; color: var(--sky); margin-bottom: 0.12rem; }
+.place-search-credit { margin: 0.35rem 0 0.8rem; }
 .status { min-height: 1.25rem; margin: 0.7rem 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
 .status.error { color: #ffaaa0; }
 .status.good { color: #9be5bb; }
@@ -110,7 +118,7 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 
 .field { display: grid; gap: 0.36rem; margin-top: 0.75rem; color: var(--muted); font-size: 0.78rem; font-weight: 700; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
-input[type="text"], input[type="number"], input[type="datetime-local"] {
+input[type="text"], input[type="search"], input[type="number"], input[type="date"] {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--line);
@@ -224,8 +232,9 @@ footer { min-height: 2.7rem; padding: 0.75rem 1rem; display: flex; justify-conte
 :root[data-theme="light"] .panel-section { border-color: #d7d0c8; }
 :root[data-theme="light"] .section-heading > span { background: #dce7e9; }
 :root[data-theme="light"] input[type="text"],
+:root[data-theme="light"] input[type="search"],
 :root[data-theme="light"] input[type="number"],
-:root[data-theme="light"] input[type="datetime-local"],
+:root[data-theme="light"] input[type="date"],
 :root[data-theme="light"] .input-with-unit { background: #ffffff; }
 :root[data-theme="light"] details { background: #ffffff; }
 :root[data-theme="light"] .generate-section { background: #eee9e2; }

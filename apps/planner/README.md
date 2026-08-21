@@ -4,8 +4,9 @@ Static application code for a balloon pilot's forecast flight plan. It keeps
 the short plan-code flow inherited from Tail End Charlie, but it does not
 pretend a balloon follows a road route:
 
-- the pilot selects a launch point, flight date, launch elevation and optional
-  destination;
+- the pilot can find a UK place with a submit-only OpenStreetMap search, choose
+  a result explicitly as the launch point, and then select a flight date, launch
+  elevation and optional destination;
 - UKMO UKV wind from Open-Meteo is sampled across a 5×5 grid spanning roughly
   120 km around the launch, at 14 MSL height levels, with hourly interpolation
   during the flight and spatially interpolated display arrows across the visible
@@ -39,6 +40,9 @@ The vendored MapLibre GL JS distribution and licence are copied from the pinned
 
 UK Met Office data obtained through Open-Meteo is attributed under CC BY-SA
 4.0. See `docs/weather-wind-source.md` for source, licence and safety limits.
+Place search uses the public OpenStreetMap Nominatim service through a bounded,
+cached Pages endpoint. It never runs autocomplete: only an explicit submitted
+query is sent, with a maximum of five UK results.
 
 ## Checks
 

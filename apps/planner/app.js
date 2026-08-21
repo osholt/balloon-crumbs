@@ -79,6 +79,11 @@ const elements = Object.fromEntries(
     "plan-code",
     "plan-expiry",
     "plan-name",
+    "place-search",
+    "place-search-form",
+    "place-search-results",
+    "place-search-status",
+    "place-search-submit",
     "retry-map",
     "route-status",
     "route-strategy",
@@ -110,6 +115,8 @@ const state = {
   windMarkers: [],
   forecastRequest: null,
   forecastGeneration: 0,
+  placeSearchRequest: null,
+  lastPlaceSearchAt: 0,
   mapTileFailures: 0,
 };
 
@@ -117,6 +124,98 @@ function setStatus(element, message, kind = "") {
   element.textContent = message;
   element.classList.toggle("error", kind === "error");
   element.classList.toggle("good", kind === "good");
+}
+
+function clearPlaceSearchResults() {
+  elements.place_search_results.replaceChildren();
+  elements.place_search_results.hidden = true;
+}
+
+function usePlaceSearchResult(result) {
+  clearPlaceSearchResults();
+  elements.place_search.value = result.displayName.split(",")[0];
+  state.map.easeTo({
+    center: [result.longitude, result.latitude],
+    zoom: 14,
+    duration: 700,
+  });
+  chooseLaunch({ lat: result.latitude, lng: result.longitude });
+  setStatus(
+    elements.place_search_status,
+    `Launch set at ${result.displayName}. Check the pin against the map before flight.`,
+    "good",
+  );
+}
+
+function renderPlaceSearchResults(results) {
+  clearPlaceSearchResults();
+  for (const result of results) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", `Set launch at ${result.displayName}`);
+    const name = document.createElement("strong");
+    const detail = document.createElement("span");
+    const parts = result.displayName.split(",").map((part) => part.trim());
+    name.textContent = parts.shift() || result.displayName;
+    detail.textContent = parts.join(", ");
+    button.append(name, detail);
+    button.addEventListener("click", () => usePlaceSearchResult(result));
+    item.append(button);
+    elements.place_search_results.append(item);
+  }
+  elements.place_search_results.hidden = false;
+}
+
+async function searchForPlace(event) {
+  event.preventDefault();
+  const query = elements.place_search.value.trim().replace(/\s+/g, " ");
+  clearPlaceSearchResults();
+  if (query.length < 2 || query.length > 100) {
+    setStatus(elements.place_search_status, "Enter between 2 and 100 characters.", "error");
+    return;
+  }
+  if (!state.map) {
+    setStatus(elements.place_search_status, "Wait for the map to finish loading.", "error");
+    return;
+  }
+
+  state.placeSearchRequest?.abort();
+  const request = new AbortController();
+  state.placeSearchRequest = request;
+  elements.place_search_submit.disabled = true;
+  setStatus(elements.place_search_status, `Searching for “${query}”…`);
+  try {
+    const delay = Math.max(0, 1_100 - (Date.now() - state.lastPlaceSearchAt));
+    if (delay > 0) await new Promise((resolve) => window.setTimeout(resolve, delay));
+    state.lastPlaceSearchAt = Date.now();
+    const response = await fetch(`/geocode/v1/search?q=${encodeURIComponent(query)}`, {
+      headers: { Accept: "application/json" },
+      signal: request.signal,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || `Place search returned ${response.status}.`);
+    const results = Array.isArray(body.results) ? body.results : [];
+    if (results.length === 0) {
+      setStatus(
+        elements.place_search_status,
+        `No UK places matched “${query}”. Try adding a nearby town or county.`,
+        "error",
+      );
+      return;
+    }
+    renderPlaceSearchResults(results);
+    setStatus(elements.place_search_status, "Choose a result to set it as the launch point.", "good");
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      setStatus(elements.place_search_status, `Place search failed: ${error.message}`, "error");
+    }
+  } finally {
+    if (state.placeSearchRequest === request) {
+      state.placeSearchRequest = null;
+      elements.place_search_submit.disabled = !state.map;
+    }
+  }
 }
 
 function toLocalDateInputValue(date) {
@@ -907,6 +1006,7 @@ async function copyPlanCode() {
 }
 
 function bindControls() {
+  elements.place_search_form.addEventListener("submit", (event) => void searchForPlace(event));
   elements.set_launch.addEventListener("click", () => beginMapChoice("launch"));
   elements.set_landing.addEventListener("click", () => beginMapChoice("landing"));
   elements.clear_destination.addEventListener("click", clearDestination);
@@ -970,6 +1070,7 @@ async function start() {
     });
     state.map.on("load", () => {
       addPlannerLayers(state.map);
+      elements.place_search_submit.disabled = false;
       applyMapTheme();
       updateSources();
       state.map.on("moveend", updateWindMarkers);
@@ -981,7 +1082,9 @@ async function start() {
     });
   } catch (error) {
     elements.map.textContent = `Map unavailable: ${error.message}`;
+    elements.place_search_submit.disabled = true;
     setMapStatus("The basemap could not start.", "error", true);
+    setStatus(elements.place_search_status, "Place search is unavailable without the map.", "error");
     setStatus(elements.wind_status, "The map could not start, so no flight forecast was made.", "error");
   }
 }
