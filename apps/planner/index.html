@@ -52,12 +52,12 @@
             <span>2</span>
             <div>
               <h2 id="flight-title">Forecast setup</h2>
-              <p>Set only what the optimiser cannot choose: departure and ground elevation.</p>
+              <p>Choose the day and ground elevation; the optimiser searches the start time.</p>
             </div>
           </div>
           <label class="field">
-            <span>Departure (local time)</span>
-            <input type="datetime-local" id="departure-time" />
+            <span>Flight date to search</span>
+            <input type="date" id="departure-time" />
           </label>
           <label class="field">
             <span>Launch elevation</span>
@@ -66,7 +66,7 @@
               <i>m MSL</i>
             </span>
           </label>
-          <p class="search-limits small">The destination search chooses a 10–180 minute duration and four altitude controls between launch elevation and 2,000 m MSL. Its resulting peak altitude is an output, not an input.</p>
+          <p class="search-limits small">The destination search tries the remaining start times on the selected day, a 10–180 minute duration and four altitude controls between launch elevation and 2,000 m MSL. Start time and peak altitude are outputs, not inputs.</p>
         </section>
 
         <section class="panel-section" aria-labelledby="wind-title">
@@ -95,7 +95,7 @@
             <span>4</span>
             <div>
               <h2 id="landing-title">Destination and landing envelope</h2>
-              <p>Optimise duration and a changing altitude profile toward a chosen destination.</p>
+              <p>Optimise start time, duration and a changing altitude profile toward a destination.</p>
             </div>
           </div>
           <div class="button-row">
@@ -105,7 +105,7 @@
           <p class="status" id="landing-status">Waiting for a wind forecast.</p>
           <p class="status" id="route-status" role="status">Set a launch point to calculate the landing envelope.</p>
           <p class="route-strategy" id="route-strategy" hidden></p>
-          <p class="small muted">The purple boundary is a convex envelope of coarse forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. A result within 100 m is marked as a forecast match. The optimiser does not assess airspace, terrain, legal limits, fuel or the balloon’s actual climb/descent performance.</p>
+          <p class="small muted">The purple boundary is a convex envelope of coarse forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. A result within 100 m is marked as a forecast match; its reported time window only applies to that forecast profile. The optimiser does not assess airspace, terrain, legal limits, fuel or the balloon’s actual climb/descent performance.</p>
         </section>
 
         <section class="panel-section" aria-labelledby="airspace-title">

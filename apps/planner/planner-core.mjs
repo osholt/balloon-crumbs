@@ -222,8 +222,8 @@ function vectorInColumns(columns, position, altitudeMetresMsl) {
   return vectorAtAltitude(nearest, altitudeMetresMsl);
 }
 
-export function interpolatedVectorAtPosition(field, position, altitudeMetresMsl) {
-  const candidates = (field?.columns ?? [])
+function interpolatedVectorInColumns(columns, position, altitudeMetresMsl) {
+  const candidates = columns
     .map((column) => ({
       distanceMetres: distanceMetres(column.position, position),
       vector: vectorAtAltitude(column, altitudeMetresMsl),
@@ -247,6 +247,51 @@ export function interpolatedVectorAtPosition(field, position, altitudeMetresMsl)
     altitudeMetresMsl,
     eastMetresPerSecond / totalWeight,
     northMetresPerSecond / totalWeight,
+  );
+}
+
+export function interpolatedVectorAtPosition(
+  field,
+  position,
+  altitudeMetresMsl,
+  elapsedSeconds = 0,
+) {
+  const slices = field?.timeSlices ?? [];
+  if (slices.length === 0) {
+    return interpolatedVectorInColumns(field?.columns ?? [], position, altitudeMetresMsl);
+  }
+  const requestedAt = field.requestedAt instanceof Date ? field.requestedAt : field.validAt;
+  const targetTime = requestedAt.getTime() + finiteNumber(elapsedSeconds, "elapsed seconds") * 1000;
+  let upperIndex = slices.findIndex((slice) => slice.validAt.getTime() >= targetTime);
+  if (upperIndex < 0) upperIndex = slices.length - 1;
+  const lowerIndex = Math.max(0, upperIndex - 1);
+  const lower = slices[lowerIndex];
+  const upper = slices[upperIndex];
+  const lowerVector = interpolatedVectorInColumns(
+    lower.columns,
+    position,
+    altitudeMetresMsl,
+  );
+  const upperVector = interpolatedVectorInColumns(
+    upper.columns,
+    position,
+    altitudeMetresMsl,
+  );
+  if (!lowerVector) return upperVector;
+  if (!upperVector || lowerIndex === upperIndex) return lowerVector;
+  const interval = upper.validAt.getTime() - lower.validAt.getTime();
+  const fraction =
+    interval <= 0
+      ? 0
+      : Math.max(0, Math.min(1, (targetTime - lower.validAt.getTime()) / interval));
+  const lowerComponents = components(lowerVector);
+  const upperComponents = components(upperVector);
+  return vectorFromComponents(
+    altitudeMetresMsl,
+    lowerComponents.eastMetresPerSecond +
+      (upperComponents.eastMetresPerSecond - lowerComponents.eastMetresPerSecond) * fraction,
+    lowerComponents.northMetresPerSecond +
+      (upperComponents.northMetresPerSecond - lowerComponents.northMetresPerSecond) * fraction,
   );
 }
 
@@ -363,12 +408,21 @@ function forecastTrackWithAltitudeProfile({
   launch,
   durationMinutes,
   altitudeAtFraction,
+  departureOffsetSeconds = 0,
   stepSeconds = DEFAULT_STEP_SECONDS,
 }) {
   let position = validPoint(launch, "launch point");
   const durationSeconds = Math.round(finiteNumber(durationMinutes, "flight duration") * 60);
+  const forecastOffsetSeconds = Math.round(
+    finiteNumber(departureOffsetSeconds, "departure offset"),
+  );
   const step = Math.round(finiteNumber(stepSeconds, "forecast step"));
-  if (durationSeconds < 600 || durationSeconds > 6 * 60 * 60 || step < 10) {
+  if (
+    durationSeconds < 600 ||
+    durationSeconds > 6 * 60 * 60 ||
+    forecastOffsetSeconds < 0 ||
+    step < 10
+  ) {
     throw new RangeError("Flight duration or forecast step is outside the supported range.");
   }
   const points = [];
@@ -376,7 +430,12 @@ function forecastTrackWithAltitudeProfile({
   while (true) {
     const fraction = elapsedSeconds / durationSeconds;
     const altitudeMetresMsl = altitudeAtFraction(fraction);
-    const vector = vectorAtPosition(field, position, altitudeMetresMsl, elapsedSeconds);
+    const vector = vectorAtPosition(
+      field,
+      position,
+      altitudeMetresMsl,
+      forecastOffsetSeconds + elapsedSeconds,
+    );
     if (!vector) throw new Error("The wind field does not cover the forecast flight.");
     points.push({ ...position, altitudeMetresMsl, elapsedSeconds, wind: vector });
     if (elapsedSeconds >= durationSeconds) break;
@@ -393,12 +452,14 @@ export function forecastFlightTrack({
   launchElevationMetresMsl,
   maximumAltitudeMetresMsl,
   durationMinutes,
+  departureOffsetSeconds = 0,
   stepSeconds = DEFAULT_STEP_SECONDS,
 }) {
   return forecastTrackWithAltitudeProfile({
     field,
     launch,
     durationMinutes,
+    departureOffsetSeconds,
     stepSeconds,
     altitudeAtFraction: (fraction) =>
       altitudeForFlightFraction({
@@ -416,12 +477,14 @@ export function forecastAltitudeStrategyTrack({
   firstCruiseAltitudeMetresMsl,
   secondCruiseAltitudeMetresMsl,
   durationMinutes,
+  departureOffsetSeconds = 0,
   stepSeconds = DEFAULT_STEP_SECONDS,
 }) {
   return forecastTrackWithAltitudeProfile({
     field,
     launch,
     durationMinutes,
+    departureOffsetSeconds,
     stepSeconds,
     altitudeAtFraction: (fraction) =>
       altitudeForStrategyFraction({
@@ -439,12 +502,14 @@ export function forecastAltitudeProfileTrack({
   launchElevationMetresMsl,
   controlAltitudesMetresMsl,
   durationMinutes,
+  departureOffsetSeconds = 0,
   stepSeconds = DEFAULT_STEP_SECONDS,
 }) {
   return forecastTrackWithAltitudeProfile({
     field,
     launch,
     durationMinutes,
+    departureOffsetSeconds,
     stepSeconds,
     altitudeAtFraction: (fraction) =>
       altitudeForProfileFraction({
@@ -475,6 +540,27 @@ function routeDurations(minimumDurationMinutes, maximumDurationMinutes, stepMinu
   for (let duration = minimum; duration <= maximum; duration += step) durations.push(duration);
   if (durations.at(-1) !== maximum) durations.push(maximum);
   return durations;
+}
+
+function routeDepartureOffsets(
+  minimumDepartureOffsetMinutes,
+  maximumDepartureOffsetMinutes,
+  stepMinutes = 120,
+) {
+  const minimum = Math.round(
+    finiteNumber(minimumDepartureOffsetMinutes, "minimum departure offset"),
+  );
+  const maximum = Math.round(
+    finiteNumber(maximumDepartureOffsetMinutes, "maximum departure offset"),
+  );
+  const step = Math.round(finiteNumber(stepMinutes, "departure search step"));
+  if (minimum < 0 || maximum > 25 * 60 - 1 || minimum > maximum || step <= 0) {
+    throw new RangeError("Departure search is outside the selected day.");
+  }
+  const offsets = [];
+  for (let offset = minimum; offset <= maximum; offset += step) offsets.push(offset);
+  if (offsets.at(-1) !== maximum) offsets.push(maximum);
+  return offsets;
 }
 
 function profileIsFeasible({
@@ -540,6 +626,7 @@ function coarseLandingCandidates({
   maximumDurationMinutes,
   altitudeCeilingMetresMsl,
   maximumVerticalRateMetresPerSecond,
+  departureOffsetMinutes = 0,
   stepSeconds = DEFAULT_STEP_SECONDS,
 }) {
   const target = destination ? validPoint(destination, "destination") : null;
@@ -575,13 +662,77 @@ function coarseLandingCandidates({
           launchElevationMetresMsl,
           controlAltitudesMetresMsl,
           durationMinutes,
+          departureOffsetSeconds: departureOffsetMinutes * 60,
           stepSeconds,
         });
         const landing = track.at(-1);
         candidates.push({
+          departureOffsetMinutes,
           durationMinutes,
           controlAltitudesMetresMsl,
           peakAltitudeMetresMsl: Math.max(launchElevationMetresMsl, ...controlAltitudesMetresMsl),
+          landing,
+          ...(target ? { missDistanceMetres: distanceMetres(landing, target) } : {}),
+        });
+      }
+    }
+  }
+  return candidates;
+}
+
+function coarseFlexibleStartCandidates({
+  field,
+  launch,
+  launchElevationMetresMsl,
+  destination,
+  minimumDurationMinutes,
+  maximumDurationMinutes,
+  altitudeCeilingMetresMsl,
+  maximumVerticalRateMetresPerSecond,
+  minimumDepartureOffsetMinutes,
+  maximumDepartureOffsetMinutes,
+  departureSearchStepMinutes,
+  stepSeconds = DEFAULT_STEP_SECONDS,
+}) {
+  const target = destination ? validPoint(destination, "destination") : null;
+  const altitudes = strategyAltitudes(launchElevationMetresMsl, altitudeCeilingMetresMsl);
+  const durations = routeDurations(minimumDurationMinutes, maximumDurationMinutes);
+  const departureOffsets = routeDepartureOffsets(
+    minimumDepartureOffsetMinutes,
+    maximumDepartureOffsetMinutes,
+    departureSearchStepMinutes,
+  );
+  const candidates = [];
+  for (const departureOffsetMinutes of departureOffsets) {
+    for (const durationMinutes of durations) {
+      for (const altitude of altitudes) {
+        const controlAltitudesMetresMsl = [altitude, altitude, altitude, altitude];
+        if (
+          !profileIsFeasible({
+            controlAltitudesMetresMsl,
+            launchElevationMetresMsl,
+            altitudeCeilingMetresMsl,
+            durationMinutes,
+            maximumVerticalRateMetresPerSecond,
+          })
+        ) {
+          continue;
+        }
+        const track = forecastAltitudeProfileTrack({
+          field,
+          launch,
+          launchElevationMetresMsl,
+          controlAltitudesMetresMsl,
+          durationMinutes,
+          departureOffsetSeconds: departureOffsetMinutes * 60,
+          stepSeconds,
+        });
+        const landing = track.at(-1);
+        candidates.push({
+          departureOffsetMinutes,
+          durationMinutes,
+          controlAltitudesMetresMsl,
+          peakAltitudeMetresMsl: Math.max(launchElevationMetresMsl, altitude),
           landing,
           ...(target ? { missDistanceMetres: distanceMetres(landing, target) } : {}),
         });
@@ -599,7 +750,16 @@ function routeSearchSettings(options) {
   const altitudeCeilingMetresMsl =
     options.altitudeCeilingMetresMsl ?? ROUTE_SEARCH_LIMITS.altitudeCeilingMetresMsl;
   const maximumVerticalRateMetresPerSecond = options.maximumVerticalRateMetresPerSecond ?? 5;
+  const minimumDepartureOffsetMinutes = options.minimumDepartureOffsetMinutes ?? 0;
+  const maximumDepartureOffsetMinutes =
+    options.maximumDepartureOffsetMinutes ?? minimumDepartureOffsetMinutes;
+  const departureSearchStepMinutes = options.departureSearchStepMinutes ?? 120;
   routeDurations(minimumDurationMinutes, maximumDurationMinutes);
+  routeDepartureOffsets(
+    minimumDepartureOffsetMinutes,
+    maximumDepartureOffsetMinutes,
+    departureSearchStepMinutes,
+  );
   if (altitudeCeilingMetresMsl < options.launchElevationMetresMsl) {
     throw new RangeError("Altitude ceiling must not be below launch.");
   }
@@ -608,12 +768,22 @@ function routeSearchSettings(options) {
     maximumDurationMinutes,
     altitudeCeilingMetresMsl,
     maximumVerticalRateMetresPerSecond,
+    minimumDepartureOffsetMinutes,
+    maximumDepartureOffsetMinutes,
+    departureSearchStepMinutes,
   };
 }
 
 export function forecastLandingEnvelope(options) {
   const settings = routeSearchSettings(options);
-  const candidates = coarseLandingCandidates({ ...options, ...settings });
+  const candidates =
+    settings.maximumDepartureOffsetMinutes > settings.minimumDepartureOffsetMinutes
+      ? coarseFlexibleStartCandidates({ ...options, ...settings })
+      : coarseLandingCandidates({
+          ...options,
+          ...settings,
+          departureOffsetMinutes: settings.minimumDepartureOffsetMinutes,
+        });
   return Object.freeze({
     candidates: Object.freeze(candidates),
     boundary: Object.freeze(convexHull(candidates.map((candidate) => candidate.landing))),
@@ -621,8 +791,12 @@ export function forecastLandingEnvelope(options) {
   });
 }
 
-function routeCandidateKey(durationMinutes, controlAltitudesMetresMsl) {
-  return `${Math.round(durationMinutes * 60)}:${controlAltitudesMetresMsl
+function routeCandidateKey(
+  departureOffsetMinutes,
+  durationMinutes,
+  controlAltitudesMetresMsl,
+) {
+  return `${Math.round(departureOffsetMinutes)}:${Math.round(durationMinutes * 60)}:${controlAltitudesMetresMsl
     .map((altitude) => Math.round(altitude))
     .join(",")}`;
 }
@@ -630,7 +804,11 @@ function routeCandidateKey(durationMinutes, controlAltitudesMetresMsl) {
 function bestUniqueCandidates(candidates, limit) {
   const unique = new Map();
   for (const candidate of candidates) {
-    const key = routeCandidateKey(candidate.durationMinutes, candidate.controlAltitudesMetresMsl);
+    const key = routeCandidateKey(
+      candidate.departureOffsetMinutes,
+      candidate.durationMinutes,
+      candidate.controlAltitudesMetresMsl,
+    );
     const existing = unique.get(key);
     if (!existing || candidate.missDistanceMetres < existing.missDistanceMetres) {
       unique.set(key, candidate);
@@ -651,12 +829,21 @@ export function planWindRouteToDestination(options) {
   } = options;
   const target = validPoint(destination, "destination");
   const settings = routeSearchSettings(options);
-  const coarseCandidates = coarseLandingCandidates({
-    ...options,
-    ...settings,
-    destination: target,
-    stepSeconds,
-  });
+  const coarseCandidates =
+    settings.maximumDepartureOffsetMinutes > settings.minimumDepartureOffsetMinutes
+      ? coarseFlexibleStartCandidates({
+          ...options,
+          ...settings,
+          destination: target,
+          stepSeconds,
+        })
+      : coarseLandingCandidates({
+          ...options,
+          ...settings,
+          destination: target,
+          departureOffsetMinutes: settings.minimumDepartureOffsetMinutes,
+          stepSeconds,
+        });
   if (coarseCandidates.length === 0) {
     throw new Error("No feasible altitude profiles were available inside the route-search limits.");
   }
@@ -665,7 +852,15 @@ export function planWindRouteToDestination(options) {
     settings.altitudeCeilingMetresMsl,
   );
   const evaluationCache = new Map();
-  const evaluate = (durationMinutes, controlAltitudesMetresMsl) => {
+  const evaluate = (
+    departureOffsetMinutes,
+    durationMinutes,
+    controlAltitudesMetresMsl,
+  ) => {
+    const boundedDepartureOffsetMinutes = Math.max(
+      settings.minimumDepartureOffsetMinutes,
+      Math.min(settings.maximumDepartureOffsetMinutes, Math.round(departureOffsetMinutes)),
+    );
     const boundedDurationMinutes = Math.max(
       settings.minimumDurationMinutes,
       Math.min(settings.maximumDurationMinutes, Math.round(durationMinutes * 60) / 60),
@@ -676,7 +871,11 @@ export function planWindRouteToDestination(options) {
         Math.min(settings.altitudeCeilingMetresMsl, Math.round(altitude)),
       ),
     );
-    const key = routeCandidateKey(boundedDurationMinutes, boundedAltitudes);
+    const key = routeCandidateKey(
+      boundedDepartureOffsetMinutes,
+      boundedDurationMinutes,
+      boundedAltitudes,
+    );
     if (evaluationCache.has(key)) return evaluationCache.get(key);
     if (
       !profileIsFeasible({
@@ -696,10 +895,12 @@ export function planWindRouteToDestination(options) {
       launchElevationMetresMsl,
       controlAltitudesMetresMsl: boundedAltitudes,
       durationMinutes: boundedDurationMinutes,
+      departureOffsetSeconds: boundedDepartureOffsetMinutes * 60,
       stepSeconds,
     });
     const landing = track.at(-1);
     const candidate = {
+      departureOffsetMinutes: boundedDepartureOffsetMinutes,
       durationMinutes: boundedDurationMinutes,
       controlAltitudesMetresMsl: boundedAltitudes,
       peakAltitudeMetresMsl: Math.max(launchElevationMetresMsl, ...boundedAltitudes),
@@ -713,7 +914,11 @@ export function planWindRouteToDestination(options) {
 
   let beam = bestUniqueCandidates(coarseCandidates, 10)
     .map((candidate) =>
-      evaluate(candidate.durationMinutes, candidate.controlAltitudesMetresMsl),
+      evaluate(
+        candidate.departureOffsetMinutes,
+        candidate.durationMinutes,
+        candidate.controlAltitudesMetresMsl,
+      ),
     )
     .filter(Boolean);
   for (let pass = 0; pass < 2; pass += 1) {
@@ -723,7 +928,11 @@ export function planWindRouteToDestination(options) {
         for (const altitude of altitudeLevels) {
           const controlAltitudes = [...seed.controlAltitudesMetresMsl];
           controlAltitudes[controlIndex] = altitude;
-          const candidate = evaluate(seed.durationMinutes, controlAltitudes);
+          const candidate = evaluate(
+            seed.departureOffsetMinutes,
+            seed.durationMinutes,
+            controlAltitudes,
+          );
           if (candidate) expanded.push(candidate);
         }
       }
@@ -732,22 +941,30 @@ export function planWindRouteToDestination(options) {
   }
 
   const refinementScales = [
-    [300, 200],
-    [120, 100],
-    [60, 50],
-    [30, 20],
-    [10, 10],
-    [5, 5],
-    [1, 1],
+    [60, 300, 200],
+    [30, 120, 100],
+    [10, 60, 50],
+    [5, 30, 20],
+    [1, 10, 10],
+    [1, 5, 5],
+    [1, 1, 1],
   ];
   const refined = [];
   for (const seed of beam.slice(0, 4)) {
     let best = seed;
-    for (const [durationStepSeconds, altitudeStepMetres] of refinementScales) {
+    for (const [departureStepMinutes, durationStepSeconds, altitudeStepMetres] of
+      refinementScales) {
       for (let attempt = 0; attempt < 6; attempt += 1) {
         const neighbours = [best];
         for (const direction of [-1, 1]) {
+          const departureCandidate = evaluate(
+            best.departureOffsetMinutes + direction * departureStepMinutes,
+            best.durationMinutes,
+            best.controlAltitudesMetresMsl,
+          );
+          if (departureCandidate) neighbours.push(departureCandidate);
           const durationCandidate = evaluate(
+            best.departureOffsetMinutes,
             best.durationMinutes + (direction * durationStepSeconds) / 60,
             best.controlAltitudesMetresMsl,
           );
@@ -755,7 +972,11 @@ export function planWindRouteToDestination(options) {
           for (let controlIndex = 0; controlIndex < 4; controlIndex += 1) {
             const controlAltitudes = [...best.controlAltitudesMetresMsl];
             controlAltitudes[controlIndex] += direction * altitudeStepMetres;
-            const altitudeCandidate = evaluate(best.durationMinutes, controlAltitudes);
+            const altitudeCandidate = evaluate(
+              best.departureOffsetMinutes,
+              best.durationMinutes,
+              controlAltitudes,
+            );
             if (altitudeCandidate) neighbours.push(altitudeCandidate);
           }
         }
@@ -769,8 +990,49 @@ export function planWindRouteToDestination(options) {
   const best = bestUniqueCandidates([...beam, ...refined], 1)[0];
   const directDistanceMetres = distanceMetres(launch, target);
   const acceptedMissDistanceMetres = ROUTE_SEARCH_LIMITS.acceptedMissDistanceMetres;
+  const searchDayStart =
+    field.requestedAt instanceof Date
+      ? field.requestedAt
+      : field.validAt instanceof Date
+        ? field.validAt
+        : new Date(0);
+  const departureAt = new Date(
+    searchDayStart.getTime() + best.departureOffsetMinutes * 60_000,
+  );
+  let departureWindow = null;
+  if (best.missDistanceMetres <= acceptedMissDistanceMetres) {
+    const matchesAt = (departureOffsetMinutes) =>
+      evaluate(
+        departureOffsetMinutes,
+        best.durationMinutes,
+        best.controlAltitudesMetresMsl,
+      ).missDistanceMetres <= acceptedMissDistanceMetres;
+    let startOffsetMinutes = best.departureOffsetMinutes;
+    while (
+      startOffsetMinutes > settings.minimumDepartureOffsetMinutes &&
+      matchesAt(startOffsetMinutes - 1)
+    ) {
+      startOffsetMinutes -= 1;
+    }
+
+    let endOffsetMinutes = best.departureOffsetMinutes;
+    while (
+      endOffsetMinutes < settings.maximumDepartureOffsetMinutes &&
+      matchesAt(endOffsetMinutes + 1)
+    ) {
+      endOffsetMinutes += 1;
+    }
+    departureWindow = Object.freeze({
+      startOffsetMinutes,
+      endOffsetMinutes,
+      startAt: new Date(searchDayStart.getTime() + startOffsetMinutes * 60_000),
+      endAt: new Date(searchDayStart.getTime() + endOffsetMinutes * 60_000),
+    });
+  }
   return Object.freeze({
     ...best,
+    departureAt,
+    departureWindow,
     destination: target,
     directDistanceMetres,
     acceptedMissDistanceMetres,
