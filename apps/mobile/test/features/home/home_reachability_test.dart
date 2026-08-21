@@ -21,6 +21,7 @@ import 'package:balloon_crumbs/features/home/home_screen.dart';
 import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/internet/internet_relay_client.dart';
 import 'package:balloon_crumbs/services/nearby_bridge.dart';
+import 'package:balloon_crumbs/services/flight_planner_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Every way into the app, by the words a rider can read (#306).
@@ -81,7 +82,10 @@ void main() {
     completedRides.dispose();
   });
 
-  Future<void> pumpHome(WidgetTester tester) async {
+  Future<void> pumpHome(
+    WidgetTester tester, {
+    FlightPlannerLauncher flightPlannerLauncher = const FlightPlannerLauncher(),
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.dark(useMaterial3: true),
@@ -99,6 +103,7 @@ void main() {
           // wait forever here on a platform map and a location plugin that
           // never answer, and pumpAndSettle would time out.
           enableNativeServices: false,
+          flightPlannerLauncher: flightPlannerLauncher,
         ),
       ),
     );
@@ -196,6 +201,49 @@ void main() {
 
     expect(find.text('Try a simulated ride'), findsOneWidget);
     expect(find.text('Record a route'), findsOneWidget);
+  });
+
+  testWidgets('the balloon flight planner is reachable and opens in place', (
+    tester,
+  ) async {
+    Uri? openedUri;
+    await pumpHome(
+      tester,
+      flightPlannerLauncher: FlightPlannerLauncher(
+        openUri: (uri) async {
+          openedUri = uri;
+          return true;
+        },
+      ),
+    );
+
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Plan a balloon flight'), findsOneWidget);
+    expect(find.textContaining('timed altitude profile'), findsOneWidget);
+
+    await tester.tap(find.text('Plan a balloon flight'));
+    await tester.pumpAndSettle();
+
+    expect(openedUri, FlightPlannerLauncher.plannerUri);
+    expect(openedUri?.host, 'balloon-crumbs.pages.dev');
+  });
+
+  testWidgets('a flight planner launch failure is explained', (tester) async {
+    await pumpHome(
+      tester,
+      flightPlannerLauncher: FlightPlannerLauncher(openUri: (_) async => false),
+    );
+
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Plan a balloon flight'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Could not open the flight planner'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('joining by QR is offered in words, not only as an icon', (
