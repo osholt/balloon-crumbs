@@ -1,0 +1,95 @@
+:8080 {
+	encode zstd gzip
+
+	@metrics path /metrics
+	respond @metrics 404
+
+	handle /api/v1/plans* {
+		request_body {
+			max_size 12MB
+		}
+		reverse_proxy server:8080
+	}
+
+	handle /api/* {
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy server:8080
+	}
+
+	handle /health/live {
+		reverse_proxy server:8080
+	}
+
+	@private_health path /health/*
+	respond @private_health 404
+
+	handle_path /maps/styles/* {
+		root * /srv/maps/styles
+		templates {
+			mime application/json
+		}
+		header Access-Control-Allow-Origin "*"
+		header Cache-Control "public, max-age=300"
+		file_server
+	}
+
+	# Keep the planner's viewport on this host. The browser requests only the
+	# relay, and the relay obtains the same OpenFreeMap vector tiles and glyphs
+	# already used by TEC's observer surface.
+	handle_path /maps/basemap/* {
+		rewrite * /planet/{$BALLOON_CRUMBS_BASEMAP_VERSION:20260726_080001_pt}{path}
+		reverse_proxy https://tiles.openfreemap.org {
+			header_up Host tiles.openfreemap.org
+		}
+		header Cache-Control "public, max-age=86400"
+	}
+
+	handle_path /maps/fonts/* {
+		rewrite * /fonts{path}
+		reverse_proxy https://tiles.openfreemap.org {
+			header_up Host tiles.openfreemap.org
+		}
+		header Cache-Control "public, max-age=604800"
+	}
+
+	# The OpenAIP client key stays in the host's mode-600 environment file. It is
+	# sent to OpenAIP as the documented header and is never exposed to planner
+	# JavaScript, HTML, URLs, source maps or browser storage.
+	@openaip path_regexp openaip ^/maps/openaip/([0-9]+)/([0-9]+)/([0-9]+)\.png$
+	handle @openaip {
+		rewrite * /api/data/openaip/{re.openaip.1}/{re.openaip.2}/{re.openaip.3}.png
+		reverse_proxy https://api.tiles.openaip.net {
+			header_up Host api.tiles.openaip.net
+			header_up x-openaip-api-key {$BALLOON_CRUMBS_OPENAIP_API_KEY}
+		}
+		header Cache-Control "public, max-age=300"
+	}
+
+	# A path-bounded, same-origin proxy for the public Open-Meteo forecast API.
+	# It prevents the browser's IP and page origin going directly to the provider
+	# and cannot be used as a general-purpose forward proxy.
+	handle /weather/v1/forecast {
+		rewrite * /v1/forecast
+		reverse_proxy https://api.open-meteo.com {
+			header_up Host api.open-meteo.com
+		}
+		header Cache-Control "public, max-age=300"
+	}
+
+	handle_path /plan/* {
+		root * /srv/planner
+		header Cache-Control "no-store"
+		header Pragma "no-cache"
+		header Referrer-Policy "no-referrer"
+		header X-Content-Type-Options "nosniff"
+		header X-Frame-Options "DENY"
+		header X-Robots-Tag "noindex, nofollow, noarchive"
+		header Permissions-Policy "geolocation=(self)"
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src blob:; child-src blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		file_server
+	}
+
+	respond 404
+}

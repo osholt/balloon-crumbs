@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>Balloon Crumbs — Pilot flight planner</title>
+    <link rel="stylesheet" href="vendor/maplibre-gl-5.24.0/maplibre-gl.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">Balloon Crumbs</p>
+        <h1>Pilot flight planner</h1>
+      </div>
+      <p class="clock" id="clock" aria-label="Current UTC time"></p>
+    </header>
+
+    <div class="advisory" role="note">
+      <strong>This predicts drift; it does not plan a controllable route.</strong>
+      Wind and OpenAIP are advisory model/community data. Use an official weather,
+      AIP and NOTAM briefing and the pilot’s own judgement before and during flight.
+    </div>
+
+    <main class="planner-shell">
+      <aside class="planner-panel" aria-label="Flight planning controls">
+        <section class="panel-section" aria-labelledby="launch-title">
+          <div class="section-heading">
+            <span>1</span>
+            <div>
+              <h2 id="launch-title">Launch</h2>
+              <p>Click the map, or use this device’s location.</p>
+            </div>
+          </div>
+          <div class="button-row">
+            <button type="button" id="set-launch">Set on map</button>
+            <button type="button" id="use-location">Use my location</button>
+          </div>
+          <p class="status" id="launch-status" role="status">Choose a launch point.</p>
+        </section>
+
+        <section class="panel-section" aria-labelledby="flight-title">
+          <div class="section-heading">
+            <span>2</span>
+            <div>
+              <h2 id="flight-title">Flight shape</h2>
+              <p>The balloon climbs, cruises, then descends through forecast layers.</p>
+            </div>
+          </div>
+          <label class="field">
+            <span>Departure (local time)</span>
+            <input type="datetime-local" id="departure-time" />
+          </label>
+          <div class="field-grid">
+            <label class="field">
+              <span>Duration</span>
+              <span class="input-with-unit">
+                <input type="number" id="duration-minutes" min="10" max="180" step="5" value="60" />
+                <i>min</i>
+              </span>
+            </label>
+            <label class="field">
+              <span>Launch elevation</span>
+              <span class="input-with-unit">
+                <input type="number" id="launch-elevation" min="-50" max="1000" step="10" value="100" />
+                <i>m MSL</i>
+              </span>
+            </label>
+          </div>
+          <label class="field">
+            <span>Planned maximum altitude</span>
+            <span class="input-with-unit">
+              <input type="number" id="maximum-altitude" min="100" max="2500" step="50" value="1000" />
+              <i>m MSL</i>
+            </span>
+          </label>
+        </section>
+
+        <section class="panel-section" aria-labelledby="wind-title">
+          <div class="section-heading split-heading">
+            <span>3</span>
+            <div>
+              <h2 id="wind-title">Wind layer</h2>
+              <p>UKMO UKV forecast via Open-Meteo.</p>
+            </div>
+            <label class="switch" title="Show or hide wind arrows">
+              <input type="checkbox" id="wind-toggle" checked />
+              <span aria-hidden="true"></span>
+              <b>Show</b>
+            </label>
+          </div>
+          <label class="range-field">
+            <span>Displayed altitude <strong id="wind-altitude-label">500 m MSL</strong></span>
+            <input type="range" id="wind-altitude" min="0" max="13" step="1" value="7" />
+          </label>
+          <p class="status" id="wind-status" role="status">Set a launch point to load wind.</p>
+          <p class="small muted">Arrows point downwind; labels show km/h. Height levels are metres above mean sea level.</p>
+        </section>
+
+        <section class="panel-section" aria-labelledby="landing-title">
+          <div class="section-heading">
+            <span>4</span>
+            <div>
+              <h2 id="landing-title">Intended landing area</h2>
+              <p>The forecast endpoint is selected initially. The pilot can move it.</p>
+            </div>
+          </div>
+          <button type="button" id="set-landing" disabled>Move landing area on map</button>
+          <p class="status" id="landing-status">Waiting for a wind forecast.</p>
+        </section>
+
+        <section class="panel-section" aria-labelledby="airspace-title">
+          <div class="section-heading split-heading">
+            <span>5</span>
+            <div>
+              <h2 id="airspace-title">Aeronautical chart</h2>
+              <p>OpenAIP advisory airspace context.</p>
+            </div>
+            <label class="switch" title="Show or hide OpenAIP chart">
+              <input type="checkbox" id="airspace-toggle" checked />
+              <span aria-hidden="true"></span>
+              <b>Show</b>
+            </label>
+          </div>
+          <details>
+            <summary>Chart key and limitations</summary>
+            <dl class="chart-key">
+              <div><dt class="swatch controlled"></dt><dd>Purple/blue areas commonly mark controlled airspace.</dd></div>
+              <div><dt class="swatch restricted"></dt><dd>Red areas commonly mark restricted, prohibited or danger areas.</dd></div>
+              <div><dt class="swatch special"></dt><dd>Orange/yellow areas can mark special-use or caution areas.</dd></div>
+              <div><dt class="swatch boundary"></dt><dd>Labels and boundary styles give class and vertical limits.</dd></div>
+            </dl>
+            <p class="small muted">Colours are a reading aid, not a legal interpretation. OpenAIP may omit temporary restrictions and current NOTAMs.</p>
+          </details>
+        </section>
+
+        <section class="panel-section generate-section" aria-labelledby="share-title">
+          <div class="section-heading">
+            <span>6</span>
+            <div>
+              <h2 id="share-title">Share with the crew</h2>
+              <p>Create the same short plan code flow used by TEC.</p>
+            </div>
+          </div>
+          <label class="field">
+            <span>Plan name</span>
+            <input type="text" id="plan-name" maxlength="200" value="Forecast balloon flight" />
+          </label>
+          <button type="button" class="primary" id="generate-code" disabled>Generate plan code</button>
+          <p class="status" id="generate-status" role="status"></p>
+          <div class="code-result" id="code-result" hidden>
+            <span>Plan code</span>
+            <div><code id="plan-code"></code><button type="button" id="copy-code">Copy</button></div>
+            <a id="open-in-app" href="#">Open in Balloon Crumbs</a>
+            <p class="small muted" id="plan-expiry"></p>
+          </div>
+        </section>
+      </aside>
+
+      <section class="map-shell" aria-label="Forecast flight map">
+        <div id="map" class="map"></div>
+        <div class="map-prompt" id="map-prompt">Click the map to set the launch point</div>
+        <div class="forecast-summary" id="forecast-summary" hidden>
+          <strong id="forecast-distance"></strong>
+          <span id="forecast-validity"></span>
+        </div>
+        <div class="map-legend" aria-label="Map legend">
+          <span><i class="legend-dot launch"></i>Launch</span>
+          <span><i class="legend-dot forecast"></i>Forecast landing</span>
+          <span><i class="legend-dot intended"></i>Pilot landing area</span>
+          <span><i class="legend-line"></i>Altitude-coloured forecast track</span>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Wind: UKMO via Open-Meteo, CC BY-SA 4.0 · chart: © OpenAIP contributors, CC BY-NC 4.0</span>
+      <span>Basemap: © OpenStreetMap contributors · © OpenMapTiles · OpenFreeMap</span>
+    </footer>
+
+    <script src="vendor/maplibre-gl-5.24.0/maplibre-gl.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

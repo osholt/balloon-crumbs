@@ -41,6 +41,11 @@ jobs:
       - run: uv run ruff check ../../tools/road-data ../../tools/tester_notify ../../tools/simulation
       - run: cd ../.. && python3 -m unittest discover -s tools/road-data/tests -v
       - run: cd ../.. && python3 -m unittest discover -s tools/tester_notify/tests -v
+      - name: Test pilot planner forecast logic
+        run: |
+          cd ../..
+          node --test apps/planner/planner-core.test.mjs
+          node --check apps/planner/app.js
       - run: uv run pytest --cov=balloon_crumbs_server --cov-report=term-missing --cov-fail-under=80
 
   postgres-migration:
@@ -144,5 +149,22 @@ jobs:
             --env BALLOON_CRUMBS_DOMAIN \
             --env BALLOON_CRUMBS_PREPRODUCTION_DOMAIN \
             --volume "$PWD/deploy/Caddyfile.preproduction:/etc/caddy/Caddyfile:ro" \
+            caddy:2.11.4-alpine \
+            caddy validate --config /etc/caddy/Caddyfile
+      - name: Validate isolated Oracle deployment
+        env:
+          POSTGRES_PASSWORD: oracle-ci-only-password
+          BALLOON_CRUMBS_CURSOR_SIGNING_KEY: CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws
+          BALLOON_CRUMBS_DATA_ENCRYPTION_KEY: BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc
+          BALLOON_CRUMBS_DOMAIN: relay.balloon-crumbs.example.com
+          BALLOON_CRUMBS_OPENAIP_API_KEY: ci-only-key
+        run: |
+          docker compose \
+            --file deploy/compose.yaml \
+            --file deploy/compose.oracle.yaml \
+            config --quiet
+          docker run --rm \
+            --env BALLOON_CRUMBS_OPENAIP_API_KEY \
+            --volume "$PWD/deploy/Caddyfile.oracle:/etc/caddy/Caddyfile:ro" \
             caddy:2.11.4-alpine \
             caddy validate --config /etc/caddy/Caddyfile

@@ -118,6 +118,12 @@ production)
     compose+=(--file "deploy/$override")
     if test "$override" = "compose.preproduction-proxy.yaml"; then
       caddyfile="deploy/Caddyfile.preproduction"
+    elif test "$override" = "compose.oracle.yaml"; then
+      # The Oracle host already has TEC's public Caddy on ports 80/443. This
+      # stack runs its own unprivileged edge container behind that proxy, with
+      # a different Caddyfile and no host ports. Watch the file that is really
+      # mounted so later planner/proxy changes cannot stay on an old inode.
+      caddyfile="deploy/Caddyfile.oracle"
     fi
   done
   domain_key="BALLOON_CRUMBS_DOMAIN"
