@@ -1608,37 +1608,51 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     child: _buildMap(),
                   ),
                 ),
-                if (_isBalloonView && widget.navigationPosition != null)
+                if (_isBalloonView &&
+                    (widget.navigationPosition != null ||
+                        widget.windForecastController != null))
                   Positioned(
                     key: const Key('balloon-altitude-position'),
-                    left: overlayLeft + 12,
-                    // The clock is the first item in the balloon viewport. Keep
-                    // telemetry below it so the time never appears to belong to
-                    // the altitude card or gets covered by that wider surface.
-                    top: overlayTop + (widget.rideStarted ? 48 : 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ValueListenableBuilder<MapNavigationPosition?>(
-                          valueListenable: widget.navigationPosition!,
-                          builder: (context, fix, _) => _BalloonAltitudeCard(
-                            fix: fix,
-                            onShowMapInformation: _showBalloonMapInformation,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const _BalloonAltitudeLegend(),
-                      ],
-                    ),
-                  ),
-                if (_isBalloonView && widget.windForecastController != null)
-                  Positioned(
-                    key: const Key('wind-forecast-control-position'),
-                    left: overlayLeft + 12,
-                    right: overlayRight + 12,
-                    bottom: overlayBottom + 84,
-                    child: _WindForecastControl(
-                      controller: widget.windForecastController!,
+                    // Landscape places the telemetry beside the menu instead
+                    // of below it. Portrait keeps a full row for the menu and
+                    // centred clock, then starts the aircraft stack beneath.
+                    left: overlayLeft + (landscape && showRideMenu ? 72 : 12),
+                    top:
+                        overlayTop +
+                        (landscape
+                            ? 12
+                            : widget.rideStarted || showRideMenu
+                            ? 64
+                            : 12),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 228),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (widget.navigationPosition case final position?)
+                            ValueListenableBuilder<MapNavigationPosition?>(
+                              valueListenable: position,
+                              builder: (context, fix, _) =>
+                                  _BalloonAltitudeCard(
+                                    fix: fix,
+                                    onShowMapInformation:
+                                        _showBalloonMapInformation,
+                                  ),
+                            ),
+                          if (widget.navigationPosition != null &&
+                              widget.windForecastController != null)
+                            const SizedBox(height: 6),
+                          if (widget.windForecastController
+                              case final controller?)
+                            KeyedSubtree(
+                              key: const Key('wind-forecast-control-position'),
+                              child: _WindForecastChip(
+                                controller: controller,
+                                onShowDetails: _showWindForecastDetails,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 Positioned.fill(
@@ -1841,7 +1855,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
       final urgent = <Widget>[
         // A paused ride is a ride-lifecycle state, not a route state (#124).
         if (widget.ridePaused) const _RidePausedBanner(),
-        if (widget.rideHasNoLeader) const _NoLeaderBanner(),
+        // A balloon operation has a pilot and chase crew rather than the
+        // inherited motorcycle ride-leader role. The roster remains the place
+        // to resolve road-ride leadership; the warning is not meaningful here.
+        if (!_isBalloonView && widget.rideHasNoLeader) const _NoLeaderBanner(),
         // Last in the urgent run, so it is the urgent surface nearest the
         // rider's gaze and the targets their hand is already going to (#104's
         // ordering). It is also the one urgent surface carrying a target of its
@@ -2343,7 +2360,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           if (rideMenu != null)
             Positioned(
               left: safeLeft + 12,
-              top: safeTop + portraitRideMenuTopOffset,
+              top: safeTop + (_isBalloonView ? 12 : portraitRideMenuTopOffset),
               child: rideMenu,
             ),
           if (routeProgressPanel != null)
@@ -5758,6 +5775,20 @@ class _RideMapScreenState extends State<RideMapScreen> {
     );
   }
 
+  Future<void> _showWindForecastDetails() async {
+    final controller = widget.windForecastController;
+    if (controller == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        child: _WindForecastControl(controller: controller),
+      ),
+    );
+  }
+
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -8331,6 +8362,91 @@ class _EnforcementEmphasis extends StatelessWidget {
   }
 }
 
+/// Compact, always-available wind state for the balloon map.
+///
+/// The altitude slider and forecast explanation live in a modal sheet opened by
+/// [onShowDetails]. Keeping only the selected layer and on/off state on the map
+/// prevents an optional weather control from competing with telemetry and
+/// emergency actions for the same fixed bottom band.
+class _WindForecastChip extends StatelessWidget {
+  const _WindForecastChip({
+    required this.controller,
+    required this.onShowDetails,
+  });
+
+  final WindForecastController controller;
+  final VoidCallback onShowDetails;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, _) {
+      final field = controller.field;
+      final status = field == null
+          ? controller.loading
+                ? 'Loading forecast…'
+                : 'Forecast unavailable'
+          : field.sourceLabel;
+      return Card(
+        key: const Key('wind-forecast-chip'),
+        margin: EdgeInsets.zero,
+        color: const Color(0xE6252E39),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 10, right: 2),
+          child: Row(
+            children: [
+              const Icon(Icons.air_rounded, size: 18),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'WIND · ${controller.selectedAltitudeMetersMsl} M',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.35,
+                      ),
+                    ),
+                    Text(
+                      status,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFB7C4D1),
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Transform.scale(
+                scale: 0.78,
+                child: Switch.adaptive(
+                  key: const Key('wind-forecast-toggle'),
+                  value: controller.enabled,
+                  onChanged: controller.setEnabled,
+                ),
+              ),
+              IconButton(
+                key: const Key('wind-forecast-details-button'),
+                tooltip: 'Wind layer details',
+                visualDensity: VisualDensity.compact,
+                onPressed: onShowDetails,
+                icon: const Icon(Icons.tune_rounded, size: 19),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class _WindForecastControl extends StatelessWidget {
   const _WindForecastControl({required this.controller});
 
@@ -8553,6 +8669,8 @@ class _BalloonMapInformationSheet extends StatelessWidget {
               'metres. GNSS altitude is not terrain clearance. Grey track '
               'segments have no usable altitude.',
             ),
+            const SizedBox(height: 14),
+            const _BalloonAltitudeLegend(),
           ],
         ),
       ),
@@ -8572,11 +8690,13 @@ class _AeronauticalChartKey extends StatelessWidget {
         children: [
           const Icon(Icons.map_outlined),
           const SizedBox(width: 10),
-          Text(
-            'Aeronautical chart key',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          Expanded(
+            child: Text(
+              'Aeronautical chart key',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
@@ -8816,84 +8936,96 @@ class _BalloonAltitudeCard extends StatelessWidget {
         'Not terrain clearance',
       ].join(', '),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 248),
+        constraints: const BoxConstraints(maxWidth: 228),
         child: Card(
           key: const Key('balloon-altitude-card'),
           color: const Color(0xE6252E39),
           margin: EdgeInsets.zero,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 11, 14, 10),
-            child: Column(
+            padding: const EdgeInsets.fromLTRB(11, 8, 4, 8),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
                         'BALLOON ALTITUDE',
                         style: TextStyle(
                           color: Color(0xFF9EABB9),
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
+                          letterSpacing: 0.65,
                         ),
                       ),
-                    ),
-                    IconButton(
-                      key: const Key('balloon-map-info-button'),
-                      tooltip: 'Map information',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      onPressed: onShowMapInformation,
-                      icon: const Icon(Icons.info_outline, size: 20),
-                    ),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        primary,
-                        key: const Key('balloon-altitude-value'),
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              primary,
+                              key: const Key('balloon-altitude-value'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                             ),
+                          ),
+                          if (trend != null) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              trend,
+                              key: const Key('balloon-vertical-trend'),
+                              maxLines: 1,
+                              style: const TextStyle(
+                                color: Color(0xFF6ED89A),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ),
-                    if (trend != null) ...[
-                      const SizedBox(width: 10),
-                      Text(
-                        trend,
-                        key: const Key('balloon-vertical-trend'),
-                        style: const TextStyle(
-                          color: Color(0xFF6ED89A),
-                          fontWeight: FontWeight.w700,
+                      if (details.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          details.join(' · '),
+                          key: const Key('balloon-altitude-quality'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFD3DAE2),
+                            fontSize: 9,
+                          ),
                         ),
+                      ],
+                      const SizedBox(height: 1),
+                      const Text(
+                        'Not terrain clearance',
+                        style: TextStyle(color: Color(0xFFFFC857), fontSize: 9),
                       ),
                     ],
-                  ],
-                ),
-                if (details.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    details.join(' · '),
-                    key: const Key('balloon-altitude-quality'),
-                    style: const TextStyle(
-                      color: Color(0xFFD3DAE2),
-                      fontSize: 11,
-                    ),
                   ),
-                ],
-                const SizedBox(height: 3),
-                const Text(
-                  'Not terrain clearance',
-                  style: TextStyle(color: Color(0xFFFFC857), fontSize: 10),
+                ),
+                IconButton(
+                  key: const Key('balloon-map-info-button'),
+                  tooltip: 'Map information',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 48,
+                    height: 48,
+                  ),
+                  onPressed: onShowMapInformation,
+                  icon: const Icon(Icons.info_outline, size: 20),
                 ),
               ],
             ),

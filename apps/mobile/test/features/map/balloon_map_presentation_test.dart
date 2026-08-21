@@ -22,6 +22,10 @@ void main() {
   testWidgets(
     'balloon map shows aircraft telemetry and suppresses driving chrome',
     (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       final directory = Directory.systemTemp.createTempSync('balloon-map');
       addTearDown(() => directory.deleteSync(recursive: true));
       final navigation = ValueNotifier<MapNavigationPosition?>(
@@ -106,6 +110,10 @@ void main() {
               label: 'Simulated landing zone',
             ),
             rideStarted: true,
+            rideHasNoLeader: true,
+            onEmergencyAlert: () async {},
+            onLeaveRide: () async {},
+            onOpenRideMenu: () async {},
             perspective: RideMapPerspective.balloon,
             distanceUnit: DistanceUnit.miles,
             localMotorcycleStyle: CraftIconStyle.fourByFour,
@@ -113,6 +121,70 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+
+      // Releasing follow mode reproduces the maximum set of controls visible
+      // in the reported screenshots without relying on a private map state.
+      await tester.drag(find.byType(FlutterMap), const Offset(60, 0));
+      await tester.pump();
+
+      Future<void> expectUnclutteredChrome(Size size) async {
+        tester.view.physicalSize = size;
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'map chrome overflowed in $size',
+        );
+
+        const requiredKeys = [
+          'ride-clock',
+          'ride-menu-button',
+          'balloon-altitude-card',
+          'wind-forecast-chip',
+          'emergency-alert-button',
+          'leave-ride-button',
+          'navigation-follow-button',
+        ];
+        final rects = <String, Rect>{};
+        for (final key in requiredKeys) {
+          final finder = find.byKey(Key(key));
+          expect(finder, findsOneWidget, reason: '$key is missing in $size');
+          final rect = tester.getRect(finder);
+          rects[key] = rect;
+          expect(rect.left, greaterThanOrEqualTo(0));
+          expect(rect.top, greaterThanOrEqualTo(0));
+          expect(rect.right, lessThanOrEqualTo(size.width));
+          expect(rect.bottom, lessThanOrEqualTo(size.height));
+        }
+
+        final entries = rects.entries.toList(growable: false);
+        for (var first = 0; first < entries.length; first += 1) {
+          for (var second = first + 1; second < entries.length; second += 1) {
+            expect(
+              entries[first].value
+                  .deflate(0.5)
+                  .overlaps(entries[second].value.deflate(0.5)),
+              isFalse,
+              reason:
+                  '${entries[first].key} overlaps ${entries[second].key} '
+                  'in $size',
+            );
+          }
+        }
+
+        for (final key in const [
+          'emergency-alert-button',
+          'leave-ride-button',
+        ]) {
+          expect(rects[key]!.width, greaterThanOrEqualTo(48));
+          expect(rects[key]!.height, greaterThanOrEqualTo(48));
+        }
+      }
+
+      await expectUnclutteredChrome(const Size(390, 844));
+      await expectUnclutteredChrome(const Size(844, 390));
+      await expectUnclutteredChrome(const Size(390, 844));
 
       expect(find.byKey(const Key('balloon-altitude-card')), findsOneWidget);
       expect(find.byKey(const Key('ride-clock')), findsOneWidget);
@@ -135,17 +207,24 @@ void main() {
       );
       expect(find.text('AIRSPACE UNAVAILABLE'), findsNothing);
       expect(find.byKey(const Key('balloon-map-info-button')), findsOneWidget);
-      expect(find.byKey(const Key('balloon-altitude-legend')), findsOneWidget);
-      expect(find.text('TRACK ALTITUDE · METRES'), findsOneWidget);
+      expect(find.byKey(const Key('balloon-altitude-legend')), findsNothing);
+      expect(find.text('TRACK ALTITUDE · METRES'), findsNothing);
       expect(find.byKey(const Key('landing-zone-area-layer')), findsOneWidget);
       expect(
         find.byKey(const Key('landing-zone-marker-layer')),
         findsOneWidget,
       );
-      expect(find.byKey(const Key('wind-forecast-control')), findsOneWidget);
-      expect(find.byKey(const Key('wind-altitude-slider')), findsOneWidget);
+      expect(find.byKey(const Key('wind-forecast-chip')), findsOneWidget);
+      expect(
+        find.byKey(const Key('wind-forecast-details-button')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('wind-forecast-control')), findsNothing);
+      expect(find.byKey(const Key('wind-altitude-slider')), findsNothing);
       expect(find.byKey(const Key('wind-forecast-layer')), findsOneWidget);
-      expect(find.textContaining('500 M MSL'), findsOneWidget);
+      expect(find.textContaining('WIND · 500 M'), findsOneWidget);
+      expect(find.byKey(const Key('no-leader-banner')), findsNothing);
+      expect(find.text('NO RIDE LEADER'), findsNothing);
 
       await tester.tap(find.byKey(const Key('wind-forecast-toggle')));
       await tester.pump();
@@ -156,8 +235,19 @@ void main() {
       wind.setEnabled(true);
       wind.setSelectedAltitude(1000);
       await tester.pump();
-      expect(find.textContaining('1000 M MSL'), findsOneWidget);
+      expect(find.textContaining('WIND · 1000 M'), findsOneWidget);
       expect(find.byKey(const Key('wind-forecast-layer')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('wind-forecast-details-button')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'wind sheet overflowed');
+      expect(find.byKey(const Key('wind-forecast-control')), findsOneWidget);
+      expect(find.byKey(const Key('wind-altitude-slider')), findsOneWidget);
+      expect(find.textContaining('1000 M MSL'), findsOneWidget);
+      Navigator.of(
+        tester.element(find.byKey(const Key('wind-forecast-control'))),
+      ).pop();
+      await tester.pumpAndSettle();
 
       final trackLayer = tester.widget<PolylineLayer>(
         find.byType(PolylineLayer),
@@ -190,6 +280,7 @@ void main() {
 
       await tester.tap(find.byKey(const Key('balloon-map-info-button')));
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'map sheet overflowed');
       expect(
         find.byKey(const Key('balloon-map-information-sheet')),
         findsOneWidget,
@@ -208,6 +299,8 @@ void main() {
       expect(find.text('Blue / pink'), findsOneWidget);
       expect(find.textContaining('GND means the surface'), findsOneWidget);
       expect(find.textContaining('shown in metres'), findsOneWidget);
+      expect(find.byKey(const Key('balloon-altitude-legend')), findsOneWidget);
+      expect(find.text('TRACK ALTITUDE · METRES'), findsOneWidget);
 
       for (final key in const [
         'posted-speed-limit-position',
