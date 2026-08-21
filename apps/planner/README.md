@@ -4,19 +4,23 @@ Static application code for a balloon pilot's forecast flight plan. It keeps
 the short plan-code flow inherited from Tail End Charlie, but it does not
 pretend a balloon follows a road route:
 
-- the pilot selects a launch point, departure time, launch elevation and optional
+- the pilot selects a launch point, flight date, launch elevation and optional
   destination;
-- UKMO UKV wind from Open-Meteo is sampled on the same 3×3 grid and MSL height
-  levels used by the mobile app, with hourly interpolation during the flight;
-- the destination optimiser searches 10–180 minute durations and four changing
-  altitude controls up to the highest 2,000 m MSL forecast layer;
-- duration, altitude profile and resulting peak altitude are outputs of the
-  optimiser rather than pilot-supplied route inputs;
+- UKMO UKV wind from Open-Meteo is sampled across a 5×5 grid spanning roughly
+  120 km around the launch, at 14 MSL height levels, with hourly interpolation
+  during the flight and spatially interpolated display arrows across the visible
+  sampling area;
+- the destination optimiser searches start times across the selected day,
+  10–180 minute durations and four changing altitude controls up to the highest
+  2,000 m MSL forecast layer;
+- start time, an approximate matching window for the selected profile, duration,
+  altitude profile and resulting peak altitude are optimiser outputs rather than
+  pilot-supplied route inputs;
 - the basemap and planner controls can switch between light and dark themes,
   with an explicit tile-load indicator and retry action;
 - OpenAIP's combined aeronautical chart is visible with a plain-language key;
 - the purple landing envelope is the convex boundary of endpoints produced by
-  the coarse duration and altitude search;
+  the coarse start-time, duration and altitude search;
 - the destination search refines its best candidates to a 100 m acceptance
   distance and clearly reports when none can get that close;
 - the forecast landing area and separately editable destination are shown; and

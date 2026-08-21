@@ -1,13 +1,14 @@
 import {
+  WIND_GRID_SPAN_METRES,
   WIND_LEVELS_METRES_MSL,
   buildFlightPlanGpx,
   circlePolygon,
   forecastDistanceMetres,
   forecastLandingEnvelope,
+  interpolatedVectorAtPosition,
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
   planWindRouteToDestination,
-  vectorAtAltitude,
 } from "./planner-core.mjs";
 
 // Keep the installed-app hand-off on its already-shipped associated domain.
@@ -15,6 +16,7 @@ import {
 const APP_LINK_ORIGIN = "https://balloon-crumbs.tailendcharlie.app";
 const FORECAST_AREA_RADIUS_METRES = 750;
 const INTENDED_AREA_RADIUS_METRES = 400;
+const WIND_MARKER_SPACING_PIXELS = 150;
 const DEFAULT_CENTER = [-2.5, 54.4];
 const MAP_PALETTES = Object.freeze({
   dark: {
@@ -117,15 +119,49 @@ function setStatus(element, message, kind = "") {
   element.classList.toggle("good", kind === "good");
 }
 
-function toLocalInputValue(date) {
+function toLocalDateInputValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
+  return local.toISOString().slice(0, 10);
 }
 
-function selectedDeparture() {
-  const value = new Date(elements.departure_time.value);
-  if (Number.isNaN(value.getTime())) throw new Error("Choose a valid departure time.");
-  return value;
+function selectedSearchDay() {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(elements.departure_time.value);
+  if (!match) throw new Error("Choose a valid flight date.");
+  const dayStart = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (
+    dayStart.getFullYear() !== Number(match[1]) ||
+    dayStart.getMonth() !== Number(match[2]) - 1 ||
+    dayStart.getDate() !== Number(match[3])
+  ) {
+    throw new Error("Choose a valid flight date.");
+  }
+  return dayStart;
+}
+
+function selectedDepartureSearch() {
+  const dayStart = selectedSearchDay();
+  const nextDay = new Date(
+    dayStart.getFullYear(),
+    dayStart.getMonth(),
+    dayStart.getDate() + 1,
+  );
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const minimumDepartureOffsetMinutes =
+    dayStart.getTime() === todayStart.getTime()
+      ? Math.max(0, Math.ceil((today.getTime() - dayStart.getTime()) / 60_000))
+      : 0;
+  const maximumDepartureOffsetMinutes =
+    Math.floor((nextDay.getTime() - dayStart.getTime()) / 60_000) - 1;
+  if (minimumDepartureOffsetMinutes > maximumDepartureOffsetMinutes) {
+    throw new Error("There are no remaining start times today. Choose tomorrow instead.");
+  }
+  return {
+    dayStart,
+    minimumDepartureOffsetMinutes,
+    maximumDepartureOffsetMinutes,
+    departureSearchStepMinutes: 120,
+  };
 }
 
 function formatUtc(date) {
@@ -140,6 +176,35 @@ function formatUtc(date) {
   }).format(date) + " UTC";
 }
 
+function formatLocalDateTime(date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  }).format(date);
+}
+
+function formatLocalTime(date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  }).format(date);
+}
+
+function formatLocalDay(date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  }).format(date);
+}
+
 function updateClock() {
   elements.clock.textContent = new Intl.DateTimeFormat("en-GB", {
     timeZone: "UTC",
@@ -152,11 +217,10 @@ function updateClock() {
 
 function configureDepartureInput() {
   const now = new Date();
-  const rounded = new Date(now.getTime() + 45 * 60_000);
-  rounded.setMinutes(0, 0, 0);
-  elements.departure_time.min = toLocalInputValue(new Date(now.getTime() - 30 * 60_000));
-  elements.departure_time.max = toLocalInputValue(new Date(now.getTime() + 47 * 60 * 60_000));
-  elements.departure_time.value = toLocalInputValue(rounded);
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  elements.departure_time.min = toLocalDateInputValue(now);
+  elements.departure_time.max = toLocalDateInputValue(tomorrow);
+  elements.departure_time.value = toLocalDateInputValue(now);
 }
 
 function normalizeStyleUrl(value) {
@@ -429,13 +493,63 @@ function clearWindMarkers() {
   state.windMarkers = [];
 }
 
+function windDisplayPositions() {
+  const columns = state.field?.columns ?? [];
+  const canvas = state.map?.getCanvas();
+  if (!canvas || columns.length === 0) return [];
+  const latitudes = columns.map((column) => column.position.latitude);
+  const longitudes = columns.map((column) => column.position.longitude);
+  const minimumLatitude = Math.min(...latitudes);
+  const maximumLatitude = Math.max(...latitudes);
+  const minimumLongitude = Math.min(...longitudes);
+  const maximumLongitude = Math.max(...longitudes);
+  const positions = [];
+  for (
+    let y = WIND_MARKER_SPACING_PIXELS / 2;
+    y < canvas.clientHeight;
+    y += WIND_MARKER_SPACING_PIXELS
+  ) {
+    for (
+      let x = WIND_MARKER_SPACING_PIXELS / 2;
+      x < canvas.clientWidth;
+      x += WIND_MARKER_SPACING_PIXELS
+    ) {
+      const point = state.map.unproject([x, y]);
+      if (
+        point.lat < minimumLatitude ||
+        point.lat > maximumLatitude ||
+        point.lng < minimumLongitude ||
+        point.lng > maximumLongitude
+      ) {
+        continue;
+      }
+      positions.push({ latitude: point.lat, longitude: point.lng });
+    }
+  }
+  return positions;
+}
+
 function updateWindMarkers() {
   clearWindMarkers();
   const altitude = selectedWindLevel();
   elements.wind_altitude_label.textContent = `${altitude} m MSL`;
   if (!state.field || !elements.wind_toggle.checked) return;
-  for (const column of state.field.columns) {
-    const vector = vectorAtAltitude(column, altitude);
+  let departureOffsetSeconds = 0;
+  try {
+    departureOffsetSeconds =
+      (state.routePlan?.departureOffsetMinutes ??
+        selectedDepartureSearch().minimumDepartureOffsetMinutes) * 60;
+  } catch {
+    // Keep the map clear until a valid search day is selected.
+    return;
+  }
+  for (const position of windDisplayPositions()) {
+    const vector = interpolatedVectorAtPosition(
+      state.field,
+      position,
+      altitude,
+      departureOffsetSeconds,
+    );
     if (!vector) continue;
     const element = document.createElement("div");
     element.className = "wind-marker";
@@ -449,7 +563,7 @@ function updateWindMarkers() {
     element.append(arrow, speed);
     state.windMarkers.push(
       new maplibregl.Marker({ element, anchor: "center" })
-        .setLngLat([column.position.longitude, column.position.latitude])
+        .setLngLat([position.longitude, position.latitude])
         .addTo(state.map),
     );
   }
@@ -503,7 +617,13 @@ function formatMissDistance(distanceMetres) {
 function recomputeTrack({ fit = false } = {}) {
   if (!state.field || !state.launch) return;
   try {
-    const settings = { field: state.field, launch: state.launch, ...validLaunchSettings() };
+    const departureSearch = selectedDepartureSearch();
+    const settings = {
+      field: state.field,
+      launch: state.launch,
+      ...validLaunchSettings(),
+      ...departureSearch,
+    };
     if (state.manualLanding && state.intendedLanding) {
       state.routePlan = planWindRouteToDestination({
         ...settings,
@@ -519,15 +639,22 @@ function recomputeTrack({ fit = false } = {}) {
       const profile = state.routePlan.controlAltitudesMetresMsl
         .map((altitude) => `${Math.round(altitude)} m`)
         .join(" → ");
+      const window = state.routePlan.departureWindow;
+      const windowText = window
+        ? window.startOffsetMinutes === window.endOffsetMinutes
+          ? ` Approximate matching start time with this profile: ${formatLocalTime(window.startAt)}.`
+          : ` Approximate matching start window with this profile: ${formatLocalTime(window.startAt)}–${formatLocalTime(window.endAt)}.`
+        : "";
       elements.route_strategy.hidden = false;
       elements.route_strategy.textContent =
-        `Optimised forecast: ${duration} min · peak ${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL · ` +
-        `heights at 20/40/60/80%: ${profile}, then land at launch elevation.`;
+        `Optimised forecast: start ${formatLocalDateTime(state.routePlan.departureAt)} · ${duration} min · ` +
+        `peak ${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL · heights at 20/40/60/80%: ` +
+        `${profile}, then land at launch elevation.${windowText}`;
       setStatus(
         elements.route_status,
         state.routePlan.reachesDestination
-          ? `The optimised forecast endpoint is ${missDistance} from the destination, within the 100 m acceptance distance.`
-          : `The forecast winds do not support this destination inside the search limits. The closest endpoint still misses by ${missDistance}; the shown track is best-effort only.`,
+          ? `The optimised forecast endpoint is ${missDistance} from the destination, within the 100 m acceptance distance at the reported start time.`
+          : `The forecast winds do not support this destination inside the selected day and search limits. The closest endpoint still misses by ${missDistance}; the shown start time and track are best-effort only.`,
         state.routePlan.reachesDestination ? "good" : "error",
       );
       state.forecastLanding = state.track.at(-1);
@@ -545,7 +672,7 @@ function recomputeTrack({ fit = false } = {}) {
       setMarker("intended", null);
       setStatus(
         elements.route_status,
-        "Set a destination to optimise flight duration and four in-flight altitude controls.",
+        "Set a destination to optimise start time, flight duration and four in-flight altitude controls.",
       );
     }
     updateSources();
@@ -556,18 +683,26 @@ function recomputeTrack({ fit = false } = {}) {
     elements.forecast_summary.hidden = !state.track;
     if (state.track) {
       elements.forecast_distance.textContent = `${(forecastDistanceMetres(state.track) / 1000).toFixed(1)} km forecast drift`;
-      elements.forecast_validity.textContent = `${state.routePlan.durationMinutes.toFixed(1)} min · hourly wind from departure`;
+      elements.forecast_validity.textContent =
+        `${formatLocalDateTime(state.routePlan.departureAt)} · ` +
+        `${state.routePlan.durationMinutes.toFixed(1)} min · hourly wind interpolation`;
     }
     setStatus(
       elements.landing_status,
       state.manualLanding
-        ? `Destination retained. ${state.routePlan.evaluatedCandidateCount} duration and height refinements were evaluated.`
-        : `The purple envelope bounds ${state.landingCandidateCount} coarse duration and height forecasts. It is not a safe-landing assessment.`,
+        ? `Destination retained. ${state.routePlan.evaluatedCandidateCount} start-time, duration and height refinements were evaluated.`
+        : `The purple envelope bounds ${state.landingCandidateCount} coarse start-time, duration and height forecasts. It is not a safe-landing assessment.`,
       "good",
     );
     setStatus(
       elements.wind_status,
-      `Hourly UKMO wind forecast starts ${formatUtc(state.field.validAt)} · model data, not an observation.`,
+      `Hourly UKMO wind forecast covers ${formatLocalDay(departureSearch.dayStart)} across ` +
+        `${state.field.columns.length} source points in a roughly ` +
+        `${Math.round(WIND_GRID_SPAN_METRES / 1000)} km square. Arrows show ` +
+        `${formatLocalTime(state.routePlan?.departureAt ?? new Date(
+          departureSearch.dayStart.getTime() +
+            departureSearch.minimumDepartureOffsetMinutes * 60_000,
+        ))} · model data, not an observation.`,
       "good",
     );
     if (fit) fitForecast();
@@ -590,9 +725,9 @@ function recomputeTrack({ fit = false } = {}) {
 
 async function refreshForecast() {
   if (!state.launch) return;
-  let departure;
+  let departureSearch;
   try {
-    departure = selectedDeparture();
+    departureSearch = selectedDepartureSearch();
     validLaunchSettings();
   } catch (error) {
     setStatus(elements.wind_status, error.message, "error");
@@ -613,7 +748,7 @@ async function refreshForecast() {
     if (!response.ok) throw new Error(`Wind service returned ${response.status}.`);
     const payload = await response.json();
     if (generation !== state.forecastGeneration) return;
-    state.field = parseOpenMeteoForecast(payload, departure);
+    state.field = parseOpenMeteoForecast(payload, departureSearch.dayStart);
     recomputeTrack({ fit: true });
   } catch (error) {
     if (error.name === "AbortError") return;
@@ -680,7 +815,7 @@ async function chooseLanding(point) {
   elements.clear_destination.disabled = false;
   setStatus(
     elements.landing_status,
-    `Destination set at ${state.intendedLanding.latitude.toFixed(5)}, ${state.intendedLanding.longitude.toFixed(5)}. Optimising duration and altitude profile…`,
+    `Destination set at ${state.intendedLanding.latitude.toFixed(5)}, ${state.intendedLanding.longitude.toFixed(5)}. Optimising start time, duration and altitude profile…`,
     "good",
   );
   await new Promise((resolve) => {
@@ -733,7 +868,7 @@ async function generatePlanCode() {
     const gpx = buildFlightPlanGpx({
       name,
       track: state.track,
-      departureAt: selectedDeparture(),
+      departureAt: state.routePlan.departureAt,
       launch: state.launch,
       forecastLanding: state.forecastLanding,
       intendedLanding: state.intendedLanding,
@@ -837,6 +972,8 @@ async function start() {
       addPlannerLayers(state.map);
       applyMapTheme();
       updateSources();
+      state.map.on("moveend", updateWindMarkers);
+      state.map.on("resize", updateWindMarkers);
       state.map.on("click", (event) => {
         if (state.mode === "launch") chooseLaunch(event.lngLat);
         else if (state.mode === "landing") void chooseLanding(event.lngLat);

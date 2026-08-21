@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  WIND_GRID_SIDE_POINTS,
+  WIND_GRID_SPAN_METRES,
   WIND_LEVELS_METRES_MSL,
   altitudeForFlightFraction,
   altitudeForProfileFraction,
@@ -11,6 +13,7 @@ import {
   forecastAltitudeProfileTrack,
   forecastLandingEnvelope,
   forecastFlightTrack,
+  interpolatedVectorAtPosition,
   moveWithWind,
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
@@ -29,14 +32,28 @@ function payload({ direction = 270, speed = 36 } = {}) {
   return { latitude: 51.5, longitude: -2.5, hourly };
 }
 
-test("wind request mirrors the app's bounded UKMO grid and height levels", () => {
+test("wind request covers a bounded wide-area UKMO grid and height levels", () => {
   const centre = { latitude: 51.5, longitude: -2.5 };
-  assert.equal(windForecastGrid(centre).length, 9);
+  const grid = windForecastGrid(centre);
+  assert.equal(grid.length, WIND_GRID_SIDE_POINTS ** 2);
+  assert.equal(WIND_GRID_SPAN_METRES, 120_000);
+  assert.ok(grid.some((point) => point.latitude === centre.latitude));
+  assert.ok(grid.some((point) => point.longitude === centre.longitude));
+  assert.ok(
+    Math.max(...grid.map((point) => point.latitude)) -
+      Math.min(...grid.map((point) => point.latitude)) >
+      1,
+  );
+  assert.ok(
+    Math.max(...grid.map((point) => point.longitude)) -
+      Math.min(...grid.map((point) => point.longitude)) >
+      1.5,
+  );
   const url = openMeteoRequestUrl({ endpoint: "/weather/v1/forecast", center: centre });
   assert.equal(url.pathname, "/weather/v1/forecast");
   assert.equal(url.searchParams.get("models"), "ukmo_seamless");
   assert.equal(url.searchParams.get("forecast_days"), "3");
-  assert.equal(url.searchParams.get("latitude").split(",").length, 9);
+  assert.equal(url.searchParams.get("latitude").split(",").length, 25);
   assert.match(url.searchParams.get("hourly"), /wind_speed_500m/);
   assert.match(url.searchParams.get("hourly"), /wind_direction_2000m/);
 });
@@ -63,6 +80,20 @@ test("wind vectors interpolate between hourly forecast slices during the flight"
   assert.ok(Math.abs(vector.speedKmh - 25.46) < 0.1);
 });
 
+test("spatially interpolated display vectors follow the chosen start time", () => {
+  const source = payload();
+  source.hourly.wind_direction_500m = [270, 180];
+  const field = parseOpenMeteoForecast(source, new Date("2026-08-21T08:00:00Z"));
+  const vector = interpolatedVectorAtPosition(
+    field,
+    { latitude: 51.5, longitude: -2.5 },
+    500,
+    30 * 60,
+  );
+  assert.ok(Math.abs(vector.fromDegrees - 225) < 0.1);
+  assert.ok(Math.abs(vector.speedKmh - 25.46) < 0.1);
+});
+
 test("vertical interpolation crosses north without wrapping south", () => {
   const vector = vectorAtAltitude(
     {
@@ -75,6 +106,27 @@ test("vertical interpolation crosses north without wrapping south", () => {
   );
   assert.ok(vector.fromDegrees < 1 || vector.fromDegrees > 359);
   assert.ok(Math.abs(vector.speedKmh - 35.45) < 0.1);
+});
+
+test("wind display interpolates direction and speed between nearby source points", () => {
+  const field = {
+    columns: [
+      [-0.1, -0.1, 270],
+      [0.1, -0.1, 180],
+      [-0.1, 0.1, 270],
+      [0.1, 0.1, 180],
+    ].map(([latitude, longitude, fromDegrees]) => ({
+      position: { latitude, longitude },
+      vectors: [{ altitudeMetresMsl: 500, speedKmh: 36, fromDegrees }],
+    })),
+  };
+  const vector = interpolatedVectorAtPosition(
+    field,
+    { latitude: 0, longitude: 0 },
+    500,
+  );
+  assert.ok(Math.abs(vector.fromDegrees - 225) < 0.1);
+  assert.ok(Math.abs(vector.speedKmh - 25.46) < 0.1);
 });
 
 test("flight profile climbs, cruises and returns to launch elevation", () => {
@@ -125,6 +177,24 @@ test("forecast track follows wind while maintaining its own altitude profile", (
   assert.ok(Math.abs(track.at(-1).latitude - track[0].latitude) < 0.001);
   assert.equal(track[0].altitudeMetresMsl, 100);
   assert.ok(Math.abs(track.at(-1).altitudeMetresMsl - 100) < 1e-9);
+});
+
+test("forecast track can start from a later wind slice on the selected day", () => {
+  const source = payload();
+  for (const altitude of WIND_LEVELS_METRES_MSL) {
+    source.hourly[`wind_direction_${altitude}m`] = [270, 180];
+  }
+  const field = parseOpenMeteoForecast(source, new Date("2026-08-21T08:00:00Z"));
+  const track = forecastFlightTrack({
+    field,
+    launch: { latitude: 51.5, longitude: -2.5 },
+    launchElevationMetresMsl: 100,
+    maximumAltitudeMetresMsl: 100,
+    durationMinutes: 10,
+    departureOffsetSeconds: 60 * 60,
+  });
+  assert.ok(track.at(-1).latitude > track[0].latitude);
+  assert.ok(Math.abs(track.at(-1).longitude - track[0].longitude) < 0.001);
 });
 
 test("wind routing chooses duration automatically and refines a reachable endpoint within 100 m", () => {
@@ -207,6 +277,48 @@ test("wind routing changes a multi-stage altitude profile and reports impossible
   });
   assert.equal(impossible.reachesDestination, false);
   assert.ok(impossible.missDistanceMetres > 20_000);
+});
+
+test("wind routing chooses a start time and reports its matching window", () => {
+  const launch = { latitude: 51.5, longitude: -2.5 };
+  const source = payload();
+  source.hourly.time = [
+    "2026-08-21T08:00",
+    "2026-08-21T09:00",
+    "2026-08-21T10:00",
+  ];
+  for (const altitude of WIND_LEVELS_METRES_MSL) {
+    source.hourly[`wind_speed_${altitude}m`] = [36, 36, 36];
+    source.hourly[`wind_direction_${altitude}m`] = [270, 180, 90];
+  }
+  const field = parseOpenMeteoForecast(source, new Date("2026-08-21T08:00:00Z"));
+  const expectedTrack = forecastAltitudeProfileTrack({
+    field,
+    launch,
+    launchElevationMetresMsl: 100,
+    controlAltitudesMetresMsl: [100, 100, 100, 100],
+    durationMinutes: 10,
+    departureOffsetSeconds: 60 * 60,
+  });
+  const result = planWindRouteToDestination({
+    field,
+    launch,
+    destination: expectedTrack.at(-1),
+    launchElevationMetresMsl: 100,
+    minimumDurationMinutes: 10,
+    maximumDurationMinutes: 10,
+    altitudeCeilingMetresMsl: 100,
+    minimumDepartureOffsetMinutes: 0,
+    maximumDepartureOffsetMinutes: 120,
+    departureSearchStepMinutes: 60,
+  });
+  assert.equal(result.reachesDestination, true);
+  assert.equal(result.departureOffsetMinutes, 60);
+  assert.equal(result.departureAt.toISOString(), "2026-08-21T09:00:00.000Z");
+  assert.ok(result.missDistanceMetres < 1);
+  assert.ok(result.departureWindow);
+  assert.ok(result.departureWindow.startAt <= result.departureAt);
+  assert.ok(result.departureWindow.endAt >= result.departureAt);
 });
 
 test("generated GPX names the forecast and intended landing without claiming a route", () => {
