@@ -20,6 +20,11 @@ pretend a balloon follows a road route:
 - before a destination is chosen, a clearly labelled representative 60-minute
   forecast keeps a visible altitude-coloured track, start time, duration, peak
   altitude and forecast landing on the map;
+- placed launch and destination pins can be dragged directly; moving the launch
+  reloads its wind field while retaining the destination, and moving the
+  destination reruns the optimiser without a separate placement action;
+- the compact control panel keeps route inputs and results together, with wind,
+  chart and sharing controls grouped below and longer guidance in disclosures;
 - the basemap and planner controls can switch between light and dark themes,
   with an explicit tile-load indicator and retry action;
 - OpenAIP's combined aeronautical chart is visible with a plain-language key;
