@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  WIND_GRID_SIDE_POINTS,
+  WIND_GRID_SPAN_METRES,
   WIND_LEVELS_METRES_MSL,
   altitudeForFlightFraction,
   altitudeForProfileFraction,
@@ -11,6 +13,7 @@ import {
   forecastAltitudeProfileTrack,
   forecastLandingEnvelope,
   forecastFlightTrack,
+  interpolatedVectorAtPosition,
   moveWithWind,
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
@@ -29,14 +32,28 @@ function payload({ direction = 270, speed = 36 } = {}) {
   return { latitude: 51.5, longitude: -2.5, hourly };
 }
 
-test("wind request mirrors the app's bounded UKMO grid and height levels", () => {
+test("wind request covers a bounded wide-area UKMO grid and height levels", () => {
   const centre = { latitude: 51.5, longitude: -2.5 };
-  assert.equal(windForecastGrid(centre).length, 9);
+  const grid = windForecastGrid(centre);
+  assert.equal(grid.length, WIND_GRID_SIDE_POINTS ** 2);
+  assert.equal(WIND_GRID_SPAN_METRES, 120_000);
+  assert.ok(grid.some((point) => point.latitude === centre.latitude));
+  assert.ok(grid.some((point) => point.longitude === centre.longitude));
+  assert.ok(
+    Math.max(...grid.map((point) => point.latitude)) -
+      Math.min(...grid.map((point) => point.latitude)) >
+      1,
+  );
+  assert.ok(
+    Math.max(...grid.map((point) => point.longitude)) -
+      Math.min(...grid.map((point) => point.longitude)) >
+      1.5,
+  );
   const url = openMeteoRequestUrl({ endpoint: "/weather/v1/forecast", center: centre });
   assert.equal(url.pathname, "/weather/v1/forecast");
   assert.equal(url.searchParams.get("models"), "ukmo_seamless");
   assert.equal(url.searchParams.get("forecast_days"), "3");
-  assert.equal(url.searchParams.get("latitude").split(",").length, 9);
+  assert.equal(url.searchParams.get("latitude").split(",").length, 25);
   assert.match(url.searchParams.get("hourly"), /wind_speed_500m/);
   assert.match(url.searchParams.get("hourly"), /wind_direction_2000m/);
 });
@@ -75,6 +92,27 @@ test("vertical interpolation crosses north without wrapping south", () => {
   );
   assert.ok(vector.fromDegrees < 1 || vector.fromDegrees > 359);
   assert.ok(Math.abs(vector.speedKmh - 35.45) < 0.1);
+});
+
+test("wind display interpolates direction and speed between nearby source points", () => {
+  const field = {
+    columns: [
+      [-0.1, -0.1, 270],
+      [0.1, -0.1, 180],
+      [-0.1, 0.1, 270],
+      [0.1, 0.1, 180],
+    ].map(([latitude, longitude, fromDegrees]) => ({
+      position: { latitude, longitude },
+      vectors: [{ altitudeMetresMsl: 500, speedKmh: 36, fromDegrees }],
+    })),
+  };
+  const vector = interpolatedVectorAtPosition(
+    field,
+    { latitude: 0, longitude: 0 },
+    500,
+  );
+  assert.ok(Math.abs(vector.fromDegrees - 225) < 0.1);
+  assert.ok(Math.abs(vector.speedKmh - 25.46) < 0.1);
 });
 
 test("flight profile climbs, cruises and returns to launch elevation", () => {

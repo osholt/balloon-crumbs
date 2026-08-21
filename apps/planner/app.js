@@ -1,13 +1,14 @@
 import {
+  WIND_GRID_SPAN_METRES,
   WIND_LEVELS_METRES_MSL,
   buildFlightPlanGpx,
   circlePolygon,
   forecastDistanceMetres,
   forecastLandingEnvelope,
+  interpolatedVectorAtPosition,
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
   planWindRouteToDestination,
-  vectorAtAltitude,
 } from "./planner-core.mjs";
 
 // Keep the installed-app hand-off on its already-shipped associated domain.
@@ -15,6 +16,7 @@ import {
 const APP_LINK_ORIGIN = "https://balloon-crumbs.tailendcharlie.app";
 const FORECAST_AREA_RADIUS_METRES = 750;
 const INTENDED_AREA_RADIUS_METRES = 400;
+const WIND_MARKER_SPACING_PIXELS = 150;
 const DEFAULT_CENTER = [-2.5, 54.4];
 const MAP_PALETTES = Object.freeze({
   dark: {
@@ -429,13 +431,49 @@ function clearWindMarkers() {
   state.windMarkers = [];
 }
 
+function windDisplayPositions() {
+  const columns = state.field?.columns ?? [];
+  const canvas = state.map?.getCanvas();
+  if (!canvas || columns.length === 0) return [];
+  const latitudes = columns.map((column) => column.position.latitude);
+  const longitudes = columns.map((column) => column.position.longitude);
+  const minimumLatitude = Math.min(...latitudes);
+  const maximumLatitude = Math.max(...latitudes);
+  const minimumLongitude = Math.min(...longitudes);
+  const maximumLongitude = Math.max(...longitudes);
+  const positions = [];
+  for (
+    let y = WIND_MARKER_SPACING_PIXELS / 2;
+    y < canvas.clientHeight;
+    y += WIND_MARKER_SPACING_PIXELS
+  ) {
+    for (
+      let x = WIND_MARKER_SPACING_PIXELS / 2;
+      x < canvas.clientWidth;
+      x += WIND_MARKER_SPACING_PIXELS
+    ) {
+      const point = state.map.unproject([x, y]);
+      if (
+        point.lat < minimumLatitude ||
+        point.lat > maximumLatitude ||
+        point.lng < minimumLongitude ||
+        point.lng > maximumLongitude
+      ) {
+        continue;
+      }
+      positions.push({ latitude: point.lat, longitude: point.lng });
+    }
+  }
+  return positions;
+}
+
 function updateWindMarkers() {
   clearWindMarkers();
   const altitude = selectedWindLevel();
   elements.wind_altitude_label.textContent = `${altitude} m MSL`;
   if (!state.field || !elements.wind_toggle.checked) return;
-  for (const column of state.field.columns) {
-    const vector = vectorAtAltitude(column, altitude);
+  for (const position of windDisplayPositions()) {
+    const vector = interpolatedVectorAtPosition(state.field, position, altitude);
     if (!vector) continue;
     const element = document.createElement("div");
     element.className = "wind-marker";
@@ -449,7 +487,7 @@ function updateWindMarkers() {
     element.append(arrow, speed);
     state.windMarkers.push(
       new maplibregl.Marker({ element, anchor: "center" })
-        .setLngLat([column.position.longitude, column.position.latitude])
+        .setLngLat([position.longitude, position.latitude])
         .addTo(state.map),
     );
   }
@@ -567,7 +605,9 @@ function recomputeTrack({ fit = false } = {}) {
     );
     setStatus(
       elements.wind_status,
-      `Hourly UKMO wind forecast starts ${formatUtc(state.field.validAt)} · model data, not an observation.`,
+      `Hourly UKMO wind forecast starts ${formatUtc(state.field.validAt)} across ` +
+        `${state.field.columns.length} source points in a roughly ` +
+        `${Math.round(WIND_GRID_SPAN_METRES / 1000)} km square · model data, not an observation.`,
       "good",
     );
     if (fit) fitForecast();
@@ -837,6 +877,8 @@ async function start() {
       addPlannerLayers(state.map);
       applyMapTheme();
       updateSources();
+      state.map.on("moveend", updateWindMarkers);
+      state.map.on("resize", updateWindMarkers);
       state.map.on("click", (event) => {
         if (state.mode === "launch") chooseLaunch(event.lngLat);
         else if (state.mode === "landing") void chooseLanding(event.lngLat);

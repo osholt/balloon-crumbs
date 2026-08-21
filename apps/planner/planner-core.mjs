@@ -4,6 +4,8 @@ export const WIND_LEVELS_METRES_MSL = Object.freeze([
 
 const EARTH_RADIUS_METRES = 6_371_000;
 const DEFAULT_STEP_SECONDS = 60;
+export const WIND_GRID_SIDE_POINTS = 5;
+export const WIND_GRID_SPAN_METRES = 120_000;
 export const ROUTE_SEARCH_LIMITS = Object.freeze({
   minimumDurationMinutes: 10,
   maximumDurationMinutes: 180,
@@ -29,14 +31,30 @@ function validPoint(point, label = "point") {
 
 export function windForecastGrid(center) {
   const origin = validPoint(center, "forecast centre");
-  return Object.freeze([
-    ...[-0.04, 0, 0.04].flatMap((latitudeOffset) =>
-      [-0.06, 0, 0.06].map((longitudeOffset) => ({
-        latitude: Math.max(-90, Math.min(90, origin.latitude + latitudeOffset)),
-        longitude: Math.max(-180, Math.min(180, origin.longitude + longitudeOffset)),
-      })),
-    ),
-  ]);
+  const halfSpanMetres = WIND_GRID_SPAN_METRES / 2;
+  const stepMetres = WIND_GRID_SPAN_METRES / (WIND_GRID_SIDE_POINTS - 1);
+  const longitudeScale = Math.max(0.01, Math.cos((origin.latitude * Math.PI) / 180));
+  const points = [];
+  for (let northIndex = 0; northIndex < WIND_GRID_SIDE_POINTS; northIndex += 1) {
+    const northMetres = -halfSpanMetres + northIndex * stepMetres;
+    const latitude = Math.max(
+      -90,
+      Math.min(90, origin.latitude + (northMetres / EARTH_RADIUS_METRES) * (180 / Math.PI)),
+    );
+    for (let eastIndex = 0; eastIndex < WIND_GRID_SIDE_POINTS; eastIndex += 1) {
+      const eastMetres = -halfSpanMetres + eastIndex * stepMetres;
+      const longitude = Math.max(
+        -180,
+        Math.min(
+          180,
+          origin.longitude +
+            (eastMetres / (EARTH_RADIUS_METRES * longitudeScale)) * (180 / Math.PI),
+        ),
+      );
+      points.push({ latitude, longitude });
+    }
+  }
+  return Object.freeze(points);
 }
 
 export function openMeteoRequestUrl({ endpoint, center }) {
@@ -202,6 +220,34 @@ function vectorInColumns(columns, position, altitudeMetresMsl) {
     nearestDistance = candidateDistance;
   }
   return vectorAtAltitude(nearest, altitudeMetresMsl);
+}
+
+export function interpolatedVectorAtPosition(field, position, altitudeMetresMsl) {
+  const candidates = (field?.columns ?? [])
+    .map((column) => ({
+      distanceMetres: distanceMetres(column.position, position),
+      vector: vectorAtAltitude(column, altitudeMetresMsl),
+    }))
+    .filter((candidate) => candidate.vector)
+    .sort((first, second) => first.distanceMetres - second.distanceMetres)
+    .slice(0, 4);
+  if (candidates.length === 0) return null;
+  if (candidates[0].distanceMetres < 1) return candidates[0].vector;
+  let totalWeight = 0;
+  let eastMetresPerSecond = 0;
+  let northMetresPerSecond = 0;
+  for (const candidate of candidates) {
+    const weight = 1 / candidate.distanceMetres ** 2;
+    const candidateComponents = components(candidate.vector);
+    totalWeight += weight;
+    eastMetresPerSecond += candidateComponents.eastMetresPerSecond * weight;
+    northMetresPerSecond += candidateComponents.northMetresPerSecond * weight;
+  }
+  return vectorFromComponents(
+    altitudeMetresMsl,
+    eastMetresPerSecond / totalWeight,
+    northMetresPerSecond / totalWeight,
+  );
 }
 
 export function vectorAtPosition(field, position, altitudeMetresMsl, elapsedSeconds = 0) {

@@ -6,8 +6,10 @@ pretend a balloon follows a road route:
 
 - the pilot selects a launch point, departure time, launch elevation and optional
   destination;
-- UKMO UKV wind from Open-Meteo is sampled on the same 3×3 grid and MSL height
-  levels used by the mobile app, with hourly interpolation during the flight;
+- UKMO UKV wind from Open-Meteo is sampled across a 5×5 grid spanning roughly
+  120 km around the launch, at 14 MSL height levels, with hourly interpolation
+  during the flight and spatially interpolated display arrows across the visible
+  sampling area;
 - the destination optimiser searches 10–180 minute durations and four changing
   altitude controls up to the highest 2,000 m MSL forecast layer;
 - duration, altitude profile and resulting peak altitude are outputs of the

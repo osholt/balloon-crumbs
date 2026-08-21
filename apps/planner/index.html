@@ -74,7 +74,7 @@
             <span>3</span>
             <div>
               <h2 id="wind-title">Wind layer</h2>
-              <p>UKMO UKV forecast via Open-Meteo.</p>
+              <p>UKMO UKV forecast via Open-Meteo across a wide 5×5 grid.</p>
             </div>
             <label class="switch" title="Show or hide wind arrows">
               <input type="checkbox" id="wind-toggle" checked />
@@ -87,7 +87,7 @@
             <input type="range" id="wind-altitude" min="0" max="13" step="1" value="7" />
           </label>
           <p class="status" id="wind-status" role="status">Set a launch point to load wind.</p>
-          <p class="small muted">Arrows point downwind; labels show km/h. Height levels are metres above mean sea level.</p>
+          <p class="small muted">Arrows are spatially interpolated between the 25 source points across the visible sampling area. They point downwind; labels show km/h. Height levels are metres above mean sea level.</p>
         </section>
 
         <section class="panel-section" aria-labelledby="landing-title">
