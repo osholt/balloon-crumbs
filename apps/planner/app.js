@@ -5,6 +5,7 @@ import {
   circlePolygon,
   forecastDistanceMetres,
   forecastLandingEnvelope,
+  forecastRepresentativeRoute,
   interpolatedVectorAtPosition,
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
@@ -397,7 +398,7 @@ function applyMapTheme() {
     state.map.setPaintProperty(
       "forecast-track-casing",
       "line-color",
-      themeName === "dark" ? "#11151c" : "#ffffff",
+      themeName === "dark" ? "#ffffff" : "#11151c",
     );
   }
 }
@@ -514,9 +515,9 @@ function addPlannerLayers(map) {
     type: "line",
     source: "forecast-track",
     paint: {
-      "line-color": selectedMapTheme() === "dark" ? "#11151c" : "#ffffff",
-      "line-width": 9,
-      "line-opacity": 0.8,
+      "line-color": selectedMapTheme() === "dark" ? "#ffffff" : "#11151c",
+      "line-width": 12,
+      "line-opacity": 1,
     },
     layout: { "line-cap": "round", "line-join": "round" },
   });
@@ -530,16 +531,16 @@ function addPlannerLayers(map) {
         ["linear"],
         ["get", "altitude"],
         0,
-        "#4ea5ff",
+        "#00c8ff",
         500,
-        "#55e1d2",
+        "#00f5a0",
         1000,
-        "#ffd45e",
+        "#ffe600",
         2000,
-        "#ff6f8c",
+        "#ff245d",
       ],
-      "line-width": 5,
-      "line-opacity": 0.96,
+      "line-width": 7,
+      "line-opacity": 1,
     },
     layout: { "line-cap": "round", "line-join": "round" },
   });
@@ -669,7 +670,7 @@ function updateWindMarkers() {
 }
 
 function updateSources() {
-  if (!state.map?.isStyleLoaded()) return;
+  if (!state.map) return;
   state.map.getSource("forecast-track")?.setData(lineCollection(state.track));
   state.map
     .getSource("landing-envelope")
@@ -689,8 +690,12 @@ function fitForecast() {
   if (state.intendedLanding) {
     bounds.extend([state.intendedLanding.longitude, state.intendedLanding.latitude]);
   }
-  for (const point of state.landingEnvelope) {
-    bounds.extend([point.longitude, point.latitude]);
+  // Prioritise the displayed flight: fitting the full 10–180 minute envelope
+  // can shrink a useful one-hour track until it is almost invisible.
+  if (!state.track || state.track.length < 2) {
+    for (const point of state.landingEnvelope) {
+      bounds.extend([point.longitude, point.latitude]);
+    }
   }
   if (!bounds.isEmpty()) state.map.fitBounds(bounds, { padding: 90, maxZoom: 11, duration: 700 });
 }
@@ -760,37 +765,47 @@ function recomputeTrack({ fit = false } = {}) {
       setMarker("forecast", state.forecastLanding, "Forecast landing");
       setMarker("intended", state.intendedLanding, "Destination");
     } else {
-      state.routePlan = null;
-      state.track = null;
-      state.forecastLanding = null;
       const envelope = forecastLandingEnvelope(settings);
+      state.routePlan = forecastRepresentativeRoute({
+        ...settings,
+        departureOffsetMinutes: departureSearch.minimumDepartureOffsetMinutes,
+      });
+      state.track = state.routePlan.track;
+      state.forecastLanding = state.routePlan.landing;
       state.landingEnvelope = envelope.boundary;
       state.landingCandidateCount = envelope.candidates.length;
-      elements.route_strategy.hidden = true;
-      setMarker("forecast", null);
+      elements.route_strategy.hidden = false;
+      elements.route_strategy.textContent =
+        `Representative forecast: start ${formatLocalDateTime(state.routePlan.departureAt)} · ` +
+        `${state.routePlan.durationMinutes.toFixed(0)} min · peak ` +
+        `${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL, then descend to launch elevation. ` +
+        "Set a destination to optimise start time, duration and a changing altitude profile.";
+      setMarker("forecast", state.forecastLanding, "Forecast landing");
       setMarker("intended", null);
       setStatus(
         elements.route_status,
-        "Set a destination to optimise start time, flight duration and four in-flight altitude controls.",
+        "Showing a representative drift forecast so the track and flight details remain visible before a destination is chosen.",
+        "good",
       );
     }
     updateSources();
     updateWindMarkers();
     elements.set_landing.disabled = false;
     elements.clear_destination.disabled = !state.manualLanding;
-    elements.generate_code.disabled = !state.track;
+    elements.generate_code.disabled = !state.track || !state.manualLanding;
     elements.forecast_summary.hidden = !state.track;
     if (state.track) {
       elements.forecast_distance.textContent = `${(forecastDistanceMetres(state.track) / 1000).toFixed(1)} km forecast drift`;
       elements.forecast_validity.textContent =
         `${formatLocalDateTime(state.routePlan.departureAt)} · ` +
-        `${state.routePlan.durationMinutes.toFixed(1)} min · hourly wind interpolation`;
+        `${state.routePlan.durationMinutes.toFixed(1)} min · ` +
+        `${state.manualLanding ? "optimised" : "representative"} · hourly wind interpolation`;
     }
     setStatus(
       elements.landing_status,
       state.manualLanding
         ? `Destination retained. ${state.routePlan.evaluatedCandidateCount} start-time, duration and height refinements were evaluated.`
-        : `The purple envelope bounds ${state.landingCandidateCount} coarse start-time, duration and height forecasts. It is not a safe-landing assessment.`,
+        : `The coloured line is a representative ${state.routePlan.durationMinutes.toFixed(0)}-minute drift forecast peaking at ${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL. The purple envelope bounds ${state.landingCandidateCount} coarse start-time, duration and height forecasts; neither is a safe-landing assessment.`,
       "good",
     );
     setStatus(
@@ -989,7 +1004,7 @@ async function generatePlanCode() {
   } catch (error) {
     setStatus(elements.generate_status, `The plan could not be saved: ${error.message}`, "error");
   } finally {
-    elements.generate_code.disabled = !state.track;
+    elements.generate_code.disabled = !state.track || !state.manualLanding;
   }
 }
 

@@ -12,6 +12,7 @@ import {
   circlePolygon,
   forecastAltitudeProfileTrack,
   forecastLandingEnvelope,
+  forecastRepresentativeRoute,
   forecastFlightTrack,
   interpolatedVectorAtPosition,
   moveWithWind,
@@ -195,6 +196,23 @@ test("forecast track can start from a later wind slice on the selected day", () 
   });
   assert.ok(track.at(-1).latitude > track[0].latitude);
   assert.ok(Math.abs(track.at(-1).longitude - track[0].longitude) < 0.001);
+});
+
+test("launch-only forecast reports a representative track and flight details", () => {
+  const field = parseOpenMeteoForecast(payload(), new Date("2026-08-21T08:00:00Z"));
+  const route = forecastRepresentativeRoute({
+    field,
+    launch: { latitude: 51.5, longitude: -2.5 },
+    launchElevationMetresMsl: 100,
+    departureOffsetMinutes: 60,
+  });
+  assert.equal(route.kind, "representative");
+  assert.equal(route.departureAt.toISOString(), "2026-08-21T09:00:00.000Z");
+  assert.equal(route.durationMinutes, 60);
+  assert.equal(route.peakAltitudeMetresMsl, 500);
+  assert.equal(route.track.length, 61);
+  assert.deepEqual(route.landing, route.track.at(-1));
+  assert.ok(route.landing.longitude > route.track[0].longitude);
 });
 
 test("wind routing chooses duration automatically and refines a reachable endpoint within 100 m", () => {

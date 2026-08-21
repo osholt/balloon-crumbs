@@ -12,6 +12,10 @@ export const ROUTE_SEARCH_LIMITS = Object.freeze({
   altitudeCeilingMetresMsl: 2000,
   acceptedMissDistanceMetres: 100,
 });
+export const REPRESENTATIVE_FORECAST_DEFAULTS = Object.freeze({
+  durationMinutes: 60,
+  cruiseAltitudeMetresMsl: 500,
+});
 export const ROUTE_CONTROL_FRACTIONS = Object.freeze([0, 0.2, 0.4, 0.6, 0.8, 1]);
 
 function finiteNumber(value, label) {
@@ -467,6 +471,51 @@ export function forecastFlightTrack({
         launchElevationMetresMsl,
         maximumAltitudeMetresMsl,
       }),
+  });
+}
+
+export function forecastRepresentativeRoute({
+  field,
+  launch,
+  launchElevationMetresMsl,
+  departureOffsetMinutes = 0,
+  durationMinutes = REPRESENTATIVE_FORECAST_DEFAULTS.durationMinutes,
+  cruiseAltitudeMetresMsl = REPRESENTATIVE_FORECAST_DEFAULTS.cruiseAltitudeMetresMsl,
+  stepSeconds = DEFAULT_STEP_SECONDS,
+}) {
+  const launchElevation = finiteNumber(launchElevationMetresMsl, "launch elevation");
+  const departureOffset = finiteNumber(departureOffsetMinutes, "departure offset");
+  if (departureOffset < 0) throw new RangeError("Departure offset must not be negative.");
+  const peakAltitudeMetresMsl = Math.max(
+    launchElevation,
+    finiteNumber(cruiseAltitudeMetresMsl, "representative cruise altitude"),
+  );
+  const track = forecastFlightTrack({
+    field,
+    launch,
+    launchElevationMetresMsl: launchElevation,
+    maximumAltitudeMetresMsl: peakAltitudeMetresMsl,
+    durationMinutes,
+    departureOffsetSeconds: departureOffset * 60,
+    stepSeconds,
+  });
+  const forecastStart =
+    field?.requestedAt instanceof Date
+      ? field.requestedAt
+      : field?.validAt instanceof Date
+        ? field.validAt
+        : null;
+  if (!forecastStart || Number.isNaN(forecastStart.getTime())) {
+    throw new TypeError("The wind field does not identify its forecast start.");
+  }
+  return Object.freeze({
+    kind: "representative",
+    departureOffsetMinutes: departureOffset,
+    departureAt: new Date(forecastStart.getTime() + departureOffset * 60_000),
+    durationMinutes: finiteNumber(durationMinutes, "flight duration"),
+    peakAltitudeMetresMsl,
+    track,
+    landing: track.at(-1),
   });
 }
 

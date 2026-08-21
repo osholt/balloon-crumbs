@@ -187,7 +187,7 @@ summary { cursor: pointer; font-weight: 750; font-size: 0.82rem; }
 .legend-dot.launch { background: var(--sky); color: var(--sky); }
 .legend-dot.forecast { background: var(--sun); color: var(--sun); }
 .legend-dot.intended { background: var(--green); color: var(--green); }
-.legend-line { width: 1.4rem; height: 0.25rem; border-radius: 1rem; background: linear-gradient(90deg, #4ea5ff, #55e1d2, #ffd45e, #ff6f8c); }
+.legend-line { width: 1.4rem; height: 0.3rem; border-radius: 1rem; background: linear-gradient(90deg, #00c8ff, #00f5a0, #ffe600, #ff245d); }
 .legend-envelope { width: 1.4rem; height: 0.65rem; border: 2px dashed var(--purple); background: color-mix(in srgb, var(--purple) 18%, transparent); }
 
 .map-marker { width: 1.2rem; height: 1.2rem; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid #10141a; box-shadow: 0 2px 8px rgb(0 0 0 / 0.45); }
