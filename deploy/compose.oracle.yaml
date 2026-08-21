@@ -1,0 +1,23 @@
+services:
+  caddy:
+    # TEC's Caddy owns the host's public ports. This Caddy is an isolated
+    # Balloon Crumbs edge on the shared TEC network; the public proxy reaches
+    # only this alias and never the database or API container directly.
+    ports: !reset []
+    expose:
+      - "8080"
+    environment:
+      BALLOON_CRUMBS_DOMAIN: ${BALLOON_CRUMBS_DOMAIN:?set BALLOON_CRUMBS_DOMAIN}
+      BALLOON_CRUMBS_OPENAIP_API_KEY: ${BALLOON_CRUMBS_OPENAIP_API_KEY:?set BALLOON_CRUMBS_OPENAIP_API_KEY}
+    volumes:
+      - ./Caddyfile.oracle:/etc/caddy/Caddyfile:ro
+    networks:
+      default: {}
+      tec-edge:
+        aliases:
+          - balloon-crumbs-edge
+
+networks:
+  tec-edge:
+    external: true
+    name: ride-relay_default
