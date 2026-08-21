@@ -32,12 +32,12 @@
 
     <main class="planner-shell">
       <aside class="planner-panel" aria-label="Flight planning controls">
-        <section class="panel-section" aria-labelledby="launch-title">
+        <section class="panel-section route-section" aria-labelledby="launch-title">
           <div class="section-heading">
             <span>1</span>
             <div>
-              <h2 id="launch-title">Launch</h2>
-              <p>Search for a place, click the map, or use this device’s location.</p>
+              <h2 id="launch-title">Flight route</h2>
+              <p>Place the start and destination, then drag either pin to adjust it.</p>
             </div>
           </div>
           <form class="place-search" id="place-search-form">
@@ -56,42 +56,54 @@
           </form>
           <p class="status" id="place-search-status" role="status"></p>
           <ul class="place-search-results" id="place-search-results" aria-label="Place search results" hidden></ul>
-          <p class="small muted place-search-credit">Submit-only search using © OpenStreetMap contributors, ODbL. Do not enter personal or confidential information.</p>
           <div class="button-row">
-            <button type="button" id="set-launch">Set on map</button>
+            <button type="button" id="set-launch">Place start</button>
             <button type="button" id="use-location">Use my location</button>
           </div>
           <p class="status" id="launch-status" role="status">Choose a launch point.</p>
+          <div class="field-grid compact-fields">
+            <label class="field">
+              <span>Flight date</span>
+              <input type="date" id="departure-time" />
+            </label>
+            <label class="field">
+              <span>Launch elevation</span>
+              <span class="input-with-unit">
+                <input type="number" id="launch-elevation" min="-50" max="1000" step="10" value="100" />
+                <i>m MSL</i>
+              </span>
+            </label>
+          </div>
+          <div class="subsection-heading">
+            <strong>Destination</strong>
+            <span>Optional until you want an optimised route</span>
+          </div>
+          <div class="button-row">
+            <button type="button" id="set-landing" disabled>Place destination</button>
+            <button type="button" id="clear-destination" disabled>Clear destination</button>
+          </div>
+          <p class="status" id="landing-status">Waiting for a wind forecast.</p>
+          <p class="status" id="route-status" role="status">Set a launch point to calculate the landing envelope.</p>
+          <p class="route-strategy" id="route-strategy" hidden></p>
+          <details class="panel-help">
+            <summary>Planner help, safety and data</summary>
+            <p class="small muted">The search varies the remaining start times on the selected day, a 10–180 minute duration and four altitude controls up to 2,000 m MSL. The purple boundary is a convex envelope of coarse forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. A result within 100 m is marked as a forecast match. The optimiser does not assess airspace, terrain, legal limits, fuel or the balloon’s actual climb/descent performance.</p>
+            <p class="small muted place-search-credit">Submit-only search using © OpenStreetMap contributors, ODbL. Do not enter personal or confidential information.</p>
+          </details>
         </section>
 
-        <section class="panel-section" aria-labelledby="flight-title">
+        <section class="panel-section layers-section" aria-labelledby="layers-title">
           <div class="section-heading">
             <span>2</span>
             <div>
-              <h2 id="flight-title">Forecast setup</h2>
-              <p>Choose the day and ground elevation; the optimiser searches the start time.</p>
+              <h2 id="layers-title">Map layers</h2>
+              <p>Wind and advisory aeronautical context.</p>
             </div>
           </div>
-          <label class="field">
-            <span>Flight date to search</span>
-            <input type="date" id="departure-time" />
-          </label>
-          <label class="field">
-            <span>Launch elevation</span>
-            <span class="input-with-unit">
-              <input type="number" id="launch-elevation" min="-50" max="1000" step="10" value="100" />
-              <i>m MSL</i>
-            </span>
-          </label>
-          <p class="search-limits small">The destination search tries the remaining start times on the selected day, a 10–180 minute duration and four altitude controls between launch elevation and 2,000 m MSL. Start time and peak altitude are outputs, not inputs.</p>
-        </section>
-
-        <section class="panel-section" aria-labelledby="wind-title">
-          <div class="section-heading split-heading">
-            <span>3</span>
+          <div class="layer-control">
             <div>
-              <h2 id="wind-title">Wind layer</h2>
-              <p>UKMO UKV forecast via Open-Meteo across a wide 5×5 grid.</p>
+              <strong id="wind-title">Wind</strong>
+              <small>UKMO via Open-Meteo</small>
             </div>
             <label class="switch" title="Show or hide wind arrows">
               <input type="checkbox" id="wind-toggle" checked />
@@ -100,37 +112,14 @@
             </label>
           </div>
           <label class="range-field">
-            <span>Displayed altitude <strong id="wind-altitude-label">500 m MSL</strong></span>
+            <span>Altitude <strong id="wind-altitude-label">500 m MSL</strong></span>
             <input type="range" id="wind-altitude" min="0" max="13" step="1" value="7" />
           </label>
           <p class="status" id="wind-status" role="status">Set a launch point to load wind.</p>
-          <p class="small muted">Arrows are spatially interpolated between the 25 source points across the visible sampling area. They point downwind; labels show km/h. Height levels are metres above mean sea level.</p>
-        </section>
-
-        <section class="panel-section" aria-labelledby="landing-title">
-          <div class="section-heading">
-            <span>4</span>
+          <div class="layer-control airspace-control">
             <div>
-              <h2 id="landing-title">Destination and landing envelope</h2>
-              <p>Optimise start time, duration and a changing altitude profile toward a destination.</p>
-            </div>
-          </div>
-          <div class="button-row">
-            <button type="button" id="set-landing" disabled>Set destination on map</button>
-            <button type="button" id="clear-destination" disabled>Clear destination</button>
-          </div>
-          <p class="status" id="landing-status">Waiting for a wind forecast.</p>
-          <p class="status" id="route-status" role="status">Set a launch point to calculate the landing envelope.</p>
-          <p class="route-strategy" id="route-strategy" hidden></p>
-          <p class="small muted">The purple boundary is a convex envelope of coarse forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. A result within 100 m is marked as a forecast match; its reported time window only applies to that forecast profile. The optimiser does not assess airspace, terrain, legal limits, fuel or the balloon’s actual climb/descent performance.</p>
-        </section>
-
-        <section class="panel-section" aria-labelledby="airspace-title">
-          <div class="section-heading split-heading">
-            <span>5</span>
-            <div>
-              <h2 id="airspace-title">Aeronautical chart</h2>
-              <p>OpenAIP advisory airspace context.</p>
+              <strong id="airspace-title">Aeronautical chart</strong>
+              <small>OpenAIP advisory airspace</small>
             </div>
             <label class="switch" title="Show or hide OpenAIP chart">
               <input type="checkbox" id="airspace-toggle" checked />
@@ -138,8 +127,9 @@
               <b>Show</b>
             </label>
           </div>
-          <details>
-            <summary>Chart key and limitations</summary>
+          <details class="panel-help">
+            <summary>Wind details and chart key</summary>
+            <p class="small muted">Wind arrows are spatially interpolated between 25 forecast points. They point downwind and show km/h; heights are metres above mean sea level.</p>
             <dl class="chart-key">
               <div><dt class="swatch controlled"></dt><dd>Purple/blue areas commonly mark controlled airspace.</dd></div>
               <div><dt class="swatch restricted"></dt><dd>Red areas commonly mark restricted, prohibited or danger areas.</dd></div>
@@ -150,32 +140,31 @@
           </details>
         </section>
 
-        <section class="panel-section generate-section" aria-labelledby="share-title">
-          <div class="section-heading">
-            <span>6</span>
-            <div>
-              <h2 id="share-title">Share with the crew</h2>
-              <p>Create the same short plan code flow used by TEC.</p>
+        <details class="panel-section generate-section share-disclosure">
+          <summary>
+            <span>3</span>
+            <span><strong id="share-title">Share with the crew</strong><small>Generate a short plan code</small></span>
+          </summary>
+          <div class="share-fields">
+            <label class="field">
+              <span>Plan name</span>
+              <input type="text" id="plan-name" maxlength="200" value="Forecast balloon flight" />
+            </label>
+            <button type="button" class="primary" id="generate-code" disabled>Generate plan code</button>
+            <p class="status" id="generate-status" role="status"></p>
+            <div class="code-result" id="code-result" hidden>
+              <span>Plan code</span>
+              <div><code id="plan-code"></code><button type="button" id="copy-code">Copy</button></div>
+              <a id="open-in-app" href="#">Open in Balloon Crumbs</a>
+              <p class="small muted" id="plan-expiry"></p>
             </div>
           </div>
-          <label class="field">
-            <span>Plan name</span>
-            <input type="text" id="plan-name" maxlength="200" value="Forecast balloon flight" />
-          </label>
-          <button type="button" class="primary" id="generate-code" disabled>Generate plan code</button>
-          <p class="status" id="generate-status" role="status"></p>
-          <div class="code-result" id="code-result" hidden>
-            <span>Plan code</span>
-            <div><code id="plan-code"></code><button type="button" id="copy-code">Copy</button></div>
-            <a id="open-in-app" href="#">Open in Balloon Crumbs</a>
-            <p class="small muted" id="plan-expiry"></p>
-          </div>
-        </section>
+        </details>
       </aside>
 
       <section class="map-shell" aria-label="Forecast flight map">
         <div id="map" class="map"></div>
-        <div class="map-prompt" id="map-prompt">Click the map to set the launch point</div>
+        <div class="map-prompt" id="map-prompt">Click the map to set the launch point; drag placed pins to adjust</div>
         <div class="map-status" id="map-status" role="status">
           <span id="map-status-text">Loading basemap tiles…</span>
           <button type="button" id="retry-map" hidden>Retry</button>

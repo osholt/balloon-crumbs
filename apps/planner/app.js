@@ -568,8 +568,10 @@ function addPlannerLayers(map) {
 function markerElement(kind, label) {
   const element = document.createElement("div");
   element.className = `map-marker ${kind}`;
-  element.title = label;
-  element.setAttribute("aria-label", label);
+  const draggable = kind === "launch" || kind === "intended";
+  if (draggable) element.classList.add("draggable");
+  element.title = draggable ? `${label} — drag to move` : label;
+  element.setAttribute("aria-label", draggable ? `${label}; drag to move` : label);
   return element;
 }
 
@@ -579,9 +581,29 @@ function setMarker(kind, point, label) {
     delete state.markers[kind];
     return;
   }
-  state.markers[kind] = new maplibregl.Marker({ element: markerElement(kind, label) })
+  const draggable = kind === "launch" || kind === "intended";
+  const marker = new maplibregl.Marker({
+    element: markerElement(kind, label),
+    draggable,
+  })
     .setLngLat([point.longitude, point.latitude])
     .addTo(state.map);
+  if (kind === "launch") {
+    marker.on("dragstart", () => {
+      setStatus(elements.launch_status, "Moving launch point…");
+    });
+    marker.on("dragend", () => {
+      chooseLaunch(marker.getLngLat(), { preserveDestination: true, fit: false });
+    });
+  } else if (kind === "intended") {
+    marker.on("dragstart", () => {
+      setStatus(elements.landing_status, "Moving destination…");
+    });
+    marker.on("dragend", () => {
+      void chooseLanding(marker.getLngLat(), { fit: false });
+    });
+  }
+  state.markers[kind] = marker;
 }
 
 function selectedWindLevel() {
@@ -746,19 +768,18 @@ function recomputeTrack({ fit = false } = {}) {
       const window = state.routePlan.departureWindow;
       const windowText = window
         ? window.startOffsetMinutes === window.endOffsetMinutes
-          ? ` Approximate matching start time with this profile: ${formatLocalTime(window.startAt)}.`
-          : ` Approximate matching start window with this profile: ${formatLocalTime(window.startAt)}–${formatLocalTime(window.endAt)}.`
+          ? ` · matching start ${formatLocalTime(window.startAt)}`
+          : ` · matching window ${formatLocalTime(window.startAt)}–${formatLocalTime(window.endAt)}`
         : "";
       elements.route_strategy.hidden = false;
       elements.route_strategy.textContent =
-        `Optimised forecast: start ${formatLocalDateTime(state.routePlan.departureAt)} · ${duration} min · ` +
-        `peak ${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL · heights at 20/40/60/80%: ` +
-        `${profile}, then land at launch elevation.${windowText}`;
+        `Best forecast · ${formatLocalDateTime(state.routePlan.departureAt)} · ${duration} min · ` +
+        `peak ${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL · profile ${profile} → land${windowText}`;
       setStatus(
         elements.route_status,
         state.routePlan.reachesDestination
-          ? `The optimised forecast endpoint is ${missDistance} from the destination, within the 100 m acceptance distance at the reported start time.`
-          : `The forecast winds do not support this destination inside the selected day and search limits. The closest endpoint still misses by ${missDistance}; the shown start time and track are best-effort only.`,
+          ? `Forecast lands ${missDistance} from the destination — within 100 m.`
+          : `Closest forecast misses the destination by ${missDistance}; no match within 100 m.`,
         state.routePlan.reachesDestination ? "good" : "error",
       );
       state.forecastLanding = state.track.at(-1);
@@ -776,15 +797,14 @@ function recomputeTrack({ fit = false } = {}) {
       state.landingCandidateCount = envelope.candidates.length;
       elements.route_strategy.hidden = false;
       elements.route_strategy.textContent =
-        `Representative forecast: start ${formatLocalDateTime(state.routePlan.departureAt)} · ` +
+        `Representative · ${formatLocalDateTime(state.routePlan.departureAt)} · ` +
         `${state.routePlan.durationMinutes.toFixed(0)} min · peak ` +
-        `${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL, then descend to launch elevation. ` +
-        "Set a destination to optimise start time, duration and a changing altitude profile.";
+        `${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL · returns to launch elevation`;
       setMarker("forecast", state.forecastLanding, "Forecast landing");
       setMarker("intended", null);
       setStatus(
         elements.route_status,
-        "Showing a representative drift forecast so the track and flight details remain visible before a destination is chosen.",
+        "Representative drift shown. Place a destination to optimise the flight.",
         "good",
       );
     }
@@ -804,19 +824,18 @@ function recomputeTrack({ fit = false } = {}) {
     setStatus(
       elements.landing_status,
       state.manualLanding
-        ? `Destination retained. ${state.routePlan.evaluatedCandidateCount} start-time, duration and height refinements were evaluated.`
-        : `The coloured line is a representative ${state.routePlan.durationMinutes.toFixed(0)}-minute drift forecast peaking at ${Math.round(state.routePlan.peakAltitudeMetresMsl)} m MSL. The purple envelope bounds ${state.landingCandidateCount} coarse start-time, duration and height forecasts; neither is a safe-landing assessment.`,
+        ? `Destination set; drag the green pin to adjust. ${state.routePlan.evaluatedCandidateCount} candidates checked.`
+        : `Envelope: ${state.landingCandidateCount} coarse forecasts. Not a safe-landing assessment.`,
       "good",
     );
     setStatus(
       elements.wind_status,
-      `Hourly UKMO wind forecast covers ${formatLocalDay(departureSearch.dayStart)} across ` +
-        `${state.field.columns.length} source points in a roughly ` +
-        `${Math.round(WIND_GRID_SPAN_METRES / 1000)} km square. Arrows show ` +
+      `Wind: ${formatLocalDay(departureSearch.dayStart)} · ${state.field.columns.length} points · ` +
+        `~${Math.round(WIND_GRID_SPAN_METRES / 1000)} km grid · ` +
         `${formatLocalTime(state.routePlan?.departureAt ?? new Date(
           departureSearch.dayStart.getTime() +
             departureSearch.minimumDepartureOffsetMinutes * 60_000,
-        ))} · model data, not an observation.`,
+        ))} model hour (not observed).`,
       "good",
     );
     if (fit) fitForecast();
@@ -837,7 +856,7 @@ function recomputeTrack({ fit = false } = {}) {
   }
 }
 
-async function refreshForecast() {
+async function refreshForecast({ fit = true } = {}) {
   if (!state.launch) return;
   let departureSearch;
   try {
@@ -863,7 +882,7 @@ async function refreshForecast() {
     const payload = await response.json();
     if (generation !== state.forecastGeneration) return;
     state.field = parseOpenMeteoForecast(payload, departureSearch.dayStart);
-    recomputeTrack({ fit: true });
+    recomputeTrack({ fit });
   } catch (error) {
     if (error.name === "AbortError") return;
     state.field = null;
@@ -889,37 +908,43 @@ async function refreshForecast() {
   }
 }
 
-function chooseLaunch(point) {
+function chooseLaunch(point, { preserveDestination = false, fit = true } = {}) {
+  const retainDestination =
+    preserveDestination && state.manualLanding && state.intendedLanding !== null;
   state.launch = { latitude: point.lat, longitude: point.lng };
-  state.manualLanding = false;
-  state.intendedLanding = null;
+  state.field = null;
+  if (!retainDestination) {
+    state.manualLanding = false;
+    state.intendedLanding = null;
+  }
   state.track = null;
   state.forecastLanding = null;
   state.landingEnvelope = [];
   state.landingCandidateCount = 0;
   state.routePlan = null;
-  elements.clear_destination.disabled = true;
+  clearWindMarkers();
+  elements.clear_destination.disabled = !retainDestination;
   elements.set_landing.disabled = true;
   elements.generate_code.disabled = true;
   elements.forecast_summary.hidden = true;
   elements.route_strategy.hidden = true;
   setMarker("launch", state.launch, "Launch");
   setMarker("forecast", null);
-  setMarker("intended", null);
+  if (!retainDestination) setMarker("intended", null);
   updateSources();
   setStatus(
     elements.launch_status,
-    `${state.launch.latitude.toFixed(5)}, ${state.launch.longitude.toFixed(5)}`,
+    `${state.launch.latitude.toFixed(5)}, ${state.launch.longitude.toFixed(5)} · Drag the blue pin to adjust.`,
     "good",
   );
   state.mode = null;
   elements.map_prompt.hidden = true;
   setStatus(elements.landing_status, "Waiting for the wind forecast.");
   setStatus(elements.route_status, "Calculating the landing envelope from this launch point…");
-  void refreshForecast();
+  void refreshForecast({ fit });
 }
 
-async function chooseLanding(point) {
+async function chooseLanding(point, { fit = true } = {}) {
   state.intendedLanding = { latitude: point.lat, longitude: point.lng };
   state.manualLanding = true;
   setMarker("intended", state.intendedLanding, "Destination");
@@ -929,13 +954,13 @@ async function chooseLanding(point) {
   elements.clear_destination.disabled = false;
   setStatus(
     elements.landing_status,
-    `Destination set at ${state.intendedLanding.latitude.toFixed(5)}, ${state.intendedLanding.longitude.toFixed(5)}. Optimising start time, duration and altitude profile…`,
+    `Destination set at ${state.intendedLanding.latitude.toFixed(5)}, ${state.intendedLanding.longitude.toFixed(5)}. Drag the green pin to adjust; optimising route…`,
     "good",
   );
   await new Promise((resolve) => {
     window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
   });
-  recomputeTrack({ fit: true });
+  recomputeTrack({ fit });
 }
 
 function clearDestination() {
@@ -951,8 +976,8 @@ function beginMapChoice(mode) {
   elements.map_prompt.hidden = false;
   elements.map_prompt.textContent =
     mode === "launch"
-      ? "Click the map to set the launch point"
-      : "Click the map to set the intended destination";
+      ? "Click the map to set the launch point; drag the pin later to adjust"
+      : "Click the map to set the intended destination; drag the pin later to adjust";
 }
 
 function useDeviceLocation() {
