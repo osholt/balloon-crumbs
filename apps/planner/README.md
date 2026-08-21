@@ -13,7 +13,9 @@ pretend a balloon follows a road route:
   sampling area;
 - the destination optimiser searches start times across the selected day,
   10–180 minute durations and four changing altitude controls up to the highest
-  2,000 m MSL forecast layer;
+  pilot-selected maximum altitude, bounded by the highest 2,000 m MSL forecast
+  layer; the same ceiling constrains the representative track and landing
+  envelope;
 - start time, an approximate matching window for the selected profile, duration,
   altitude profile and resulting peak altitude are optimiser outputs rather than
   pilot-supplied route inputs;
@@ -23,6 +25,10 @@ pretend a balloon follows a road route:
 - placed launch and destination pins can be dragged directly; moving the launch
   reloads its wind field while retaining the destination, and moving the
   destination reruns the optimiser without a separate placement action;
+- after launch, the next map click sets the destination directly, while dragging
+  the initial yellow forecast endpoint converts it into the intended destination;
+- a flight-profile pane lists launch and landing times, duration, the altitude at
+  each 20% stage and each climb, level or descent change;
 - the compact control panel keeps route inputs and results together, with wind,
   chart and sharing controls grouped below and longer guidance in disclosures;
 - the basemap and planner controls can switch between light and dark themes,

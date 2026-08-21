@@ -112,7 +112,6 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 .status:empty { display: none; }
 .status.error { color: #ffaaa0; }
 .status.good { color: #9be5bb; }
-.route-strategy { margin: 0.55rem 0 0; padding: 0.65rem 0.7rem; border: 1px solid #655a84; border-radius: 0.65rem; background: #1d1928; color: #d9cdf7; font-size: 0.76rem; line-height: 1.35; font-weight: 750; }
 .search-limits { margin: 0.75rem 0 0; padding: 0.65rem 0.75rem; border-left: 3px solid var(--purple); background: color-mix(in srgb, var(--purple) 9%, transparent); color: var(--muted); }
 .muted { color: var(--muted); }
 .small { font-size: 0.75rem; line-height: 1.45; }
@@ -121,6 +120,7 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
 .compact-fields { margin-top: 0.1rem; }
 .compact-fields .field { margin-top: 0.65rem; }
+.ceiling-field { margin-top: 0.7rem; padding-top: 0.65rem; border-top: 1px solid var(--line); }
 input[type="text"], input[type="search"], input[type="number"], input[type="date"] {
   width: 100%;
   min-width: 0;
@@ -200,7 +200,7 @@ summary { cursor: pointer; font-weight: 750; font-size: 0.82rem; }
 
 .map-shell { position: relative; min-height: 42rem; background: #11141a; overflow: hidden; }
 .map { position: absolute; inset: 0; }
-.map-prompt, .forecast-summary, .map-legend, .map-status {
+.map-prompt, .forecast-summary, .flight-profile-pane, .map-legend, .map-status {
   position: absolute;
   z-index: 2;
   background: rgb(17 21 28 / 0.93);
@@ -216,6 +216,29 @@ summary { cursor: pointer; font-weight: 750; font-size: 0.82rem; }
 .forecast-summary { top: 1rem; right: 1rem; border-radius: 0.75rem; padding: 0.7rem 0.85rem; display: grid; gap: 0.15rem; }
 .forecast-summary strong { color: var(--sky); }
 .forecast-summary span { color: var(--muted); font-size: 0.72rem; }
+.flight-profile-pane { top: 5.25rem; right: 1rem; width: min(23rem, calc(100% - 2rem)); border-radius: 0.75rem; padding: 0.75rem 0.85rem; }
+.profile-pane-heading { display: flex; align-items: end; justify-content: space-between; gap: 0.75rem; padding-bottom: 0.55rem; border-bottom: 1px solid var(--line); }
+.profile-pane-heading > div { display: grid; gap: 0.1rem; }
+.profile-pane-heading > div > span { color: var(--muted); font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; }
+.profile-pane-heading strong { color: var(--sky); font-size: 0.95rem; }
+.profile-pane-heading > span { color: var(--muted); font-size: 0.68rem; font-weight: 750; }
+.profile-times { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--line); }
+.profile-times div { display: grid; gap: 0.08rem; }
+.profile-times span { color: var(--muted); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.profile-times strong { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.profile-window { margin: 0; padding: 0.42rem 0 0.1rem; color: var(--purple); font-size: 0.68rem; font-weight: 750; }
+.flight-profile-pane table { width: 100%; border-collapse: collapse; margin-top: 0.35rem; font-size: 0.68rem; font-variant-numeric: tabular-nums; }
+.flight-profile-pane th { color: var(--muted); font-size: 0.6rem; text-align: left; text-transform: uppercase; letter-spacing: 0.06em; }
+.flight-profile-pane th,
+.flight-profile-pane td { padding: 0.28rem 0.25rem; border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent); }
+.flight-profile-pane th:first-child,
+.flight-profile-pane td:first-child { padding-left: 0; }
+.flight-profile-pane th:last-child,
+.flight-profile-pane td:last-child { padding-right: 0; text-align: right; }
+.flight-profile-pane tbody tr:last-child td { border-bottom: 0; }
+.flight-profile-pane .climb { color: var(--green); }
+.flight-profile-pane .descent { color: var(--sun); }
+.flight-profile-pane .level { color: var(--muted); }
 .map-legend { left: 1rem; bottom: 1.25rem; border-radius: 0.7rem; padding: 0.7rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 0.8rem; font-size: 0.7rem; color: #d7dce5; }
 .map-legend span { display: flex; align-items: center; gap: 0.4rem; }
 .legend-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; border: 2px solid #11151c; box-shadow: 0 0 0 1px currentColor; }
@@ -279,7 +302,6 @@ footer { min-height: 2.7rem; padding: 0.75rem 1rem; display: flex; justify-conte
 :root[data-theme="light"] details { background: #ffffff; }
 :root[data-theme="light"] .generate-section { background: #eee9e2; }
 :root[data-theme="light"] .code-result { background: #f8fbfc; }
-:root[data-theme="light"] .route-strategy { background: #eee9f7; color: #493b72; border-color: #a89acb; }
 :root[data-theme="light"] .status.good,
 :root[data-theme="light"] .map-status.good { color: #14683f; }
 :root[data-theme="light"] .status.error,
@@ -288,6 +310,7 @@ footer { min-height: 2.7rem; padding: 0.75rem 1rem; display: flex; justify-conte
 :root[data-theme="light"] .map-shell { background: #e2e6e9; }
 :root[data-theme="light"] .map-prompt,
 :root[data-theme="light"] .forecast-summary,
+:root[data-theme="light"] .flight-profile-pane,
 :root[data-theme="light"] .map-legend,
 :root[data-theme="light"] .map-status { background: rgb(255 255 255 / 0.92); color: #49434d; }
 :root[data-theme="light"] .map-legend { color: #3b3640; }
@@ -309,5 +332,6 @@ footer { min-height: 2.7rem; padding: 0.75rem 1rem; display: flex; justify-conte
   .field-grid { grid-template-columns: 1fr; }
   .map-legend { right: 0.65rem; left: 0.65rem; bottom: 0.65rem; }
   .forecast-summary { top: 3.8rem; right: 0.65rem; }
+  .flight-profile-pane { top: 7.4rem; right: 0.65rem; width: calc(100% - 1.3rem); max-height: calc(100% - 12rem); overflow-y: auto; }
   .map-prompt { width: calc(100% - 1.3rem); text-align: center; }
 }

@@ -478,17 +478,25 @@ export function forecastRepresentativeRoute({
   field,
   launch,
   launchElevationMetresMsl,
+  altitudeCeilingMetresMsl = ROUTE_SEARCH_LIMITS.altitudeCeilingMetresMsl,
   departureOffsetMinutes = 0,
   durationMinutes = REPRESENTATIVE_FORECAST_DEFAULTS.durationMinutes,
   cruiseAltitudeMetresMsl = REPRESENTATIVE_FORECAST_DEFAULTS.cruiseAltitudeMetresMsl,
   stepSeconds = DEFAULT_STEP_SECONDS,
 }) {
   const launchElevation = finiteNumber(launchElevationMetresMsl, "launch elevation");
+  const altitudeCeiling = finiteNumber(altitudeCeilingMetresMsl, "altitude ceiling");
+  if (altitudeCeiling < launchElevation) {
+    throw new RangeError("Altitude ceiling must not be below launch.");
+  }
   const departureOffset = finiteNumber(departureOffsetMinutes, "departure offset");
   if (departureOffset < 0) throw new RangeError("Departure offset must not be negative.");
   const peakAltitudeMetresMsl = Math.max(
     launchElevation,
-    finiteNumber(cruiseAltitudeMetresMsl, "representative cruise altitude"),
+    Math.min(
+      altitudeCeiling,
+      finiteNumber(cruiseAltitudeMetresMsl, "representative cruise altitude"),
+    ),
   );
   const track = forecastFlightTrack({
     field,
@@ -513,6 +521,7 @@ export function forecastRepresentativeRoute({
     departureOffsetMinutes: departureOffset,
     departureAt: new Date(forecastStart.getTime() + departureOffset * 60_000),
     durationMinutes: finiteNumber(durationMinutes, "flight duration"),
+    altitudeCeilingMetresMsl: altitudeCeiling,
     peakAltitudeMetresMsl,
     track,
     landing: track.at(-1),

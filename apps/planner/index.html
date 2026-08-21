@@ -37,7 +37,7 @@
             <span>1</span>
             <div>
               <h2 id="launch-title">Flight route</h2>
-              <p>Place the start and destination, then drag either pin to adjust it.</p>
+              <p>Place the start, then click the map or drag the yellow endpoint to choose a destination.</p>
             </div>
           </div>
           <form class="place-search" id="place-search-form">
@@ -74,9 +74,13 @@
               </span>
             </label>
           </div>
+          <label class="range-field ceiling-field">
+            <span>Maximum altitude <strong id="max-altitude-label">2,000 m MSL</strong></span>
+            <input type="range" id="max-altitude" min="100" max="2000" step="50" value="2000" />
+          </label>
           <div class="subsection-heading">
             <strong>Destination</strong>
-            <span>Optional until you want an optimised route</span>
+            <span>Click the map directly or drag the yellow endpoint</span>
           </div>
           <div class="button-row">
             <button type="button" id="set-landing" disabled>Place destination</button>
@@ -84,10 +88,9 @@
           </div>
           <p class="status" id="landing-status">Waiting for a wind forecast.</p>
           <p class="status" id="route-status" role="status">Set a launch point to calculate the landing envelope.</p>
-          <p class="route-strategy" id="route-strategy" hidden></p>
           <details class="panel-help">
             <summary>Planner help, safety and data</summary>
-            <p class="small muted">The search varies the remaining start times on the selected day, a 10–180 minute duration and four altitude controls up to 2,000 m MSL. The purple boundary is a convex envelope of coarse forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. A result within 100 m is marked as a forecast match. The optimiser does not assess airspace, terrain, legal limits, fuel or the balloon’s actual climb/descent performance.</p>
+            <p class="small muted">The search varies the remaining start times on the selected day, a 10–180 minute duration and four altitude controls up to the selected maximum altitude. The purple boundary is a convex envelope of coarse forecast endpoints, not a guarantee that every point inside it is reachable or suitable for landing. A result within 100 m is marked as a forecast match. The optimiser does not assess airspace, terrain, legal limits, fuel or the balloon’s actual climb/descent performance.</p>
             <p class="small muted place-search-credit">Submit-only search using © OpenStreetMap contributors, ODbL. Do not enter personal or confidential information.</p>
           </details>
         </section>
@@ -173,9 +176,28 @@
           <strong id="forecast-distance"></strong>
           <span id="forecast-validity"></span>
         </div>
+        <section class="flight-profile-pane" id="flight-profile" aria-labelledby="flight-profile-title" hidden>
+          <div class="profile-pane-heading">
+            <div>
+              <span>Flight profile</span>
+              <strong id="flight-profile-title">Forecast</strong>
+            </div>
+            <span id="profile-limit"></span>
+          </div>
+          <div class="profile-times">
+            <div><span>Start</span><strong id="profile-start"></strong></div>
+            <div><span>Landing</span><strong id="profile-landing"></strong></div>
+            <div><span>Duration</span><strong id="profile-duration"></strong></div>
+          </div>
+          <p class="profile-window" id="profile-window" hidden></p>
+          <table aria-label="Timed altitude stages">
+            <thead><tr><th scope="col">Stage</th><th scope="col">Time</th><th scope="col">Altitude</th><th scope="col">Change</th></tr></thead>
+            <tbody id="profile-stages"></tbody>
+          </table>
+        </section>
         <div class="map-legend" aria-label="Map legend">
           <span><i class="legend-dot launch"></i>Launch</span>
-          <span><i class="legend-dot forecast"></i>Forecast landing</span>
+          <span><i class="legend-dot forecast"></i>Calculated landing (drag first endpoint)</span>
           <span><i class="legend-dot intended"></i>Destination</span>
           <span><i class="legend-line"></i>Altitude-coloured forecast track</span>
           <span><i class="legend-envelope"></i>Forecast landing envelope</span>
