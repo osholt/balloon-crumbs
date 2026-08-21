@@ -17,6 +17,9 @@ pretend a balloon follows a road route:
 - start time, an approximate matching window for the selected profile, duration,
   altitude profile and resulting peak altitude are optimiser outputs rather than
   pilot-supplied route inputs;
+- before a destination is chosen, a clearly labelled representative 60-minute
+  forecast keeps a visible altitude-coloured track, start time, duration, peak
+  altitude and forecast landing on the map;
 - the basemap and planner controls can switch between light and dark themes,
   with an explicit tile-load indicator and retry action;
 - OpenAIP's combined aeronautical chart is visible with a plain-language key;
