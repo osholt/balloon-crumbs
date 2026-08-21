@@ -5,16 +5,22 @@ import 'package:balloon_crumbs/data/in_memory_event_store.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/services/ride_completion_detector.dart';
 
 void main() {
   late InMemoryEventStore store;
   late SituationalAwarenessController awareness;
   late RideSimulationController simulation;
+  late RideSession session;
+  const route = [
+    GeoPoint(latitude: 51, longitude: -1),
+    GeoPoint(latitude: 51, longitude: -0.9),
+  ];
 
   setUp(() async {
     store = InMemoryEventStore();
-    final session = RideSession(
+    session = RideSession(
       rideId: 'sim-ride',
       rideCode: 'SIM123',
       inviteSecret: 'simulation-secret-that-is-long-enough',
@@ -25,10 +31,6 @@ void main() {
       joinedAt: DateTime.utc(2026, 7, 17),
       isSimulation: true,
     );
-    const route = [
-      GeoPoint(latitude: 51, longitude: -1),
-      GeoPoint(latitude: 51, longitude: -0.9),
-    ];
     awareness = SituationalAwarenessController(store, session, route: route);
     await awareness.initialize();
     simulation = RideSimulationController(
@@ -45,20 +47,30 @@ void main() {
     awareness.dispose();
   });
 
+  Future<RideSimulationController> buildLegacyFleet() async {
+    final controller = RideSimulationController(
+      awareness,
+      session: session,
+      route: route,
+      riderCount: 5,
+      tickInterval: const Duration(days: 1),
+    );
+    await controller.initialize();
+    addTearDown(controller.dispose);
+    return controller;
+  }
+
   test(
-    'emits an authenticated five-bike fleet and advances virtual time',
+    'emits one balloon and one Land Rover and advances virtual time',
     () async {
-      expect(awareness.riderLocations, hasLength(5));
-      expect(awareness.authenticatedLocationEvidence, hasLength(5));
-      expect(
-        awareness.riderLocations
-            .singleWhere(
-              (location) =>
-                  location.riderId == RideSimulationController.backRiderId,
-            )
-            .role,
-        RideRole.rider,
+      expect(awareness.riderLocations, hasLength(2));
+      expect(awareness.authenticatedLocationEvidence, hasLength(2));
+      final chase = simulation.riders.singleWhere(
+        (rider) => rider.id == RideSimulationController.companionRiderId,
       );
+      expect(chase.displayName, 'Land Rover');
+      expect(chase.role, RideRole.rider);
+      expect(chase.motorcycleStyle, CraftIconStyle.fourByFour);
 
       final initialProgress = simulation.progress;
       await simulation.advance(const Duration(seconds: 2));
@@ -201,18 +213,7 @@ void main() {
     final initialLeader = simulation.riders.singleWhere(
       (rider) => rider.role == RideRole.lead,
     );
-    final backRider = simulation.riders.singleWhere(
-      (rider) => rider.id == RideSimulationController.backRiderId,
-    );
-    expect(initialLeader.travelTrail.length, greaterThan(1));
-    expect(
-      initialLeader.travelTrail.first.latitude,
-      closeTo(backRider.position.latitude, 1e-7),
-    );
-    expect(
-      initialLeader.travelTrail.first.longitude,
-      closeTo(backRider.position.longitude, 1e-7),
-    );
+    expect(initialLeader.travelTrail, hasLength(1));
 
     await simulation.advance(const Duration(seconds: 1));
 
@@ -222,51 +223,45 @@ void main() {
     expect(movingLeader.travelTrail.length, greaterThan(1));
   });
 
-  test('switches between leader, follower and TEC perspectives', () {
+  test('switches between balloon and Land Rover perspectives', () {
     simulation.setLocalRole(RideRole.rider);
     expect(simulation.localRole, RideRole.rider);
     final follower = simulation.riders.singleWhere((rider) => rider.isLocal);
     final leader = simulation.riders.singleWhere(
-      (rider) => rider.displayName == 'Maya',
+      (rider) => rider.displayName == 'Balloon',
     );
-    expect(follower.displayName, 'You · Follower');
-    expect(follower.progress, lessThan(leader.progress));
+    expect(follower.displayName, 'You · Land Rover');
+    expect(follower.motorcycleStyle, CraftIconStyle.fourByFour);
     expect(leader.role, RideRole.lead);
-
-    simulation.setLocalRole(RideRole.rider);
-    expect(simulation.localRole, RideRole.rider);
-    expect(
-      simulation.riders
-          .singleWhere(
-            (rider) => rider.id == RideSimulationController.backRiderId,
-          )
-          .role,
-      RideRole.rider,
-    );
   });
 
-  test('follower perspective remains behind the simulated leader', () async {
+  test('the two demo craft keep moving after changing perspective', () async {
     simulation.setLocalRole(RideRole.rider);
     simulation.setTimeScale(1);
+    final before = {
+      for (final rider in simulation.riders) rider.id: rider.position,
+    };
 
     await simulation.advance(const Duration(seconds: 30));
 
     final follower = simulation.riders.singleWhere((rider) => rider.isLocal);
     final leader = simulation.riders.singleWhere(
-      (rider) => rider.displayName == 'Maya',
+      (rider) => rider.displayName == 'Balloon',
     );
     expect(follower.role, RideRole.rider);
     expect(leader.role, RideRole.lead);
-    expect(follower.progress, lessThan(leader.progress));
+    expect(follower.position, isNot(before[follower.id]));
+    expect(leader.position, isNot(before[leader.id]));
   });
 
   test(
     'off-route visual trail is local to the current simulation run',
     () async {
-      simulation.setAlexOffRoute(true);
-      await simulation.advance(const Duration(seconds: 1));
+      final legacy = await buildLegacyFleet();
+      legacy.setAlexOffRoute(true);
+      await legacy.advance(const Duration(seconds: 1));
 
-      final alex = simulation.riders.singleWhere(
+      final alex = legacy.riders.singleWhere(
         (rider) => rider.id == RideSimulationController.offRouteRiderId,
       );
       expect(alex.offRouteTrail, hasLength(greaterThanOrEqualTo(2)));
@@ -277,9 +272,9 @@ void main() {
         isTrue,
       );
 
-      simulation.setAlexOffRoute(false);
+      legacy.setAlexOffRoute(false);
       expect(
-        simulation.riders
+        legacy.riders
             .singleWhere(
               (rider) => rider.id == RideSimulationController.offRouteRiderId,
             )
@@ -290,20 +285,21 @@ void main() {
   );
 
   test('can delay TEC and inject a synthetic roadworks hazard', () async {
-    final normalTecSpeed = simulation.riders
+    final legacy = await buildLegacyFleet();
+    final normalTecSpeed = legacy.riders
         .singleWhere(
           (rider) => rider.id == RideSimulationController.backRiderId,
         )
         .speedMetersPerSecond;
-    simulation.setBackRiderDelayed(true);
-    final delayedTecSpeed = simulation.riders
+    legacy.setBackRiderDelayed(true);
+    final delayedTecSpeed = legacy.riders
         .singleWhere(
           (rider) => rider.id == RideSimulationController.backRiderId,
         )
         .speedMetersPerSecond;
     expect(delayedTecSpeed, lessThan(normalTecSpeed));
 
-    await simulation.reportRoadworks();
+    await legacy.reportRoadworks();
     expect(awareness.activeHazards.single.details, contains('Ride Lab'));
     expect(
       (awareness.activeHazards.single.position.longitude -

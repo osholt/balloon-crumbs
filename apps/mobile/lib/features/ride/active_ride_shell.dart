@@ -66,6 +66,7 @@ import '../../services/fixed_speed_camera_provider.dart';
 import '../../services/gpx_import_source.dart';
 import '../../services/measurement_formatter.dart';
 import '../../services/native_push_token_source.dart';
+import '../../services/open_meteo_wind.dart';
 import '../../services/position_report_policy.dart';
 import '../../services/received_quick_message.dart';
 import '../../services/navigation_guidance.dart';
@@ -1077,6 +1078,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   CarPlayBridge? _carPlayBridge;
   String? _carPlayMapStyleJson;
   late final http.Client _carPlayRoutingClient;
+  late final http.Client _windForecastClient;
+  late final RoadRoutingService _simulationRoutingService;
   late final DestinationRoutePlanner _carPlayDestinationPlanner;
   ForegroundLocationController? _locationController;
   NearbyRelayController? _relayController;
@@ -1093,6 +1096,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// The bundled Fiesta flight, held so the simulation controller can play the
   /// balloon back against the clock rather than dragging it along the road.
   BalloonFlight? _balloonFlight;
+  WindForecastController? _windForecastController;
+  final ValueNotifier<MapLandingZone?> _simulationLandingZone = ValueNotifier(
+    null,
+  );
+  bool _simulationRerouteInFlight = false;
+  Duration? _lastSimulationRerouteElapsed;
+  awareness_geo.GeoPoint? _lastSimulationRerouteLanding;
+  int _simulationRerouteSequence = 0;
   RouteStore? _rideRouteStore;
   StreamSubscription<RideEvent>? _receivedEventSubscription;
   StreamSubscription<RideEvent>? _internetReceivedEventSubscription;
@@ -1173,21 +1184,23 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     )..start();
     final carPlayRouting = RoutingConfiguration.fromEnvironment();
     _carPlayRoutingClient = http.Client();
+    _windForecastClient = http.Client();
+    _simulationRoutingService = PreferenceAwareRoadRoutingService(
+      osrm: OsrmRoadRoutingService(
+        client: _carPlayRoutingClient,
+        baseUrl: carPlayRouting.routingBaseUrl,
+      ),
+      valhalla: ValhallaRoadRoutingService(
+        client: _carPlayRoutingClient,
+        routeUrl: carPlayRouting.valhallaRoutingUrl,
+      ),
+    );
     _carPlayDestinationPlanner = DestinationRoutePlanner(
       searchService: NominatimDestinationSearchService(
         client: _carPlayRoutingClient,
         baseUrl: carPlayRouting.geocodingBaseUrl,
       ),
-      routingService: PreferenceAwareRoadRoutingService(
-        osrm: OsrmRoadRoutingService(
-          client: _carPlayRoutingClient,
-          baseUrl: carPlayRouting.routingBaseUrl,
-        ),
-        valhalla: ValhallaRoadRoutingService(
-          client: _carPlayRoutingClient,
-          routeUrl: carPlayRouting.valhallaRoutingUrl,
-        ),
-      ),
+      routingService: _simulationRoutingService,
     );
     widget.rideController.addListener(_onRideControllerChanged);
     widget.sharedRoutes.addListener(_onSharedRoutesChanged);
@@ -1288,14 +1301,25 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         route = await loader.loadChaseRoute();
         _balloonFlight = await loader.load();
         _simulationRouteStore = InMemoryRouteStore(route);
+        final flight = _balloonFlight!;
+        _windForecastController = WindForecastController(
+          OpenMeteoWindProvider(client: _windForecastClient),
+          initialField: _bundledWindForecast(flight),
+        );
+        if (widget.enableNativeServices) {
+          unawaited(_windForecastController!.refresh(flight.launch));
+        }
         _warnings.add(
-          'Ride Lab is isolated: device GPS, internet relay and nearby radios '
-          'are disabled.',
+          'Ride Lab keeps device GPS, internet relay and nearby radios '
+          'disabled. Its forecast wind may use Open-Meteo.',
         );
       } on Object catch (error) {
         _warnings.add('The simulation route could not be loaded: $error');
       }
     } else if (widget.enableNativeServices) {
+      _windForecastController = WindForecastController(
+        OpenMeteoWindProvider(client: _windForecastClient),
+      );
       try {
         final session = widget.rideController.session;
         if (session != null) {
@@ -1955,7 +1979,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       session: session,
       route: simulationRoute,
       balloonFlight: _balloonFlight,
-      riderCount: session.simulationRiderCount,
+      windForecastController: _windForecastController,
+      // Old saved Ride Lab sessions can still carry the former five-rider
+      // setting. The demo is now deliberately one balloon and one chase car.
+      riderCount: RideSession.defaultSimulationRiderCount,
       rideStarted: widget.rideController.rideStarted,
     );
     _simulationController = controller;
@@ -1976,6 +2003,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   void _onSimulationVisualChanged() {
     if (!mounted || !_isSimulation) return;
+    _updateSimulationLandingZone();
+    unawaited(_rerouteSimulationChaseIfNeeded());
     final now = DateTime.now();
     final updateNavigationPosition =
         _lastSimulationNavigationUpdateAt == null ||
@@ -1991,12 +2020,127 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (updateOverlayMarkers) _lastSimulationOverlayUpdateAt = now;
     _updateMapOverlays(
       // The map status card is derived from the same authenticated synthetic
-      // fixes as the overlays. Without this, a restarted leader view could
-      // keep saying that Charlie's location was unavailable.
+      // fixes as the overlays. Without this, a restarted balloon view could
+      // keep saying that the chase vehicle's location was unavailable.
       updateDerivedState: updateOverlayMarkers,
       updateOverlayMarkers: updateOverlayMarkers,
       updateNavigationPosition: updateNavigationPosition,
     );
+  }
+
+  void _updateSimulationLandingZone() {
+    final simulation = _simulationController;
+    final predicted = simulation?.predictedLandingZone;
+    if (simulation == null || predicted == null) return;
+    final field = _windForecastController?.field;
+    final label = field?.isLiveForecast == true
+        ? 'Forecast landing area · UKMO via Open-Meteo'
+        : 'Forecast landing area · bundled wind fallback';
+    final next = MapLandingZone(
+      center: route_domain.GeoPoint(
+        latitude: predicted.latitude,
+        longitude: predicted.longitude,
+      ),
+      label: label,
+      radiusMeters: 300,
+    );
+    final previous = _simulationLandingZone.value;
+    if (previous != null &&
+        GeoCalculations.distanceMeters(
+              awareness_geo.GeoPoint(
+                latitude: previous.center.latitude,
+                longitude: previous.center.longitude,
+              ),
+              predicted,
+            ) <
+            10 &&
+        previous.label == next.label) {
+      return;
+    }
+    _simulationLandingZone.value = next;
+  }
+
+  Future<void> _rerouteSimulationChaseIfNeeded() async {
+    final simulation = _simulationController;
+    final landing = simulation?.predictedLandingZone;
+    final chase = simulation?.chaseVehicle;
+    if (!widget.enableNativeServices ||
+        simulation == null ||
+        landing == null ||
+        chase == null ||
+        _simulationRerouteInFlight ||
+        !widget.rideController.rideStarted ||
+        widget.rideController.ridePaused ||
+        widget.rideController.rideEnded) {
+      return;
+    }
+    final lastElapsed = _lastSimulationRerouteElapsed;
+    final elapsedEnough =
+        lastElapsed == null ||
+        simulation.simulatedElapsed - lastElapsed >= const Duration(minutes: 5);
+    final lastLanding = _lastSimulationRerouteLanding;
+    final landingMoved =
+        lastLanding == null ||
+        GeoCalculations.distanceMeters(lastLanding, landing) >= 300;
+    if (!elapsedEnough && !landingMoved) return;
+
+    _simulationRerouteInFlight = true;
+    // Record an attempt as well as a success. A temporary routing outage must
+    // not turn the simulator's 100 ms update into a network request loop.
+    _lastSimulationRerouteElapsed = simulation.simulatedElapsed;
+    _lastSimulationRerouteLanding = landing;
+    try {
+      final result = await _simulationRoutingService.routeThrough([
+        route_domain.GeoPoint(
+          latitude: chase.position.latitude,
+          longitude: chase.position.longitude,
+        ),
+        route_domain.GeoPoint(
+          latitude: landing.latitude,
+          longitude: landing.longitude,
+        ),
+      ], originBearingDegrees: chase.headingDegrees);
+      if (!mounted || _simulationController != simulation) return;
+      final route = route_domain.ImportedRoute(
+        id: 'live-chase-route-${_simulationRerouteSequence++}',
+        name: 'Live chase route to forecast landing area',
+        description:
+            'Recalculated from the Land Rover position to a road-accessible '
+            'point serving the forecast landing area.',
+        importedAt: DateTime.now(),
+        sourceFileName: 'live-open-meteo-chase-route',
+        paths: [
+          route_domain.RoutePath(
+            kind: route_domain.RoutePathKind.route,
+            points: result.points,
+          ),
+        ],
+        waypoints: const [],
+        maneuvers: result.maneuvers,
+      );
+      await _simulationRouteStore?.saveActiveRoute(route);
+      if (!mounted || _simulationController != simulation) return;
+      _activeRoute = route;
+      simulation.replaceChaseRoute(
+        result.points
+            .map(
+              (point) => awareness_geo.GeoPoint(
+                latitude: point.latitude,
+                longitude: point.longitude,
+              ),
+            )
+            .toList(growable: false),
+      );
+      setState(() {});
+    } on Object catch (error) {
+      final added = _warnings.add(
+        'Live chase rerouting is unavailable; the last road route is still '
+        'in use. $error',
+      );
+      if (added && mounted) setState(() {});
+    } finally {
+      _simulationRerouteInFlight = false;
+    }
   }
 
   void _onAwarenessChanged() {
@@ -2832,6 +2976,28 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         .toList(growable: false);
   }
 
+  static WindForecastField _bundledWindForecast(BalloonFlight flight) {
+    final vectors = [
+      for (final layer in flight.windLayers)
+        WindForecastVector(
+          altitudeMetersMsl: flight.launchElevationMetres + layer.heightMetres,
+          fromDegrees: layer.fromDegrees,
+          speedKmh: layer.speedKmh,
+        ),
+    ];
+    final sourceTime = DateTime.utc(2026, 8, 8, 6);
+    return WindForecastField(
+      columns: [
+        for (final point in windForecastGrid(flight.launch))
+          WindForecastColumn(position: point, vectors: vectors),
+      ],
+      validAt: sourceTime,
+      fetchedAt: sourceTime,
+      origin: WindForecastOrigin.bundledFallback,
+      sourceLabel: 'Bundled Open-Meteo rehearsal wind',
+    );
+  }
+
   Future<void> _onReceivedEvent(
     RideEvent event,
     RideTransportEvidence transport,
@@ -3067,6 +3233,18 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // sample to the durable ride journal is briefly delayed or fails. Only
     // the journal feeds trails, summaries and GPX recording.
     _updateMapOverlays(updateDerivedState: false, updateOverlayMarkers: false);
+    final point = _mapPosition.value;
+    final wind = _windForecastController;
+    if (point != null && wind != null) {
+      unawaited(
+        wind.refresh(
+          awareness_geo.GeoPoint(
+            latitude: point.latitude,
+            longitude: point.longitude,
+          ),
+        ),
+      );
+    }
     if (warningChanged) setState(() {});
   }
 
@@ -3350,7 +3528,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     return RideMapFeature.fromEnvironment(
       key: ValueKey(
         'ride-map:${_appliedAuthoritativeRouteRevision ?? 'local'}:'
-        '${_activeRoute?.id ?? 'none'}:'
+        '${isBalloonView ? 'air' : _activeRoute?.id ?? 'none'}:'
         '${isBalloonView ? 'balloon' : 'chase'}',
       ),
       currentPosition: _mapPosition,
@@ -3358,15 +3536,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       navigationPosition: _mapNavigationPosition,
       overlayMarkers: _mapOverlays,
       riderTrails: _riderTrails,
-      landingZone: _isSimulation && _balloonFlight != null
-          ? MapLandingZone(
-              center: route_domain.GeoPoint(
-                latitude: _balloonFlight!.landing.latitude,
-                longitude: _balloonFlight!.landing.longitude,
-              ),
-              label: 'Simulated landing zone · wind-model endpoint',
-            )
-          : null,
+      landingZone: _isSimulation ? _simulationLandingZone.value : null,
+      landingZoneUpdates: _isSimulation ? _simulationLandingZone : null,
+      windForecastController: _windForecastController,
       groupRiderCount: widget.rideController.liveParticipants.length,
       onOpenRoster: _openRoster,
       // Deliberately not `onOpenRideMenu`. The control that reaches the other
@@ -3449,6 +3621,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           widget.mapStyleMode.dayStyle == DayMapStyle.restrained,
       localMotorcycleStyle: isBalloonView
           ? CraftIconStyle.balloon
+          : _isSimulation
+          ? CraftIconStyle.fourByFour
           : session?.motorcycleStyle ?? craftIconStyleDefault,
       localRiderSymbol:
           widget.rideController.session?.riderSymbol ?? riderSymbolDefault,
@@ -4848,6 +5022,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     widget.sharedRoutes.removeListener(_onSharedRoutesChanged);
     _simulationController?.removeListener(_onSimulationVisualChanged);
     _simulationController?.dispose();
+    _windForecastController?.dispose();
+    _simulationLandingZone.dispose();
     _preStartPresenceController?.removeListener(_onPreStartPresenceChanged);
     unawaited(_spokenGuidance?.stop());
     _awarenessController?.removeListener(_onAwarenessChanged);
@@ -4879,6 +5055,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _rideCompletionSuggestion.dispose();
     unawaited(_carPlayBridge?.dispose());
     _carPlayRoutingClient.close();
+    _windForecastClient.close();
     super.dispose();
   }
 }

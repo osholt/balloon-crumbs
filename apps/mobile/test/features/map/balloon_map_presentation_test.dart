@@ -4,11 +4,13 @@ import 'package:balloon_crumbs/domain/altitude.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
 import 'package:balloon_crumbs/domain/route_store.dart';
 import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/geo_point.dart' as live;
 import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/features/map/ride_map.dart';
 import 'package:balloon_crumbs/services/basemap_configuration.dart';
 import 'package:balloon_crumbs/services/gpx_import_source.dart';
 import 'package:balloon_crumbs/services/offline_tile_cache.dart';
+import 'package:balloon_crumbs/services/open_meteo_wind.dart';
 import 'package:balloon_crumbs/services/route_importer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -55,6 +57,33 @@ void main() {
       ]);
       addTearDown(navigation.dispose);
       addTearDown(trails.dispose);
+      final wind = WindForecastController(
+        const _NoWindProvider(),
+        initialField: WindForecastField(
+          columns: const [
+            WindForecastColumn(
+              position: live.GeoPoint(latitude: 51.43, longitude: -2.70),
+              vectors: [
+                WindForecastVector(
+                  altitudeMetersMsl: 20,
+                  fromDegrees: 250,
+                  speedKmh: 12,
+                ),
+                WindForecastVector(
+                  altitudeMetersMsl: 1000,
+                  fromDegrees: 300,
+                  speedKmh: 30,
+                ),
+              ],
+            ),
+          ],
+          validAt: DateTime.utc(2026, 8, 21, 10),
+          fetchedAt: DateTime.utc(2026, 8, 21, 9, 55),
+          origin: WindForecastOrigin.bundledFallback,
+          sourceLabel: 'Bundled demo wind',
+        ),
+      );
+      addTearDown(wind.dispose);
       final cache = OfflineTileCache(
         rootDirectory: directory,
         configuration: const BasemapConfiguration(),
@@ -71,6 +100,7 @@ void main() {
             offlineTileCache: cache,
             navigationPosition: navigation,
             riderTrails: trails,
+            windForecastController: wind,
             landingZone: const MapLandingZone(
               center: GeoPoint(latitude: 51.4128, longitude: -2.7584),
               label: 'Simulated landing zone',
@@ -85,16 +115,26 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('balloon-altitude-card')), findsOneWidget);
+      expect(find.byKey(const Key('ride-clock')), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byKey(const Key('ride-clock'))).dy,
+        lessThan(
+          tester.getTopLeft(find.byKey(const Key('balloon-altitude-card'))).dy,
+        ),
+        reason: 'the clock belongs above balloon telemetry',
+      );
       expect(find.text('226 m'), findsOneWidget);
       expect(find.textContaining('↑ 1.2 m/s'), findsOneWidget);
       expect(find.textContaining('GNSS'), findsOneWidget);
       expect(find.textContaining('relative to launch'), findsOneWidget);
       expect(find.text('Not terrain clearance'), findsOneWidget);
+      expect(find.byKey(const Key('aeronautical-chart-status')), findsNothing);
       expect(
-        find.byKey(const Key('aeronautical-chart-status')),
-        findsOneWidget,
+        find.byKey(const Key('aeronautical-chart-status-position')),
+        findsNothing,
       );
-      expect(find.text('AIRSPACE UNAVAILABLE'), findsOneWidget);
+      expect(find.text('AIRSPACE UNAVAILABLE'), findsNothing);
+      expect(find.byKey(const Key('balloon-map-info-button')), findsOneWidget);
       expect(find.byKey(const Key('balloon-altitude-legend')), findsOneWidget);
       expect(find.text('TRACK ALTITUDE · METRES'), findsOneWidget);
       expect(find.byKey(const Key('landing-zone-area-layer')), findsOneWidget);
@@ -102,6 +142,22 @@ void main() {
         find.byKey(const Key('landing-zone-marker-layer')),
         findsOneWidget,
       );
+      expect(find.byKey(const Key('wind-forecast-control')), findsOneWidget);
+      expect(find.byKey(const Key('wind-altitude-slider')), findsOneWidget);
+      expect(find.byKey(const Key('wind-forecast-layer')), findsOneWidget);
+      expect(find.textContaining('500 M MSL'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('wind-forecast-toggle')));
+      await tester.pump();
+      expect(wind.enabled, isFalse);
+      expect(find.byKey(const Key('wind-altitude-slider')), findsNothing);
+      expect(find.byKey(const Key('wind-forecast-layer')), findsNothing);
+
+      wind.setEnabled(true);
+      wind.setSelectedAltitude(1000);
+      await tester.pump();
+      expect(find.textContaining('1000 M MSL'), findsOneWidget);
+      expect(find.byKey(const Key('wind-forecast-layer')), findsOneWidget);
 
       final trackLayer = tester.widget<PolylineLayer>(
         find.byType(PolylineLayer),
@@ -131,6 +187,27 @@ void main() {
         isFalse,
         reason: 'the balloon viewport must not draw the chase road route',
       );
+
+      await tester.tap(find.byKey(const Key('balloon-map-info-button')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('balloon-map-information-sheet')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('aeronautical-chart-information')),
+        findsOneWidget,
+      );
+      expect(find.text('AIRSPACE UNAVAILABLE'), findsOneWidget);
+      expect(
+        find.textContaining('official AIP and NOTAM briefing'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('aeronautical-chart-key')), findsOneWidget);
+      expect(find.text('Red / red hatching'), findsOneWidget);
+      expect(find.text('Blue / pink'), findsOneWidget);
+      expect(find.textContaining('GND means the surface'), findsOneWidget);
+      expect(find.textContaining('shown in metres'), findsOneWidget);
 
       for (final key in const [
         'posted-speed-limit-position',
@@ -186,4 +263,14 @@ class _NoFileSource implements GpxImportSource {
 
   @override
   Future<PickedGpxFile?> pickGpxFile() async => null;
+}
+
+class _NoWindProvider implements WindForecastProvider {
+  const _NoWindProvider();
+
+  @override
+  Future<WindForecastField> fetch({
+    required live.GeoPoint center,
+    required DateTime at,
+  }) => throw UnimplementedError();
 }

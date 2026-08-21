@@ -68,7 +68,9 @@ void main() {
     expect(playButton.onPressed, isNull);
   });
 
-  testWidgets('Ride Lab exposes fleet scenarios in landscape', (tester) async {
+  testWidgets('Ride Lab presents the live two-craft demo in landscape', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(844, 390);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -121,20 +123,13 @@ void main() {
     );
 
     expect(find.text('Ride Lab'), findsOneWidget);
-    expect(find.text('VIRTUAL FLEET'), findsOneWidget);
-    expect(find.text('Demo Lead'), findsOneWidget);
-    expect(find.text('Charlie'), findsOneWidget);
-    expect(find.byKey(const Key('simulation-off-route')), findsOneWidget);
+    expect(find.text('LIVE DEMO CRAFT'), findsOneWidget);
+    expect(find.text('Balloon'), findsWidgets);
+    expect(find.text('Land Rover'), findsOneWidget);
+    expect(find.byKey(const Key('simulation-off-route')), findsNothing);
     expect(find.byKey(const Key('simulation-role')), findsOneWidget);
     expect(find.text('Chase'), findsOneWidget);
-    expect(find.text('Balloon'), findsOneWidget);
-    expect(find.byKey(const Key('simulation-rider-count')), findsOneWidget);
-
-    await tester.ensureVisible(find.byKey(const Key('simulation-off-route')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('simulation-off-route')));
-    await tester.pump();
-    expect(simulation.alexOffRoute, isTrue);
+    expect(find.byKey(const Key('simulation-rider-count')), findsNothing);
 
     await tester.ensureVisible(find.text('Chase'));
     await tester.tap(find.text('Chase'));

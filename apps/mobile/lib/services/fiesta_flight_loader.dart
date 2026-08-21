@@ -62,12 +62,14 @@ class BalloonFlight {
     required this.samples,
     required this.windLayers,
     required this.source,
+    this.launchElevationMetres = 0,
   });
 
   final String name;
   final GeoPoint launch;
   final List<BalloonFlightSample> samples;
   final List<BalloonWindLayer> windLayers;
+  final double launchElevationMetres;
 
   /// Provenance, carried so a surface can say where the numbers came from.
   final String source;
@@ -161,6 +163,8 @@ class BundledFiestaFlightLoader {
         longitude: (launch['longitude'] as num).toDouble(),
       ),
       source: decoded['source'] as String? ?? '',
+      launchElevationMetres:
+          (launch['elevationMetres'] as num?)?.toDouble() ?? 0,
       windLayers: [
         for (final layer
             in (decoded['windLayers'] as List? ?? []).whereType<Map>())

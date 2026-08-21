@@ -7,9 +7,9 @@ import 'ride_role.dart';
 import 'rider_color.dart';
 
 class RideSession {
-  static const minimumSimulationRiderCount = 4;
+  static const minimumSimulationRiderCount = 2;
   static const maximumSimulationRiderCount = 30;
-  static const defaultSimulationRiderCount = 5;
+  static const defaultSimulationRiderCount = 2;
 
   const RideSession({
     required this.rideId,
