@@ -1,10 +1,10 @@
 # Getting Balloon Crumbs onto TestFlight
 
-For internal testers, which for now means the one person who needs to fly with
-it. Internal testing needs **no beta review**: once Apple finishes processing an
+Internal testing needs **no beta review**: once Apple finishes processing an
 upload it appears for everyone in an internal group, usually within minutes.
-External testing is the thing that needs review, and it is not what this
-document is about.
+External testing needs beta review; the CI workflow can assign the processed
+build to an external group and submit that review through App Store Connect's
+API, following the release path used by Tail End Charlie.
 
 ## The short version
 
@@ -148,10 +148,21 @@ Create these once, under Settings → Secrets and variables → Actions:
 | `APPSTORE_CONNECT_API_KEY_ID` | the Developer-role key's ID |
 | `APPSTORE_CONNECT_API_ISSUER_ID` | the account's issuer ID |
 | `APPSTORE_CONNECT_API_PRIVATE_KEY_BASE64` | that key's `.p8`, base64 |
+| `APPSTORE_CONNECT_REVIEW_API_KEY_ID` | the App Manager-role review key's ID |
+| `APPSTORE_CONNECT_REVIEW_API_ISSUER_ID` | the review key account's issuer ID |
+| `APPSTORE_CONNECT_REVIEW_API_PRIVATE_KEY_BASE64` | the review key's `.p8`, base64 |
 | `BALLOON_CRUMBS_OPENAIP_API_KEY` | OpenAIP third-party application key for the advisory airspace layer |
 
 Set the `BALLOON_CRUMBS_API_BASE_URL` **variable** (not a secret) to
-`https://balloon-crumbs.pages.dev/api`.
+`https://balloon-crumbs.pages.dev/api`. Set
+`BALLOON_CRUMBS_IOS_EXTERNAL_TESTER_GROUP` to the exact external TestFlight
+group name.
+
+Keep the upload and review keys separate. The routine upload key can remain at
+Developer privilege; assigning an external group and creating its beta review
+submission uses the separate App Manager key. The `submit_external` workflow
+input defaults to true and the operation is idempotent: a retry leaves an
+existing group assignment or active review submission in place.
 
 To produce the two base64 values:
 
