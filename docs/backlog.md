@@ -1,5 +1,11 @@
 # Initial Backlog
 
+The next coordinated implementation is specified in
+[role-specific live flight experience](role-specific-live-flight-experience.md).
+Its slices supersede implementing WP3/WP5/WP6/WP7/WP10b/WP11 independently:
+role and craft assignment, route-state separation and role-specific shells are
+prerequisites for bringing planner evidence into the live app safely.
+
 The GitHub issues mirror this ordered backlog. Priority is a product priority,
 not a claim that every P0 item is small. Work packages are defined in
 [delivery-plan.md](delivery-plan.md).
