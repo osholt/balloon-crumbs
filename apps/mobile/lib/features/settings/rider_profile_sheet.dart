@@ -41,6 +41,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
   late CraftIconStyle _style = widget.riderProfile.motorcycleStyle;
   late RiderSymbol _symbol = widget.riderProfile.riderSymbol;
   late RiderColor _color = widget.riderProfile.riderColor;
+  late bool _retainPeerTracks = widget.riderProfile.retainPeerTracksForReplay;
   String? _nameError;
   bool _saving = false;
 
@@ -129,6 +130,19 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
             ],
           ),
           const SizedBox(height: 24),
+          SwitchListTile(
+            key: const Key('retain-peer-replay-tracks'),
+            contentPadding: EdgeInsets.zero,
+            value: _retainPeerTracks,
+            onChanged: _saving
+                ? null
+                : (value) => setState(() => _retainPeerTracks = value),
+            title: const Text('Keep other chaser tracks for replay'),
+            subtitle: const Text(
+              'Off by default. When enabled, available crew location history is kept only in this phone’s completed-flight archive until you delete it.',
+            ),
+          ),
+          const SizedBox(height: 12),
           FilledButton(
             key: const Key('save-rider-profile'),
             onPressed: _saving ? null : _save,
@@ -168,6 +182,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
       riderSymbol: _symbol,
       riderColor: _color,
     );
+    await widget.riderProfile.setRetainPeerTracksForReplay(_retainPeerTracks);
     if (mounted) Navigator.of(context).pop();
   }
 

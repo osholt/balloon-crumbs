@@ -25,6 +25,7 @@ class RiderProfileController extends ChangeNotifier {
     this._ownPhoneNumber,
     this._onboardingCompleted,
     this._onboardingEducationSkipped,
+    this._retainPeerTracksForReplay,
   );
 
   static const _nameKey = 'rider_profile_display_name';
@@ -45,6 +46,8 @@ class RiderProfileController extends ChangeNotifier {
   static const _onboardingCompletedKey = 'rider_profile_onboarding_completed';
   static const _onboardingEducationSkippedKey =
       'rider_profile_onboarding_education_skipped';
+  static const _retainPeerTracksForReplayKey =
+      'flight_replay_retain_peer_tracks';
 
   final SharedPreferences _preferences;
   final String _installationId;
@@ -59,6 +62,7 @@ class RiderProfileController extends ChangeNotifier {
   String _ownPhoneNumber;
   bool _onboardingCompleted;
   bool _onboardingEducationSkipped;
+  bool _retainPeerTracksForReplay;
   OnboardingRideChoice? _pendingRideChoice;
 
   String get installationId => _installationId;
@@ -69,6 +73,7 @@ class RiderProfileController extends ChangeNotifier {
   bool get onboardingCompleted => _onboardingCompleted;
   bool get needsOnboarding => !_onboardingCompleted;
   bool get onboardingEducationSkipped => _onboardingEducationSkipped;
+  bool get retainPeerTracksForReplay => _retainPeerTracksForReplay;
 
   // In-case-of-emergency details. Kept device-local by default: not read by
   // RideSession/RideEvent, so ordinary ride events never carry it. It only
@@ -129,6 +134,7 @@ class RiderProfileController extends ChangeNotifier {
       preferences.getString(_ownPhoneNumberKey) ?? '',
       onboardingCompleted,
       preferences.getBool(_onboardingEducationSkippedKey) ?? false,
+      preferences.getBool(_retainPeerTracksForReplayKey) ?? false,
     );
   }
 
@@ -185,6 +191,13 @@ class RiderProfileController extends ChangeNotifier {
     _onboardingCompleted = false;
     _pendingRideChoice = null;
     await _preferences.setBool(_onboardingCompletedKey, false);
+    notifyListeners();
+  }
+
+  Future<void> setRetainPeerTracksForReplay(bool value) async {
+    if (_retainPeerTracksForReplay == value) return;
+    _retainPeerTracksForReplay = value;
+    await _preferences.setBool(_retainPeerTracksForReplayKey, value);
     notifyListeners();
   }
 

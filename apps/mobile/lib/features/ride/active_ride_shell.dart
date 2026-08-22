@@ -30,10 +30,12 @@ import '../../data/json_file_route_store.dart';
 import '../../data/secure_observer_grant_store.dart';
 import '../../domain/event_store.dart';
 import '../../domain/completed_ride_store.dart';
+import '../../domain/flight_replay.dart';
 import '../../domain/geo_point.dart' as awareness_geo;
 import '../../domain/hazard.dart';
 import '../../domain/imported_route.dart' as route_domain;
 import '../../domain/landing_zone.dart';
+import '../../domain/operational_boundary.dart';
 import '../../domain/map_style_mode.dart';
 import '../../domain/quick_message.dart';
 import '../../domain/ride_coordination_mode.dart';
@@ -53,6 +55,7 @@ import '../../relay/native_nearby_transport.dart';
 import '../../relay/relay_engine.dart';
 import '../../relay/sqlite_relay_queue.dart';
 import '../../services/carplay_bridge.dart';
+import '../../services/chase_guidance_target.dart';
 import '../../services/fiesta_flight_loader.dart';
 import '../../services/geo_calculations.dart';
 import '../../services/spoken_audio_mode.dart';
@@ -68,6 +71,7 @@ import '../../services/gpx_import_source.dart';
 import '../../services/measurement_formatter.dart';
 import '../../services/native_push_token_source.dart';
 import '../../services/open_meteo_wind.dart';
+import '../../services/operational_boundary_monitor.dart';
 import '../../services/position_report_policy.dart';
 import '../../services/received_quick_message.dart';
 import '../../services/navigation_guidance.dart';
@@ -428,6 +432,12 @@ class _RideActionsPanel extends StatelessWidget {
     required this.canChangeLandingZone,
     required this.landingZoneLabel,
     required this.onChangeLandingZone,
+    required this.boundaryCount,
+    required this.canEditBoundaries,
+    required this.onOperationalBoundaries,
+    required this.canChooseChaseGuidance,
+    required this.chaseGuidanceLabel,
+    required this.onChooseChaseGuidance,
     required this.maneuverCount,
     required this.onShowManeuvers,
     required this.onEmergencyInfo,
@@ -458,6 +468,12 @@ class _RideActionsPanel extends StatelessWidget {
   final bool canChangeLandingZone;
   final String? landingZoneLabel;
   final VoidCallback onChangeLandingZone;
+  final int boundaryCount;
+  final bool canEditBoundaries;
+  final VoidCallback onOperationalBoundaries;
+  final bool canChooseChaseGuidance;
+  final String? chaseGuidanceLabel;
+  final VoidCallback onChooseChaseGuidance;
   final int maneuverCount;
   final VoidCallback onShowManeuvers;
   final VoidCallback onEmergencyInfo;
@@ -564,6 +580,34 @@ class _RideActionsPanel extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               onTap: onChangeLandingZone,
+            ),
+          ListTile(
+            key: const Key('flight-menu-operational-boundaries'),
+            leading: const Icon(Icons.polyline_outlined),
+            title: const Text('Boundaries and altitude alerts'),
+            subtitle: Text(
+              boundaryCount == 0
+                  ? canEditBoundaries
+                        ? 'Add advisory lines, areas or high/low altitude limits'
+                        : 'No advisory boundaries have been shared by the pilot'
+                  : '$boundaryCount shared advisor${boundaryCount == 1 ? 'y' : 'ies'} · alerts on this device',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: onOperationalBoundaries,
+          ),
+          if (canChooseChaseGuidance)
+            ListTile(
+              key: const Key('flight-menu-chase-guidance-target'),
+              leading: const Icon(Icons.assistant_direction_outlined),
+              title: const Text('Chase guidance target'),
+              subtitle: Text(
+                chaseGuidanceLabel ??
+                    'Choose the landing area or a road rendezvous near the balloon',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: onChooseChaseGuidance,
             ),
           if (canManageObserverAccess)
             ListTile(
@@ -987,6 +1031,27 @@ Future<RideCompletionDecision?> showRideCompletionDialog(
   ),
 );
 
+class _OperationalBoundaryDraft {
+  _OperationalBoundaryDraft({
+    required this.id,
+    required this.label,
+    required this.kind,
+    required this.source,
+    this.lowerAltitudeMeters,
+    this.upperAltitudeMeters,
+    this.altitudeDatum = AltitudeDatum.wgs84Geoid,
+  });
+
+  final String id;
+  final String label;
+  final OperationalBoundaryKind kind;
+  final String source;
+  final double? lowerAltitudeMeters;
+  final double? upperAltitudeMeters;
+  final AltitudeDatum altitudeDatum;
+  final List<route_domain.GeoPoint> points = [];
+}
+
 class _ActiveRideShellState extends State<ActiveRideShell>
     with WidgetsBindingObserver {
   final _mapPosition = ValueNotifier<route_domain.GeoPoint?>(null);
@@ -1086,6 +1151,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   /// Recorded travelled trails, composed into the map's one trail channel.
   List<MapOverlayTrace> _recordedTrailTraces = const [];
+  List<MapOverlayTrace> _operationalBoundaryTraces = const [];
+  final _operationalBoundaryMonitor = OperationalBoundaryMonitor();
 
   /// TEC requests this phone has already put in front of the rider, so an
   /// unanswered request does not reopen its dialog on every rebuild.
@@ -1126,7 +1193,16 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   );
   final ValueNotifier<MapLandingZone?> _sharedLandingZone = ValueNotifier(null);
   bool _selectingLandingZone = false;
+  _OperationalBoundaryDraft? _operationalBoundaryDraft;
   double _landingRadiusMeters = 500;
+  ChaseGuidanceTarget? _chaseGuidanceTarget;
+  bool _chaseGuidanceRouting = false;
+  DateTime? _lastChaseGuidanceRouteAt;
+  awareness_geo.GeoPoint? _lastChaseGuidanceTarget;
+  int _chaseGuidanceRouteSequence = 0;
+  static const _chaseGuidanceResolver = ChaseGuidanceTargetResolver();
+  static const _chaseGuidanceReroutePolicy = ChaseGuidanceReroutePolicy();
+  String? _recordedWindContextFingerprint;
   bool _simulationRerouteInFlight = false;
   Duration? _lastSimulationRerouteElapsed;
   awareness_geo.GeoPoint? _lastSimulationRerouteLanding;
@@ -1231,6 +1307,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
     widget.rideController.addListener(_onRideControllerChanged);
     _syncSharedLandingZone();
+    _syncOperationalBoundaries();
     widget.sharedRoutes.addListener(_onSharedRoutesChanged);
     _capturePlannerLinkError();
     if (widget.sharedRoutes.pending case final file?) {
@@ -1340,6 +1417,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           OpenMeteoWindProvider(client: _windForecastClient),
           initialField: _bundledWindForecast(flight),
         );
+        _windForecastController!.addListener(_onWindForecastChanged);
+        _onWindForecastChanged();
         if (widget.enableNativeServices) {
           unawaited(_windForecastController!.refresh(flight.launch));
         }
@@ -1354,6 +1433,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       _windForecastController = WindForecastController(
         OpenMeteoWindProvider(client: _windForecastClient),
       );
+      _windForecastController!.addListener(_onWindForecastChanged);
       try {
         final session = widget.rideController.session;
         if (session != null) {
@@ -1407,6 +1487,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       await _initializeTrafficRerouting();
     } on Object catch (error) {
       _warnings.add('Traffic preferences could not be restored: $error');
+    }
+    try {
+      await _restoreChaseGuidanceTarget();
+    } on Object catch (error) {
+      _warnings.add('Chase guidance preference could not be restored: $error');
     }
     try {
       await _replaceAwarenessController(route);
@@ -1652,6 +1737,25 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   String get _trafficRerouteSuppressionKey =>
       'traffic-reroute-suppression:'
       '${widget.rideController.session?.rideId ?? 'none'}';
+
+  String get _chaseGuidancePreferenceKey =>
+      'chase-guidance-target:'
+      '${widget.rideController.session?.rideId ?? 'none'}';
+
+  bool get _isChaserPerspective =>
+      widget.rideController.session?.role != RideRole.lead;
+
+  Future<void> _restoreChaseGuidanceTarget() async {
+    if (!_isChaserPerspective) return;
+    final preferences = await SharedPreferences.getInstance();
+    final stored = preferences.getString(_chaseGuidancePreferenceKey);
+    _chaseGuidanceTarget = ChaseGuidanceTarget.values
+        .where((target) => target.name == stored)
+        .firstOrNull;
+    _chaseGuidanceTarget ??= widget.rideController.landingZone == null
+        ? ChaseGuidanceTarget.balloon
+        : ChaseGuidanceTarget.landingArea;
+  }
 
   /// Publishes a rider's own enforcement sighting to the group.
   ///
@@ -1971,6 +2075,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _activeRoute = route;
     await _replaceAwarenessController(route);
     if (mounted) setState(() {});
+    if (_isChaserPerspective && _chaseGuidanceTarget != null) {
+      unawaited(_refreshChaseGuidanceIfNeeded(force: true));
+    }
   }
 
   Future<void> _replaceSimulationController(
@@ -2183,6 +2290,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return;
     }
     _updateMapOverlays();
+    unawaited(_refreshChaseGuidanceIfNeeded());
     _refreshTrafficOfferState();
     _schedulePublish();
   }
@@ -2930,6 +3038,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               RiderTrailKind.balloonGroundTrack =>
                 '${trail.displayName} balloon ground track',
               RiderTrailKind.rider => '${trail.displayName} trail',
+              RiderTrailKind.operationalBoundary =>
+                '${trail.displayName} operational boundary',
               // RiderTrailRecorder only records where riders have been, so it
               // never produces a route-start connector; the map composes that
               // one itself.
@@ -2949,6 +3059,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   void _pushRiderTrails() {
     _riderTrails.value = List.unmodifiable([
       for (final trace in _recordedTrailTraces) _simplifiedForDisplay(trace),
+      ..._operationalBoundaryTraces,
     ]);
   }
 
@@ -3032,6 +3143,64 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
   }
 
+  void _onWindForecastChanged() {
+    final field = _windForecastController?.field;
+    if (field == null ||
+        !widget.rideController.isLocalRideLeader ||
+        !widget.rideController.rideStarted ||
+        widget.rideController.rideEnded ||
+        field.columns.isEmpty) {
+      return;
+    }
+    final fingerprint =
+        '${field.origin.name}:${field.validAt.toUtc().toIso8601String()}:'
+        '${field.fetchedAt.toUtc().toIso8601String()}';
+    if (fingerprint == _recordedWindContextFingerprint) return;
+    _recordedWindContextFingerprint = fingerprint;
+    final current = _mapPosition.value;
+    final column = current == null
+        ? field.columns.first
+        : field.columns.reduce(
+            (first, second) =>
+                GeoCalculations.distanceMeters(
+                      first.position,
+                      awareness_geo.GeoPoint(
+                        latitude: current.latitude,
+                        longitude: current.longitude,
+                      ),
+                    ) <=
+                    GeoCalculations.distanceMeters(
+                      second.position,
+                      awareness_geo.GeoPoint(
+                        latitude: current.latitude,
+                        longitude: current.longitude,
+                      ),
+                    )
+                ? first
+                : second,
+          );
+    unawaited(
+      widget.rideController.noteWindContext(
+        FlightReplayWindContext(
+          recordedAt: DateTime.now(),
+          validAt: field.validAt,
+          source: field.sourceLabel,
+          // Both live Open-Meteo and the bundled Fiesta field are model output.
+          isForecast: true,
+          position: column.position,
+          vectors: [
+            for (final vector in column.vectors)
+              FlightReplayWindVector(
+                altitudeMetersMsl: vector.altitudeMetersMsl,
+                fromDegrees: vector.fromDegrees,
+                speedKmh: vector.speedKmh,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _onReceivedEvent(
     RideEvent event,
     RideTransportEvidence transport,
@@ -3066,6 +3235,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   void _onRideControllerChanged() {
     _syncSharedLandingZone();
+    _syncOperationalBoundaries();
+    if (_isChaserPerspective && _chaseGuidanceTarget == null) {
+      _chaseGuidanceTarget = widget.rideController.landingZone == null
+          ? ChaseGuidanceTarget.balloon
+          : ChaseGuidanceTarget.landingArea;
+    }
     final session = widget.rideController.session;
     final rideStarted =
         widget.rideController.rideStarted && !widget.rideController.rideEnded;
@@ -3076,6 +3251,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // whatever the rider has or has not moved since.
     if (rideJustStarted) _positionReportGate.reset();
     if (rideJustStarted) unawaited(_warmNaturalVoiceIfNeeded());
+    if (rideJustStarted) _onWindForecastChanged();
     if (session != null) {
       _awarenessController?.updateLocalSession(session);
       _observerAccessController?.updateSession(session);
@@ -3089,6 +3265,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         unawaited(_pushNotificationController?.refreshRegistration());
       }
       _publishObserverSnapshot();
+      unawaited(_refreshChaseGuidanceIfNeeded());
     }
     if (widget.rideController.rideEnded && !_rideEndHandled) {
       unawaited(_handleRideEnded());
@@ -3119,6 +3296,44 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       radiusMeters: target.radiusMeters,
       label: target.label,
     );
+  }
+
+  void _syncOperationalBoundaries() {
+    final draft = _operationalBoundaryDraft;
+    _operationalBoundaryTraces = List.unmodifiable([
+      for (final boundary in widget.rideController.operationalBoundaries)
+        if (boundary.kind != OperationalBoundaryKind.altitudeBand)
+          MapOverlayTrace(
+            id: 'operational-boundary-${boundary.id}',
+            points: [
+              for (final point in boundary.points)
+                route_domain.GeoPoint(
+                  latitude: point.latitude,
+                  longitude: point.longitude,
+                ),
+              if (boundary.kind == OperationalBoundaryKind.area)
+                route_domain.GeoPoint(
+                  latitude: boundary.points.first.latitude,
+                  longitude: boundary.points.first.longitude,
+                ),
+            ],
+            label: '${boundary.label} · advisory · ${boundary.source}',
+            kind: RiderTrailKind.operationalBoundary,
+          ),
+      if (draft != null && draft.points.length >= 2)
+        MapOverlayTrace(
+          id: 'operational-boundary-draft',
+          points: [
+            ...draft.points,
+            if (draft.kind == OperationalBoundaryKind.area &&
+                draft.points.length >= 3)
+              draft.points.first,
+          ],
+          label: '${draft.label} draft',
+          kind: RiderTrailKind.operationalBoundary,
+        ),
+    ]);
+    _pushRiderTrails();
   }
 
   /// Starts location for the map before the ride does, so a rider can see
@@ -3293,6 +3508,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // sample to the durable ride journal is briefly delayed or fails. Only
     // the journal feeds trails, summaries and GPX recording.
     _updateMapOverlays(updateDerivedState: false, updateOverlayMarkers: false);
+    _checkOperationalBoundaries();
     final point = _mapPosition.value;
     final wind = _windForecastController;
     if (point != null && wind != null) {
@@ -3305,7 +3521,38 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         ),
       );
     }
+    unawaited(_refreshChaseGuidanceIfNeeded());
     if (warningChanged) setState(() {});
+  }
+
+  void _checkOperationalBoundaries() {
+    final navigation = _mapNavigationPosition.value;
+    if (navigation == null) return;
+    final alerts = _operationalBoundaryMonitor.evaluate(
+      boundaries: widget.rideController.operationalBoundaries,
+      position: awareness_geo.GeoPoint(
+        latitude: navigation.point.latitude,
+        longitude: navigation.point.longitude,
+      ),
+      now: DateTime.now(),
+      altitudeMeters: navigation.altitudeMeters,
+      altitudeDatum: navigation.altitudeDatum,
+    );
+    if (alerts.isEmpty || !mounted) return;
+    for (final alert in alerts) {
+      _warnings.add(
+        '${alert.message}. Advisory only — confirm the source and current flight information.',
+      );
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${alerts.first.message}. Advisory only; verify before acting.',
+        ),
+        backgroundColor: const Color(0xFF8F2638),
+        duration: const Duration(seconds: 8),
+      ),
+    );
   }
 
   @override
@@ -3588,6 +3835,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final landingZoneUpdates = _isSimulation
         ? _simulationLandingZone
         : _sharedLandingZone;
+    final boundaryDraft = _operationalBoundaryDraft;
     final map = RideMapFeature.fromEnvironment(
       key: ValueKey(
         'ride-map:${_appliedAuthoritativeRouteRevision ?? 'local'}:'
@@ -3601,7 +3849,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       riderTrails: _riderTrails,
       landingZone: landingZoneUpdates.value,
       landingZoneUpdates: landingZoneUpdates,
-      onMapTap: _selectingLandingZone ? _updateLandingZoneFromMap : null,
+      onMapTap: _selectingLandingZone || boundaryDraft != null
+          ? _handleFlightSetupMapTap
+          : null,
       windForecastController: _windForecastController,
       groupRiderCount: widget.rideController.liveParticipants.length,
       onOpenRoster: _openRoster,
@@ -3696,7 +3946,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           ? RideMapPerspective.balloon
           : RideMapPerspective.chase,
     );
-    if (!_selectingLandingZone) return map;
+    if (!_selectingLandingZone && boundaryDraft == null) return map;
     return Stack(
       children: [
         Positioned.fill(child: map),
@@ -3712,17 +3962,33 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
               child: Row(
                 children: [
-                  const Icon(Icons.touch_app, color: Color(0xFFFFC857)),
+                  Icon(
+                    boundaryDraft == null
+                        ? Icons.touch_app
+                        : Icons.polyline_outlined,
+                    color: const Color(0xFFFFC857),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Tap the map to update the intended landing area · ${_landingRadiusMeters < 1000 ? '${_landingRadiusMeters.toInt()} m' : '${(_landingRadiusMeters / 1000).toStringAsFixed(1)} km'} radius',
+                      boundaryDraft == null
+                          ? 'Tap the map to update the intended landing area · ${_landingRadiusMeters < 1000 ? '${_landingRadiusMeters.toInt()} m' : '${(_landingRadiusMeters / 1000).toStringAsFixed(1)} km'} radius'
+                          : boundaryDraft.kind == OperationalBoundaryKind.line
+                          ? 'Tap two points for ${boundaryDraft.label} · ${boundaryDraft.points.length}/2'
+                          : 'Tap at least three corners for ${boundaryDraft.label} · ${boundaryDraft.points.length} selected',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
+                  if (boundaryDraft != null &&
+                      boundaryDraft.kind == OperationalBoundaryKind.area &&
+                      boundaryDraft.points.length >= 3)
+                    TextButton(
+                      onPressed: () =>
+                          unawaited(_saveOperationalBoundaryDraft()),
+                      child: const Text('Save'),
+                    ),
                   TextButton(
-                    onPressed: () =>
-                        setState(() => _selectingLandingZone = false),
+                    onPressed: _cancelMapSelection,
                     child: const Text('Cancel'),
                   ),
                 ],
@@ -3732,6 +3998,65 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         ),
       ],
     );
+  }
+
+  Future<void> _handleFlightSetupMapTap(route_domain.GeoPoint point) async {
+    if (_selectingLandingZone) {
+      await _updateLandingZoneFromMap(point);
+      return;
+    }
+    final draft = _operationalBoundaryDraft;
+    if (draft == null) return;
+    draft.points.add(point);
+    _syncOperationalBoundaries();
+    if (mounted) setState(() {});
+    if (draft.kind == OperationalBoundaryKind.line &&
+        draft.points.length >= 2) {
+      await _saveOperationalBoundaryDraft();
+    }
+  }
+
+  void _cancelMapSelection() {
+    setState(() {
+      _selectingLandingZone = false;
+      _operationalBoundaryDraft = null;
+    });
+    _syncOperationalBoundaries();
+  }
+
+  Future<void> _saveOperationalBoundaryDraft() async {
+    final draft = _operationalBoundaryDraft;
+    if (draft == null) return;
+    final minimum = draft.kind == OperationalBoundaryKind.line ? 2 : 3;
+    if (draft.points.length < minimum) return;
+    await widget.rideController.upsertOperationalBoundary(
+      OperationalBoundary(
+        id: draft.id,
+        label: draft.label,
+        kind: draft.kind,
+        points: [
+          for (final point in draft.points)
+            awareness_geo.GeoPoint(
+              latitude: point.latitude,
+              longitude: point.longitude,
+            ),
+        ],
+        source: draft.source,
+        updatedAt: DateTime.now(),
+        lowerAltitudeMeters: draft.lowerAltitudeMeters,
+        upperAltitudeMeters: draft.upperAltitudeMeters,
+        altitudeDatum: draft.altitudeDatum,
+      ),
+    );
+    if (!mounted) return;
+    if (widget.rideController.errorMessage case final message?) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+    setState(() => _operationalBoundaryDraft = null);
+    _syncOperationalBoundaries();
   }
 
   Future<void> _updateLandingZoneFromMap(route_domain.GeoPoint point) async {
@@ -3755,6 +4080,244 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return;
     }
     setState(() => _selectingLandingZone = false);
+  }
+
+  LocationSample? _latestBalloonFix() {
+    if (_isSimulation) {
+      final balloon = _simulationController?.riders
+          .where((rider) => rider.role == RideRole.lead)
+          .firstOrNull;
+      if (balloon == null) return null;
+      return LocationSample(
+        position: awareness_geo.GeoPoint(
+          latitude: balloon.position.latitude,
+          longitude: balloon.position.longitude,
+        ),
+        recordedAt: DateTime.now(),
+        accuracyMeters: 5,
+        speedMetersPerSecond: balloon.speedMetersPerSecond,
+        headingDegrees: balloon.headingDegrees,
+        altitudeMeters: balloon.altitudeMeters,
+        altitudeSource: balloon.altitudeMeters == null
+            ? AltitudeSource.unknown
+            : AltitudeSource.gnss,
+        altitudeDatum: balloon.altitudeMeters == null
+            ? AltitudeDatum.unknown
+            : AltitudeDatum.relativeToLaunch,
+        verticalSpeedMetersPerSecond: balloon.verticalSpeedMetersPerSecond,
+      );
+    }
+
+    final roster = widget.rideController.resolveCraftRoster();
+    final balloonDeviceIds = roster.balloon?.deviceIds.toSet() ?? const {};
+    final candidates =
+        <RiderLocation>[
+              ...widget.rideController.liveView.renderedPositions,
+              ...?_awarenessController?.riderLocations,
+            ]
+            .where(
+              (location) =>
+                  balloonDeviceIds.contains(location.riderId) ||
+                  (balloonDeviceIds.isEmpty && location.role == RideRole.lead),
+            )
+            .toList();
+    if (candidates.isEmpty) return null;
+    candidates.sort(
+      (left, right) =>
+          right.sample.recordedAt.compareTo(left.sample.recordedAt),
+    );
+    return candidates.first.sample;
+  }
+
+  ChaseGuidanceDestination? _currentChaseGuidanceDestination({
+    ChaseGuidanceTarget? target,
+  }) {
+    final selected = target ?? _chaseGuidanceTarget;
+    if (selected == null) return null;
+    return _chaseGuidanceResolver.resolve(
+      target: selected,
+      now: DateTime.now(),
+      landingZone: widget.rideController.landingZone,
+      balloonFix: _latestBalloonFix(),
+    );
+  }
+
+  Future<void> _chooseChaseGuidanceTarget() async {
+    final landing = _currentChaseGuidanceDestination(
+      target: ChaseGuidanceTarget.landingArea,
+    );
+    final balloon = _currentChaseGuidanceDestination(
+      target: ChaseGuidanceTarget.balloon,
+    );
+    final selected = await showModalBottomSheet<ChaseGuidanceTarget>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ListTile(
+            title: Text('Directions for this chase vehicle'),
+            subtitle: Text(
+              'This changes only this device. The route ends on a road near the target; it never directs a vehicle off-road.',
+            ),
+          ),
+          ListTile(
+            key: const Key('chase-guidance-landing-area'),
+            enabled: landing != null,
+            leading: const Icon(Icons.flag_outlined),
+            title: const Text('Intended landing area'),
+            subtitle: Text(
+              landing?.label ?? 'The pilot has not set an area yet',
+            ),
+            trailing: _chaseGuidanceTarget == ChaseGuidanceTarget.landingArea
+                ? const Icon(Icons.check)
+                : null,
+            onTap: landing == null
+                ? null
+                : () => Navigator.pop(
+                    sheetContext,
+                    ChaseGuidanceTarget.landingArea,
+                  ),
+          ),
+          ListTile(
+            key: const Key('chase-guidance-balloon'),
+            enabled: balloon != null,
+            leading: const Icon(Icons.air_outlined),
+            title: const Text('Road rendezvous near balloon'),
+            subtitle: Text(
+              balloon?.label ?? 'No fresh balloon fix is available',
+            ),
+            trailing: _chaseGuidanceTarget == ChaseGuidanceTarget.balloon
+                ? const Icon(Icons.check)
+                : null,
+            onTap: balloon == null
+                ? null
+                : () =>
+                      Navigator.pop(sheetContext, ChaseGuidanceTarget.balloon),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _chaseGuidanceTarget = selected);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_chaseGuidancePreferenceKey, selected.name);
+    await _refreshChaseGuidanceIfNeeded(force: true);
+  }
+
+  Future<void> _refreshChaseGuidanceIfNeeded({bool force = false}) async {
+    if (!_isChaserPerspective ||
+        _isSimulation ||
+        _chaseGuidanceRouting ||
+        !widget.rideController.rideStarted ||
+        widget.rideController.rideEnded) {
+      return;
+    }
+    final selected = _chaseGuidanceTarget;
+    final destination = _currentChaseGuidanceDestination();
+    final origin = _mapPosition.value;
+    if (selected == null || destination == null || origin == null) {
+      if (force && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              selected == ChaseGuidanceTarget.balloon
+                  ? 'A fresh balloon fix and this vehicle’s position are needed.'
+                  : 'An intended landing area and this vehicle’s position are needed.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    final now = DateTime.now();
+    if (!_chaseGuidanceReroutePolicy.shouldReroute(
+      now: now,
+      target: destination.point,
+      lastRoutedAt: _lastChaseGuidanceRouteAt,
+      lastTarget: _lastChaseGuidanceTarget,
+      force: force,
+    )) {
+      return;
+    }
+
+    _chaseGuidanceRouting = true;
+    if (mounted) setState(() {});
+    try {
+      final result = await _simulationRoutingService.routeThrough([
+        origin,
+        route_domain.GeoPoint(
+          latitude: destination.point.latitude,
+          longitude: destination.point.longitude,
+        ),
+      ], originBearingDegrees: _mapNavigationPosition.value?.headingDegrees);
+      if (!mounted) return;
+      final roadEndpoint = awareness_geo.GeoPoint(
+        latitude: result.points.last.latitude,
+        longitude: result.points.last.longitude,
+      );
+      if (!destination.acceptsRoadEndpoint(roadEndpoint)) {
+        _warnings.add(
+          'No sufficiently close road rendezvous was found for ${selected.label.toLowerCase()}. The previous route is still in use.',
+        );
+        setState(() {});
+        return;
+      }
+      final separation = GeoCalculations.distanceMeters(
+        roadEndpoint,
+        destination.point,
+      );
+      final route = route_domain.ImportedRoute(
+        id: 'personal-chase-${_chaseGuidanceRouteSequence++}',
+        name: selected.label,
+        description:
+            'Device-local road guidance. The road endpoint is '
+            '${MeasurementFormatter(widget.distanceUnits.value).distance(separation)} '
+            'from ${selected == ChaseGuidanceTarget.balloon ? 'the latest balloon fix' : 'the centre of the intended area'}. Access and stopping suitability remain unverified.',
+        importedAt: now,
+        sourceFileName: 'balloon-crumbs-personal-chase-route',
+        paths: [
+          route_domain.RoutePath(
+            kind: route_domain.RoutePathKind.route,
+            name: selected.label,
+            points: result.points,
+          ),
+        ],
+        waypoints: [
+          route_domain.RouteWaypoint(
+            point: origin,
+            name: 'Chase vehicle',
+            symbol: 'Flag, Blue',
+          ),
+          route_domain.RouteWaypoint(
+            point: result.points.last,
+            name: selected.label,
+            description:
+                'Road-accessible routing endpoint; target remains approximate.',
+            symbol: 'Flag, Red',
+          ),
+        ],
+        maneuvers: result.maneuvers,
+        plannedDuration: result.duration,
+      );
+      _activeRoute = route;
+      _lastChaseGuidanceRouteAt = now;
+      _lastChaseGuidanceTarget = destination.point;
+      await _replaceAwarenessController(route);
+      if (mounted) setState(() {});
+    } on Object catch (error) {
+      if (mounted) {
+        _warnings.add(
+          'Personal chase guidance is unavailable; the previous road route is still in use. $error',
+        );
+        setState(() {});
+      }
+    } finally {
+      _chaseGuidanceRouting = false;
+      if (mounted) setState(() {});
+    }
   }
 
   void _onNavigationGuidanceChanged(NavigationGuidance? guidance) {
@@ -4539,6 +5102,21 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         !_isSimulation && widget.rideController.isLocalRideLeader,
     landingZoneLabel: widget.rideController.landingZone?.label,
     onChangeLandingZone: () => unawaited(_chooseLandingZoneOnMap()),
+    boundaryCount: widget.rideController.operationalBoundaries.length,
+    canEditBoundaries:
+        !_isSimulation && widget.rideController.isLocalRideLeader,
+    onOperationalBoundaries: () => unawaited(_openOperationalBoundaries()),
+    canChooseChaseGuidance:
+        !_isSimulation &&
+        _isChaserPerspective &&
+        widget.rideController.rideStarted &&
+        !widget.rideController.rideEnded,
+    chaseGuidanceLabel: _chaseGuidanceRouting
+        ? 'Calculating a road rendezvous…'
+        : _chaseGuidanceTarget == null
+        ? null
+        : '${_chaseGuidanceTarget!.label} · only on this device',
+    onChooseChaseGuidance: () => unawaited(_chooseChaseGuidanceTarget()),
     maneuverCount: const NavigationGuidancePlanner()
         .instructions(_activeRoute)
         .length,
@@ -4620,6 +5198,321 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       _selectedIndex = 0;
       _selectingLandingZone = true;
     });
+  }
+
+  Future<void> _openOperationalBoundaries() async {
+    final canEdit = !_isSimulation && widget.rideController.isLocalRideLeader;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF171D25),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final boundaries = widget.rideController.operationalBoundaries;
+          return FractionallySizedBox(
+            heightFactor: 0.82,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Operational boundaries',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Shared pilot-entered advisories. They do not replace current airspace, weather, permissions or pilot judgement.',
+                        style: TextStyle(color: Color(0xFFABB5C1)),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: boundaries.isEmpty
+                      ? const Center(
+                          child: Text('No boundaries have been added.'),
+                        )
+                      : ListView.builder(
+                          itemCount: boundaries.length,
+                          itemBuilder: (context, index) {
+                            final boundary = boundaries[index];
+                            final altitude = [
+                              if (boundary.lowerAltitudeMeters
+                                  case final value?)
+                                'min ${value.round()} m',
+                              if (boundary.upperAltitudeMeters
+                                  case final value?)
+                                'max ${value.round()} m',
+                            ].join(' · ');
+                            return ListTile(
+                              leading: Icon(switch (boundary.kind) {
+                                OperationalBoundaryKind.line => Icons.polyline,
+                                OperationalBoundaryKind.area =>
+                                  Icons.pentagon_outlined,
+                                OperationalBoundaryKind.altitudeBand =>
+                                  Icons.height,
+                              }, color: const Color(0xFFFF5D73)),
+                              title: Text(boundary.label),
+                              subtitle: Text(
+                                '${boundary.source}${altitude.isEmpty ? '' : ' · $altitude ${boundary.altitudeDatum.name}'}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: canEdit
+                                  ? IconButton(
+                                      tooltip: 'Remove boundary',
+                                      icon: const Icon(Icons.delete_outline),
+                                      onPressed: () async {
+                                        await widget.rideController
+                                            .removeOperationalBoundary(
+                                              boundary.id,
+                                            );
+                                        if (sheetContext.mounted) {
+                                          setSheetState(() {});
+                                        }
+                                      },
+                                    )
+                                  : null,
+                            );
+                          },
+                        ),
+                ),
+                if (canEdit)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            unawaited(
+                              _configureOperationalBoundary(
+                                OperationalBoundaryKind.line,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.polyline),
+                          label: const Text('Draw line'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            unawaited(
+                              _configureOperationalBoundary(
+                                OperationalBoundaryKind.area,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.pentagon_outlined),
+                          label: const Text('Draw area'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            unawaited(
+                              _configureOperationalBoundary(
+                                OperationalBoundaryKind.altitudeBand,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.height),
+                          label: const Text('Altitude limits'),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _configureOperationalBoundary(
+    OperationalBoundaryKind kind,
+  ) async {
+    final labelController = TextEditingController(
+      text: switch (kind) {
+        OperationalBoundaryKind.line => 'Advisory boundary line',
+        OperationalBoundaryKind.area => 'Advisory boundary area',
+        OperationalBoundaryKind.altitudeBand => 'Planned altitude band',
+      },
+    );
+    final sourceController = TextEditingController(
+      text: 'Pilot-entered advisory boundary',
+    );
+    final lowerController = TextEditingController();
+    final upperController = TextEditingController();
+    var datum = AltitudeDatum.wgs84Geoid;
+    String? validationMessage;
+    final draft = await showDialog<_OperationalBoundaryDraft>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            kind == OperationalBoundaryKind.altitudeBand
+                ? 'Add altitude limits'
+                : 'Describe the boundary',
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: labelController,
+                  maxLength: 96,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
+                TextField(
+                  controller: sourceController,
+                  maxLength: 160,
+                  decoration: const InputDecoration(
+                    labelText: 'Source or briefing reference',
+                    helperText: 'Shown to every crew member',
+                  ),
+                ),
+                if (kind == OperationalBoundaryKind.altitudeBand) ...[
+                  TextField(
+                    controller: lowerController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Minimum altitude in metres (optional)',
+                    ),
+                  ),
+                  TextField(
+                    controller: upperController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Maximum altitude in metres (optional)',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<AltitudeDatum>(
+                    initialValue: datum,
+                    decoration: const InputDecoration(
+                      labelText: 'Altitude reference',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: AltitudeDatum.wgs84Geoid,
+                        child: Text('Mean sea level / WGS84 geoid'),
+                      ),
+                      DropdownMenuItem(
+                        value: AltitudeDatum.wgs84Ellipsoid,
+                        child: Text('WGS84 ellipsoid'),
+                      ),
+                      DropdownMenuItem(
+                        value: AltitudeDatum.relativeToLaunch,
+                        child: Text('Relative to launch'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setDialogState(() => datum = value);
+                    },
+                  ),
+                ],
+                if (validationMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(
+                      validationMessage!,
+                      style: const TextStyle(color: Color(0xFFFF8A8A)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final label = labelController.text.trim();
+                final source = sourceController.text.trim();
+                final lower = lowerController.text.trim().isEmpty
+                    ? null
+                    : double.tryParse(lowerController.text.trim());
+                final upper = upperController.text.trim().isEmpty
+                    ? null
+                    : double.tryParse(upperController.text.trim());
+                final altitudeValid =
+                    kind != OperationalBoundaryKind.altitudeBand ||
+                    ((lower != null || upper != null) &&
+                        (lower == null || upper == null || lower < upper));
+                if (label.isEmpty || source.isEmpty || !altitudeValid) {
+                  setDialogState(() {
+                    validationMessage = label.isEmpty || source.isEmpty
+                        ? 'Add a name and source.'
+                        : 'Add at least one limit, with the minimum below the maximum.';
+                  });
+                  return;
+                }
+                Navigator.pop(
+                  dialogContext,
+                  _OperationalBoundaryDraft(
+                    id: 'boundary-${DateTime.now().microsecondsSinceEpoch}',
+                    label: label,
+                    kind: kind,
+                    source: source,
+                    lowerAltitudeMeters: lower,
+                    upperAltitudeMeters: upper,
+                    altitudeDatum: datum,
+                  ),
+                );
+              },
+              child: Text(
+                kind == OperationalBoundaryKind.altitudeBand
+                    ? 'Save limits'
+                    : 'Choose points on map',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    labelController.dispose();
+    sourceController.dispose();
+    lowerController.dispose();
+    upperController.dispose();
+    if (draft == null || !mounted) return;
+    if (kind == OperationalBoundaryKind.altitudeBand) {
+      await widget.rideController.upsertOperationalBoundary(
+        OperationalBoundary(
+          id: draft.id,
+          label: draft.label,
+          kind: draft.kind,
+          points: const [],
+          source: draft.source,
+          updatedAt: DateTime.now(),
+          lowerAltitudeMeters: draft.lowerAltitudeMeters,
+          upperAltitudeMeters: draft.upperAltitudeMeters,
+          altitudeDatum: draft.altitudeDatum,
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _selectedIndex = 0;
+      _selectingLandingZone = false;
+      _operationalBoundaryDraft = draft;
+    });
+    _syncOperationalBoundaries();
   }
 
   void _openAlertsAndReports() {
@@ -5204,6 +6097,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     widget.sharedRoutes.removeListener(_onSharedRoutesChanged);
     _simulationController?.removeListener(_onSimulationVisualChanged);
     _simulationController?.dispose();
+    _windForecastController?.removeListener(_onWindForecastChanged);
     _windForecastController?.dispose();
     _simulationLandingZone.dispose();
     _sharedLandingZone.dispose();

@@ -8,7 +8,7 @@ The only shared boundary is TEC's public Caddy network:
 
 ```text
 Internet
-  -> balloon-crumbs.pages.dev (public planner and bounded same-origin proxy)
+  -> balloon-crumbs.pages.dev (product home, planner and bounded same-origin proxy)
       -> TEC public Caddy :443
       -> balloon-crumbs-edge:8080
           -> Balloon Crumbs API + PostgreSQL
@@ -26,7 +26,8 @@ Balloon Crumbs network. TEC's Caddy routes the dedicated hostname to that alias.
 - Checkout: `/opt/balloon-crumbs`, detached at an ancestor of `origin/main`.
 - Secrets: `/opt/balloon-crumbs/deploy/.env`, mode 600, never committed.
 - Compose project: `balloon-crumbs`.
-- Public planner: `https://balloon-crumbs.pages.dev/`.
+- Product home: `https://balloon-crumbs.pages.dev/`.
+- Public planner: `https://balloon-crumbs.pages.dev/planner.html`.
 - Oracle origin hostname: `relay.balloon-crumbs.tailendcharlie.app`.
 - Deploy state: `/var/lib/balloon-crumbs-deploy/production.commit`.
 

@@ -50,15 +50,15 @@ Tester release setup is documented for
 ```text
 apps/mobile/                 Flutter client plus Swift/Kotlin platform bridges
 apps/server/                 FastAPI/PostgreSQL relay inherited from TEC
-apps/planner/                Pilot forecast planner and short-code sharing page
-apps/website/                Public product home; the planner is a secondary destination
+apps/planner/                Product home, pilot planner and short-code sharing page
 deploy/                      Deployment templates; no production credentials
 docs/                        Product, architecture, source, and backlog notes
 .github/workflows/           Mobile and server CI only
 ```
 
-The pilot planner is published at
-[`balloon-crumbs.pages.dev`](https://balloon-crumbs.pages.dev/). Its bounded
+The product home is published at
+[`balloon-crumbs.pages.dev`](https://balloon-crumbs.pages.dev/), with the pilot
+planner at `/planner.html`. Its bounded
 Pages proxy keeps the Oracle relay and provider credentials out of browser code.
 
 ## Local verification

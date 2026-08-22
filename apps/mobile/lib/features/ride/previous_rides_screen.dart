@@ -23,6 +23,7 @@ import '../map/craft_icon.dart';
 import '../map/resolved_route_map_preview.dart'
     show embeddedMapGestureRecognizers;
 import '../map/stored_route_picker.dart';
+import '../replay/flight_replay_screen.dart';
 import 'ride_recap_screen.dart';
 
 class PreviousRidesScreen extends StatelessWidget {
@@ -270,6 +271,17 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
           ),
           const SizedBox(height: 10),
           FilledButton.icon(
+            key: const Key('archived-flight-replay'),
+            onPressed: ride.replay?.canReplay == true ? _replayFlight : null,
+            icon: const Icon(Icons.play_circle_outline),
+            label: Text(
+              ride.replay?.canReplay == true
+                  ? 'Replay entire flight'
+                  : 'Replay unavailable for this older archive',
+            ),
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
             onPressed: _sharing ? null : () => _shareSummary(),
             icon: const Icon(Icons.ios_share),
             label: const Text('Share summary'),
@@ -312,6 +324,17 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
       sharePositionOrigin: _shareOrigin(),
     ),
   );
+
+  Future<void> _replayFlight() async {
+    final replay = widget.ride.replay;
+    if (replay == null || !replay.canReplay) return;
+    await FlightReplayScreen.show(
+      context,
+      title: widget.ride.title,
+      replay: replay,
+      distanceUnit: widget.distanceUnits.value,
+    );
+  }
 
   Future<void> _rideAgain() async {
     final ride = widget.ride;

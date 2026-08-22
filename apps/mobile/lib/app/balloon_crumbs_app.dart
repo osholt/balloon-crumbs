@@ -123,6 +123,8 @@ class BalloonCrumbsApp extends StatelessWidget {
         ?routeProgressDisplay,
       ]),
       builder: (context, _) {
+        controller.includePeerReplayTracks =
+            riderProfile.retainPeerTracksForReplay;
         if (!restorationComplete && !showRestorationFallback) {
           return const _RideRestoreScreen();
         }

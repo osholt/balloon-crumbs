@@ -20,6 +20,10 @@ enum RiderTrailKind {
   /// underneath a road route or be mistaken for a chase vehicle's path.
   balloonGroundTrack,
 
+  /// Pilot-authored advisory geometry. It is shared with the crew but is not a
+  /// travelled trail and therefore never receives direction arrows.
+  operationalBoundary,
+
   /// The road route from where the rider is to the start of the planned route
   /// (#133). The one kind that is not recorded history: it is where the routing
   /// engine says to go next, which is why it is never produced by

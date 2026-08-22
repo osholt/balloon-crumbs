@@ -10,12 +10,14 @@ import 'package:uuid/uuid.dart';
 import '../domain/craft.dart';
 import '../services/craft_roster.dart';
 import '../domain/event_store.dart';
+import '../domain/flight_replay.dart';
 import '../domain/geo_point.dart' as awareness_geo;
 import '../domain/ice_share.dart';
 import '../domain/imported_route.dart';
 import '../domain/completed_ride_store.dart';
 import '../domain/join_invite.dart';
 import '../domain/landing_zone.dart';
+import '../domain/operational_boundary.dart';
 import '../domain/quick_message.dart';
 import '../domain/ride_coordination_mode.dart';
 import '../domain/ride_event.dart';
@@ -115,6 +117,10 @@ class RideController extends ChangeNotifier {
   List<PresenceRosterMember> _presenceRoster = const [];
   List<RideParticipant>? _membershipParticipantsCache;
   int _membershipProjectionCount = 0;
+  LandingZoneTarget? _landingZoneCache;
+  bool _landingZoneDirty = true;
+  List<OperationalBoundary> _operationalBoundaryCache = const [];
+  bool _operationalBoundaryDirty = true;
 
   /// True when this device cannot currently receive live positions at all, so a
   /// missing position is attributed to the transport rather than to the rider.
@@ -211,8 +217,24 @@ class RideController extends ChangeNotifier {
   ImportedRoute? get authoritativeRoute => _routeState.route;
 
   /// The latest pilot-authored intended landing area for this ride.
-  LandingZoneTarget? get landingZone =>
-      const LandingZoneReducer().fromEvents(_events);
+  LandingZoneTarget? get landingZone {
+    if (_landingZoneDirty) {
+      _landingZoneCache = const LandingZoneReducer().fromEvents(_events);
+      _landingZoneDirty = false;
+    }
+    return _landingZoneCache;
+  }
+
+  /// Pilot-authored advisory lines, areas and altitude bands for this flight.
+  List<OperationalBoundary> get operationalBoundaries {
+    if (_operationalBoundaryDirty) {
+      _operationalBoundaryCache = const OperationalBoundaryReducer().fromEvents(
+        _events,
+      );
+      _operationalBoundaryDirty = false;
+    }
+    return _operationalBoundaryCache;
+  }
 
   /// The reconciled live presence most recently observed, keyed by rider.
   List<LiveRiderPresence> get livePresence => List.unmodifiable(_livePresence);
@@ -647,6 +669,10 @@ class RideController extends ChangeNotifier {
     if (event.type != RideEventType.riderLocationUpdated) {
       _invalidateMembershipProjection();
     }
+    if (_affectsFlightSetup(event.type)) {
+      _landingZoneDirty = true;
+      _operationalBoundaryDirty = true;
+    }
     if (_affectsLifecycleOrRoute(event.type)) {
       _rebuildLifecycle();
     }
@@ -664,6 +690,16 @@ class RideController extends ChangeNotifier {
     RideEventType.routeRevisionChunk ||
     RideEventType.routeRevisionPublished ||
     RideEventType.routeCleared => true,
+    _ => false,
+  };
+
+  static bool _affectsFlightSetup(RideEventType type) => switch (type) {
+    RideEventType.rideCreated ||
+    RideEventType.riderJoined ||
+    RideEventType.roleChanged ||
+    RideEventType.landingAreaNoted ||
+    RideEventType.operationalBoundaryUpserted ||
+    RideEventType.operationalBoundaryRemoved => true,
     _ => false,
   };
 
@@ -1375,6 +1411,84 @@ class RideController extends ChangeNotifier {
     });
   }
 
+  Future<void> noteWindContext(FlightReplayWindContext context) async {
+    await _run(() async {
+      _requireSession();
+      if (!isLocalRideLeader) return;
+      final source = context.source.trim();
+      if (source.isEmpty ||
+          source.length > 120 ||
+          context.vectors.length > 32) {
+        throw const FormatException('Wind context is invalid.');
+      }
+      await _record(
+        type: RideEventType.windContextNoted,
+        priority: EventPriority.routine,
+        payload: {
+          'validAt': context.validAt.toUtc().toIso8601String(),
+          'source': source,
+          'isForecast': context.isForecast,
+          'latitude': context.position.latitude,
+          'longitude': context.position.longitude,
+          'altitudeDatum': 'wgs84Geoid',
+          'speedUnit': 'km/h',
+          'directionConvention': 'meteorological-from-degrees',
+          'vectors': [
+            for (final vector in context.vectors)
+              {
+                'altitudeMetersMsl': vector.altitudeMetersMsl,
+                'fromDegrees': vector.fromDegrees,
+                'speedKmh': vector.speedKmh,
+              },
+          ],
+        },
+      );
+    });
+  }
+
+  Future<void> upsertOperationalBoundary(OperationalBoundary boundary) async {
+    await _run(() async {
+      final session = _requireSession();
+      if (!isLocalRideLeader) {
+        throw const FormatException(
+          'Only the pilot can change operational boundaries.',
+        );
+      }
+      if (!boundary.isValid) {
+        throw const FormatException(
+          'Choose a valid line, area or altitude band.',
+        );
+      }
+      await _record(
+        type: RideEventType.operationalBoundaryUpserted,
+        priority: EventPriority.important,
+        payload: boundary.toEventPayload(leaderRiderId: session.localRiderId),
+      );
+    });
+  }
+
+  Future<void> removeOperationalBoundary(String boundaryId) async {
+    await _run(() async {
+      final session = _requireSession();
+      if (!isLocalRideLeader) {
+        throw const FormatException(
+          'Only the pilot can change operational boundaries.',
+        );
+      }
+      if (boundaryId.trim().isEmpty || boundaryId.length > 96) {
+        throw const FormatException('Boundary ID is invalid.');
+      }
+      await _record(
+        type: RideEventType.operationalBoundaryRemoved,
+        priority: EventPriority.important,
+        payload: {
+          'leaderRiderId': session.localRiderId,
+          'boundaryId': boundaryId,
+        },
+      );
+    });
+  }
+
   Future<void> clearRoute() async {
     await _run(() async {
       final session = _requireSession();
@@ -1752,6 +1866,7 @@ class RideController extends ChangeNotifier {
   /// risk rather than a certainty and says what happens next.
   String? get rideArchiveError => _rideArchiveError;
   String? _rideArchiveError;
+  bool includePeerReplayTracks = false;
 
   static const rideArchiveFailedMessage =
       'This flight could not be added to Previous flights. It is still on this '
@@ -1773,6 +1888,7 @@ class RideController extends ChangeNotifier {
       events: _events,
       archivedAt: archivedAt,
       plannedRoute: _routeState.route,
+      includePeerReplayTracks: includePeerReplayTracks,
     );
     // Caught here rather than left to `_run`, for two reasons. It gets the
     // rider a sentence about their ride record instead of the generic "that
@@ -1850,6 +1966,8 @@ class RideController extends ChangeNotifier {
       ..clear()
       ..addAll(_events.map((event) => event.id));
     _invalidateMembershipProjection();
+    _landingZoneDirty = true;
+    _operationalBoundaryDirty = true;
   }
 
   void _rebuildLifecycle() {

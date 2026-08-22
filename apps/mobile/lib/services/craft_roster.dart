@@ -166,6 +166,9 @@ class CraftRosterReducer {
         case RideEventType.iceInfoViewed:
         case RideEventType.riderContactShared:
         case RideEventType.landingAreaNoted:
+        case RideEventType.windContextNoted:
+        case RideEventType.operationalBoundaryUpserted:
+        case RideEventType.operationalBoundaryRemoved:
           break;
       }
     }

@@ -19,7 +19,7 @@
 ///  1. here, for building and parsing links;
 ///  2. `ios/Runner/*.entitlements`, as `applinks:<host>`, or iOS will not offer
 ///     the app when a link is tapped;
-///  3. `apps/website/.well-known/apple-app-site-association`, served by that
+///  3. `apps/planner/.well-known/apple-app-site-association`, served by that
 ///     host over HTTPS with no redirect, or iOS will not believe the app owns
 ///     it.
 ///

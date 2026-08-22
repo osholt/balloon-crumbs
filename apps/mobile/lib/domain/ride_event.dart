@@ -71,6 +71,20 @@ enum RideEventType {
   /// must route from its own position to a safe road-accessible point serving
   /// the area, while the balloon ground track remains independent.
   landingAreaNoted,
+
+  /// Timestamped wind context used during the flight.
+  ///
+  /// The payload always states whether it is forecast model output or an
+  /// observation, plus source, valid time, units and vertical reference. It is
+  /// replay evidence, never an authoritative weather claim.
+  windContextNoted,
+
+  /// A pilot-authored line, area or altitude band that should raise an
+  /// advisory warning when crossed. Several boundaries may coexist.
+  operationalBoundaryUpserted,
+
+  /// Removes one pilot-authored operational boundary by its stable ID.
+  operationalBoundaryRemoved,
 }
 
 enum EventPriority { routine, important, critical }

@@ -139,6 +139,9 @@ class LandingZoneReducer {
         case RideEventType.deviceAttachedToCraft:
         case RideEventType.craftPrimaryDeviceNominated:
         case RideEventType.craftChaseAssigned:
+        case RideEventType.windContextNoted:
+        case RideEventType.operationalBoundaryUpserted:
+        case RideEventType.operationalBoundaryRemoved:
           break;
       }
     }

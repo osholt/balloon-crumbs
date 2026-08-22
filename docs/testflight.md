@@ -213,7 +213,7 @@ Three things must name the same host, and only a test enforces it
 | --- | --- |
 | `lib/domain/app_links.dart` | `appLinkHost`, used to build and parse links |
 | `ios/Runner/{DebugProfile,Release}.entitlements` | `applinks:<host>` |
-| `apps/website/.well-known/apple-app-site-association` | `appIDs: ["UY4624PH6X.dev.osholt.ballooncrumbs"]` |
+| `apps/planner/.well-known/apple-app-site-association` | `appIDs: ["UY4624PH6X.dev.osholt.ballooncrumbs"]` |
 
 Get any one of them wrong and the failure is silent: the link opens Safari,
 which is exactly what a link that was never meant to open the app does. There is
@@ -225,7 +225,7 @@ The app side is done. The hosting side is not, and it is account access rather
 than code:
 
 1. Point `balloon-crumbs.tailendcharlie.app` at something that serves
-   `apps/website/`. A Cloudflare Pages project on this repository with that
+   `apps/planner/`. A Cloudflare Pages project on this repository with that
    custom domain is the cheapest option and matches how the sibling domain is
    already served.
 2. Confirm the file is reachable at exactly

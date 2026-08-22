@@ -4294,6 +4294,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await _addTrailLayers(controller, RiderTrailKind.leader);
       await _addTrailLayers(controller, RiderTrailKind.balloonGroundTrack);
       await _addTrailLayers(controller, RiderTrailKind.rider);
+      await _addTrailLayers(controller, RiderTrailKind.operationalBoundary);
       await controller.addGeoJsonSource(
         _remainingRouteSource,
         _remainingRouteGeoJson(),
@@ -4701,11 +4702,15 @@ class _RideMapScreenState extends State<RideMapScreen> {
     // Whole-group rides can hold more trail than the arrow budget allows, so
     // the cues a rider needs to interpret someone else's path come before the
     // ordinary ones.
-    final byImportance = _visibleRiderTrails.toList()
-      ..sort(
-        (first, second) =>
-            _arrowPriority(first.kind).compareTo(_arrowPriority(second.kind)),
-      );
+    final byImportance =
+        _visibleRiderTrails
+            .where((trace) => trace.kind != RiderTrailKind.operationalBoundary)
+            .toList()
+          ..sort(
+            (first, second) => _arrowPriority(
+              first.kind,
+            ).compareTo(_arrowPriority(second.kind)),
+          );
     final selected = selectTrailDirectionArrows<_TrailArrowStyle>(
       sampler: _trailDirectionArrowSampler,
       sources: [
@@ -4748,6 +4753,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     RiderTrailKind.balloonGroundTrack => 1,
     RiderTrailKind.leader => 1,
     RiderTrailKind.rider => 3,
+    RiderTrailKind.operationalBoundary => 4,
   };
 
   Map<String, dynamic> _trailDirectionArrowGeoJson() => MapGeoJson.points(

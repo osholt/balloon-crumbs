@@ -1,7 +1,7 @@
 /// Route preferences: what kind of road, and what size of vehicle.
 ///
 /// This file used to open by declaring itself the Dart half of a contract with
-/// `apps/website/planner-core.mjs`, pinned to it by tests on both sides and
+/// the inherited TEC website planner, pinned to it by tests on both sides and
 /// documented in `docs/route-twistiness.md`. None of those files exist, and none
 /// ever have in this repository — they belong to Tail End Charlie, which was
 /// never brought across. The claim cost real time to disprove, so it is written

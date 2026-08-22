@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const workerSource = await readFile(new URL("./_worker.js", import.meta.url), "utf8");
+const homeSource = await readFile(new URL("./index.html", import.meta.url), "utf8");
+const plannerSource = await readFile(new URL("./planner.html", import.meta.url), "utf8");
 const worker = await import(
   `data:text/javascript;base64,${Buffer.from(workerSource).toString("base64")}`
 );
@@ -220,17 +222,47 @@ test("the associated-domain planner path serves the planner shell", async () => 
     },
   );
 
-  assert.equal(requestedPath, "/index.html");
+  assert.equal(requestedPath, "/planner.html");
   assert.equal(await response.text(), "planner");
   assert.equal(response.headers.get("X-Frame-Options"), "DENY");
 });
 
-test("the old Pages planner path redirects to the root planner URL", async () => {
+test("the old Pages planner path redirects to the named planner URL", async () => {
   const response = await worker.default.fetch(
     new Request("https://balloon-crumbs.pages.dev/plan/?example=yes"),
     { ASSETS: { fetch: assert.fail } },
   );
 
   assert.equal(response.status, 308);
-  assert.equal(response.headers.get("Location"), "https://balloon-crumbs.pages.dev/?example=yes");
+  assert.equal(
+    response.headers.get("Location"),
+    "https://balloon-crumbs.pages.dev/planner.html?example=yes",
+  );
+});
+
+test("the root serves the product home rather than the planner", async () => {
+  let requestedPath;
+  const response = await worker.default.fetch(
+    new Request("https://balloon-crumbs.pages.dev/"),
+    {
+      ASSETS: {
+        async fetch(request) {
+          requestedPath = new URL(request.url).pathname;
+          return new Response("home", { headers: { "Content-Type": "text/html" } });
+        },
+      },
+    },
+  );
+
+  assert.equal(requestedPath, "/");
+  assert.equal(await response.text(), "home");
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+});
+
+test("the product home leads to the separately styled planner", () => {
+  assert.match(homeSource, /One balloon\./);
+  assert.match(homeSource, /href="\/planner\.html"/);
+  assert.doesNotMatch(homeSource, /id="map"/);
+  assert.match(plannerSource, /id="map"/);
+  assert.match(plannerSource, /href="planner\.css"/);
 });

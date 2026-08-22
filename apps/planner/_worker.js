@@ -50,7 +50,6 @@ export function oracleUrl(requestUrl) {
 }
 
 export function assetPath(pathname) {
-  if (pathname === "/planner.html") return "/index.html";
   return pathname;
 }
 
@@ -202,7 +201,7 @@ export default {
     }
 
     if (url.pathname === "/plan" || url.pathname === "/plan/") {
-      url.pathname = "/";
+      url.pathname = "/planner.html";
       return Response.redirect(url, 308);
     }
 

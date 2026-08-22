@@ -72,6 +72,8 @@
 
 	handle_path /plan/* {
 		root * /srv/planner
+		@planner_shell path /
+		rewrite @planner_shell /planner.html
 		header Content-Security-Policy "default-src 'self'"
 		header X-Content-Type-Options "nosniff"
 		file_server
@@ -79,7 +81,7 @@
 
 	@observer_static path /observer.html /observer.css /observer.js /observer-core.mjs /styles.css /assets/*
 	handle @observer_static {
-		root * /srv/website
+		root * /srv/planner
 		header Cache-Control "no-store"
 		header Pragma "no-cache"
 		header Referrer-Policy "no-referrer"
@@ -164,7 +166,7 @@
 
 	@observer_static path /observer.html /observer.css /observer.js /observer-core.mjs /styles.css /assets/*
 	handle @observer_static {
-		root * /srv/website
+		root * /srv/planner
 		header Cache-Control "no-store"
 		header Pragma "no-cache"
 		header Referrer-Policy "no-referrer"

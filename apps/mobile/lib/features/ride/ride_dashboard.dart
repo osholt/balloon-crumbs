@@ -606,6 +606,11 @@ class _EventRow extends StatelessWidget {
         '${event.payload['vehicleLabel'] ?? 'A vehicle'} is now chasing '
             '${event.payload['targetLabel'] ?? 'the balloon'}',
       RideEventType.landingAreaNoted => 'Intended landing area updated',
+      RideEventType.windContextNoted => 'Wind context recorded for replay',
+      RideEventType.operationalBoundaryUpserted =>
+        'Operational boundary updated',
+      RideEventType.operationalBoundaryRemoved =>
+        'Operational boundary removed',
       // #188. The activity list says a number was shared and with whom, never
       // what the number is: this is a log, not a place to read a number off a
       // screen.

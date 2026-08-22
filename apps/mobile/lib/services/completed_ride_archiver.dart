@@ -3,6 +3,7 @@ import '../domain/imported_route.dart';
 import '../domain/ride_event.dart';
 import '../domain/ride_session.dart';
 import 'ride_summary_exporter.dart';
+import 'flight_replay_archiver.dart';
 
 class CompletedRideArchiver {
   const CompletedRideArchiver({
@@ -16,10 +17,12 @@ class CompletedRideArchiver {
     required Iterable<RideEvent> events,
     required DateTime archivedAt,
     ImportedRoute? plannedRoute,
+    bool includePeerReplayTracks = false,
   }) {
+    final archivedEvents = events.toList(growable: false);
     final summary = summaryExporter.summarize(
       session,
-      events,
+      archivedEvents,
       generatedAt: archivedAt,
     );
     return CompletedRide(
@@ -37,8 +40,15 @@ class CompletedRideArchiver {
       plannedRoute: plannedRoute,
       traveledRoute: summaryExporter.traveledRoute(
         session,
-        events,
+        archivedEvents,
         generatedAt: archivedAt,
+      ),
+      replay: const FlightReplayArchiver().create(
+        session: session,
+        events: archivedEvents,
+        startedAt: summary.startedAt,
+        endedAt: summary.endedAt ?? archivedAt,
+        includePeerTracks: includePeerReplayTracks,
       ),
     );
   }

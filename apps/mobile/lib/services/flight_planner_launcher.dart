@@ -10,9 +10,11 @@ typedef FlightPlannerUriOpener = Future<bool> Function(Uri uri);
 class FlightPlannerLauncher {
   const FlightPlannerLauncher({this.openUri});
 
-  static final plannerUri = Uri.https('balloon-crumbs.pages.dev', '/', const {
-    'source': 'mobile-app',
-  });
+  static final plannerUri = Uri.https(
+    'balloon-crumbs.pages.dev',
+    '/planner.html',
+    const {'source': 'mobile-app'},
+  );
 
   final FlightPlannerUriOpener? openUri;
 

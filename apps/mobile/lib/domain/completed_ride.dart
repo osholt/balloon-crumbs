@@ -1,4 +1,5 @@
 import 'imported_route.dart';
+import 'flight_replay.dart';
 import 'ride_role.dart';
 
 /// A secret-free, immutable local record derived from a completed ride.
@@ -20,9 +21,10 @@ class CompletedRide {
     required this.totalDistanceMeters,
     required this.plannedRoute,
     required this.traveledRoute,
+    this.replay,
   });
 
-  static const schemaVersion = 1;
+  static const schemaVersion = 2;
 
   final String rideId;
   final String rideCode;
@@ -37,6 +39,7 @@ class CompletedRide {
   final double totalDistanceMeters;
   final ImportedRoute? plannedRoute;
   final ImportedRoute? traveledRoute;
+  final FlightReplay? replay;
 
   String get title => rideName?.trim().isNotEmpty == true
       ? rideName!.trim()
@@ -73,10 +76,12 @@ class CompletedRide {
     'totalDistanceMeters': totalDistanceMeters,
     if (plannedRoute != null) 'plannedRoute': plannedRoute!.toJson(),
     if (traveledRoute != null) 'traveledRoute': traveledRoute!.toJson(),
+    if (replay != null) 'replay': replay!.toJson(),
   };
 
   factory CompletedRide.fromJson(Map<String, Object?> json) {
-    if (json['schemaVersion'] != schemaVersion) {
+    final version = json['schemaVersion'];
+    if (version != 1 && version != schemaVersion) {
       throw FormatException(
         'Unsupported completed ride schema: ${json['schemaVersion']}',
       );
@@ -96,6 +101,7 @@ class CompletedRide {
           (json['totalDistanceMeters'] as num?)?.toDouble() ?? 0,
       plannedRoute: _optionalRoute(json['plannedRoute']),
       traveledRoute: _optionalRoute(json['traveledRoute']),
+      replay: version == 1 ? null : _optionalReplay(json['replay']),
     );
   }
 
@@ -105,6 +111,16 @@ class CompletedRide {
       return ImportedRoute.fromJson(Map<String, Object?>.from(value));
     } on FormatException {
       // Preserve useful summary metadata when optional geometry is damaged.
+      return null;
+    }
+  }
+
+  static FlightReplay? _optionalReplay(Object? value) {
+    if (value is! Map) return null;
+    try {
+      return FlightReplay.fromJson(Map<String, Object?>.from(value));
+    } on Object {
+      // A damaged optional replay must not hide the flight summary or GPX.
       return null;
     }
   }

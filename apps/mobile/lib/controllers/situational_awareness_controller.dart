@@ -71,6 +71,7 @@ class SituationalAwarenessController extends ChangeNotifier {
   final List<LocationSample> _leaderTrail = [];
   bool _busy = false;
   bool _refreshingStaleness = false;
+  bool _disposed = false;
   String? _errorMessage;
 
   bool get busy => _busy;
@@ -159,6 +160,7 @@ class SituationalAwarenessController extends ChangeNotifier {
   }
 
   Future<void> initialize({Iterable<RideEvent>? restoredEvents}) async {
+    if (_disposed) return;
     final events =
         restoredEvents ?? await _eventStore.eventsForRide(_session.rideId);
     var replayed = 0;
@@ -171,10 +173,11 @@ class SituationalAwarenessController extends ChangeNotifier {
       // (#209).
       if (replayed % 250 == 0) {
         await Future<void>.delayed(Duration.zero);
+        if (_disposed) return;
       }
     }
     _removeExpiredHazards();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> recordLocalLocation(LocationSample sample) async {
@@ -268,6 +271,7 @@ class SituationalAwarenessController extends ChangeNotifier {
   }
 
   Future<void> ingestRemoteEvent(RideEvent event) async {
+    if (_disposed) return;
     if (event.rideId != _session.rideId ||
         !_supportedSituationalEventTypes.contains(event.type)) {
       throw const FormatException('Event is not valid for this ride.');
@@ -276,6 +280,7 @@ class SituationalAwarenessController extends ChangeNotifier {
       throw const FormatException('Event signature is invalid.');
     }
     await _eventStore.append(event);
+    if (_disposed) return;
     _applyEvent(event);
     onEventStored?.call(event);
     notifyListeners();
@@ -323,23 +328,25 @@ class SituationalAwarenessController extends ChangeNotifier {
   }
 
   Future<void> refreshStaleness() async {
-    if (_refreshingStaleness) return;
+    if (_disposed || _refreshingStaleness) return;
     _refreshingStaleness = true;
     try {
       _removeExpiredHazards();
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     } finally {
       _refreshingStaleness = false;
     }
   }
 
   void clearError() {
+    if (_disposed) return;
     _errorMessage = null;
     notifyListeners();
   }
 
   Future<void> _appendAndApply(RideEvent event) async {
     await _eventStore.append(event);
+    if (_disposed) return;
     _applyEvent(event);
     onEventStored?.call(event);
   }
@@ -410,6 +417,9 @@ class SituationalAwarenessController extends ChangeNotifier {
       case RideEventType.craftPrimaryDeviceNominated:
       case RideEventType.craftChaseAssigned:
       case RideEventType.landingAreaNoted:
+      case RideEventType.windContextNoted:
+      case RideEventType.operationalBoundaryUpserted:
+      case RideEventType.operationalBoundaryRemoved:
         break;
     }
     if (!replaying) {
@@ -491,7 +501,7 @@ class SituationalAwarenessController extends ChangeNotifier {
   }
 
   Future<void> _run(Future<void> Function() operation) async {
-    if (_busy) {
+    if (_disposed || _busy) {
       return;
     }
     _busy = true;
@@ -508,8 +518,14 @@ class SituationalAwarenessController extends ChangeNotifier {
       }
     } finally {
       _busy = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   static Map<String, Object?> _mapPayload(Object? value) =>

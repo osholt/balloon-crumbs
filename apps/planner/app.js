@@ -10,12 +10,14 @@ import {
   forecastRepresentativeRoute,
   interpolatedVectorAtPosition,
   openMeteoRequestUrl,
+  normaliseOperationalBoundary,
+  operationalBoundariesGeoJson,
   parseOpenMeteoForecast,
   planWindRouteToDestination,
 } from "./planner-core.mjs";
 
 // Keep the installed-app hand-off on its already-shipped associated domain.
-// The planner itself is hosted at balloon-crumbs.pages.dev.
+// The planner itself is hosted at balloon-crumbs.pages.dev/planner.html.
 const APP_LINK_ORIGIN = "https://balloon-crumbs.tailendcharlie.app";
 const FORECAST_AREA_RADIUS_METRES = 750;
 const INTENDED_AREA_RADIUS_METRES = 400;
@@ -61,16 +63,28 @@ const MAP_PALETTES = Object.freeze({
 const elements = Object.fromEntries(
   [
     "airspace-toggle",
+    "add-altitude-boundary",
+    "boundary-altitude-datum",
+    "boundary-list",
+    "boundary-lower-altitude",
+    "boundary-name",
+    "boundary-source",
+    "boundary-status",
+    "boundary-upper-altitude",
+    "cancel-boundary",
     "clock",
     "code-result",
     "copy-code",
     "clear-destination",
     "departure-time",
+    "draw-boundary-area",
+    "draw-boundary-line",
     "forecast-distance",
     "forecast-summary",
     "forecast-validity",
     "flight-profile",
     "flight-profile-title",
+    "finish-boundary",
     "generate-code",
     "generate-status",
     "launch-elevation",
@@ -134,6 +148,8 @@ const state = {
   placeSearchRequest: null,
   lastPlaceSearchAt: 0,
   mapTileFailures: 0,
+  operationalBoundaries: [],
+  operationalBoundaryDraft: null,
 };
 
 function setStatus(element, message, kind = "") {
@@ -507,6 +523,28 @@ function addPlannerLayers(map) {
     type: "geojson",
     data: landingEnvelopeFeature(null),
   });
+  map.addSource("operational-boundaries", {
+    type: "geojson",
+    data: operationalBoundariesGeoJson(state.operationalBoundaries),
+  });
+  map.addLayer({
+    id: "operational-boundaries-fill",
+    type: "fill",
+    source: "operational-boundaries",
+    filter: ["==", ["geometry-type"], "Polygon"],
+    paint: { "fill-color": "#ff806c", "fill-opacity": 0.12 },
+  });
+  map.addLayer({
+    id: "operational-boundaries-line",
+    type: "line",
+    source: "operational-boundaries",
+    paint: {
+      "line-color": "#ff806c",
+      "line-width": 4,
+      "line-dasharray": [2.5, 1.75],
+    },
+    layout: { "line-cap": "round", "line-join": "round" },
+  });
   map.addLayer({
     id: "landing-envelope-fill",
     type: "fill",
@@ -728,6 +766,14 @@ function updateSources() {
   state.map
     .getSource("intended-area")
     ?.setData(polygonFeature(state.intendedLanding, INTENDED_AREA_RADIUS_METRES));
+  state.map
+    .getSource("operational-boundaries")
+    ?.setData(
+      operationalBoundariesGeoJson(
+        state.operationalBoundaries,
+        state.operationalBoundaryDraft,
+      ),
+    );
 }
 
 function fitForecast() {
@@ -1115,6 +1161,181 @@ function beginMapChoice(mode) {
       : "Click the map to set the intended destination; drag the pin later to adjust";
 }
 
+const OPERATIONAL_BOUNDARY_STORAGE_KEY = "balloon-crumbs.operational-boundaries.v1";
+
+function boundaryId() {
+  return globalThis.crypto?.randomUUID?.() ?? `boundary-${Date.now()}`;
+}
+
+function boundaryDescription(boundary) {
+  const geometry = boundary.kind === "line" ? "Line" : boundary.kind === "area" ? "Area" : "Altitude";
+  const limits = [
+    boundary.lowerAltitudeMeters === null ? null : `min ${boundary.lowerAltitudeMeters} m`,
+    boundary.upperAltitudeMeters === null ? null : `max ${boundary.upperAltitudeMeters} m`,
+  ].filter(Boolean);
+  return `${geometry}${limits.length ? ` · ${limits.join(" · ")} · ${boundary.altitudeDatum}` : ""} · ${boundary.source}`;
+}
+
+function persistOperationalBoundaries() {
+  try {
+    localStorage.setItem(
+      OPERATIONAL_BOUNDARY_STORAGE_KEY,
+      JSON.stringify(state.operationalBoundaries),
+    );
+  } catch {
+    setStatus(
+      elements.boundary_status,
+      "Boundaries are visible now but this browser could not save them.",
+      "error",
+    );
+  }
+}
+
+function renderOperationalBoundaries() {
+  elements.boundary_list.replaceChildren();
+  for (const boundary of state.operationalBoundaries) {
+    const item = document.createElement("li");
+    const copy = document.createElement("div");
+    const title = document.createElement("strong");
+    const detail = document.createElement("small");
+    const remove = document.createElement("button");
+    title.textContent = boundary.label;
+    detail.textContent = boundaryDescription(boundary);
+    remove.type = "button";
+    remove.textContent = "Remove";
+    remove.setAttribute("aria-label", `Remove ${boundary.label}`);
+    remove.addEventListener("click", () => {
+      state.operationalBoundaries = state.operationalBoundaries.filter(
+        (candidate) => candidate.id !== boundary.id,
+      );
+      persistOperationalBoundaries();
+      renderOperationalBoundaries();
+      updateSources();
+      setStatus(elements.boundary_status, `${boundary.label} removed.`);
+    });
+    copy.append(title, detail);
+    item.append(copy, remove);
+    elements.boundary_list.append(item);
+  }
+}
+
+function loadOperationalBoundaries() {
+  try {
+    const decoded = JSON.parse(localStorage.getItem(OPERATIONAL_BOUNDARY_STORAGE_KEY) ?? "[]");
+    state.operationalBoundaries = Array.isArray(decoded)
+      ? decoded.flatMap((value) => {
+          try {
+            return [normaliseOperationalBoundary(value)];
+          } catch {
+            return [];
+          }
+        })
+      : [];
+  } catch {
+    state.operationalBoundaries = [];
+  }
+  renderOperationalBoundaries();
+}
+
+function boundaryLabelAndSource() {
+  const label = elements.boundary_name.value.trim();
+  const source = elements.boundary_source.value.trim();
+  if (!label || !source) throw new Error("Add a boundary name and source first.");
+  return { label, source };
+}
+
+function beginOperationalBoundary(kind) {
+  try {
+    const { label, source } = boundaryLabelAndSource();
+    state.operationalBoundaryDraft = { id: boundaryId(), label, source, kind, points: [] };
+    state.mode = "boundary";
+    elements.finish_boundary.disabled = true;
+    elements.cancel_boundary.disabled = false;
+    elements.map_prompt.hidden = false;
+    elements.map_prompt.textContent =
+      kind === "line" ? "Click two points for the boundary line" : "Click at least three corners, then finish the area";
+    setStatus(elements.boundary_status, "Boundary drawing started. Map points are approximate.");
+    updateSources();
+  } catch (error) {
+    setStatus(elements.boundary_status, error.message, "error");
+  }
+}
+
+function cancelOperationalBoundary() {
+  state.operationalBoundaryDraft = null;
+  state.mode = null;
+  elements.finish_boundary.disabled = true;
+  elements.cancel_boundary.disabled = true;
+  elements.map_prompt.hidden = true;
+  updateSources();
+  setStatus(elements.boundary_status, "Boundary drawing cancelled.");
+}
+
+function finishOperationalBoundary() {
+  const draft = state.operationalBoundaryDraft;
+  if (!draft) return;
+  try {
+    const boundary = normaliseOperationalBoundary({
+      ...draft,
+      lowerAltitudeMeters: null,
+      upperAltitudeMeters: null,
+      altitudeDatum: "wgs84Geoid",
+    });
+    state.operationalBoundaries = [...state.operationalBoundaries, boundary];
+    state.operationalBoundaryDraft = null;
+    state.mode = null;
+    elements.finish_boundary.disabled = true;
+    elements.cancel_boundary.disabled = true;
+    elements.map_prompt.hidden = true;
+    persistOperationalBoundaries();
+    renderOperationalBoundaries();
+    updateSources();
+    setStatus(elements.boundary_status, `${boundary.label} saved in this browser.`, "good");
+  } catch (error) {
+    setStatus(elements.boundary_status, error.message, "error");
+  }
+}
+
+function addOperationalBoundaryPoint(point) {
+  const draft = state.operationalBoundaryDraft;
+  if (!draft) return;
+  draft.points.push({ latitude: point.lat, longitude: point.lng });
+  elements.finish_boundary.disabled = draft.kind !== "area" || draft.points.length < 3;
+  updateSources();
+  if (draft.kind === "line" && draft.points.length >= 2) finishOperationalBoundary();
+}
+
+function optionalNumber(element) {
+  const raw = element.value.trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) throw new Error("Altitude limits must be numbers.");
+  return value;
+}
+
+function addAltitudeBoundary() {
+  try {
+    const { label, source } = boundaryLabelAndSource();
+    const boundary = normaliseOperationalBoundary({
+      id: boundaryId(),
+      label,
+      source,
+      kind: "altitudeBand",
+      points: [],
+      lowerAltitudeMeters: optionalNumber(elements.boundary_lower_altitude),
+      upperAltitudeMeters: optionalNumber(elements.boundary_upper_altitude),
+      altitudeDatum: elements.boundary_altitude_datum.value,
+    });
+    state.operationalBoundaries = [...state.operationalBoundaries, boundary];
+    persistOperationalBoundaries();
+    renderOperationalBoundaries();
+    updateSources();
+    setStatus(elements.boundary_status, `${boundary.label} saved in this browser.`, "good");
+  } catch (error) {
+    setStatus(elements.boundary_status, error.message, "error");
+  }
+}
+
 function useDeviceLocation() {
   if (!("geolocation" in navigator)) {
     setStatus(elements.launch_status, "This browser cannot provide a location.", "error");
@@ -1212,6 +1433,11 @@ function bindControls() {
   elements.max_descent_rate.addEventListener("change", () => recomputeTrack({ fit: true }));
   elements.generate_code.addEventListener("click", () => void generatePlanCode());
   elements.copy_code.addEventListener("click", () => void copyPlanCode());
+  elements.draw_boundary_line.addEventListener("click", () => beginOperationalBoundary("line"));
+  elements.draw_boundary_area.addEventListener("click", () => beginOperationalBoundary("area"));
+  elements.finish_boundary.addEventListener("click", finishOperationalBoundary);
+  elements.cancel_boundary.addEventListener("click", cancelOperationalBoundary);
+  elements.add_altitude_boundary.addEventListener("click", addAltitudeBoundary);
 }
 
 async function start() {
@@ -1223,6 +1449,7 @@ async function start() {
   updateClock();
   window.setInterval(updateClock, 1_000);
   bindControls();
+  loadOperationalBoundaries();
   updateWindMarkers();
   try {
     setMapStatus("Loading basemap tiles…");
@@ -1264,6 +1491,7 @@ async function start() {
       state.map.on("click", (event) => {
         if (state.mode === "launch") chooseLaunch(event.lngLat);
         else if (state.mode === "landing") void chooseLanding(event.lngLat);
+        else if (state.mode === "boundary") addOperationalBoundaryPoint(event.lngLat);
       });
     });
   } catch (error) {

@@ -84,6 +84,8 @@
 
 	handle_path /plan/* {
 		root * /srv/planner
+		@planner_shell path /
+		rewrite @planner_shell /planner.html
 		header Content-Security-Policy "default-src 'self'"
 		header X-Content-Type-Options "nosniff"
 		file_server
@@ -91,7 +93,7 @@
 
 	@observer_static path /observer.html /observer.css /observer.js /observer-core.mjs /styles.css /assets/*
 	handle @observer_static {
-		root * /srv/website
+		root * /srv/planner
 		header Cache-Control "no-store"
 		header Pragma "no-cache"
 		header Referrer-Policy "no-referrer"
@@ -107,7 +109,7 @@
 	# else, so without this the association file would be present in the image
 	# and unreachable - which fails as a link that quietly opens Safari instead.
 	handle /.well-known/apple-app-site-association {
-		root * /srv/website
+		root * /srv/planner
 		header Content-Type "application/json"
 		header Cache-Control "no-store"
 		header X-Content-Type-Options "nosniff"

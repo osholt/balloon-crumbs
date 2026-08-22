@@ -47,7 +47,7 @@ void main() {
     final association =
         jsonDecode(
               File(
-                '../website/.well-known/apple-app-site-association',
+                '../planner/.well-known/apple-app-site-association',
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
@@ -76,7 +76,7 @@ void main() {
     final association =
         jsonDecode(
               File(
-                '../website/.well-known/apple-app-site-association',
+                '../planner/.well-known/apple-app-site-association',
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
