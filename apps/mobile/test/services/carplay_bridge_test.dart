@@ -228,6 +228,20 @@ void main() {
     expect(solo.warning, isNull);
 
     expect(project(isGroup: true)!.warning, isNull);
+
+    final forecast = CarPlayRideStart.project(
+      hasSession: true,
+      isLeader: true,
+      rideStarted: false,
+      rideEnded: false,
+      busy: false,
+      locationReady: true,
+      isGroup: true,
+      routeName: 'Bath forecast',
+      routeIsBalloonForecast: true,
+    )!;
+    expect(forecast.detail, contains('This is advisory'));
+    expect(forecast.detail, isNot(contains('navigation will start')));
   });
 
   test(

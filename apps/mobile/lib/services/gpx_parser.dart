@@ -84,8 +84,10 @@ class GpxParser {
     }
 
     final paths = <RoutePath>[];
+    var purpose = ImportedRoutePurpose.unspecified;
     for (final track in _children(root, 'trk')) {
       final trackName = _childText(track, 'name');
+      final trackPurpose = _childText(track, 'type')?.trim().toLowerCase();
       final isCalculatedRoadRoute = _children(track, 'extensions')
           .expand((extensions) => extensions.childElements)
           .any(
@@ -100,6 +102,9 @@ class GpxParser {
           'trkpt',
         ).map(parsePoint).toList(growable: false);
         if (points.isEmpty) continue;
+        if (trackPurpose == 'balloon-flight-forecast') {
+          purpose = ImportedRoutePurpose.balloonForecast;
+        }
         final segmentName = segments.length > 1 && trackName != null
             ? '$trackName · segment ${index + 1}'
             : trackName;
@@ -194,6 +199,7 @@ class GpxParser {
           firstPathName ??
           _nameWithoutExtension(sourceFileName),
       description: metadata == null ? null : _childText(metadata, 'desc'),
+      purpose: purpose,
       importedAt: importedAt.toUtc(),
       sourceFileName: sourceFileName,
       paths: selectedPaths,

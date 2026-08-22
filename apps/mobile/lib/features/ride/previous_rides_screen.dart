@@ -374,7 +374,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
                 title: Text('Which route should be reused?'),
                 subtitle: Text(
                   'The planned route is recommended. The recorded track '
-                  'includes where the bike actually went.',
+                  'includes where the crew vehicle actually went.',
                 ),
               ),
               for (final option in candidates)

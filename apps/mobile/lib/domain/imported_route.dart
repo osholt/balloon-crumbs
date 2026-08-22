@@ -7,6 +7,15 @@ export 'route_preferences.dart';
 
 enum RoutePathKind { track, route }
 
+/// What an imported line represents, when its source states that explicitly.
+///
+/// Most GPX files do not carry enough semantics to distinguish a recorded road
+/// track from any other line, so [unspecified] preserves the existing import
+/// and optional road-matching flow. The web planner does state that its output
+/// is a forecast balloon flight; retaining that distinction prevents it from
+/// being offered as turn-by-turn road navigation.
+enum ImportedRoutePurpose { unspecified, balloonForecast }
+
 class GeoPoint {
   const GeoPoint({
     required this.latitude,
@@ -336,6 +345,7 @@ class ImportedRoute {
     this.shapingPoints = const [],
     this.maneuvers = const [],
     this.description,
+    this.purpose = ImportedRoutePurpose.unspecified,
     this.preferences,
     this.plannedDuration,
   });
@@ -345,6 +355,7 @@ class ImportedRoute {
   final String id;
   final String name;
   final String? description;
+  final ImportedRoutePurpose purpose;
   final DateTime importedAt;
   final String sourceFileName;
   final List<RoutePath> paths;
@@ -369,6 +380,8 @@ class ImportedRoute {
   /// defaults.
   final RoutePreferences? preferences;
 
+  bool get isBalloonForecast => purpose == ImportedRoutePurpose.balloonForecast;
+
   Iterable<GeoPoint> get allPoints sync* {
     for (final path in paths) {
       yield* path.points;
@@ -386,6 +399,7 @@ class ImportedRoute {
         id: id,
         name: name,
         description: description,
+        purpose: purpose,
         importedAt: importedAt,
         sourceFileName: sourceFileName,
         paths: paths,
@@ -401,6 +415,7 @@ class ImportedRoute {
     'id': id,
     'name': name,
     if (description != null) 'description': description,
+    if (purpose != ImportedRoutePurpose.unspecified) 'purpose': purpose.name,
     'importedAt': importedAt.toUtc().toIso8601String(),
     'sourceFileName': sourceFileName,
     'paths': paths.map((path) => path.toJson()).toList(),
@@ -479,6 +494,11 @@ class ImportedRoute {
       id: _requiredString(json, 'id'),
       name: _requiredString(json, 'name'),
       description: description,
+      purpose: _enumByName(
+        ImportedRoutePurpose.values,
+        json['purpose'],
+        ImportedRoutePurpose.unspecified,
+      ),
       importedAt: DateTime.parse(_requiredString(json, 'importedAt')).toUtc(),
       sourceFileName: sourceFileName,
       paths: paths,

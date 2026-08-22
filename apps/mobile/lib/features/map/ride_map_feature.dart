@@ -1169,6 +1169,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     final start = _plannedRouteStart;
     final route = _route;
     if (position == null || start == null || route == null) return null;
+    if (route.isBalloonForecast) return null;
     if (_progressGeometry.progressMeters > 50 ||
         distanceToRouteMeters(route, position) <= 250) {
       return null;
@@ -1490,7 +1491,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   ),
                 // Route-derived: there is nothing to hand to another
                 // navigation app or write to a GPX without one.
-                if (!_isBalloonView && _route != null)
+                if (!_isBalloonView &&
+                    _route != null &&
+                    !_route!.isBalloonForecast)
                   IconButton(
                     tooltip: 'Navigate or export route',
                     visualDensity: compactDensity,
@@ -1503,11 +1506,15 @@ class _RideMapScreenState extends State<RideMapScreen> {
                         : const Icon(Icons.alt_route),
                   ),
                 IconButton(
-                  tooltip: 'Fit route',
+                  tooltip: _route?.isBalloonForecast == true
+                      ? 'Fit forecast plan'
+                      : 'Fit route',
                   visualDensity: compactDensity,
                   // Route-derived: fitting the whole plan needs a plan. The
                   // rider's own framing is the follow camera's job.
-                  onPressed: _isBalloonView || _route == null
+                  onPressed:
+                      (_isBalloonView && _route?.isBalloonForecast != true) ||
+                          _route == null
                       ? null
                       : _showWholeRoute,
                   icon: const Icon(Icons.fit_screen),
@@ -1930,6 +1937,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           : null;
       final routeProgressPanel =
           _isBalloonView ||
+              _route?.isBalloonForecast == true ||
               !widget.showRouteProgress ||
               _route == null ||
               _progressGeometry.totalMeters <= 0
@@ -2537,10 +2545,13 @@ class _RideMapScreenState extends State<RideMapScreen> {
   Widget _buildMap() {
     if (_basemap.usesMapLibre) return _buildMapLibreMap();
 
-    final route = _isBalloonView ? null : _route;
+    final route = _isBalloonView && _route?.isBalloonForecast != true
+        ? null
+        : _route;
     final framingPoints = <GeoPoint>[
       ...(_isBalloonView
-          ? _balloonGroundTrackPoints
+          ? route?.allPoints.toList(growable: false) ??
+                _balloonGroundTrackPoints
           : route?.allPoints.toList(growable: false) ?? const <GeoPoint>[]),
       ...?_landingZone?.boundary,
     ];
@@ -2638,8 +2649,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
           PolylineLayer(
             polylines: [
               ..._trailPolylines(dashed: false),
-              if (!_isBalloonView)
-                ..._progressGeometry.remainingPaths.map(
+              if (_displayedRoutePaths.isNotEmpty)
+                ..._displayedRoutePaths.map(
                   (path) => _routePolyline(path, RouteTrailStyle.routeAhead),
                 ),
               ..._trailPolylines(dashed: true),
@@ -3429,14 +3440,15 @@ class _RideMapScreenState extends State<RideMapScreen> {
     _speedLimitDisplay.observe(location);
     _speedLimitDisplay.prefetchAhead(
       current: location,
-      routeAhead:
-          _navigationProgressGeometry.remainingPaths.firstOrNull ??
-          const <GeoPoint>[],
+      routeAhead: _route?.isBalloonForecast == true
+          ? const <GeoPoint>[]
+          : _navigationProgressGeometry.remainingPaths.firstOrNull ??
+                const <GeoPoint>[],
     );
   }
 
   void _updateNavigationGuidance(GeoPoint? position) {
-    if (_isBalloonView) {
+    if (_isBalloonView || _route?.isBalloonForecast == true) {
       final current = _navigationGuidance.value;
       if (current.state != NavigationGuidanceState.noRoute) {
         _navigationGuidance.value =
@@ -4611,12 +4623,17 @@ class _RideMapScreenState extends State<RideMapScreen> {
     }
   }
 
-  Map<String, dynamic> _remainingRouteGeoJson() => MapGeoJson.lines(
-    _isBalloonView
+  Map<String, dynamic> _remainingRouteGeoJson() =>
+      MapGeoJson.lines(_displayedRoutePaths, idPrefix: 'remaining-route');
+
+  List<List<GeoPoint>> get _displayedRoutePaths {
+    if (_route?.isBalloonForecast == true) {
+      return _route!.paths.map((path) => path.points).toList(growable: false);
+    }
+    return _isBalloonView
         ? const <List<GeoPoint>>[]
-        : _progressGeometry.remainingPaths,
-    idPrefix: 'remaining-route',
-  );
+        : _progressGeometry.remainingPaths;
+  }
 
   /// Every rider's travelled trail with enough geometry to draw. Rendering is
   /// deliberately independent of whether a route is loaded or matched (#100).
@@ -4718,9 +4735,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
     final selected = selectTrailDirectionArrows<_TrailArrowStyle>(
       sampler: _trailDirectionArrowSampler,
       sources: [
-        if (!_isBalloonView)
+        if (_displayedRoutePaths.isNotEmpty)
           TrailDirectionArrowSource(
-            paths: _progressGeometry.remainingPaths,
+            paths: _displayedRoutePaths,
             reserve: _plannedRouteArrowReserve,
             style: _TrailArrowStyle(
               color: RouteTrailStyle.routeAhead.color,
@@ -5020,7 +5037,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     } on FormatException catch (error) {
       _showMessage(error.message);
     } on Object catch (error) {
-      _showMessage('Could not load planned route: $error');
+      _showMessage('Could not load forecast plan: $error');
     } finally {
       if (mounted) setState(() => _importing = false);
     }
@@ -5031,7 +5048,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     return showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Load a planned route'),
+        title: const Text('Load a forecast flight plan'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -5180,7 +5197,13 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }) async {
     if (!widget.canEditRoute) {
       throw const FormatException(
-        'Only the pilot or coordinator can replace the crew route.',
+        'Only the pilot or coordinator can replace the shared flight plan or chase route.',
+      );
+    }
+    if (_isBalloonView && !route.isBalloonForecast) {
+      throw const FormatException(
+        'The balloon view accepts forecast flight plans, not road routes. '
+        'Open the chase view to import or plan road guidance.',
       );
     }
     ImportedRoute? comparisonRoute;
@@ -5232,10 +5255,16 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }) async {
     if (!widget.canEditRoute) {
       throw const FormatException(
-        'Only the pilot or coordinator can replace the crew route.',
+        'Only the pilot or coordinator can replace the shared flight plan or chase route.',
       );
     }
-    final enrichment = await _routeGeometryEnricher.enrich(route);
+    final enrichment = route.isBalloonForecast
+        ? RouteGeometryEnrichment(
+            route: route,
+            attempted: false,
+            snappedPathCount: 0,
+          )
+        : await _routeGeometryEnricher.enrich(route);
     final activeRoute = enrichment.route;
     if (!mounted) return null;
     final confirmationWarnings = [
@@ -5261,7 +5290,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   bool _canGenerateNavigableRoute(ImportedRoute route) {
     final drawablePaths = route.paths.where((path) => path.points.length >= 2);
-    return route.maneuvers.isEmpty &&
+    return !route.isBalloonForecast &&
+        route.maneuvers.isEmpty &&
         drawablePaths.isNotEmpty &&
         drawablePaths.every((path) => path.kind == RoutePathKind.track);
   }
@@ -5333,7 +5363,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
     widget.onRouteChanged?.call(activeRoute);
     widget.onRouteCommitted?.call(activeRoute);
     _showMessage(
-      '${activeRoute.name}: confirmed and stored offline '
+      '${activeRoute.name}: '
+      '${activeRoute.isBalloonForecast ? 'forecast plan' : 'route'} confirmed '
+      'and stored offline '
       '(${activeRoute.pathPointCount} points).',
     );
     return activeRoute;
@@ -5488,9 +5520,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
   /// until the bike moved fast enough to arm the follow camera (#124).
   void _fitRoute() {
     final planned = <GeoPoint>[
-      ...(_isBalloonView
-          ? _balloonGroundTrackPoints
-          : _route?.allPoints.toList(growable: false) ?? const []),
+      if (_isBalloonView) ..._balloonGroundTrackPoints,
+      if (!_isBalloonView || _route?.isBalloonForecast == true)
+        ...?_route?.allPoints,
       ...?_landingZone?.boundary,
     ];
     final routePoints = planned.isNotEmpty ? planned : [?_effectivePosition];
@@ -5862,7 +5894,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       if (!mounted) return;
       if (!widget.canEditRoute) {
         _showMessage(
-          'Only the pilot or coordinator can replace the crew route.',
+          'Only the pilot or coordinator can replace the shared flight plan or chase route.',
         );
         return;
       }
@@ -5897,7 +5929,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   Future<void> _showChangeRouteSheet() async {
     if (!widget.canEditRoute) {
-      _showMessage('Only the pilot or coordinator can replace the crew route.');
+      _showMessage(
+        'Only the pilot or coordinator can replace the shared flight plan or chase route.',
+      );
       return;
     }
     await showModalBottomSheet<void>(
@@ -5913,7 +5947,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
                 leading: const Icon(Icons.map_outlined),
                 title: Text(
                   _route == null
-                      ? 'Continue without a route'
+                      ? _isBalloonView
+                            ? 'Continue without a forecast plan'
+                            : 'Continue without a route'
+                      : _route!.isBalloonForecast
+                      ? 'Keep current forecast plan'
                       : 'Keep current route',
                 ),
                 subtitle: _route == null
@@ -5925,31 +5963,39 @@ class _RideMapScreenState extends State<RideMapScreen> {
                 },
               ),
               const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.add_road),
-                title: const Text('Plan a destination'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _planDestination();
-                },
-              ),
+              if (!_isBalloonView)
+                ListTile(
+                  leading: const Icon(Icons.add_road),
+                  title: const Text('Plan a destination'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _planDestination();
+                  },
+                ),
               // Stored geometry sits beside "choose a file", not behind it: a
               // rider picking a route should not have to know which one the
               // app wants (#155).
-              ListTile(
-                key: const Key('use-stored-route-sheet-item'),
-                leading: const Icon(Icons.history),
-                title: const Text('Use a saved route'),
-                subtitle: const Text('A recorded route or a previous flight'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _useStoredRoute();
-                },
-              ),
+              if (!_isBalloonView)
+                ListTile(
+                  key: const Key('use-stored-route-sheet-item'),
+                  leading: const Icon(Icons.history),
+                  title: const Text('Use a saved route'),
+                  subtitle: const Text('A recorded route or a previous flight'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _useStoredRoute();
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.upload_file),
                 title: Text(
-                  _route == null ? 'Import GPX route' : 'Replace GPX route',
+                  _isBalloonView
+                      ? _route == null
+                            ? 'Import GPX forecast plan'
+                            : 'Replace GPX forecast plan'
+                      : _route == null
+                      ? 'Import GPX route'
+                      : 'Replace GPX route',
                 ),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
@@ -5958,20 +6004,21 @@ class _RideMapScreenState extends State<RideMapScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.qr_code),
-                title: const Text('Load a planned route'),
+                title: const Text('Load a forecast flight plan'),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _loadPlannedRoute();
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.route_outlined),
-                title: const Text('Load demo route'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _loadDemoRoute();
-                },
-              ),
+              if (!_isBalloonView)
+                ListTile(
+                  leading: const Icon(Icons.route_outlined),
+                  title: const Text('Load demo route'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _loadDemoRoute();
+                  },
+                ),
               // Route-derived: nothing to remove without one.
               if (_route != null)
                 ListTile(
@@ -6104,14 +6151,14 @@ class MapEmergencyContact {
   bool get hasPhoneNumber => (phoneNumber ?? '').isNotEmpty;
 
   String get shortRoleLabel => switch (role) {
-    RideRole.lead => 'the leader',
+    RideRole.lead => 'the flight coordinator',
     _ => displayName,
   };
 
-  /// "Oliver (leader)". Used at the point of dialling, where the rider needs to
+  /// "Oliver (coordinator)". Used at the point of dialling, where the crew needs to
   /// know both who and which role.
   String get roleQualifiedName => switch (role) {
-    RideRole.lead => '$displayName (leader)',
+    RideRole.lead => '$displayName (coordinator)',
     _ => displayName,
   };
 }
@@ -6425,14 +6472,14 @@ class _WaitingForLeaderRoutePrompt extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Waiting for the leader’s route',
+                'Waiting for the coordinator’s plan',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               const Text(
-                'This flight has no crew route yet. It will appear here when '
-                'the leader shares one. The leader can also start without a '
-                'route.',
+                'This flight has no forecast plan or chase route yet. It will '
+                'appear here when the coordinator shares one. The coordinator '
+                'can also start without one.',
                 style: TextStyle(color: Color(0xFF98A3B1)),
               ),
               const SizedBox(height: 16),
@@ -9189,7 +9236,7 @@ class _PostedSpeedLimitBadge extends StatelessWidget {
           };
     final riderSpeedLabel = riderMilesPerHour == null
         ? 'Your speed is unavailable.'
-        : 'You are riding at $riderMilesPerHour miles per hour by GPS.';
+        : 'You are travelling at $riderMilesPerHour miles per hour by GPS.';
     // Carries what the deleted caption used to say (#125): which number is the
     // sign and which is the rider, that the limit is mapped rather than live,
     // and how stale it is. Removing the caption moved this wording, it did not

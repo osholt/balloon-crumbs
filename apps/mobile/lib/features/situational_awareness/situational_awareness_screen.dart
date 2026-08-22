@@ -211,7 +211,7 @@ class _TrafficRerouteCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'The group route changes only after the leader reviews and '
+              'The group route changes only after the coordinator reviews and '
               'confirms the alternative.',
               style: TextStyle(color: Color(0xFFAD9E90), fontSize: 12),
             ),

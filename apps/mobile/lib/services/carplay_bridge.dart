@@ -654,11 +654,15 @@ class CarPlayRideStart {
     required bool locationReady,
     required bool isGroup,
     String? routeName,
+    bool routeIsBalloonForecast = false,
   }) {
     if (!hasSession || !isLeader || rideStarted || rideEnded) return null;
     return CarPlayRideStart(
       enabled: !busy && locationReady,
-      detail: routeName == null
+      detail: routeIsBalloonForecast
+          ? '${routeName ?? 'Forecast plan selected'}. This is advisory; '
+                'recording and group location sharing will start.'
+          : routeName == null
           ? 'No route selected. Recording and group location sharing will start.'
           : '$routeName. Recording, sharing and navigation will start.',
       warning: null,

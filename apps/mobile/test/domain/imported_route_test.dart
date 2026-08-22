@@ -10,6 +10,7 @@ void main() {
       description: 'Dry run',
       importedAt: DateTime.utc(2026, 7, 16, 9),
       sourceFileName: 'loop.gpx',
+      purpose: ImportedRoutePurpose.balloonForecast,
       paths: [
         RoutePath(
           kind: RoutePathKind.track,
@@ -62,6 +63,7 @@ void main() {
     expect(restored.name, 'Saturday loop');
     expect(restored.pathPointCount, 2);
     expect(restored.paths.single.kind, RoutePathKind.track);
+    expect(restored.purpose, ImportedRoutePurpose.balloonForecast);
     expect(restored.paths.single.points.first.elevationMeters, 210);
     expect(
       restored.paths.single.points.first.altitudeSource,
@@ -124,6 +126,7 @@ void main() {
       restored.paths.single.points.first.altitudeDatum,
       AltitudeDatum.unknown,
     );
+    expect(restored.purpose, ImportedRoutePurpose.unspecified);
   });
 
   test('migrates the planned duration from a build 60 destination route', () {

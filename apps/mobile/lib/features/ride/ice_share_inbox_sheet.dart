@@ -122,7 +122,7 @@ class _ReceivedIceShareCard extends StatelessWidget {
       children: [
         Text(
           'From ${share.sharedByDisplayName}'
-          '${share.toWholeGroup ? '' : ' (shared with the leader)'}',
+          '${share.toWholeGroup ? '' : ' (shared with the coordinator)'}',
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
@@ -199,7 +199,7 @@ class _SentIceShareTile extends StatelessWidget {
             share.toWholeGroup
                 ? 'Shared with the group - '
                       '${share.viewedAt != null ? 'seen' : 'not yet seen'}'
-                : 'Shared with the leader - '
+                : 'Shared with the coordinator - '
                       '${share.viewedAt != null ? 'seen' : 'not yet seen'}',
             style: const TextStyle(color: Color(0xFF98A3B1)),
           ),

@@ -1208,7 +1208,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
                     LengthLimitingTextInputFormatter(16),
                   ],
                   decoration: InputDecoration(
-                    labelText: 'Planned route code (optional)',
+                    labelText: 'Forecast plan code (optional)',
                     hintText: 'e.g. 7F3K9QRT',
                     helperText:
                         'From the web planner. The forecast opens for review after the flight is created.',
@@ -1459,7 +1459,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
           if (mounted) {
             setState(
               () => _planCodeError =
-                  'The planned route could not be loaded. Check your connection and try again.',
+                  'The forecast plan could not be loaded. Check your connection and try again.',
             );
           }
           return;

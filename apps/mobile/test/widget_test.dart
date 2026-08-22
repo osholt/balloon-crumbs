@@ -217,7 +217,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('planned-route-code-field')), findsOneWidget);
-    expect(find.text('Planned route code (optional)'), findsOneWidget);
+    expect(find.text('Forecast plan code (optional)'), findsOneWidget);
     await tester.enterText(
       find.byKey(const Key('planned-route-code-field')),
       'AB12CD34',
@@ -607,7 +607,7 @@ void main() {
     await tester.pumpWidget(_app(controller));
     await tester.pumpAndSettle();
 
-    expect(find.text('Waiting to start'), findsOneWidget);
+    expect(find.text('Waiting for launch'), findsOneWidget);
     expect(find.textContaining('Current positions only'), findsOneWidget);
     expect(find.byKey(const Key('pre-start-roster')), findsOneWidget);
     expect(find.textContaining('Oliver (you)'), findsOneWidget);
@@ -620,13 +620,16 @@ void main() {
     await tester.tap(find.byKey(const Key('start-ride-button')));
     await tester.pumpAndSettle();
     expect(find.text('Start this flight?'), findsOneWidget);
-    expect(find.textContaining('No route is selected'), findsOneWidget);
+    expect(
+      find.textContaining('No forecast plan or chase route is selected'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const Key('start-without-route-button')));
     await tester.pumpAndSettle();
 
     expect(controller.rideStarted, isTrue);
-    expect(find.text('Waiting to start'), findsNothing);
+    expect(find.text('Waiting for launch'), findsNothing);
     expect(find.text('Navigation map'), findsOneWidget);
   });
 

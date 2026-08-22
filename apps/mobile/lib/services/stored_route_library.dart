@@ -61,7 +61,13 @@ class StoredRouteCandidate {
 
   /// True when this is a recording rather than a plan, and therefore when the
   /// tidied/raw choice applies.
-  bool get isRecording => origin != StoredRouteOrigin.previousRidePlan;
+  bool get isRecording =>
+      origin != StoredRouteOrigin.previousRidePlan &&
+      !geometry.isBalloonForecast;
+
+  /// A wind forecast is time-directional. Reversing its geometry would invent
+  /// a flight that the forecast never described.
+  bool get canReverse => !geometry.isBalloonForecast;
 
   int get pointCount => geometry.pathPointCount;
 
@@ -203,6 +209,9 @@ class StoredRouteLibrary {
   /// Builds the selection into a route, and states plainly what it is.
   PreparedStoredRoute prepare(StoredRouteSelection selection) {
     final candidate = selection.candidate;
+    if (selection.reversed && !candidate.canReverse) {
+      throw const FormatException('A forecast flight plan cannot be reversed.');
+    }
     final tidying =
         candidate.isRecording && selection.variant == StoredRouteVariant.tidied;
     var paths = candidate.geometry.paths;
@@ -246,7 +255,10 @@ class StoredRouteLibrary {
         name: selection.reversed
             ? '${candidate.title} (reversed)'
             : candidate.title,
-        description: _description(candidate),
+        description: candidate.geometry.isBalloonForecast
+            ? candidate.geometry.description
+            : _description(candidate),
+        purpose: candidate.geometry.purpose,
         importedAt: _clock(),
         sourceFileName: _sourceLabel(candidate),
         paths: List.unmodifiable(paths),
@@ -296,11 +308,14 @@ class StoredRouteLibrary {
     required bool reversed,
   }) => [
     switch (candidate.origin) {
+      _ when candidate.geometry.isBalloonForecast =>
+        'This is an advisory balloon forecast, not a controllable route or a '
+            'recording of where the balloon travelled.',
       StoredRouteOrigin.previousRidePlan =>
         'This is the route that flight was planned with, not a recording of it.',
       _ when tidied =>
         'This is a tidied recording, not a planned route. Stops and GPS '
-            'wander were removed. Every road the bike actually took is kept, '
+            'wander were removed. Every road the vehicle actually took is kept, '
             'including any wrong turns and car park loops.',
       _ =>
         'This is the raw recorded track: every fix as it was recorded, '

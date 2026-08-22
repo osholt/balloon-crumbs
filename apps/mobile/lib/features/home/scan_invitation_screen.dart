@@ -156,7 +156,7 @@ class _CameraUnavailable extends StatelessWidget {
             const SizedBox(height: 10),
             const Text(
               'You can still join with the six-digit flight code, or by pasting '
-              'the invitation the leader shared. Scanning is the only way that '
+              'the invitation the coordinator shared. Scanning is the only way that '
               'works with no signal at all.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFFABB5C1), height: 1.45),

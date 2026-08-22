@@ -431,6 +431,7 @@ class _RideActionsPanel extends StatelessWidget {
     required this.onOpenRoster,
     required this.onShareRoster,
     required this.onChangeRoute,
+    required this.activeRouteIsForecast,
     required this.canChangeLandingZone,
     required this.landingZoneLabel,
     required this.onChangeLandingZone,
@@ -467,6 +468,7 @@ class _RideActionsPanel extends StatelessWidget {
   final VoidCallback onOpenRoster;
   final VoidCallback onShareRoster;
   final VoidCallback onChangeRoute;
+  final bool activeRouteIsForecast;
   final bool canChangeLandingZone;
   final String? landingZoneLabel;
   final VoidCallback onChangeLandingZone;
@@ -560,9 +562,13 @@ class _RideActionsPanel extends StatelessWidget {
             ListTile(
               key: const Key('ride-menu-change-route'),
               leading: const Icon(Icons.edit_road_outlined),
-              title: const Text('Change route'),
-              subtitle: const Text(
-                'Plan a destination, import a GPX file, or load the demo route',
+              title: Text(
+                activeRouteIsForecast ? 'Change flight plan' : 'Change route',
+              ),
+              subtitle: Text(
+                activeRouteIsForecast
+                    ? 'Replace the advisory forecast, or plan chase guidance'
+                    : 'Plan a destination, import a GPX file, or load a forecast plan',
               ),
               onTap: onChangeRoute,
             ),
@@ -733,6 +739,7 @@ class _PreStartRidePanel extends StatelessWidget {
     required this.isLeader,
     required this.busy,
     required this.routeName,
+    required this.routeIsForecast,
     required this.onStartRide,
     required this.onChooseRoute,
     this.onJoinGroup,
@@ -744,6 +751,7 @@ class _PreStartRidePanel extends StatelessWidget {
   final bool isLeader;
   final bool busy;
   final String? routeName;
+  final bool routeIsForecast;
   final VoidCallback onStartRide;
   final VoidCallback onChooseRoute;
   final VoidCallback? onJoinGroup;
@@ -775,7 +783,7 @@ class _PreStartRidePanel extends StatelessWidget {
                       Text(
                         coordinationMode == RideCoordinationMode.solo
                             ? 'Ready for solo flight'
-                            : 'Waiting to start',
+                            : 'Waiting for launch',
                         style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                       Text(
@@ -792,7 +800,7 @@ class _PreStartRidePanel extends StatelessWidget {
                 ),
                 if (!isLeader)
                   const Text(
-                    'LEADER STARTS',
+                    'COORDINATOR STARTS',
                     style: TextStyle(
                       color: Color(0xFFFFC857),
                       fontWeight: FontWeight.w800,
@@ -844,8 +852,10 @@ class _PreStartRidePanel extends StatelessWidget {
                 Expanded(
                   child: Text(
                     routeName == null
-                        ? 'No route selected'
-                        : 'Route: $routeName',
+                        ? 'No flight plan or chase route selected'
+                        : routeIsForecast
+                        ? 'Forecast plan: $routeName'
+                        : 'Chase route: $routeName',
                     maxLines: 2,
                     style: const TextStyle(
                       color: Color(0xFFD4DCE6),
@@ -857,7 +867,7 @@ class _PreStartRidePanel extends StatelessWidget {
                   TextButton(
                     key: const Key('pre-start-choose-route'),
                     onPressed: busy ? null : onChooseRoute,
-                    child: Text(routeName == null ? 'Choose route' : 'Change'),
+                    child: Text(routeName == null ? 'Choose plan' : 'Change'),
                   ),
               ],
             ),
@@ -1405,7 +1415,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final code = widget.sharedRoutes.plannerLinkCode;
     return _warnings.add(
       'Shared route link: $message'
-      '${code == null ? '' : ' You can still enter code $code from Change route → Load a planned route.'}',
+      '${code == null ? '' : ' You can still enter code $code from Change route → Load a forecast flight plan.'}',
     );
   }
 
@@ -1811,7 +1821,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   List<HazardReport> get _trafficRerouteHazards {
     if (widget.rideController.localFlightRole != FlightRole.chaseDriver ||
         !widget.rideController.rideStarted ||
-        _activeRoute == null) {
+        _activeRoute == null ||
+        _activeRoute!.isBalloonForecast) {
       return const [];
     }
     final now = DateTime.now();
@@ -1951,7 +1962,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (session == null) return;
 
     final routeSegments =
-        route?.paths
+        (route?.isBalloonForecast == true ? null : route)?.paths
             .where((path) => path.points.length >= 2)
             .map(
               (path) => path.points
@@ -2662,7 +2673,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final bridge = _carPlayBridge;
     if (bridge == null) return;
     final session = widget.rideController.session;
-    final navigationRoute = _activeRoute;
+    final navigationRoute = _activeRoute?.isBalloonForecast == true
+        ? null
+        : _activeRoute;
     final routeProgress = _carPlayRouteProgressTracker.update(
       navigationRoute,
       _mapPosition.value,
@@ -2936,7 +2949,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   static route_domain.GeoPoint? _routeDestination(
     route_domain.ImportedRoute? route,
   ) {
-    if (route == null) return null;
+    if (route == null || route.isBalloonForecast) return null;
     for (final path in route.paths.reversed) {
       if (path.points.isNotEmpty) return path.points.last;
     }
@@ -3065,7 +3078,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 : 'trail-${trail.riderId}-$index',
             points: points,
             label: switch (trail.kind) {
-              RiderTrailKind.leader => '${trail.displayName} leader trail',
+              RiderTrailKind.leader => '${trail.displayName} pilot trail',
               RiderTrailKind.balloonGroundTrack =>
                 '${trail.displayName} balloon ground track',
               RiderTrailKind.forecastTrack =>
@@ -3728,6 +3741,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 isLeader: widget.rideController.hasFlightAuthority,
                 busy: widget.rideController.busy || _loading,
                 routeName: _activeRoute?.name,
+                routeIsForecast: _activeRoute?.isBalloonForecast == true,
                 onStartRide: _confirmStartRide,
                 onChooseRoute: _requestRouteChange,
                 onJoinGroup: widget.onJoinGroupRequested == null
@@ -3971,9 +3985,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           ? () async => _mapPosition.value
           : _acquireCurrentPosition,
       routeStore: routeStore,
-      canEditRoute:
-          !isBalloonView &&
-          (_isSimulation || widget.rideController.isLocalRideLeader),
+      canEditRoute: _isSimulation || widget.rideController.hasFlightAuthority,
       distanceUnit: widget.distanceUnits.value,
       speedLimitDisplay: isDriverView ? widget.speedLimitDisplay : null,
       chaseVehicle: widget.chaseVehicle?.vehicle ?? ChaseVehicle.unspecified,
@@ -4637,6 +4649,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       locationReady: locationReady,
       isGroup: controller.coordinationMode.isGroup,
       routeName: _activeRoute?.name,
+      routeIsBalloonForecast: _activeRoute?.isBalloonForecast == true,
     );
   }
 
@@ -4911,7 +4924,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final recipients = _ownContactRecipients;
     if (recipients.isEmpty) {
       _showRideSnackBar(
-        'Nobody is holding the leader role yet, so there '
+        'Nobody is coordinating the flight yet, so there '
         'is nobody to give your number to. Nothing has been shared.',
       );
       return;
@@ -5035,12 +5048,17 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           title: const Text('Start this flight?'),
           content: Text(
             route == null
-                ? 'No route is selected. You can choose one now, or start '
-                      'without navigation. Live location sharing and flight '
+                ? 'No forecast plan or chase route is selected. You can '
+                      'choose one now, or start without one. Live location '
+                      'sharing and flight '
                       'recording begin only after you start.'
-                : 'Route: ${route.name}\n\nLive location sharing, route '
-                      'progress, off-course alerts and flight recording will '
-                      'begin for the group.',
+                : route.isBalloonForecast
+                ? 'Forecast plan: ${route.name}\n\nThis is an advisory '
+                      'wind-drift forecast, not a route the balloon can '
+                      'follow. Live location sharing and flight recording '
+                      'will begin for the group.'
+                : 'Chase route: ${route.name}\n\nLive location sharing, road '
+                      'guidance and flight recording will begin for the group.',
           ),
           actions: [
             TextButton(
@@ -5053,7 +5071,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 key: const Key('start-without-route-button'),
                 onPressed: () =>
                     Navigator.pop(dialogContext, _StartRideDecision.start),
-                child: const Text('Start without route'),
+                child: const Text('Start without a plan'),
               ),
               FilledButton.icon(
                 key: const Key('choose-route-before-start-button'),
@@ -5062,7 +5080,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                   _StartRideDecision.chooseRoute,
                 ),
                 icon: const Icon(Icons.route_outlined),
-                label: const Text('Choose route'),
+                label: const Text('Choose plan'),
               ),
             ] else
               FilledButton.icon(
@@ -5152,6 +5170,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     onOpenRoster: _openRoster,
     onShareRoster: _shareRoster,
     onChangeRoute: _requestRouteChange,
+    activeRouteIsForecast: _activeRoute?.isBalloonForecast == true,
     canChangeLandingZone:
         !_isSimulation && widget.rideController.isLocalRideLeader,
     landingZoneLabel: widget.rideController.landingZone?.label,

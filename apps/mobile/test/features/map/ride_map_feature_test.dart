@@ -526,7 +526,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Waiting for the leader’s route'), findsOneWidget);
+      expect(find.text('Waiting for the coordinator’s plan'), findsOneWidget);
       expect(find.text('Choose a route'), findsNothing);
       expect(
         find.byKey(const Key('plan-destination-empty-button')),
@@ -541,7 +541,7 @@ void main() {
 
       await tester.tap(find.byKey(const Key('dismiss-waiting-route-prompt')));
       await tester.pumpAndSettle();
-      expect(find.text('Waiting for the leader’s route'), findsNothing);
+      expect(find.text('Waiting for the coordinator’s plan'), findsNothing);
     },
   );
 
@@ -570,7 +570,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Waiting for the leader’s route'), findsNothing);
+    expect(find.text('Waiting for the coordinator’s plan'), findsNothing);
     expect(find.text('Choose a route'), findsNothing);
   });
 
@@ -1041,7 +1041,7 @@ void main() {
       allOf(
         contains('Mapped speed limit 30 miles per hour'),
         contains('Mapped, not live'),
-        contains('You are riding at 45 miles per hour by GPS'),
+        contains('You are travelling at 45 miles per hour by GPS'),
       ),
     );
     // 20 m/s is 45 mph, shown below the sign at the sign's own font size.
@@ -1953,6 +1953,101 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets(
+    'a balloon forecast is reviewed as a flight plan without road matching',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync(
+        'map-balloon-forecast-test',
+      );
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final forecast = ImportedRoute(
+        id: 'forecast-track',
+        name: 'Bath forecast',
+        description:
+            'Forecast-only wind drift. Not a controllable route or an aviation briefing.',
+        purpose: ImportedRoutePurpose.balloonForecast,
+        importedAt: DateTime.utc(2026, 8, 22),
+        sourceFileName: 'bath-forecast.gpx',
+        paths: [
+          RoutePath(
+            kind: RoutePathKind.track,
+            points: [
+              GeoPoint(
+                latitude: 51.38,
+                longitude: -2.36,
+                elevationMeters: 120,
+                recordedAt: DateTime.utc(2026, 8, 23, 6),
+              ),
+              GeoPoint(
+                latitude: 51.42,
+                longitude: -2.20,
+                elevationMeters: 900,
+                recordedAt: DateTime.utc(2026, 8, 23, 7, 15),
+              ),
+            ],
+          ),
+        ],
+        waypoints: const [],
+      );
+      final matcher = _StubImportedTrackMatcher(
+        ImportedTrackMatch(
+          route: forecast,
+          confidence: 1,
+          traceCoverage: 1,
+          meanDeviationMeters: 0,
+          maximumDeviationMeters: 0,
+        ),
+      );
+      final routeStore = _RecordingRouteStore();
+      final cache = OfflineTileCache(
+        rootDirectory: directory,
+        configuration: const BasemapConfiguration(),
+        httpClient: MockClient((_) async => http.Response('', 404)),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(useMaterial3: true),
+          home: RideMapScreen(
+            routeStore: routeStore,
+            routeImporter: RouteImporter(source: const _NoFileSource()),
+            offlineTileCache: cache,
+            demoRouteLoader: () async => forecast,
+            importedTrackMatcher: matcher,
+            rideStarted: false,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.ensureVisible(find.text('Use demo route'));
+      await tester.tap(find.text('Use demo route'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Add turn directions?'), findsNothing);
+      expect(find.text('Use this forecast plan?'), findsOneWidget);
+      expect(find.text('1h 15m'), findsOneWidget);
+      expect(find.text('Max 900 m MSL'), findsOneWidget);
+      expect(find.byKey(const Key('forecast-plan-time')), findsOneWidget);
+      expect(
+        find.textContaining('balloon cannot follow this line'),
+        findsOneWidget,
+      );
+      expect(matcher.originals, isEmpty);
+
+      await tester.tap(find.byKey(const Key('confirm-route-confirmation')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(routeStore.route?.purpose, ImportedRoutePurpose.balloonForecast);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
   testWidgets('a failed track match keeps the active route unchanged', (
     tester,
   ) async {
@@ -2728,7 +2823,7 @@ void main() {
 
     // Both roles are listed, by name and role.
     expect(find.byKey(const Key('emergency-contact-lead')), findsOneWidget);
-    expect(find.text('Oliver (leader)'), findsOneWidget);
+    expect(find.text('Oliver (coordinator)'), findsOneWidget);
 
     // The leader shared, so both dial controls are offered.
     expect(
