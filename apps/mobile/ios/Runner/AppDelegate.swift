@@ -490,7 +490,7 @@ import UserNotifications
   func handleIncomingAppLink(url: URL) {
     guard
       url.scheme == "https",
-      url.host?.lowercased() == "balloon-crumbs.invalid",
+      url.host?.lowercased() == "balloon-crumbs.tailendcharlie.app",
       url.absoluteString.count <= 2048
     else { return }
     switch url.path {

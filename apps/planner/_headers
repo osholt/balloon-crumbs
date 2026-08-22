@@ -9,3 +9,6 @@
   Content-Type: application/json
   Cache-Control: no-store
 
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Cache-Control: no-store

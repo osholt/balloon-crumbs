@@ -7,6 +7,12 @@ matched to its changes.
 
 ## Next tester build
 
+- Fixes web-planner codes so the app loads the saved flight through the live
+  relay instead of receiving the planner webpage as an invalid response.
+- Fixes **Open in Balloon Crumbs** for both iOS and Play-installed Android
+  builds by aligning the native link handlers and signed domain association.
+- Restores the same relay path for creating and joining live rides with a
+  six-digit ride code.
 - Adds **Plan a balloon flight** to the home map's More menu and opens the live
   planner in the iOS/Android in-app browser.
 - Includes the planner's maximum-altitude landing envelope, draggable launch

@@ -173,7 +173,10 @@ async function serveAsset(request, env) {
     headers.set("Cache-Control", "no-store");
     headers.set("Pragma", "no-cache");
   }
-  if (url.pathname === "/.well-known/apple-app-site-association") {
+  if (
+    url.pathname === "/.well-known/apple-app-site-association" ||
+    url.pathname === "/.well-known/assetlinks.json"
+  ) {
     headers.set("Content-Type", "application/json");
     headers.set("Cache-Control", "no-store");
   }

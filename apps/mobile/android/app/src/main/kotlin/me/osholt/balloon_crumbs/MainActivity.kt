@@ -293,7 +293,7 @@ class MainActivity : FlutterActivity() {
         val uri = intent.data ?: return
         if (
             uri.scheme != "https" ||
-            !uri.host.equals("balloon-crumbs.invalid", ignoreCase = true) ||
+            !uri.host.equals("balloon-crumbs.tailendcharlie.app", ignoreCase = true) ||
             uri.toString().length > 2048
         ) {
             return
