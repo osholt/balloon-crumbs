@@ -12,20 +12,18 @@
 /// Tail End Charlie's own Apple App Site Association file, so standing this one
 /// up is a DNS record and a static file rather than a certificate and a server.
 /// Moving to a Balloon Crumbs domain later is a change to this one line, plus
-/// the two places outside Dart that have to agree with it.
+/// the native declarations and hosted association files that have to agree.
 ///
-/// **Three files must name this host, and nothing enforces it but a test.**
+/// **Every link layer must name this host, and nothing enforces it but a test.**
 ///
 ///  1. here, for building and parsing links;
-///  2. `ios/Runner/*.entitlements`, as `applinks:<host>`, or iOS will not offer
-///     the app when a link is tapped;
-///  3. `apps/website/.well-known/apple-app-site-association`, served by that
-///     host over HTTPS with no redirect, or iOS will not believe the app owns
-///     it.
+///  2. the iOS entitlement and native link bridge;
+///  3. the Android manifest and native link bridge;
+///  4. the hosted Apple and Android association files.
 ///
-/// `test/domain/app_links_test.dart` asserts all three agree. A universal link
-/// that is wrong in any one of them fails silently by opening Safari, which
-/// looks exactly like a link that was never meant to open the app.
+/// `test/domain/app_links_test.dart` asserts the checked-in layers agree. A link
+/// that is wrong in any one of them fails silently by opening the browser or by
+/// reaching the app without delivering its route code.
 library;
 
 /// The host that serves this app's association file.

@@ -60,11 +60,11 @@ The OpenAIP key is compiled into the tester app because OpenAIP's tile API is
 designed for map clients; keep it in Actions secrets so it is absent from the
 repository and can be rotated independently.
 
-Optional repository variables:
+Repository variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `BALLOON_CRUMBS_API_BASE_URL` | HTTPS relay base URL; unset builds remain nearby/offline-only and say so |
+| `BALLOON_CRUMBS_API_BASE_URL` | Required tester relay base: `https://balloon-crumbs.pages.dev/api` |
 | `BALLOON_CRUMBS_FIREBASE_API_KEY` | Android Firebase configuration |
 | `BALLOON_CRUMBS_FIREBASE_PROJECT_ID` | Android Firebase configuration |
 | `BALLOON_CRUMBS_FIREBASE_MESSAGING_SENDER_ID` | Android Firebase configuration |
@@ -74,6 +74,11 @@ Push is enabled only when all four Firebase variables are present. Tester email
 configuration is also optional and is documented in the workflow's variable
 names; the default release mode is `dry-run`, so no mail can be sent during the
 first setup run.
+
+Android App Links are verified against the Play app-signing certificate in
+`apps/planner/.well-known/assetlinks.json`. Use Play Console's generated Digital
+Asset Links statement when the app-signing key changes; the upload-key
+fingerprint is not sufficient for Play-installed builds.
 
 ## Releasing
 

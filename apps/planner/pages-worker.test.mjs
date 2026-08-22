@@ -225,6 +225,29 @@ test("the associated-domain planner path serves the planner shell", async () => 
   assert.equal(response.headers.get("X-Frame-Options"), "DENY");
 });
 
+test("mobile association files are served as uncached JSON", async () => {
+  for (const path of [
+    "/.well-known/apple-app-site-association",
+    "/.well-known/assetlinks.json",
+  ]) {
+    const response = await worker.default.fetch(
+      new Request(`https://balloon-crumbs.tailendcharlie.app${path}`),
+      {
+        ASSETS: {
+          async fetch() {
+            return new Response("{}", {
+              headers: { "Content-Type": "application/octet-stream" },
+            });
+          },
+        },
+      },
+    );
+
+    assert.equal(response.headers.get("Content-Type"), "application/json");
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+  }
+});
+
 test("the old Pages planner path redirects to the root planner URL", async () => {
   const response = await worker.default.fetch(
     new Request("https://balloon-crumbs.pages.dev/plan/?example=yes"),

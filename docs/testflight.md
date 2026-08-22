@@ -116,16 +116,13 @@ The version inherited from Tail End Charlie is `1.0.1+22`, and builds 23 and 24
 are already spent — so the pubspec is behind reality, which is exactly the drift
 that made asking Apple the better answer.
 
-## Without a relay
+## Relay
 
-`BALLOON_CRUMBS_API_BASE_URL` has no default and no relay is deployed for this
-app yet. A build without it is still usable: nearby transport carries the
-journal between devices, and the app says `Set BALLOON_CRUMBS_API_BASE_URL - no
-server traffic` on its own status card rather than looking like a broken relay.
-The script warns and continues, because an honest offline build is worth having
-and a silent one is not.
-
-Export the variable to point at a deployed relay when there is one.
+Tester builds require `BALLOON_CRUMBS_API_BASE_URL` to be
+`https://balloon-crumbs.pages.dev/api`. The `/api` suffix is part of the relay
+base: mobile clients append `/v1/...` paths to it. The release workflow rejects
+an empty value or a URL without that suffix so a build cannot silently ship with
+broken ride and plan-code lookups.
 
 ## CI
 
@@ -153,9 +150,8 @@ Create these once, under Settings → Secrets and variables → Actions:
 | `APPSTORE_CONNECT_API_PRIVATE_KEY_BASE64` | that key's `.p8`, base64 |
 | `BALLOON_CRUMBS_OPENAIP_API_KEY` | OpenAIP third-party application key for the advisory airspace layer |
 
-Optionally set the `BALLOON_CRUMBS_API_BASE_URL` **variable** (not a secret) to a
-deployed relay. Without it the build warns and ships without relay access, which
-the app says on its own status card.
+Set the `BALLOON_CRUMBS_API_BASE_URL` **variable** (not a secret) to
+`https://balloon-crumbs.pages.dev/api`.
 
 To produce the two base64 values:
 
@@ -206,43 +202,42 @@ and a static file rather than a certificate and a server. Moving to a Balloon
 Crumbs domain later is one line in `lib/domain/app_links.dart` plus the two
 files that have to agree with it.
 
-Three things must name the same host, and only a test enforces it
+The Dart parser, native bridges, platform declarations and hosted association
+files must name the same host. A test enforces the checked-in copies
 (`test/domain/app_links_test.dart`):
 
 | where | what |
 | --- | --- |
 | `lib/domain/app_links.dart` | `appLinkHost`, used to build and parse links |
 | `ios/Runner/{DebugProfile,Release}.entitlements` | `applinks:<host>` |
+| `ios/Runner/AppDelegate.swift` | accepts incoming links from `<host>` |
+| `android/app/src/main/AndroidManifest.xml` and `MainActivity.kt` | claim and accept `<host>` |
 | `apps/website/.well-known/apple-app-site-association` | `appIDs: ["UY4624PH6X.dev.osholt.ballooncrumbs"]` |
+| `apps/website/.well-known/assetlinks.json` | Play app-signing certificate and Android package |
 
 Get any one of them wrong and the failure is silent: the link opens Safari,
 which is exactly what a link that was never meant to open the app does. There is
 no error to notice, only somebody saying it did nothing.
 
-### What still has to happen for a tapped link to work
+### Verifying tapped links
 
-The app side is done. The hosting side is not, and it is account access rather
-than code:
+The custom domain is served by the planner's Cloudflare Pages project. Confirm
+both platform association files are reachable directly over HTTPS with no
+redirect:
 
-1. Point `balloon-crumbs.tailendcharlie.app` at something that serves
-   `apps/website/`. A Cloudflare Pages project on this repository with that
-   custom domain is the cheapest option and matches how the sibling domain is
-   already served.
-2. Confirm the file is reachable at exactly
-   `https://balloon-crumbs.tailendcharlie.app/.well-known/apple-app-site-association`,
-   over HTTPS, with **no redirect** — Apple does not follow one:
+```bash
+curl -sSI https://balloon-crumbs.tailendcharlie.app/.well-known/apple-app-site-association
+curl -sSI https://balloon-crumbs.tailendcharlie.app/.well-known/assetlinks.json
+```
 
-   ```bash
-   curl -sSI https://balloon-crumbs.tailendcharlie.app/.well-known/apple-app-site-association
-   ```
+Ship a replacement build after changing an entitlement, manifest, native link
+bridge, package identity or signing certificate. iOS and Android verify the
+association when the app is installed, so an existing installation can retain
+stale link handling until the corrected build is installed.
 
-3. Ship a build carrying the entitlement. iOS fetches the association file when
-   the app is installed, so a link tapped before that build is installed still
-   opens Safari.
-
-Until then the six-digit code is the mechanism that works, and it is offered
-alongside every link. That is not a fallback bolted on — it is why the invitation
-carries both.
+The six-digit ride code remains available alongside invitation links. Web
+planner codes are separate eight-character plan codes and load a route; they do
+not join a live ride.
 
 If the Caddy stack is ever the origin instead of Cloudflare, `deploy/Caddyfile`
 now serves the file with `Content-Type: application/json`. Its website block is

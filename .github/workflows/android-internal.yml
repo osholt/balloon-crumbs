@@ -121,9 +121,17 @@ jobs:
           BALLOON_CRUMBS_FIREBASE_ANDROID_APP_ID: ${{ vars.BALLOON_CRUMBS_FIREBASE_ANDROID_APP_ID }}
         run: |
           set -euo pipefail
-          if test -z "${BALLOON_CRUMBS_API_BASE_URL:-}"; then
-            echo "::warning::No BALLOON_CRUMBS_API_BASE_URL repository variable; this build has nearby transport but no relay."
-          fi
+          case "${BALLOON_CRUMBS_API_BASE_URL:-}" in
+            https://*/api|https://*/api/) ;;
+            "")
+              echo "::error::BALLOON_CRUMBS_API_BASE_URL is required for tester releases." >&2
+              exit 1
+              ;;
+            *)
+              echo "::error::BALLOON_CRUMBS_API_BASE_URL must be an HTTPS relay base ending in /api." >&2
+              exit 1
+              ;;
+          esac
           if test -z "${BALLOON_CRUMBS_OPENAIP_API_KEY:-}"; then
             echo "::error::Missing BALLOON_CRUMBS_OPENAIP_API_KEY; tester releases must include the selected advisory airspace layer." >&2
             exit 1

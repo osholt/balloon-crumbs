@@ -116,9 +116,17 @@ jobs:
         run: |
           set -euo pipefail
           eval "$("$GITHUB_WORKSPACE/tools/build-identity.sh" pubspec.yaml testflight "$BUILD_NUMBER" | sed 's/^/export /')"
-          if [ -z "${BALLOON_CRUMBS_API_BASE_URL:-}" ]; then
-            echo "::warning::No BALLOON_CRUMBS_API_BASE_URL repository variable; this build cannot reach a relay. Nearby transport still works and the app says so on its status card."
-          fi
+          case "${BALLOON_CRUMBS_API_BASE_URL:-}" in
+            https://*/api|https://*/api/) ;;
+            "")
+              echo "::error::BALLOON_CRUMBS_API_BASE_URL is required for tester releases." >&2
+              exit 1
+              ;;
+            *)
+              echo "::error::BALLOON_CRUMBS_API_BASE_URL must be an HTTPS relay base ending in /api." >&2
+              exit 1
+              ;;
+          esac
           if [ -z "${BALLOON_CRUMBS_OPENAIP_API_KEY:-}" ]; then
             echo "::error::Missing BALLOON_CRUMBS_OPENAIP_API_KEY; tester releases must include the selected advisory airspace layer." >&2
             exit 1
