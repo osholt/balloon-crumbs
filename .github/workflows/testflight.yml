@@ -59,6 +59,46 @@ jobs:
           printf '%s' "$CERTIFICATE_BASE64" | base64 -D > "$certificate"
           printf '%s' "$PROFILE_BASE64" | base64 -D > "$profile"
 
+          # `cryptography` emits PBES2/AES-encrypted PKCS#12 bundles by
+          # default. OpenSSL accepts those, but macOS Security reports the
+          # misleading "MAC verification failed (wrong password?)" error.
+          # Re-encode the same identity with the older Apple-compatible
+          # PBESv1 scheme before importing it; the secret and its password do
+          # not change and the private key never leaves the runner.
+          python3 -m pip install --quiet --disable-pip-version-check \
+            "cryptography==50.0.0"
+          python3 - "$certificate" "$CERTIFICATE_PASSWORD" <<'PY'
+          import pathlib
+          import sys
+
+          from cryptography.hazmat.primitives import hashes, serialization
+          from cryptography.hazmat.primitives.serialization import pkcs12
+
+          path = pathlib.Path(sys.argv[1])
+          password = sys.argv[2].encode()
+          private_key, certificate, additional = pkcs12.load_key_and_certificates(
+              path.read_bytes(), password
+          )
+          if private_key is None or certificate is None:
+              raise SystemExit("the signing PKCS#12 contains no identity")
+          encryption = (
+              serialization.PrivateFormat.PKCS12.encryption_builder()
+              .kdf_rounds(50_000)
+              .key_cert_algorithm(pkcs12.PBES.PBESv1SHA1And3KeyTripleDESCBC)
+              .hmac_hash(hashes.SHA1())
+              .build(password)
+          )
+          path.write_bytes(
+              pkcs12.serialize_key_and_certificates(
+                  name=b"Apple Distribution",
+                  key=private_key,
+                  cert=certificate,
+                  cas=additional,
+                  encryption_algorithm=encryption,
+              )
+          )
+          PY
+
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
