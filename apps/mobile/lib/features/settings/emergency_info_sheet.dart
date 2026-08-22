@@ -105,10 +105,10 @@ class _EmergencyInfoSheetState extends State<EmergencyInfoSheet> {
         const SizedBox(height: 6),
         const Text(
           'Optional, and blank unless you type it - the app never reads it from '
-          'your SIM or your contacts. Once a ride is running you can offer it '
-          'to the ride leader from the Ride page, so they '
+          'your SIM or your contacts. Once a flight is running you can offer it '
+          'to the coordinator from the Flight page, so they '
           'can ring you if you stop. Nobody gets it until you send it, and it '
-          'is cleared from their phone when the ride ends.',
+          'is cleared from their phone when the flight ends.',
           style: TextStyle(color: Color(0xFF98A3B1)),
         ),
         const Divider(height: 32),
@@ -160,12 +160,12 @@ class _EmergencyInfoSheetState extends State<EmergencyInfoSheet> {
           value: _shareWithLeaderByDefault,
           onChanged: (value) =>
               setState(() => _shareWithLeaderByDefault = value ?? false),
-          title: const Text('Share automatically with the ride leader'),
+          title: const Text('Share automatically with the coordinator'),
           subtitle: const Text(
             'If you send an emergency-stop alert, this info goes straight '
             'to whoever is currently the leader - useful if you can\'t take '
             'a further step yourself. You can also share it with the whole '
-            'group at any time from the Ride page.',
+            'group at any time from the Flight page.',
           ),
         ),
         const SizedBox(height: 16),

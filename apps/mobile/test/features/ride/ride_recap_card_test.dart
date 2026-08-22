@@ -25,7 +25,7 @@ void main() {
       ),
     );
 
-    expect(find.text('RIDE ABC123'), findsOneWidget);
+    expect(find.text('FLIGHT ABC123'), findsOneWidget);
     expect(find.text('4'), findsOneWidget);
     expect(find.textContaining('km'), findsOneWidget);
   });
@@ -39,7 +39,7 @@ void main() {
       ),
     );
 
-    expect(find.text('No recorded route for this ride'), findsOneWidget);
+    expect(find.text('No recorded route for this flight'), findsOneWidget);
   });
 
   group('the shared image never ends a word in an ellipsis (#308)', () {
@@ -98,9 +98,9 @@ void main() {
     testWidgets('the app name is never cut short', (tester) async {
       await pumpAtExportSize(tester);
 
-      expect(find.text('TAIL END CHARLIE'), findsOneWidget);
+      expect(find.text('BALLOON CRUMBS'), findsOneWidget);
       expect(
-        clipped(tester, 'TAIL END CHARLIE'),
+        clipped(tester, 'BALLOON CRUMBS'),
         isFalse,
         reason: 'this is the image a stranger sees first',
       );
@@ -109,7 +109,7 @@ void main() {
     testWidgets('the ride code beside it is never cut short', (tester) async {
       await pumpAtExportSize(tester);
 
-      expect(clipped(tester, 'RIDE ABC123'), isFalse);
+      expect(clipped(tester, 'FLIGHT ABC123'), isFalse);
     });
 
     testWidgets('the longer half of the header gets the larger share', (
@@ -132,7 +132,7 @@ void main() {
           .size
           .width;
 
-      expect(roomFor('TAIL END CHARLIE'), greaterThan(roomFor('RIDE ABC123')));
+      expect(roomFor('BALLOON CRUMBS'), greaterThan(roomFor('FLIGHT ABC123')));
     });
 
     testWidgets('a narrower card shrinks the header rather than clipping it', (
@@ -140,14 +140,14 @@ void main() {
     ) async {
       final wide = await (() async {
         await pumpAtExportSize(tester, width: 420);
-        return scaleOf(tester, 'TAIL END CHARLIE');
+        return scaleOf(tester, 'BALLOON CRUMBS');
       })();
 
       await pumpAtExportSize(tester, width: 300);
 
-      expect(clipped(tester, 'TAIL END CHARLIE'), isFalse);
+      expect(clipped(tester, 'BALLOON CRUMBS'), isFalse);
       expect(
-        scaleOf(tester, 'TAIL END CHARLIE'),
+        scaleOf(tester, 'BALLOON CRUMBS'),
         lessThan(wide),
         reason: 'something has to give on a narrower card; not the letters',
       );
@@ -158,13 +158,13 @@ void main() {
       // fixed share, so an unusually long code shrinks itself instead of
       // stealing room from the name.
       await pumpAtExportSize(tester);
-      final withShortCode = scaleOf(tester, 'TAIL END CHARLIE');
+      final withShortCode = scaleOf(tester, 'BALLOON CRUMBS');
 
       await pumpAtExportSize(tester, rideCode: 'A-VERY-LONG-RIDE-CODE-INDEED');
 
-      expect(clipped(tester, 'TAIL END CHARLIE'), isFalse);
-      expect(clipped(tester, 'RIDE A-VERY-LONG-RIDE-CODE-INDEED'), isFalse);
-      expect(scaleOf(tester, 'TAIL END CHARLIE'), withShortCode);
+      expect(clipped(tester, 'BALLOON CRUMBS'), isFalse);
+      expect(clipped(tester, 'FLIGHT A-VERY-LONG-RIDE-CODE-INDEED'), isFalse);
+      expect(scaleOf(tester, 'BALLOON CRUMBS'), withShortCode);
     });
   });
 }

@@ -70,6 +70,10 @@ class RideLifecycleReducer {
         case RideEventType.deviceAttachedToCraft:
         case RideEventType.craftPrimaryDeviceNominated:
         case RideEventType.craftChaseAssigned:
+        case RideEventType.landingAreaNoted:
+        case RideEventType.windContextNoted:
+        case RideEventType.operationalBoundaryUpserted:
+        case RideEventType.operationalBoundaryRemoved:
           break;
       }
     }

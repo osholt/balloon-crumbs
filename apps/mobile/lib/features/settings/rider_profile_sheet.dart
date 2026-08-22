@@ -41,6 +41,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
   late CraftIconStyle _style = widget.riderProfile.motorcycleStyle;
   late RiderSymbol _symbol = widget.riderProfile.riderSymbol;
   late RiderColor _color = widget.riderProfile.riderColor;
+  late bool _retainPeerTracks = widget.riderProfile.retainPeerTracksForReplay;
   String? _nameError;
   bool _saving = false;
 
@@ -60,14 +61,14 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Rider profile',
+            'Crew profile',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
           Text(
             widget.currentRideActive
-                ? 'Changes are saved for your next ride. Your current ride keeps the identity you joined with so the roster stays consistent.'
-                : 'This identity is prefilled for your next ride.',
+                ? 'Changes are saved for your next flight. Your current flight keeps the identity you joined with so the crew list stays consistent.'
+                : 'This identity is prefilled for your next flight.',
             style: const TextStyle(color: Color(0xFFABB5C1), height: 1.4),
           ),
           const SizedBox(height: 20),
@@ -78,7 +79,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
             textCapitalization: TextCapitalization.words,
             onChanged: (_) => setState(() => _nameError = null),
             decoration: InputDecoration(
-              labelText: 'Rider name',
+              labelText: 'Crew name',
               counterText: '',
               errorText: _nameError,
             ),
@@ -105,7 +106,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
                 Semantics(
                   button: true,
                   selected: color == _color,
-                  label: '${color.label} rider colour',
+                  label: '${color.label} crew colour',
                   child: InkWell(
                     key: Key('profile-colour-${color.name}'),
                     customBorder: const CircleBorder(),
@@ -129,6 +130,19 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
             ],
           ),
           const SizedBox(height: 24),
+          SwitchListTile(
+            key: const Key('retain-peer-replay-tracks'),
+            contentPadding: EdgeInsets.zero,
+            value: _retainPeerTracks,
+            onChanged: _saving
+                ? null
+                : (value) => setState(() => _retainPeerTracks = value),
+            title: const Text('Keep other chaser tracks for replay'),
+            subtitle: const Text(
+              'Off by default. When enabled, available crew location history is kept only in this phone’s completed-flight archive until you delete it.',
+            ),
+          ),
+          const SizedBox(height: 12),
           FilledButton(
             key: const Key('save-rider-profile'),
             onPressed: _saving ? null : _save,
@@ -146,7 +160,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
             icon: const Icon(Icons.replay_outlined),
             label: Text(
               widget.currentRideActive
-                  ? 'Replay guide after this ride'
+                  ? 'Replay guide after this flight'
                   : 'Replay setup guide',
             ),
           ),
@@ -168,6 +182,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
       riderSymbol: _symbol,
       riderColor: _color,
     );
+    await widget.riderProfile.setRetainPeerTracksForReplay(_retainPeerTracks);
     if (mounted) Navigator.of(context).pop();
   }
 

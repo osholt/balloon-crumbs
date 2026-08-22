@@ -106,7 +106,7 @@ class RidePushNotificationController extends ChangeNotifier
           preferences: _preferences,
         );
         _statusMessage =
-            'Urgent background ride alerts are enabled. Delivery is best-effort and is not an emergency-service substitute.';
+            'Urgent background flight alerts are enabled. Delivery is best-effort and is not an emergency-service substitute.';
       } else if (result.permission == PushPermissionState.denied) {
         await _revokeSilently(session);
         _statusMessage =
@@ -159,11 +159,11 @@ class RidePushNotificationController extends ChangeNotifier
           token: token,
           preferences: _preferences,
         );
-        _statusMessage = 'Notification token and ride role are up to date.';
+        _statusMessage = 'Notification token and flight role are up to date.';
       } else if (result.permission == PushPermissionState.denied) {
         await _revokeSilently(session);
         _statusMessage =
-            'Notifications are blocked by system settings. The ride registration was removed.';
+            'Notifications are blocked by system settings. The flight registration was removed.';
       } else {
         _statusMessage =
             'A push token is not available yet. Balloon Crumbs will retry when the app resumes.';

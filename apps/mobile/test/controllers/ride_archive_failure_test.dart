@@ -70,7 +70,7 @@ void main() {
     );
     expect(
       controller.rideArchiveError,
-      contains('Previous rides'),
+      contains('Previous flights'),
       reason:
           'the generic "that action could not be saved" never said what '
           'had been lost',
@@ -166,7 +166,7 @@ void main() {
           find.byKey(const Key('ride-archive-failed-notice')),
           findsOneWidget,
         );
-        expect(find.text('This ride was not saved'), findsOneWidget);
+        expect(find.text('This flight was not saved'), findsOneWidget);
       });
     });
 

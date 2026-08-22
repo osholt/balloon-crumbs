@@ -227,3 +227,67 @@ def test_craft_structure_outlives_a_position_report() -> None:
         "craftChaseAssigned",
     ):
         assert retention(event_type) > retention("riderLocationUpdated")
+
+
+def test_balloon_flight_context_is_accepted_and_relayed(client, synchronize, make_event) -> None:
+    ride_id = "flight-context"
+    shared = [
+        make_event(
+            ride_id,
+            "landing-area",
+            event_type="landingAreaNoted",
+            payload={
+                "latitude": 51.45,
+                "longitude": -2.6,
+                "radiusMeters": 500,
+                "label": "North field",
+            },
+        ),
+        make_event(
+            ride_id,
+            "wind-context",
+            event_type="windContextNoted",
+            payload={
+                "validAt": "2026-08-22T06:00:00Z",
+                "source": "UKMO test forecast",
+                "isForecast": True,
+                "latitude": 51.45,
+                "longitude": -2.6,
+                "speedUnit": "km/h",
+                "vectors": [{"altitudeMetersMsl": 100, "fromDegrees": 240, "speedKmh": 12}],
+            },
+        ),
+        make_event(
+            ride_id,
+            "boundary-upsert",
+            event_type="operationalBoundaryUpserted",
+            payload={
+                "leaderRiderId": "device-a",
+                "boundary": {
+                    "id": "restricted-edge",
+                    "label": "Restricted airspace edge",
+                    "kind": "line",
+                    "points": [
+                        {"latitude": 51.4, "longitude": -2.7},
+                        {"latitude": 51.5, "longitude": -2.6},
+                    ],
+                    "source": "Pilot briefing",
+                    "updatedAt": "2026-08-22T06:00:00Z",
+                },
+            },
+        ),
+        make_event(
+            ride_id,
+            "boundary-remove",
+            event_type="operationalBoundaryRemoved",
+            payload={"leaderRiderId": "device-a", "boundaryId": "restricted-edge"},
+        ),
+    ]
+
+    uploaded = synchronize(client, ride_id=ride_id, secret=SECRET, events=shared)
+    assert uploaded.status_code == 200
+    assert uploaded.json()["acceptedEventIds"] == [event["id"] for event in shared]
+
+    downloaded = synchronize(client, ride_id=ride_id, secret=SECRET, device_id="device-b")
+    assert downloaded.status_code == 200
+    assert downloaded.json()["events"] == shared

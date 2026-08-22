@@ -130,7 +130,7 @@ void main() {
     expect(bill.isIncludedInLiveCount, isFalse);
     // The row stays, and it says when they went (#144): 09:02 for a departure
     // two minutes after this ride started.
-    expect(bill.stateLabel, 'Left the ride at 09:02');
+    expect(bill.stateLabel, 'Left the flight at 09:02');
     expect(bill.leftAt, startedAt.add(const Duration(minutes: 2)));
   });
 

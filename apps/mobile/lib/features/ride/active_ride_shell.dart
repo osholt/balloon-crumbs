@@ -30,9 +30,12 @@ import '../../data/json_file_route_store.dart';
 import '../../data/secure_observer_grant_store.dart';
 import '../../domain/event_store.dart';
 import '../../domain/completed_ride_store.dart';
+import '../../domain/flight_replay.dart';
 import '../../domain/geo_point.dart' as awareness_geo;
 import '../../domain/hazard.dart';
 import '../../domain/imported_route.dart' as route_domain;
+import '../../domain/landing_zone.dart';
+import '../../domain/operational_boundary.dart';
 import '../../domain/map_style_mode.dart';
 import '../../domain/quick_message.dart';
 import '../../domain/ride_coordination_mode.dart';
@@ -52,6 +55,7 @@ import '../../relay/native_nearby_transport.dart';
 import '../../relay/relay_engine.dart';
 import '../../relay/sqlite_relay_queue.dart';
 import '../../services/carplay_bridge.dart';
+import '../../services/chase_guidance_target.dart';
 import '../../services/fiesta_flight_loader.dart';
 import '../../services/geo_calculations.dart';
 import '../../services/spoken_audio_mode.dart';
@@ -67,6 +71,7 @@ import '../../services/gpx_import_source.dart';
 import '../../services/measurement_formatter.dart';
 import '../../services/native_push_token_source.dart';
 import '../../services/open_meteo_wind.dart';
+import '../../services/operational_boundary_monitor.dart';
 import '../../services/position_report_policy.dart';
 import '../../services/received_quick_message.dart';
 import '../../services/navigation_guidance.dart';
@@ -197,7 +202,7 @@ ObserverPublishedSnapshot buildGroupObserverSnapshot({
   return ObserverPublishedSnapshot(
     scope: ObserverAccessScope.group,
     subjectName: _boundedObserverText(
-      session.rideName ?? 'Group ride led by ${session.displayName}',
+      session.rideName ?? 'Flight coordinated by ${session.displayName}',
       80,
     ),
     snapshotGeneratedAt: snapshotGeneratedAt,
@@ -424,6 +429,15 @@ class _RideActionsPanel extends StatelessWidget {
     required this.onOpenRoster,
     required this.onShareRoster,
     required this.onChangeRoute,
+    required this.canChangeLandingZone,
+    required this.landingZoneLabel,
+    required this.onChangeLandingZone,
+    required this.boundaryCount,
+    required this.canEditBoundaries,
+    required this.onOperationalBoundaries,
+    required this.canChooseChaseGuidance,
+    required this.chaseGuidanceLabel,
+    required this.onChooseChaseGuidance,
     required this.maneuverCount,
     required this.onShowManeuvers,
     required this.onEmergencyInfo,
@@ -451,6 +465,15 @@ class _RideActionsPanel extends StatelessWidget {
   final VoidCallback onOpenRoster;
   final VoidCallback onShareRoster;
   final VoidCallback onChangeRoute;
+  final bool canChangeLandingZone;
+  final String? landingZoneLabel;
+  final VoidCallback onChangeLandingZone;
+  final int boundaryCount;
+  final bool canEditBoundaries;
+  final VoidCallback onOperationalBoundaries;
+  final bool canChooseChaseGuidance;
+  final String? chaseGuidanceLabel;
+  final VoidCallback onChooseChaseGuidance;
   final int maneuverCount;
   final VoidCallback onShowManeuvers;
   final VoidCallback onEmergencyInfo;
@@ -488,12 +511,12 @@ class _RideActionsPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Ride actions',
+            'Flight actions',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 4),
           const Text(
-            'Route, group, sharing and ride controls are all on this page.',
+            'Route, crew, sharing and flight controls are all on this page.',
             style: TextStyle(color: Color(0xFF98A3B1)),
           ),
           const SizedBox(height: 8),
@@ -508,8 +531,8 @@ class _RideActionsPanel extends StatelessWidget {
           ListTile(
             key: const Key('ride-actions-share-summary'),
             leading: const Icon(Icons.summarize_outlined),
-            title: const Text('Share ride summary'),
-            subtitle: const Text('Current ride details and recorded route'),
+            title: const Text('Share flight summary'),
+            subtitle: const Text('Current flight details and recorded route'),
             onTap: onShareSummary,
           ),
           const Divider(height: 20),
@@ -527,7 +550,7 @@ class _RideActionsPanel extends StatelessWidget {
           ListTile(
             key: const Key('ride-menu-open-roster'),
             leading: const Icon(Icons.groups_2_outlined),
-            title: const Text('Ride roster'),
+            title: const Text('Flight crew'),
             subtitle: const Text('Presence, freshness and relay evidence'),
             onTap: onOpenRoster,
           ),
@@ -540,6 +563,51 @@ class _RideActionsPanel extends StatelessWidget {
                 'Plan a destination, import a GPX file, or load the demo route',
               ),
               onTap: onChangeRoute,
+            ),
+          if (canChangeLandingZone)
+            ListTile(
+              key: const Key('flight-menu-change-landing-zone'),
+              leading: const Icon(Icons.flag_outlined),
+              title: Text(
+                landingZoneLabel == null
+                    ? 'Set intended landing area'
+                    : 'Update intended landing area',
+              ),
+              subtitle: Text(
+                landingZoneLabel ??
+                    'Choose an approximate area and radius on the map',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: onChangeLandingZone,
+            ),
+          ListTile(
+            key: const Key('flight-menu-operational-boundaries'),
+            leading: const Icon(Icons.polyline_outlined),
+            title: const Text('Boundaries and altitude alerts'),
+            subtitle: Text(
+              boundaryCount == 0
+                  ? canEditBoundaries
+                        ? 'Add advisory lines, areas or high/low altitude limits'
+                        : 'No advisory boundaries have been shared by the pilot'
+                  : '$boundaryCount shared advisor${boundaryCount == 1 ? 'y' : 'ies'} · alerts on this device',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: onOperationalBoundaries,
+          ),
+          if (canChooseChaseGuidance)
+            ListTile(
+              key: const Key('flight-menu-chase-guidance-target'),
+              leading: const Icon(Icons.assistant_direction_outlined),
+              title: const Text('Chase guidance target'),
+              subtitle: Text(
+                chaseGuidanceLabel ??
+                    'Choose the landing area or a road rendezvous near the balloon',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: onChooseChaseGuidance,
             ),
           if (canManageObserverAccess)
             ListTile(
@@ -555,12 +623,12 @@ class _RideActionsPanel extends StatelessWidget {
             key: const Key('ride-more-options'),
             leading: const Icon(Icons.more_horiz),
             title: const Text('Contacts and other sharing'),
-            subtitle: const Text('Less common ride setup'),
+            subtitle: const Text('Less common flight setup'),
             children: [
               ListTile(
                 key: const Key('ride-menu-share-roster'),
                 leading: const Icon(Icons.groups_outlined),
-                title: const Text('Share rider list'),
+                title: const Text('Share crew list'),
                 subtitle: const Text(
                   'Names and roles, to paste into a group chat you create',
                 ),
@@ -576,7 +644,7 @@ class _RideActionsPanel extends StatelessWidget {
               ListTile(
                 key: const Key('ride-menu-notifications'),
                 leading: const Icon(Icons.notifications_outlined),
-                title: const Text('Ride notifications'),
+                title: const Text('Flight notifications'),
                 subtitle: const Text(
                   'Background alert permission and preferences',
                 ),
@@ -603,10 +671,10 @@ class _RideActionsPanel extends StatelessWidget {
                       ? 'Optional. Add your number first, so they can ring you '
                             'if you stop'
                       : ownPhoneNumberShared
-                      ? 'Sent to $ownPhoneNumberRecipientLabel for this ride. '
-                            'Cleared when the ride ends'
+                      ? 'Sent to $ownPhoneNumberRecipientLabel for this flight. '
+                            'Cleared when the flight ends'
                       : 'Gives it to $ownPhoneNumberRecipientLabel for this '
-                            'ride only',
+                            'flight only',
                 ),
                 onTap: onShareOwnPhoneNumber,
               ),
@@ -618,7 +686,7 @@ class _RideActionsPanel extends StatelessWidget {
                   child: const Icon(Icons.contacts_outlined),
                 ),
                 title: const Text('Shared emergency contacts'),
-                subtitle: const Text('From other riders, for this ride only'),
+                subtitle: const Text('From other crew, for this flight only'),
                 onTap: onViewIceShares,
               ),
             ],
@@ -628,7 +696,7 @@ class _RideActionsPanel extends StatelessWidget {
             ListTile(
               key: const Key('ride-menu-toggle-pause'),
               leading: Icon(ridePaused ? Icons.play_arrow : Icons.pause),
-              title: Text(ridePaused ? 'Resume ride' : 'Pause ride'),
+              title: Text(ridePaused ? 'Resume flight' : 'Pause flight'),
               subtitle: Text(
                 coordinationMode.isGroup
                     ? 'Pauses tracking and progress for the whole group'
@@ -640,12 +708,12 @@ class _RideActionsPanel extends StatelessWidget {
             key: const Key('ride-actions-leave-or-end'),
             leading: const Icon(Icons.logout),
             title: Text(
-              coordinationMode.isGroup ? 'Leave or end ride' : 'End ride',
+              coordinationMode.isGroup ? 'Leave or end flight' : 'End flight',
             ),
             subtitle: Text(
               coordinationMode.isGroup
-                  ? 'Leaders can end it for everyone; other riders leave alone'
-                  : 'Ends your ride and stops recording',
+                  ? 'Coordinators can end it for everyone; other crew leave alone'
+                  : 'Ends your flight and stops recording',
             ),
             onTap: onLeaveOrEndRide,
           ),
@@ -704,14 +772,14 @@ class _PreStartRidePanel extends StatelessWidget {
                     children: [
                       Text(
                         coordinationMode == RideCoordinationMode.solo
-                            ? 'Ready for solo ride'
+                            ? 'Ready for solo flight'
                             : 'Waiting to start',
                         style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                       Text(
                         coordinationMode == RideCoordinationMode.solo
                             ? 'Tracking begins when you start'
-                            : 'Ride $rideCode · Current positions only until the leader starts',
+                            : 'Flight $rideCode · Current positions only until the coordinator starts',
                         style: const TextStyle(
                           color: Color(0xFFA9B4C2),
                           fontSize: 12,
@@ -752,7 +820,7 @@ class _PreStartRidePanel extends StatelessWidget {
                       key: const Key('start-ride-button'),
                       onPressed: busy ? null : onStartRide,
                       icon: const Icon(Icons.play_arrow),
-                      label: const Text('Start ride'),
+                      label: const Text('Start flight'),
                     ),
                   ),
                 ],
@@ -862,8 +930,8 @@ List<RideDestination> rideDestinations({required bool simulation}) {
       );
   return [
     next('Map', Icons.map_outlined, Icons.map),
-    if (simulation) next('Ride Lab', Icons.science_outlined, Icons.science),
-    next('Ride', Icons.two_wheeler_outlined, Icons.two_wheeler),
+    if (simulation) next('Replay', Icons.science_outlined, Icons.science),
+    next('Flight', Icons.air_outlined, Icons.air),
     next('Settings', Icons.settings_outlined, Icons.settings),
   ];
 }
@@ -891,17 +959,17 @@ Future<RideExitDecision?> showRideExitDialog(
   builder: (dialogContext) => AlertDialog(
     title: Text(
       isSolo
-          ? 'End this ride?'
+          ? 'End this flight?'
           : isLeader
-          ? 'Leave or end this ride?'
-          : 'Leave this ride?',
+          ? 'Leave or end this flight?'
+          : 'Leave this flight?',
     ),
     content: Text(
       isSolo
-          ? 'Your ride ends and location sharing stops on this phone.'
+          ? 'Your flight ends and location sharing stops on this phone.'
           : isLeader
-          ? 'Leave only this phone, or end the group ride for everyone.'
-          : 'Your location sharing will stop on this phone. The group ride '
+          ? 'Leave only this phone, or end the group flight for everyone.'
+          : 'Your location sharing will stop on this phone. The group flight '
                 'will continue for everyone else.',
     ),
     actions: [
@@ -913,14 +981,14 @@ Future<RideExitDecision?> showRideExitDialog(
         TextButton(
           key: const Key('leave-only-this-phone'),
           onPressed: () => Navigator.pop(dialogContext, RideExitDecision.leave),
-          child: Text(isLeader ? 'Leave only' : 'Leave ride'),
+          child: Text(isLeader ? 'Leave only' : 'Leave flight'),
         ),
       if (isLeader)
         FilledButton(
           key: const Key('end-ride-for-everyone'),
           onPressed: () =>
               Navigator.pop(dialogContext, RideExitDecision.endForEveryone),
-          child: Text(isSolo ? 'End ride' : 'End for everyone'),
+          child: Text(isSolo ? 'End flight' : 'End for everyone'),
         ),
     ],
   ),
@@ -939,19 +1007,19 @@ Future<RideCompletionDecision?> showRideCompletionDialog(
     icon: const Icon(Icons.flag_circle_outlined),
     title: const Text('Has everyone finished?'),
     content: Text(
-      '${assessment.arrivedRiderCount} of ${assessment.riderCount} riders have '
+      '${assessment.arrivedRiderCount} of ${assessment.riderCount} crew members have '
       'fresh positions within ${assessment.destinationRadiusMeters.round()} m '
       'of the destination, and '
       '${(assessment.routeProgressFraction * 100).clamp(0, 100).round()}% of '
       'the route has been completed.\n\n'
-      '${relayCanCarryReopen ? 'If this is wrong, the leader can resume this ride within 24 hours without changing its code.' : 'This relay cannot resume an ended ride on the other phones. Only end when the whole group is definitely finished.'}',
+      '${relayCanCarryReopen ? 'If this is wrong, the coordinator can resume this flight within 24 hours without changing its code.' : 'This relay cannot resume an ended flight on the other phones. Only end when the whole crew is definitely finished.'}',
     ),
     actions: [
       TextButton(
         key: const Key('continue-completed-ride'),
         onPressed: () =>
             Navigator.pop(dialogContext, RideCompletionDecision.continueRide),
-        child: const Text('Continue ride'),
+        child: const Text('Continue flight'),
       ),
       FilledButton(
         key: const Key('confirm-completed-ride'),
@@ -962,6 +1030,27 @@ Future<RideCompletionDecision?> showRideCompletionDialog(
     ],
   ),
 );
+
+class _OperationalBoundaryDraft {
+  _OperationalBoundaryDraft({
+    required this.id,
+    required this.label,
+    required this.kind,
+    required this.source,
+    this.lowerAltitudeMeters,
+    this.upperAltitudeMeters,
+    this.altitudeDatum = AltitudeDatum.wgs84Geoid,
+  });
+
+  final String id;
+  final String label;
+  final OperationalBoundaryKind kind;
+  final String source;
+  final double? lowerAltitudeMeters;
+  final double? upperAltitudeMeters;
+  final AltitudeDatum altitudeDatum;
+  final List<route_domain.GeoPoint> points = [];
+}
 
 class _ActiveRideShellState extends State<ActiveRideShell>
     with WidgetsBindingObserver {
@@ -1062,6 +1151,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   /// Recorded travelled trails, composed into the map's one trail channel.
   List<MapOverlayTrace> _recordedTrailTraces = const [];
+  List<MapOverlayTrace> _operationalBoundaryTraces = const [];
+  final _operationalBoundaryMonitor = OperationalBoundaryMonitor();
 
   /// TEC requests this phone has already put in front of the rider, so an
   /// unanswered request does not reopen its dialog on every rebuild.
@@ -1093,13 +1184,25 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   SharedPreferences? _trafficReroutePreferences;
   InMemoryRouteStore? _simulationRouteStore;
 
-  /// The bundled Fiesta flight, held so the simulation controller can play the
+  /// The bundled Fiesta ride, held so the simulation controller can play the
   /// balloon back against the clock rather than dragging it along the road.
   BalloonFlight? _balloonFlight;
   WindForecastController? _windForecastController;
   final ValueNotifier<MapLandingZone?> _simulationLandingZone = ValueNotifier(
     null,
   );
+  final ValueNotifier<MapLandingZone?> _sharedLandingZone = ValueNotifier(null);
+  bool _selectingLandingZone = false;
+  _OperationalBoundaryDraft? _operationalBoundaryDraft;
+  double _landingRadiusMeters = 500;
+  ChaseGuidanceTarget? _chaseGuidanceTarget;
+  bool _chaseGuidanceRouting = false;
+  DateTime? _lastChaseGuidanceRouteAt;
+  awareness_geo.GeoPoint? _lastChaseGuidanceTarget;
+  int _chaseGuidanceRouteSequence = 0;
+  static const _chaseGuidanceResolver = ChaseGuidanceTargetResolver();
+  static const _chaseGuidanceReroutePolicy = ChaseGuidanceReroutePolicy();
+  String? _recordedWindContextFingerprint;
   bool _simulationRerouteInFlight = false;
   Duration? _lastSimulationRerouteElapsed;
   awareness_geo.GeoPoint? _lastSimulationRerouteLanding;
@@ -1203,6 +1306,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       routingService: _simulationRoutingService,
     );
     widget.rideController.addListener(_onRideControllerChanged);
+    _syncSharedLandingZone();
+    _syncOperationalBoundaries();
     widget.sharedRoutes.addListener(_onSharedRoutesChanged);
     _capturePlannerLinkError();
     if (widget.sharedRoutes.pending case final file?) {
@@ -1211,7 +1316,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _changeRouteRequestToken = Object();
         _pendingSharedGpxFile = file;
       } else {
-        _warnings.add('Only the ride leader can replace the group route.');
+        _warnings.add(
+          'Only the pilot or coordinator can replace the crew route.',
+        );
       }
       _clearSharedRoutePending();
     } else if (widget.sharedRoutes.pendingInAppRoute case final route?) {
@@ -1220,7 +1327,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _changeRouteRequestToken = Object();
         _pendingInAppRoute = route;
       } else {
-        _warnings.add('Only the ride leader can replace the group route.');
+        _warnings.add(
+          'Only the pilot or coordinator can replace the crew route.',
+        );
       }
       _clearSharedRoutePending();
     }
@@ -1253,7 +1362,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return;
     }
     if (!widget.rideController.isLocalRideLeader) {
-      _warnings.add('Only the ride leader can replace the group route.');
+      _warnings.add(
+        'Only the pilot or coordinator can replace the crew route.',
+      );
       _clearSharedRoutePending();
       setState(() {});
       return;
@@ -1306,11 +1417,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           OpenMeteoWindProvider(client: _windForecastClient),
           initialField: _bundledWindForecast(flight),
         );
+        _windForecastController!.addListener(_onWindForecastChanged);
+        _onWindForecastChanged();
         if (widget.enableNativeServices) {
           unawaited(_windForecastController!.refresh(flight.launch));
         }
         _warnings.add(
-          'Ride Lab keeps device GPS, internet relay and nearby radios '
+          'Flight replay keeps device GPS, internet relay and nearby radios '
           'disabled. Its forecast wind may use Open-Meteo.',
         );
       } on Object catch (error) {
@@ -1320,6 +1433,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       _windForecastController = WindForecastController(
         OpenMeteoWindProvider(client: _windForecastClient),
       );
+      _windForecastController!.addListener(_onWindForecastChanged);
       try {
         final session = widget.rideController.session;
         if (session != null) {
@@ -1375,15 +1489,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       _warnings.add('Traffic preferences could not be restored: $error');
     }
     try {
+      await _restoreChaseGuidanceTarget();
+    } on Object catch (error) {
+      _warnings.add('Chase guidance preference could not be restored: $error');
+    }
+    try {
       await _replaceAwarenessController(route);
     } on Object catch (error) {
-      _warnings.add('Ride map history could not be restored: $error');
+      _warnings.add('Flight map history could not be restored: $error');
     }
     if (_isSimulation) {
       try {
         await _replaceSimulationController(route);
       } on Object catch (error) {
-        _warnings.add('Ride Lab could not be restored: $error');
+        _warnings.add('Flight replay could not be restored: $error');
       }
     }
     if (publishStoredLeaderRoute && route != null) {
@@ -1404,7 +1523,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         try {
           await widget.rideController.publishRideCode();
         } on RideCodeDirectoryException catch (error) {
-          _warnings.add('Ride code is not ready yet: ${error.message}');
+          _warnings.add('Flight code is not ready yet: ${error.message}');
         }
       }
       _stalenessTimer = Timer.periodic(const Duration(seconds: 15), (_) {
@@ -1619,6 +1738,25 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       'traffic-reroute-suppression:'
       '${widget.rideController.session?.rideId ?? 'none'}';
 
+  String get _chaseGuidancePreferenceKey =>
+      'chase-guidance-target:'
+      '${widget.rideController.session?.rideId ?? 'none'}';
+
+  bool get _isChaserPerspective =>
+      widget.rideController.session?.role != RideRole.lead;
+
+  Future<void> _restoreChaseGuidanceTarget() async {
+    if (!_isChaserPerspective) return;
+    final preferences = await SharedPreferences.getInstance();
+    final stored = preferences.getString(_chaseGuidancePreferenceKey);
+    _chaseGuidanceTarget = ChaseGuidanceTarget.values
+        .where((target) => target.name == stored)
+        .firstOrNull;
+    _chaseGuidanceTarget ??= widget.rideController.landingZone == null
+        ? ChaseGuidanceTarget.balloon
+        : ChaseGuidanceTarget.landingArea;
+  }
+
   /// Publishes a rider's own enforcement sighting to the group.
   ///
   /// Reported as [HazardSeverity.serious] so it reaches the same advance
@@ -1627,7 +1765,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   Future<void> _reportHazardFromMap(HazardType type) async {
     final awareness = _awarenessController;
     if (awareness == null) {
-      throw const FormatException('This ride is not tracking hazards yet.');
+      throw const FormatException('This flight is not tracking hazards yet.');
     }
     await awareness.reportHazard(type: type, severity: HazardSeverity.serious);
   }
@@ -1884,7 +2022,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   Future<void> _handleRouteChanged(route_domain.ImportedRoute? route) async {
     if (!_isSimulation && !widget.rideController.isLocalRideLeader) {
-      _warnings.add('A rider cannot replace the leader’s group route.');
+      _warnings.add('A chaser cannot replace the coordinator’s crew route.');
       await _applyAuthoritativeRouteDecision();
       if (mounted) setState(() {});
       return;
@@ -1937,6 +2075,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _activeRoute = route;
     await _replaceAwarenessController(route);
     if (mounted) setState(() {});
+    if (_isChaserPerspective && _chaseGuidanceTarget != null) {
+      unawaited(_refreshChaseGuidanceIfNeeded(force: true));
+    }
   }
 
   Future<void> _replaceSimulationController(
@@ -2149,6 +2290,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return;
     }
     _updateMapOverlays();
+    unawaited(_refreshChaseGuidanceIfNeeded());
     _refreshTrafficOfferState();
     _schedulePublish();
   }
@@ -2534,7 +2676,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         guidanceRoadName: _latestNavigationGuidance?.roadLabel,
         guidanceDistanceMeters: _latestNavigationGuidance?.distanceMeters,
         distanceUnit: widget.distanceUnits.value,
-        groupStatus: '${visibleRiderLocations.length} riders visible',
+        groupStatus: '${visibleRiderLocations.length} crew visible',
         rideStart: _carPlayRideStart,
         surfaceMode: widget.rideController.rideEnded
             ? CarPlaySurfaceMode.endedRide
@@ -2574,7 +2716,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         controller.rideEnded ||
         controller.busy) {
       throw const FormatException(
-        'Only the ride leader can plan a route before the ride starts.',
+        'Only the pilot or coordinator can plan a route before the flight starts.',
       );
     }
     return [
@@ -2595,7 +2737,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         controller.rideEnded ||
         controller.busy) {
       throw const FormatException(
-        'Only the ride leader can plan a route before the ride starts.',
+        'Only the pilot or coordinator can plan a route before the flight starts.',
       );
     }
     final origin = _mapPosition.value ?? await _acquireCurrentPosition();
@@ -2896,6 +3038,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               RiderTrailKind.balloonGroundTrack =>
                 '${trail.displayName} balloon ground track',
               RiderTrailKind.rider => '${trail.displayName} trail',
+              RiderTrailKind.operationalBoundary =>
+                '${trail.displayName} operational boundary',
               // RiderTrailRecorder only records where riders have been, so it
               // never produces a route-start connector; the map composes that
               // one itself.
@@ -2915,6 +3059,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   void _pushRiderTrails() {
     _riderTrails.value = List.unmodifiable([
       for (final trace in _recordedTrailTraces) _simplifiedForDisplay(trace),
+      ..._operationalBoundaryTraces,
     ]);
   }
 
@@ -2998,6 +3143,64 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
   }
 
+  void _onWindForecastChanged() {
+    final field = _windForecastController?.field;
+    if (field == null ||
+        !widget.rideController.isLocalRideLeader ||
+        !widget.rideController.rideStarted ||
+        widget.rideController.rideEnded ||
+        field.columns.isEmpty) {
+      return;
+    }
+    final fingerprint =
+        '${field.origin.name}:${field.validAt.toUtc().toIso8601String()}:'
+        '${field.fetchedAt.toUtc().toIso8601String()}';
+    if (fingerprint == _recordedWindContextFingerprint) return;
+    _recordedWindContextFingerprint = fingerprint;
+    final current = _mapPosition.value;
+    final column = current == null
+        ? field.columns.first
+        : field.columns.reduce(
+            (first, second) =>
+                GeoCalculations.distanceMeters(
+                      first.position,
+                      awareness_geo.GeoPoint(
+                        latitude: current.latitude,
+                        longitude: current.longitude,
+                      ),
+                    ) <=
+                    GeoCalculations.distanceMeters(
+                      second.position,
+                      awareness_geo.GeoPoint(
+                        latitude: current.latitude,
+                        longitude: current.longitude,
+                      ),
+                    )
+                ? first
+                : second,
+          );
+    unawaited(
+      widget.rideController.noteWindContext(
+        FlightReplayWindContext(
+          recordedAt: DateTime.now(),
+          validAt: field.validAt,
+          source: field.sourceLabel,
+          // Both live Open-Meteo and the bundled Fiesta field are model output.
+          isForecast: true,
+          position: column.position,
+          vectors: [
+            for (final vector in column.vectors)
+              FlightReplayWindVector(
+                altitudeMetersMsl: vector.altitudeMetersMsl,
+                fromDegrees: vector.fromDegrees,
+                speedKmh: vector.speedKmh,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _onReceivedEvent(
     RideEvent event,
     RideTransportEvidence transport,
@@ -3031,6 +3234,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   };
 
   void _onRideControllerChanged() {
+    _syncSharedLandingZone();
+    _syncOperationalBoundaries();
+    if (_isChaserPerspective && _chaseGuidanceTarget == null) {
+      _chaseGuidanceTarget = widget.rideController.landingZone == null
+          ? ChaseGuidanceTarget.balloon
+          : ChaseGuidanceTarget.landingArea;
+    }
     final session = widget.rideController.session;
     final rideStarted =
         widget.rideController.rideStarted && !widget.rideController.rideEnded;
@@ -3041,6 +3251,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // whatever the rider has or has not moved since.
     if (rideJustStarted) _positionReportGate.reset();
     if (rideJustStarted) unawaited(_warmNaturalVoiceIfNeeded());
+    if (rideJustStarted) _onWindForecastChanged();
     if (session != null) {
       _awarenessController?.updateLocalSession(session);
       _observerAccessController?.updateSession(session);
@@ -3054,11 +3265,75 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         unawaited(_pushNotificationController?.refreshRegistration());
       }
       _publishObserverSnapshot();
+      unawaited(_refreshChaseGuidanceIfNeeded());
     }
     if (widget.rideController.rideEnded && !_rideEndHandled) {
       unawaited(_handleRideEnded());
     }
     _schedulePublish();
+  }
+
+  void _syncSharedLandingZone() {
+    final target = widget.rideController.landingZone;
+    if (target == null) {
+      if (_sharedLandingZone.value != null) _sharedLandingZone.value = null;
+      return;
+    }
+    _landingRadiusMeters = target.radiusMeters;
+    final previous = _sharedLandingZone.value;
+    if (previous != null &&
+        previous.center.latitude == target.center.latitude &&
+        previous.center.longitude == target.center.longitude &&
+        previous.radiusMeters == target.radiusMeters &&
+        previous.label == target.label) {
+      return;
+    }
+    _sharedLandingZone.value = MapLandingZone(
+      center: route_domain.GeoPoint(
+        latitude: target.center.latitude,
+        longitude: target.center.longitude,
+      ),
+      radiusMeters: target.radiusMeters,
+      label: target.label,
+    );
+  }
+
+  void _syncOperationalBoundaries() {
+    final draft = _operationalBoundaryDraft;
+    _operationalBoundaryTraces = List.unmodifiable([
+      for (final boundary in widget.rideController.operationalBoundaries)
+        if (boundary.kind != OperationalBoundaryKind.altitudeBand)
+          MapOverlayTrace(
+            id: 'operational-boundary-${boundary.id}',
+            points: [
+              for (final point in boundary.points)
+                route_domain.GeoPoint(
+                  latitude: point.latitude,
+                  longitude: point.longitude,
+                ),
+              if (boundary.kind == OperationalBoundaryKind.area)
+                route_domain.GeoPoint(
+                  latitude: boundary.points.first.latitude,
+                  longitude: boundary.points.first.longitude,
+                ),
+            ],
+            label: '${boundary.label} · advisory · ${boundary.source}',
+            kind: RiderTrailKind.operationalBoundary,
+          ),
+      if (draft != null && draft.points.length >= 2)
+        MapOverlayTrace(
+          id: 'operational-boundary-draft',
+          points: [
+            ...draft.points,
+            if (draft.kind == OperationalBoundaryKind.area &&
+                draft.points.length >= 3)
+              draft.points.first,
+          ],
+          label: '${draft.label} draft',
+          kind: RiderTrailKind.operationalBoundary,
+        ),
+    ]);
+    _pushRiderTrails();
   }
 
   /// Starts location for the map before the ride does, so a rider can see
@@ -3233,6 +3508,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // sample to the durable ride journal is briefly delayed or fails. Only
     // the journal feeds trails, summaries and GPX recording.
     _updateMapOverlays(updateDerivedState: false, updateOverlayMarkers: false);
+    _checkOperationalBoundaries();
     final point = _mapPosition.value;
     final wind = _windForecastController;
     if (point != null && wind != null) {
@@ -3245,7 +3521,38 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         ),
       );
     }
+    unawaited(_refreshChaseGuidanceIfNeeded());
     if (warningChanged) setState(() {});
+  }
+
+  void _checkOperationalBoundaries() {
+    final navigation = _mapNavigationPosition.value;
+    if (navigation == null) return;
+    final alerts = _operationalBoundaryMonitor.evaluate(
+      boundaries: widget.rideController.operationalBoundaries,
+      position: awareness_geo.GeoPoint(
+        latitude: navigation.point.latitude,
+        longitude: navigation.point.longitude,
+      ),
+      now: DateTime.now(),
+      altitudeMeters: navigation.altitudeMeters,
+      altitudeDatum: navigation.altitudeDatum,
+    );
+    if (alerts.isEmpty || !mounted) return;
+    for (final alert in alerts) {
+      _warnings.add(
+        '${alert.message}. Advisory only — confirm the source and current flight information.',
+      );
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${alerts.first.message}. Advisory only; verify before acting.',
+        ),
+        backgroundColor: const Color(0xFF8F2638),
+        duration: const Duration(seconds: 8),
+      ),
+    );
   }
 
   @override
@@ -3429,7 +3736,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                     child: FloatingActionButton.small(
                       key: const Key('ride-menu-button'),
                       heroTag: 'balloon-crumbs-shell-menu',
-                      tooltip: 'Ride actions',
+                      tooltip: 'Flight actions',
                       onPressed: _openRideMenu,
                       backgroundColor: const Color(0xE6252E39),
                       foregroundColor: Colors.white,
@@ -3525,7 +3832,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final isBalloonView = _isSimulation
         ? session?.role == RideRole.lead
         : widget.rideController.localCraft?.isBalloon == true;
-    return RideMapFeature.fromEnvironment(
+    final landingZoneUpdates = _isSimulation
+        ? _simulationLandingZone
+        : _sharedLandingZone;
+    final boundaryDraft = _operationalBoundaryDraft;
+    final map = RideMapFeature.fromEnvironment(
       key: ValueKey(
         'ride-map:${_appliedAuthoritativeRouteRevision ?? 'local'}:'
         '${isBalloonView ? 'air' : _activeRoute?.id ?? 'none'}:'
@@ -3536,8 +3847,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       navigationPosition: _mapNavigationPosition,
       overlayMarkers: _mapOverlays,
       riderTrails: _riderTrails,
-      landingZone: _isSimulation ? _simulationLandingZone.value : null,
-      landingZoneUpdates: _isSimulation ? _simulationLandingZone : null,
+      landingZone: landingZoneUpdates.value,
+      landingZoneUpdates: landingZoneUpdates,
+      onMapTap: _selectingLandingZone || boundaryDraft != null
+          ? _handleFlightSetupMapTap
+          : null,
       windForecastController: _windForecastController,
       groupRiderCount: widget.rideController.liveParticipants.length,
       onOpenRoster: _openRoster,
@@ -3632,6 +3946,378 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           ? RideMapPerspective.balloon
           : RideMapPerspective.chase,
     );
+    if (!_selectingLandingZone && boundaryDraft == null) return map;
+    return Stack(
+      children: [
+        Positioned.fill(child: map),
+        Positioned(
+          top: MediaQuery.paddingOf(context).top + 12,
+          left: 16,
+          right: 16,
+          child: Material(
+            color: const Color(0xF2252E39),
+            borderRadius: BorderRadius.circular(16),
+            elevation: 8,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+              child: Row(
+                children: [
+                  Icon(
+                    boundaryDraft == null
+                        ? Icons.touch_app
+                        : Icons.polyline_outlined,
+                    color: const Color(0xFFFFC857),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      boundaryDraft == null
+                          ? 'Tap the map to update the intended landing area · ${_landingRadiusMeters < 1000 ? '${_landingRadiusMeters.toInt()} m' : '${(_landingRadiusMeters / 1000).toStringAsFixed(1)} km'} radius'
+                          : boundaryDraft.kind == OperationalBoundaryKind.line
+                          ? 'Tap two points for ${boundaryDraft.label} · ${boundaryDraft.points.length}/2'
+                          : 'Tap at least three corners for ${boundaryDraft.label} · ${boundaryDraft.points.length} selected',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  if (boundaryDraft != null &&
+                      boundaryDraft.kind == OperationalBoundaryKind.area &&
+                      boundaryDraft.points.length >= 3)
+                    TextButton(
+                      onPressed: () =>
+                          unawaited(_saveOperationalBoundaryDraft()),
+                      child: const Text('Save'),
+                    ),
+                  TextButton(
+                    onPressed: _cancelMapSelection,
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleFlightSetupMapTap(route_domain.GeoPoint point) async {
+    if (_selectingLandingZone) {
+      await _updateLandingZoneFromMap(point);
+      return;
+    }
+    final draft = _operationalBoundaryDraft;
+    if (draft == null) return;
+    draft.points.add(point);
+    _syncOperationalBoundaries();
+    if (mounted) setState(() {});
+    if (draft.kind == OperationalBoundaryKind.line &&
+        draft.points.length >= 2) {
+      await _saveOperationalBoundaryDraft();
+    }
+  }
+
+  void _cancelMapSelection() {
+    setState(() {
+      _selectingLandingZone = false;
+      _operationalBoundaryDraft = null;
+    });
+    _syncOperationalBoundaries();
+  }
+
+  Future<void> _saveOperationalBoundaryDraft() async {
+    final draft = _operationalBoundaryDraft;
+    if (draft == null) return;
+    final minimum = draft.kind == OperationalBoundaryKind.line ? 2 : 3;
+    if (draft.points.length < minimum) return;
+    await widget.rideController.upsertOperationalBoundary(
+      OperationalBoundary(
+        id: draft.id,
+        label: draft.label,
+        kind: draft.kind,
+        points: [
+          for (final point in draft.points)
+            awareness_geo.GeoPoint(
+              latitude: point.latitude,
+              longitude: point.longitude,
+            ),
+        ],
+        source: draft.source,
+        updatedAt: DateTime.now(),
+        lowerAltitudeMeters: draft.lowerAltitudeMeters,
+        upperAltitudeMeters: draft.upperAltitudeMeters,
+        altitudeDatum: draft.altitudeDatum,
+      ),
+    );
+    if (!mounted) return;
+    if (widget.rideController.errorMessage case final message?) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+    setState(() => _operationalBoundaryDraft = null);
+    _syncOperationalBoundaries();
+  }
+
+  Future<void> _updateLandingZoneFromMap(route_domain.GeoPoint point) async {
+    await widget.rideController.setLandingZone(
+      LandingZoneTarget(
+        center: awareness_geo.GeoPoint(
+          latitude: point.latitude,
+          longitude: point.longitude,
+        ),
+        radiusMeters: _landingRadiusMeters,
+        label:
+            'Intended area · ${point.latitude.toStringAsFixed(3)}, ${point.longitude.toStringAsFixed(3)}',
+        updatedAt: DateTime.now(),
+      ),
+    );
+    if (!mounted) return;
+    if (widget.rideController.errorMessage case final message?) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+    setState(() => _selectingLandingZone = false);
+  }
+
+  LocationSample? _latestBalloonFix() {
+    if (_isSimulation) {
+      final balloon = _simulationController?.riders
+          .where((rider) => rider.role == RideRole.lead)
+          .firstOrNull;
+      if (balloon == null) return null;
+      return LocationSample(
+        position: awareness_geo.GeoPoint(
+          latitude: balloon.position.latitude,
+          longitude: balloon.position.longitude,
+        ),
+        recordedAt: DateTime.now(),
+        accuracyMeters: 5,
+        speedMetersPerSecond: balloon.speedMetersPerSecond,
+        headingDegrees: balloon.headingDegrees,
+        altitudeMeters: balloon.altitudeMeters,
+        altitudeSource: balloon.altitudeMeters == null
+            ? AltitudeSource.unknown
+            : AltitudeSource.gnss,
+        altitudeDatum: balloon.altitudeMeters == null
+            ? AltitudeDatum.unknown
+            : AltitudeDatum.relativeToLaunch,
+        verticalSpeedMetersPerSecond: balloon.verticalSpeedMetersPerSecond,
+      );
+    }
+
+    final roster = widget.rideController.resolveCraftRoster();
+    final balloonDeviceIds = roster.balloon?.deviceIds.toSet() ?? const {};
+    final candidates =
+        <RiderLocation>[
+              ...widget.rideController.liveView.renderedPositions,
+              ...?_awarenessController?.riderLocations,
+            ]
+            .where(
+              (location) =>
+                  balloonDeviceIds.contains(location.riderId) ||
+                  (balloonDeviceIds.isEmpty && location.role == RideRole.lead),
+            )
+            .toList();
+    if (candidates.isEmpty) return null;
+    candidates.sort(
+      (left, right) =>
+          right.sample.recordedAt.compareTo(left.sample.recordedAt),
+    );
+    return candidates.first.sample;
+  }
+
+  ChaseGuidanceDestination? _currentChaseGuidanceDestination({
+    ChaseGuidanceTarget? target,
+  }) {
+    final selected = target ?? _chaseGuidanceTarget;
+    if (selected == null) return null;
+    return _chaseGuidanceResolver.resolve(
+      target: selected,
+      now: DateTime.now(),
+      landingZone: widget.rideController.landingZone,
+      balloonFix: _latestBalloonFix(),
+    );
+  }
+
+  Future<void> _chooseChaseGuidanceTarget() async {
+    final landing = _currentChaseGuidanceDestination(
+      target: ChaseGuidanceTarget.landingArea,
+    );
+    final balloon = _currentChaseGuidanceDestination(
+      target: ChaseGuidanceTarget.balloon,
+    );
+    final selected = await showModalBottomSheet<ChaseGuidanceTarget>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ListTile(
+            title: Text('Directions for this chase vehicle'),
+            subtitle: Text(
+              'This changes only this device. The route ends on a road near the target; it never directs a vehicle off-road.',
+            ),
+          ),
+          ListTile(
+            key: const Key('chase-guidance-landing-area'),
+            enabled: landing != null,
+            leading: const Icon(Icons.flag_outlined),
+            title: const Text('Intended landing area'),
+            subtitle: Text(
+              landing?.label ?? 'The pilot has not set an area yet',
+            ),
+            trailing: _chaseGuidanceTarget == ChaseGuidanceTarget.landingArea
+                ? const Icon(Icons.check)
+                : null,
+            onTap: landing == null
+                ? null
+                : () => Navigator.pop(
+                    sheetContext,
+                    ChaseGuidanceTarget.landingArea,
+                  ),
+          ),
+          ListTile(
+            key: const Key('chase-guidance-balloon'),
+            enabled: balloon != null,
+            leading: const Icon(Icons.air_outlined),
+            title: const Text('Road rendezvous near balloon'),
+            subtitle: Text(
+              balloon?.label ?? 'No fresh balloon fix is available',
+            ),
+            trailing: _chaseGuidanceTarget == ChaseGuidanceTarget.balloon
+                ? const Icon(Icons.check)
+                : null,
+            onTap: balloon == null
+                ? null
+                : () =>
+                      Navigator.pop(sheetContext, ChaseGuidanceTarget.balloon),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _chaseGuidanceTarget = selected);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_chaseGuidancePreferenceKey, selected.name);
+    await _refreshChaseGuidanceIfNeeded(force: true);
+  }
+
+  Future<void> _refreshChaseGuidanceIfNeeded({bool force = false}) async {
+    if (!_isChaserPerspective ||
+        _isSimulation ||
+        _chaseGuidanceRouting ||
+        !widget.rideController.rideStarted ||
+        widget.rideController.rideEnded) {
+      return;
+    }
+    final selected = _chaseGuidanceTarget;
+    final destination = _currentChaseGuidanceDestination();
+    final origin = _mapPosition.value;
+    if (selected == null || destination == null || origin == null) {
+      if (force && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              selected == ChaseGuidanceTarget.balloon
+                  ? 'A fresh balloon fix and this vehicle’s position are needed.'
+                  : 'An intended landing area and this vehicle’s position are needed.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    final now = DateTime.now();
+    if (!_chaseGuidanceReroutePolicy.shouldReroute(
+      now: now,
+      target: destination.point,
+      lastRoutedAt: _lastChaseGuidanceRouteAt,
+      lastTarget: _lastChaseGuidanceTarget,
+      force: force,
+    )) {
+      return;
+    }
+
+    _chaseGuidanceRouting = true;
+    if (mounted) setState(() {});
+    try {
+      final result = await _simulationRoutingService.routeThrough([
+        origin,
+        route_domain.GeoPoint(
+          latitude: destination.point.latitude,
+          longitude: destination.point.longitude,
+        ),
+      ], originBearingDegrees: _mapNavigationPosition.value?.headingDegrees);
+      if (!mounted) return;
+      final roadEndpoint = awareness_geo.GeoPoint(
+        latitude: result.points.last.latitude,
+        longitude: result.points.last.longitude,
+      );
+      if (!destination.acceptsRoadEndpoint(roadEndpoint)) {
+        _warnings.add(
+          'No sufficiently close road rendezvous was found for ${selected.label.toLowerCase()}. The previous route is still in use.',
+        );
+        setState(() {});
+        return;
+      }
+      final separation = GeoCalculations.distanceMeters(
+        roadEndpoint,
+        destination.point,
+      );
+      final route = route_domain.ImportedRoute(
+        id: 'personal-chase-${_chaseGuidanceRouteSequence++}',
+        name: selected.label,
+        description:
+            'Device-local road guidance. The road endpoint is '
+            '${MeasurementFormatter(widget.distanceUnits.value).distance(separation)} '
+            'from ${selected == ChaseGuidanceTarget.balloon ? 'the latest balloon fix' : 'the centre of the intended area'}. Access and stopping suitability remain unverified.',
+        importedAt: now,
+        sourceFileName: 'balloon-crumbs-personal-chase-route',
+        paths: [
+          route_domain.RoutePath(
+            kind: route_domain.RoutePathKind.route,
+            name: selected.label,
+            points: result.points,
+          ),
+        ],
+        waypoints: [
+          route_domain.RouteWaypoint(
+            point: origin,
+            name: 'Chase vehicle',
+            symbol: 'Flag, Blue',
+          ),
+          route_domain.RouteWaypoint(
+            point: result.points.last,
+            name: selected.label,
+            description:
+                'Road-accessible routing endpoint; target remains approximate.',
+            symbol: 'Flag, Red',
+          ),
+        ],
+        maneuvers: result.maneuvers,
+        plannedDuration: result.duration,
+      );
+      _activeRoute = route;
+      _lastChaseGuidanceRouteAt = now;
+      _lastChaseGuidanceTarget = destination.point;
+      await _replaceAwarenessController(route);
+      if (mounted) setState(() {});
+    } on Object catch (error) {
+      if (mounted) {
+        _warnings.add(
+          'Personal chase guidance is unavailable; the previous road route is still in use. $error',
+        );
+        setState(() {});
+      }
+    } finally {
+      _chaseGuidanceRouting = false;
+      if (mounted) setState(() {});
+    }
   }
 
   void _onNavigationGuidanceChanged(NavigationGuidance? guidance) {
@@ -3875,10 +4561,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   String get _projectedRideState {
-    if (widget.rideController.rideEnded) return 'Ride ended';
-    if (widget.rideController.ridePaused) return 'Ride paused';
-    if (widget.rideController.rideStarted) return 'Ride in progress';
-    return 'Waiting for the ride leader to start';
+    if (widget.rideController.rideEnded) return 'Flight ended';
+    if (widget.rideController.ridePaused) return 'Flight paused';
+    if (widget.rideController.rideStarted) return 'Flight in progress';
+    return 'Waiting for the pilot or coordinator to start';
   }
 
   /// Offers only the final pre-departure decision on CarPlay. Ride creation,
@@ -3962,9 +4648,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         );
       }
       final message = source == 'CarPlay'
-          ? 'CarPlay could not start the ride. Open Balloon Crumbs on the '
+          ? 'CarPlay could not start the flight. Open Balloon Crumbs on the '
                 'iPhone and try again.'
-          : 'The ride could not start. Please try again.';
+          : 'The flight could not start. Please try again.';
       final added = _warnings.add(message);
       if (added && mounted) setState(() {});
       if (source != 'CarPlay' && mounted) _showRideSnackBar(message);
@@ -4186,9 +4872,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _showRideSnackBar(
       shared
           ? (recipients.toRideGroup
-                ? 'Your number is now available to this ride, for this ride '
+                ? 'Your number is now available to this flight, for this flight '
                       'only.'
-                : 'Your number has gone to the ride leader, and '
+                : 'Your number has gone to the coordinator, and '
                       'to nobody else.')
           : 'Your number was not shared. '
                     '${widget.rideController.errorMessage ?? ''}'
@@ -4224,7 +4910,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(content: Text('Opened the authenticated ride alert.')),
+        const SnackBar(content: Text('Opened the authenticated flight alert.')),
       );
   }
 
@@ -4292,14 +4978,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       final decision = await showDialog<_StartRideDecision>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Start this ride?'),
+          title: const Text('Start this flight?'),
           content: Text(
             route == null
                 ? 'No route is selected. You can choose one now, or start '
-                      'without navigation. Live location sharing and ride '
+                      'without navigation. Live location sharing and flight '
                       'recording begin only after you start.'
                 : 'Route: ${route.name}\n\nLive location sharing, route '
-                      'progress, off-course alerts and ride recording will '
+                      'progress, off-course alerts and flight recording will '
                       'begin for the group.',
           ),
           actions: [
@@ -4330,7 +5016,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 onPressed: () =>
                     Navigator.pop(dialogContext, _StartRideDecision.start),
                 icon: const Icon(Icons.play_arrow),
-                label: const Text('Start ride'),
+                label: const Text('Start flight'),
               ),
           ],
         ),
@@ -4354,7 +5040,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               debugPrint('Could not start live GPS: $error\n$stackTrace');
             }
             final added = _warnings.add(
-              'The ride started, but live GPS could not start. Use Follow me '
+              'The flight started, but live GPS could not start. Use Follow me '
               'or Safety to try again.',
             );
             if (added && mounted) setState(() {});
@@ -4412,6 +5098,25 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     onOpenRoster: _openRoster,
     onShareRoster: _shareRoster,
     onChangeRoute: _requestRouteChange,
+    canChangeLandingZone:
+        !_isSimulation && widget.rideController.isLocalRideLeader,
+    landingZoneLabel: widget.rideController.landingZone?.label,
+    onChangeLandingZone: () => unawaited(_chooseLandingZoneOnMap()),
+    boundaryCount: widget.rideController.operationalBoundaries.length,
+    canEditBoundaries:
+        !_isSimulation && widget.rideController.isLocalRideLeader,
+    onOperationalBoundaries: () => unawaited(_openOperationalBoundaries()),
+    canChooseChaseGuidance:
+        !_isSimulation &&
+        _isChaserPerspective &&
+        widget.rideController.rideStarted &&
+        !widget.rideController.rideEnded,
+    chaseGuidanceLabel: _chaseGuidanceRouting
+        ? 'Calculating a road rendezvous…'
+        : _chaseGuidanceTarget == null
+        ? null
+        : '${_chaseGuidanceTarget!.label} · only on this device',
+    onChooseChaseGuidance: () => unawaited(_chooseChaseGuidanceTarget()),
     maneuverCount: const NavigationGuidancePlanner()
         .instructions(_activeRoute)
         .length,
@@ -4428,8 +5133,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     hasOwnPhoneNumber: widget.riderProfile.hasOwnPhoneNumber,
     ownPhoneNumberShared: widget.rideController.hasSharedOwnContactNumber,
     ownPhoneNumberRecipientLabel: _ownContactRecipients.toRideGroup
-        ? 'this ride'
-        : 'the ride leader',
+        ? 'this flight'
+        : 'the coordinator',
     onShareOwnPhoneNumber: () => unawaited(_shareOwnPhoneNumber()),
     ridePaused: widget.rideController.ridePaused,
     canToggleRidePause:
@@ -4439,6 +5144,376 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     onToggleRidePause: _toggleRidePause,
     onLeaveOrEndRide: _confirmLeaveRideFromMap,
   );
+
+  Future<void> _chooseLandingZoneOnMap() async {
+    var radius = _landingRadiusMeters;
+    final selectedRadius = await showModalBottomSheet<double>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF171D25),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Update intended landing area',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Choose an approximate radius, then tap the map. This does not verify road access, permission or landing suitability.',
+                style: TextStyle(color: Color(0xFFABB5C1)),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final choice in const [250.0, 500.0, 1000.0])
+                    ChoiceChip(
+                      label: Text(
+                        choice < 1000 ? '${choice.toInt()} m' : '1 km',
+                      ),
+                      selected: radius == choice,
+                      onSelected: (_) => setSheetState(() => radius = choice),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).pop(radius),
+                icon: const Icon(Icons.touch_app),
+                label: const Text('Choose centre on map'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selectedRadius == null || !mounted) return;
+    setState(() {
+      _landingRadiusMeters = selectedRadius;
+      _selectedIndex = 0;
+      _selectingLandingZone = true;
+    });
+  }
+
+  Future<void> _openOperationalBoundaries() async {
+    final canEdit = !_isSimulation && widget.rideController.isLocalRideLeader;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF171D25),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final boundaries = widget.rideController.operationalBoundaries;
+          return FractionallySizedBox(
+            heightFactor: 0.82,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Operational boundaries',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Shared pilot-entered advisories. They do not replace current airspace, weather, permissions or pilot judgement.',
+                        style: TextStyle(color: Color(0xFFABB5C1)),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: boundaries.isEmpty
+                      ? const Center(
+                          child: Text('No boundaries have been added.'),
+                        )
+                      : ListView.builder(
+                          itemCount: boundaries.length,
+                          itemBuilder: (context, index) {
+                            final boundary = boundaries[index];
+                            final altitude = [
+                              if (boundary.lowerAltitudeMeters
+                                  case final value?)
+                                'min ${value.round()} m',
+                              if (boundary.upperAltitudeMeters
+                                  case final value?)
+                                'max ${value.round()} m',
+                            ].join(' · ');
+                            return ListTile(
+                              leading: Icon(switch (boundary.kind) {
+                                OperationalBoundaryKind.line => Icons.polyline,
+                                OperationalBoundaryKind.area =>
+                                  Icons.pentagon_outlined,
+                                OperationalBoundaryKind.altitudeBand =>
+                                  Icons.height,
+                              }, color: const Color(0xFFFF5D73)),
+                              title: Text(boundary.label),
+                              subtitle: Text(
+                                '${boundary.source}${altitude.isEmpty ? '' : ' · $altitude ${boundary.altitudeDatum.name}'}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: canEdit
+                                  ? IconButton(
+                                      tooltip: 'Remove boundary',
+                                      icon: const Icon(Icons.delete_outline),
+                                      onPressed: () async {
+                                        await widget.rideController
+                                            .removeOperationalBoundary(
+                                              boundary.id,
+                                            );
+                                        if (sheetContext.mounted) {
+                                          setSheetState(() {});
+                                        }
+                                      },
+                                    )
+                                  : null,
+                            );
+                          },
+                        ),
+                ),
+                if (canEdit)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            unawaited(
+                              _configureOperationalBoundary(
+                                OperationalBoundaryKind.line,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.polyline),
+                          label: const Text('Draw line'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            unawaited(
+                              _configureOperationalBoundary(
+                                OperationalBoundaryKind.area,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.pentagon_outlined),
+                          label: const Text('Draw area'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            unawaited(
+                              _configureOperationalBoundary(
+                                OperationalBoundaryKind.altitudeBand,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.height),
+                          label: const Text('Altitude limits'),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _configureOperationalBoundary(
+    OperationalBoundaryKind kind,
+  ) async {
+    final labelController = TextEditingController(
+      text: switch (kind) {
+        OperationalBoundaryKind.line => 'Advisory boundary line',
+        OperationalBoundaryKind.area => 'Advisory boundary area',
+        OperationalBoundaryKind.altitudeBand => 'Planned altitude band',
+      },
+    );
+    final sourceController = TextEditingController(
+      text: 'Pilot-entered advisory boundary',
+    );
+    final lowerController = TextEditingController();
+    final upperController = TextEditingController();
+    var datum = AltitudeDatum.wgs84Geoid;
+    String? validationMessage;
+    final draft = await showDialog<_OperationalBoundaryDraft>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            kind == OperationalBoundaryKind.altitudeBand
+                ? 'Add altitude limits'
+                : 'Describe the boundary',
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: labelController,
+                  maxLength: 96,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
+                TextField(
+                  controller: sourceController,
+                  maxLength: 160,
+                  decoration: const InputDecoration(
+                    labelText: 'Source or briefing reference',
+                    helperText: 'Shown to every crew member',
+                  ),
+                ),
+                if (kind == OperationalBoundaryKind.altitudeBand) ...[
+                  TextField(
+                    controller: lowerController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Minimum altitude in metres (optional)',
+                    ),
+                  ),
+                  TextField(
+                    controller: upperController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Maximum altitude in metres (optional)',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<AltitudeDatum>(
+                    initialValue: datum,
+                    decoration: const InputDecoration(
+                      labelText: 'Altitude reference',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: AltitudeDatum.wgs84Geoid,
+                        child: Text('Mean sea level / WGS84 geoid'),
+                      ),
+                      DropdownMenuItem(
+                        value: AltitudeDatum.wgs84Ellipsoid,
+                        child: Text('WGS84 ellipsoid'),
+                      ),
+                      DropdownMenuItem(
+                        value: AltitudeDatum.relativeToLaunch,
+                        child: Text('Relative to launch'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setDialogState(() => datum = value);
+                    },
+                  ),
+                ],
+                if (validationMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(
+                      validationMessage!,
+                      style: const TextStyle(color: Color(0xFFFF8A8A)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final label = labelController.text.trim();
+                final source = sourceController.text.trim();
+                final lower = lowerController.text.trim().isEmpty
+                    ? null
+                    : double.tryParse(lowerController.text.trim());
+                final upper = upperController.text.trim().isEmpty
+                    ? null
+                    : double.tryParse(upperController.text.trim());
+                final altitudeValid =
+                    kind != OperationalBoundaryKind.altitudeBand ||
+                    ((lower != null || upper != null) &&
+                        (lower == null || upper == null || lower < upper));
+                if (label.isEmpty || source.isEmpty || !altitudeValid) {
+                  setDialogState(() {
+                    validationMessage = label.isEmpty || source.isEmpty
+                        ? 'Add a name and source.'
+                        : 'Add at least one limit, with the minimum below the maximum.';
+                  });
+                  return;
+                }
+                Navigator.pop(
+                  dialogContext,
+                  _OperationalBoundaryDraft(
+                    id: 'boundary-${DateTime.now().microsecondsSinceEpoch}',
+                    label: label,
+                    kind: kind,
+                    source: source,
+                    lowerAltitudeMeters: lower,
+                    upperAltitudeMeters: upper,
+                    altitudeDatum: datum,
+                  ),
+                );
+              },
+              child: Text(
+                kind == OperationalBoundaryKind.altitudeBand
+                    ? 'Save limits'
+                    : 'Choose points on map',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    labelController.dispose();
+    sourceController.dispose();
+    lowerController.dispose();
+    upperController.dispose();
+    if (draft == null || !mounted) return;
+    if (kind == OperationalBoundaryKind.altitudeBand) {
+      await widget.rideController.upsertOperationalBoundary(
+        OperationalBoundary(
+          id: draft.id,
+          label: draft.label,
+          kind: draft.kind,
+          points: const [],
+          source: draft.source,
+          updatedAt: DateTime.now(),
+          lowerAltitudeMeters: draft.lowerAltitudeMeters,
+          upperAltitudeMeters: draft.upperAltitudeMeters,
+          altitudeDatum: draft.altitudeDatum,
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _selectedIndex = 0;
+      _selectingLandingZone = false;
+      _operationalBoundaryDraft = draft;
+    });
+    _syncOperationalBoundaries();
+  }
 
   void _openAlertsAndReports() {
     unawaited(
@@ -4468,7 +5543,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     } on Object catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not share ride summary: $error')),
+        SnackBar(content: Text('Could not share flight summary: $error')),
       );
     }
   }
@@ -4805,16 +5880,16 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         }
       }
     }
-    final title = session.rideName ?? 'Balloon Crumbs ride';
+    final title = session.rideName ?? 'Balloon Crumbs flight';
     final text = [
       title,
-      'Ride code: ${session.rideCode}',
+      'Flight code: ${session.rideCode}',
       '',
       ...riders,
     ].join('\n');
     unawaited(
       SharePlus.instance.share(
-        ShareParams(text: text, subject: 'Riders on $title'),
+        ShareParams(text: text, subject: 'Crew on $title'),
       ),
     );
   }
@@ -5022,8 +6097,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     widget.sharedRoutes.removeListener(_onSharedRoutesChanged);
     _simulationController?.removeListener(_onSimulationVisualChanged);
     _simulationController?.dispose();
+    _windForecastController?.removeListener(_onWindForecastChanged);
     _windForecastController?.dispose();
     _simulationLandingZone.dispose();
+    _sharedLandingZone.dispose();
     _preStartPresenceController?.removeListener(_onPreStartPresenceChanged);
     unawaited(_spokenGuidance?.stop());
     _awarenessController?.removeListener(_onAwarenessChanged);

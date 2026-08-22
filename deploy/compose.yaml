@@ -111,7 +111,6 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./maps/styles:/srv/maps/styles:ro
       - ../apps/planner:/srv/planner:ro
-      - ../apps/website:/srv/website:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:

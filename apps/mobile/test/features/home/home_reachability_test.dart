@@ -115,8 +115,8 @@ void main() {
   ) async {
     await pumpHome(tester);
 
-    expect(find.text('Create a ride'), findsOneWidget);
-    expect(find.text('Join a ride'), findsOneWidget);
+    expect(find.text('Create flight'), findsOneWidget);
+    expect(find.text('Join crew'), findsOneWidget);
   });
 
   testWidgets('ride setup uses the saved symbol and colour without repicking', (
@@ -130,7 +130,7 @@ void main() {
     );
     await pumpHome(tester);
 
-    await tester.tap(find.text('Create a ride'));
+    await tester.tap(find.text('Create flight'));
     await tester.pumpAndSettle();
 
     expect(find.text('Your colour'), findsNothing);
@@ -152,7 +152,7 @@ void main() {
     );
 
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Create ride'),
+      find.widgetWithText(FilledButton, 'Create private flight'),
       180,
       scrollable: find
           .descendant(
@@ -161,7 +161,9 @@ void main() {
           )
           .first,
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Create ride'));
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Create private flight'),
+    );
     await tester.pumpAndSettle();
 
     expect(rideController.session?.riderSymbol, const RiderSymbol.emoji('🦊'));
@@ -180,15 +182,20 @@ void main() {
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ride library'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Flight library'),
+      100,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Flight library'), findsOneWidget);
     expect(
-      find.textContaining('Recorded routes and previous rides'),
+      find.textContaining('Recorded chase routes and previous flights'),
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Ride library'));
+    await tester.tap(find.text('Flight library'));
     await tester.pumpAndSettle();
-    expect(find.text('Ride library'), findsOneWidget);
+    expect(find.text('Flight library'), findsOneWidget);
     expect(find.text('No saved routes yet'), findsOneWidget);
   });
 
@@ -199,8 +206,8 @@ void main() {
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Try a simulated ride'), findsOneWidget);
-    expect(find.text('Record a route'), findsOneWidget);
+    expect(find.text('Replay the Fiesta flight'), findsOneWidget);
+    expect(find.text('Record a chase route'), findsOneWidget);
   });
 
   testWidgets('the balloon flight planner is reachable and opens in place', (
@@ -229,7 +236,7 @@ void main() {
     expect(openedUri?.host, 'balloon-crumbs.pages.dev');
   });
 
-  testWidgets('a flight planner launch failure is explained', (tester) async {
+  testWidgets('a ride planner launch failure is explained', (tester) async {
     await pumpHome(
       tester,
       flightPlannerLauncher: FlightPlannerLauncher(openUri: (_) async => false),
@@ -253,7 +260,7 @@ void main() {
     // then concluded to be missing, because the only way to find it was an
     // unlabelled camera icon inside a text field's suffix.
     await pumpHome(tester);
-    await tester.tap(find.text('Join a ride'));
+    await tester.tap(find.text('Join crew'));
     await tester.pumpAndSettle();
 
     expect(
@@ -268,7 +275,7 @@ void main() {
   ) async {
     // Adding the label must not have quietly replaced the compact affordance.
     await pumpHome(tester);
-    await tester.tap(find.text('Join a ride'));
+    await tester.tap(find.text('Join crew'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('scan-invitation-button')), findsOneWidget);

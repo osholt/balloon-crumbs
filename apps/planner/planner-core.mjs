@@ -1233,3 +1233,89 @@ export function forecastDistanceMetres(track) {
   }
   return total;
 }
+
+export function normaliseOperationalBoundary(input) {
+  if (!input || typeof input !== "object") throw new TypeError("Boundary is invalid.");
+  const id = String(input.id ?? "").trim().slice(0, 96);
+  const label = String(input.label ?? "").trim().slice(0, 96);
+  const source = String(input.source ?? "").trim().slice(0, 160);
+  const kind = String(input.kind ?? "");
+  if (!id || !label || !source || !["line", "area", "altitudeBand"].includes(kind)) {
+    throw new TypeError("Boundary name, kind and source are required.");
+  }
+  const points = Array.isArray(input.points)
+    ? input.points.map((point) => validPoint(point, "boundary point"))
+    : [];
+  if ((kind === "line" && points.length < 2) || (kind === "area" && points.length < 3)) {
+    throw new RangeError("Boundary geometry is incomplete.");
+  }
+  if (kind === "altitudeBand" && points.length !== 0) {
+    throw new RangeError("An altitude band cannot contain map points.");
+  }
+  const lowerAltitudeMeters =
+    input.lowerAltitudeMeters === null || input.lowerAltitudeMeters === undefined
+      ? null
+      : finiteNumber(input.lowerAltitudeMeters, "minimum altitude");
+  const upperAltitudeMeters =
+    input.upperAltitudeMeters === null || input.upperAltitudeMeters === undefined
+      ? null
+      : finiteNumber(input.upperAltitudeMeters, "maximum altitude");
+  if (
+    kind === "altitudeBand" &&
+    lowerAltitudeMeters === null &&
+    upperAltitudeMeters === null
+  ) {
+    throw new RangeError("An altitude band needs at least one limit.");
+  }
+  if (
+    lowerAltitudeMeters !== null &&
+    upperAltitudeMeters !== null &&
+    lowerAltitudeMeters >= upperAltitudeMeters
+  ) {
+    throw new RangeError("Minimum altitude must be below maximum altitude.");
+  }
+  const altitudeDatum = ["wgs84Geoid", "wgs84Ellipsoid", "relativeToLaunch"].includes(
+    input.altitudeDatum,
+  )
+    ? input.altitudeDatum
+    : "wgs84Geoid";
+  return Object.freeze({
+    id,
+    label,
+    kind,
+    points: Object.freeze(points.map((point) => Object.freeze(point))),
+    source,
+    lowerAltitudeMeters,
+    upperAltitudeMeters,
+    altitudeDatum,
+  });
+}
+
+export function operationalBoundariesGeoJson(boundaries, draft = null) {
+  const features = [];
+  for (const boundary of boundaries ?? []) {
+    const value = normaliseOperationalBoundary(boundary);
+    if (value.kind === "altitudeBand") continue;
+    const coordinates = value.points.map((point) => [point.longitude, point.latitude]);
+    features.push({
+      type: "Feature",
+      properties: { id: value.id, label: value.label, source: value.source, draft: false },
+      geometry:
+        value.kind === "area"
+          ? { type: "Polygon", coordinates: [[...coordinates, coordinates[0]]] }
+          : { type: "LineString", coordinates },
+    });
+  }
+  if (draft?.points?.length >= 2) {
+    const coordinates = draft.points.map((point) => [point.longitude, point.latitude]);
+    features.push({
+      type: "Feature",
+      properties: { id: "draft", label: draft.label ?? "Boundary draft", draft: true },
+      geometry:
+        draft.kind === "area" && coordinates.length >= 3
+          ? { type: "Polygon", coordinates: [[...coordinates, coordinates[0]]] }
+          : { type: "LineString", coordinates },
+    });
+  }
+  return { type: "FeatureCollection", features };
+}

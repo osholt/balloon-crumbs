@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../controllers/foreground_location_controller.dart';
@@ -34,6 +35,8 @@ class HomeMapBackdrop extends StatefulWidget {
     this.position,
     this.completedRideStore,
     this.onMapStyleResolved,
+    this.landingZone,
+    this.onMapTap,
   });
 
   /// Height kept clear at the bottom for whatever stands on the map.
@@ -54,6 +57,8 @@ class HomeMapBackdrop extends StatefulWidget {
   final DistanceUnit distanceUnit;
   final CompletedRideStore? completedRideStore;
   final ValueChanged<String>? onMapStyleResolved;
+  final ValueListenable<MapLandingZone?>? landingZone;
+  final ValueChanged<route_domain.GeoPoint>? onMapTap;
 
   /// False in widget tests and on any build without the platform plugins, where
   /// the map would be a spinner and the location plugin is not answering.
@@ -143,6 +148,8 @@ class _HomeMapBackdropState extends State<HomeMapBackdrop> {
             speedLimitDisplay: widget.speedLimitDisplay,
             distanceUnit: widget.distanceUnit,
             onMapStyleResolved: widget.onMapStyleResolved,
+            landingZoneUpdates: widget.landingZone,
+            onMapTap: widget.onMapTap,
             // No ride yet, so nothing may edit a ride's route from here and no
             // ride surface has anything to say.
             canEditRoute: false,

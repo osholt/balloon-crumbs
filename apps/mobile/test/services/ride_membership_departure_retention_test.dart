@@ -81,7 +81,7 @@ void main() {
       expect(bill.hasLeft, isTrue);
       // Marked as having left, and when.
       expect(bill.leftAt, startedAt.add(const Duration(minutes: 32)));
-      expect(bill.stateLabel, 'Left the ride at 14:32');
+      expect(bill.stateLabel, 'Left the flight at 14:32');
       // Role and last-seen survive: this is the record you look somebody up in.
       expect(bill.role, RideRole.rider);
       expect(bill.lastSeenAt, startedAt.add(const Duration(minutes: 32)));
@@ -161,7 +161,7 @@ void main() {
     final bill = riderIn(participants, 'bill');
     expect(bill.state, RideMembershipState.left);
     expect(bill.displayName, 'Bill');
-    expect(bill.stateLabel, 'Left the ride at 14:06');
+    expect(bill.stateLabel, 'Left the flight at 14:06');
     expect(bill.lastKnownLocation?.sample.position.latitude, 51.5);
     expect(bill.isIncludedInLiveCount, isFalse);
   });
@@ -196,7 +196,7 @@ void main() {
 
     final bill = riderIn(participants, 'bill');
     expect(bill.state, RideMembershipState.left);
-    expect(bill.stateLabel, 'Left the ride at 14:32');
+    expect(bill.stateLabel, 'Left the flight at 14:32');
     expect(bill.role, RideRole.rider);
     expect(bill.knownFromRelayOnly, isTrue);
     expect(bill.isIncludedInLiveCount, isFalse);
@@ -290,7 +290,7 @@ void main() {
     // Sam is known to nobody else, so the undated departure is all there is.
     final sam = riderIn(participants, 'sam');
     expect(sam.hasLeft, isTrue);
-    expect(sam.stateLabel, 'Left the ride');
+    expect(sam.stateLabel, 'Left the flight');
     expect(sam.isIncludedInLiveCount, isFalse);
   });
 
@@ -319,7 +319,7 @@ void main() {
     );
     final bill = riderIn(ended, 'bill');
     expect(bill.state, RideMembershipState.left);
-    expect(bill.stateLabel, 'Left the ride at 14:05');
+    expect(bill.stateLabel, 'Left the flight at 14:05');
     expect(bill.isIncludedInLiveCount, isFalse);
 
     // Deleting the ride takes its journal, and the record goes with it. There is

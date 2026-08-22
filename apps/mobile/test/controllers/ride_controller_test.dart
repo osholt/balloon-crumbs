@@ -254,12 +254,12 @@ void main() {
 
     await controller.publishRoute(route);
     expect(controller.authoritativeRoute, isNull);
-    expect(controller.errorMessage, contains('Only the ride leader'));
+    expect(controller.errorMessage, contains('Only the coordinator'));
 
     controller.clearError();
     await controller.clearRoute();
     expect(controller.authoritativeRouteState.hasDecision, isFalse);
-    expect(controller.errorMessage, contains('Only the ride leader'));
+    expect(controller.errorMessage, contains('Only the coordinator'));
   });
 
   test('a non-leader cannot start the ride', () async {
@@ -269,7 +269,7 @@ void main() {
     await controller.startRide();
 
     expect(controller.rideStarted, isFalse);
-    expect(controller.errorMessage, contains('Only the ride leader'));
+    expect(controller.errorMessage, contains('Only the coordinator'));
     expect(
       controller.events.where(
         (event) => event.type == RideEventType.rideStarted,
@@ -457,7 +457,7 @@ void main() {
 
       expect(
         controller.rideCodeShareText,
-        contains('ride code ${leaderSession.rideCode} in the'),
+        contains('flight code ${leaderSession.rideCode} in the'),
       );
       expect(
         controller.rideCodeShareText,
@@ -668,7 +668,7 @@ void main() {
     expect(controller.session?.rideName, 'Current ride');
     expect(
       controller.errorMessage,
-      'Finish or leave your current ride before creating another.',
+      'Finish or leave your current flight before creating another.',
     );
   });
 
@@ -689,7 +689,7 @@ void main() {
     expect(controller.session?.rideId, current.rideId);
     expect(
       controller.errorMessage,
-      'Finish or leave your current ride before joining another.',
+      'Finish or leave your current flight before joining another.',
     );
   });
 

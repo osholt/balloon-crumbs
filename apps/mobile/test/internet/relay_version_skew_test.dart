@@ -399,7 +399,7 @@ void main() {
               .having(
                 (error) => error.message,
                 'message',
-                contains('does not support live rider positions'),
+                contains('does not support live crew positions'),
               ),
         ),
       );

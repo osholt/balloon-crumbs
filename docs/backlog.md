@@ -9,18 +9,20 @@ not a claim that every P0 item is small. Work packages are defined in
 | 1 | P0 | ~~Isolate inherited TEC baseline and keep CI green~~ **done** | WP1 | — |
 | 2 | P0 | ~~Balloon-capable telemetry: altitude, source, datum, accuracy, vertical speed~~ **done** | WP2 | 1 |
 | 3 | P0 | Craft model, flight roles, and pilot authority | WP3 | 2 |
-| 4 | P0 | ~~Delete the motorcycle domain~~ **done**; vocabulary rename deferred to after 6, 7 | WP4 | 3 |
+| 4 | P0 | ~~Delete the motorcycle domain and replace user-facing ride/rider copy~~ **done**; compatibility identifiers remain until after 6, 7 | WP4 | 3 |
 | 4a | P0 | Replace the 15 motorcycle map markers with craft icons (#18) | WP4 | 6, 7 |
 | 5 | P0 | Altitude-coloured ground track and telemetry card | WP5 | 2, 3 |
 | 6 | P0 | Pilot view, drawn landing area, and inferred landing phase | WP6 | 3, 5 |
 | 7 | P0 | Multiple chase vehicles, rendezvous, and vehicle assignment | WP7 | 3, 5 |
-| 7a | P0 | Route to the intended landing area, with a balloon-divergence check | WP7 | 6, 7 |
+| 7a | P0 | Chaser-selectable road guidance to the balloon or intended landing area, with safe road rendezvous and balloon-divergence checks | WP7 | 6, 7 |
 | 7b | P0 | Mini-map as the chase decision surface (balloon, track, area, vehicles) | WP7 | 7a |
 | 8 | P0 | Voice-first chase guidance for a moving target | WP8 | 7 |
 | 9 | P0 | Ground notes and the retrieve | WP9 | 3 |
 | 10 | P0 | Landing-phase basemap (OS topographic / aerial) | WP6b | 6 |
 | 11 | P0 | Balloon/chase simulator and replay matrix | WP10 | 3–9 |
+| 11a | P0 | Full-flight archive v2: time-align balloon telemetry, available chaser/craft locations, wind observations and guidance target changes; replay any previous flight, not only the bundled Fiesta scenario | WP10 | 5–9 |
 | 12 | P0 | Security, privacy, retention, and field-test gates | WP12 | 3–11 |
+| 12a | P0 | Multiple operational boundaries and altitude bands: draw, name, share and update more than one line/area in the web planner or app; alert on crossing with source, age and hysteresis; support configurable high/low altitude alerts | WP10b | 5, 6, 12 |
 | 13 | P1 | ~~Carry balloon altitude through GPX export and import (#16)~~ **done** | WP5 | 2 |
 | 14 | P1 | Retarget speed limits, camera and enforcement alerts at the chase driver | WP7 | 3 |
 | 15 | P1 | Pilot aeronautical context: airspace, notices, restrictions | WP10b | 5 |
@@ -32,6 +34,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 21 | P1 | Revocable observer sharing and balloon-specific exports | — | 3, 5 |
 | 22 | P2 | Multiple balloons in one event, with a shared vehicle pool | — | 3, 7 |
 | 23 | P2 | Dynamic chase reassignment across balloons by distance and wind | — | 22, 17 |
+| 24 | P1 | Saved launch/landing-area catalogue and time-by-altitude weather scan informed by the Ballooning Maps review | WP11 | 17, 18 |
 
 ## Notes on ordering
 

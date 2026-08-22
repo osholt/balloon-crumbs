@@ -66,12 +66,12 @@ void main() {
     }
   });
 
-  test('both hosted association-file copies are identical', () {
+  test('both hosted association files live with the deployed planner', () {
     for (final name in ['apple-app-site-association', 'assetlinks.json']) {
       expect(
         File('../planner/.well-known/$name').readAsStringSync(),
-        File('../website/.well-known/$name').readAsStringSync(),
-        reason: '$name differs between the planner and website deployments',
+        isNotEmpty,
+        reason: '$name is missing from the deployed planner bundle',
       );
     }
   });
@@ -80,7 +80,7 @@ void main() {
     final association =
         jsonDecode(
               File(
-                '../website/.well-known/apple-app-site-association',
+                '../planner/.well-known/apple-app-site-association',
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
@@ -109,7 +109,7 @@ void main() {
     final association =
         jsonDecode(
               File(
-                '../website/.well-known/apple-app-site-association',
+                '../planner/.well-known/apple-app-site-association',
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
@@ -128,7 +128,7 @@ void main() {
     final statements =
         (jsonDecode(
                   File(
-                    '../website/.well-known/assetlinks.json',
+                    '../planner/.well-known/assetlinks.json',
                   ).readAsStringSync(),
                 )
                 as List)

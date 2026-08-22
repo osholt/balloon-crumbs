@@ -52,7 +52,7 @@ String rideInvitationUrl(String rideCode, String joinToken) {
   final invitation = joinInviteText(rideCode, joinToken);
   final parsed = parseJoinInvite(invitation);
   if (parsed.code != rideCode || parsed.token != joinToken) {
-    throw const FormatException('Cannot create an invalid ride invitation.');
+    throw const FormatException('Cannot create an invalid flight invitation.');
   }
   return Uri.https(
     appLinkHost,

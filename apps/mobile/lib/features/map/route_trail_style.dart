@@ -61,7 +61,7 @@ class RouteLineStyle {
 /// 1. Luminance against the basemap. Every line is opaque, bright, and carries
 ///    an opaque near-black casing. The bright fill provides the contrast over a
 ///    dark basemap, the casing provides it over a light one.
-/// 2. Weight and pattern. Five bright colours cannot all be separated by
+/// 2. Weight and pattern. Bright colours cannot all be separated by
 ///    luminance alone - a dark basemap needs every one of them to be light - so
 ///    each category also has a unique (width, dash pattern) pair and stays
 ///    identifiable in a greyscale render.
@@ -75,6 +75,7 @@ class RouteLineStyle {
 /// | travelled     | #FF7A1A |      2.81  |        6.52  |     7.02  |
 /// | leader trail  | #D3B8FF |      4.22  |        9.78  |    10.53  |
 /// | connector     | #00E5FF |      4.77  |       11.06  |    11.91  |
+/// | boundary      | #FF8FA3 |      3.39  |        7.87  |     8.47  |
 ///
 /// "dark worst" is against the lightest surface of the dark basemap (the
 /// motorway fill), "dark typical" against its background. The casing measures
@@ -164,6 +165,15 @@ class RouteTrailStyle {
     casingWidthPixels: 11,
   );
 
+  /// Advisory operational geometry. Magenta and a short dash keep it distinct
+  /// from road guidance and all recorded tracks.
+  static const operationalBoundary = RouteLineStyle(
+    color: Color(0xFFFF8FA3),
+    widthPixels: 4,
+    casingWidthPixels: 8,
+    dashPixels: [10, 7],
+  );
+
   /// The road route to the start of the planned route (#133), which claimed this
   /// cyan and renders it dashed. Declared here so the palette stays one table and
   /// the widths and dash runs stay distinct from every other line.
@@ -191,6 +201,7 @@ class RouteTrailStyle {
     RiderTrailKind.rider => travelled,
     RiderTrailKind.leader => leaderTrail,
     RiderTrailKind.balloonGroundTrack => balloonGroundTrack,
+    RiderTrailKind.operationalBoundary => operationalBoundary,
     RiderTrailKind.routeStartConnector => routeStartConnectorLine,
   };
 
@@ -246,6 +257,7 @@ class RouteTrailStyle {
     'travelled': travelled,
     'leader trail': leaderTrail,
     'balloon ground track': balloonGroundTrack,
+    'operational boundary': operationalBoundary,
     'route start connector': routeStartConnectorLine,
   };
 

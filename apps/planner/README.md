@@ -44,7 +44,8 @@ pretend a balloon follows a road route:
 - the resulting forecast track can be stored through `/api/v1/plans` and loaded
   in the app with the returned short code.
 
-The public page is served at `https://balloon-crumbs.pages.dev/`. Its Pages
+The product home is served at `https://balloon-crumbs.pages.dev/`, with this
+planner at `/planner.html`. Its Pages
 Worker keeps browser calls same-origin and proxies only the relay, health,
 Open-Meteo, OpenFreeMap and OpenAIP paths needed by the planner to the isolated
 Oracle deployment. The origin also serves `/plan/` as a recovery path. The
@@ -63,6 +64,12 @@ UK Met Office data obtained through Open-Meteo is attributed under CC BY-SA
 Place search uses the public OpenStreetMap Nominatim service through a bounded,
 cached Pages endpoint. It never runs autocomplete: only an explicit submitted
 query is sent, with a maximum of five UK results.
+
+Pilot-entered operational lines, areas and altitude bands are stored locally in
+the planner browser and rendered together on the map. They remain advisory and
+show their entered source and vertical datum. They are not yet embedded in the
+short-code GPX, so the pilot must recreate or update them in the live flight to
+share them with crew devices.
 
 ## Checks
 

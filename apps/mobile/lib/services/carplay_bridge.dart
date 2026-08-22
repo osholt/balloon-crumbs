@@ -72,7 +72,7 @@ class CarPlayLocalRider {
     required this.motorcycleStyle,
     required this.riderSymbol,
     required this.riderColor,
-    this.roleLabel = 'Rider',
+    this.roleLabel = 'Chaser',
   });
 
   final String riderId;
@@ -253,7 +253,7 @@ class CarPlayBridge {
         if (rawGroupRide != null && rawGroupRide is! bool) {
           return const {
             'ok': false,
-            'error': 'The ride type is invalid. Try again.',
+            'error': 'The flight type is invalid. Try again.',
           };
         }
         try {
@@ -663,7 +663,7 @@ class CarPlayRideStart {
           : '$routeName. Recording, sharing and navigation will start.',
       warning: null,
       unavailableReason: locationReady
-          ? (busy ? 'Ride setup is still being saved.' : null)
+          ? (busy ? 'Flight setup is still being saved.' : null)
           : 'Allow location access on the iPhone before starting from CarPlay.',
     );
   }

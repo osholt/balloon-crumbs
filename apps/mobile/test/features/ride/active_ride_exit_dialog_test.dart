@@ -23,7 +23,7 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Leave or end this ride?'), findsOneWidget);
+    expect(find.text('Leave or end this flight?'), findsOneWidget);
     expect(find.byKey(const Key('leave-only-this-phone')), findsOneWidget);
     expect(find.byKey(const Key('end-ride-for-everyone')), findsOneWidget);
 
@@ -48,9 +48,9 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Leave this ride?'), findsOneWidget);
+    expect(find.text('Leave this flight?'), findsOneWidget);
     expect(find.byKey(const Key('end-ride-for-everyone')), findsNothing);
-    expect(find.text('Leave ride'), findsOneWidget);
+    expect(find.text('Leave flight'), findsOneWidget);
   });
 
   // #362: a solo ride is still led by the rider, so isLeader is true and the
@@ -81,12 +81,12 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('End this ride?'), findsOneWidget);
+    expect(find.text('End this flight?'), findsOneWidget);
     expect(find.textContaining('everyone'), findsNothing);
     expect(find.textContaining('group'), findsNothing);
     // One act, one action: there is no "leave" distinct from "end".
     expect(find.byKey(const Key('leave-only-this-phone')), findsNothing);
-    expect(find.text('End ride'), findsOneWidget);
+    expect(find.text('End flight'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('end-ride-for-everyone')));
     await tester.pumpAndSettle();

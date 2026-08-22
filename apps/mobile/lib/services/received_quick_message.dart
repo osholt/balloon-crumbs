@@ -394,7 +394,7 @@ class ReceivedQuickMessageReducer {
   static String _nameFor(RideEvent event, Map<String, String> displayNames) {
     final relayed = event.payload['senderDisplayName'];
     if (relayed is String && relayed.trim().isNotEmpty) return relayed.trim();
-    return displayNames[event.deviceId] ?? 'A rider';
+    return displayNames[event.deviceId] ?? 'A crew member';
   }
 
   static GeoPoint? _positionFrom(Object? value) {

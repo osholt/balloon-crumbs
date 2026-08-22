@@ -131,7 +131,7 @@ void main() {
         (participant) => participant.riderId == 'bill',
       );
       expect(bill.hasLeft, isTrue);
-      expect(bill.stateLabel, 'Left the ride at 09:12');
+      expect(bill.stateLabel, 'Left the flight at 09:12');
       expect(bill.displayName, 'Bill');
       // Out of the live group immediately, and off the map with it.
       expect(controller.liveParticipants.length, 1);

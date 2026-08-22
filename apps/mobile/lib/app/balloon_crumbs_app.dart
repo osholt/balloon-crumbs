@@ -101,6 +101,10 @@ class BalloonCrumbsApp extends StatelessWidget {
     required bool openJoinGroup,
     required VoidCallback requestJoinGroup,
     required VoidCallback consumeJoinGroupRequest,
+    required bool showRecoveredRideChoice,
+    required VoidCallback rejoinRecoveredRide,
+    required VoidCallback setRecoveredRideAside,
+    required Future<void> Function() endRecoveredRide,
   }) {
     const background = Color(0xFF0D1117);
     const surface = Color(0xFF171D25);
@@ -119,6 +123,8 @@ class BalloonCrumbsApp extends StatelessWidget {
         ?routeProgressDisplay,
       ]),
       builder: (context, _) {
+        controller.includePeerReplayTracks =
+            riderProfile.retainPeerTracksForReplay;
         if (!restorationComplete && !showRestorationFallback) {
           return const _RideRestoreScreen();
         }
@@ -147,9 +153,18 @@ class BalloonCrumbsApp extends StatelessWidget {
             enableNativeServices: enableNativeServices,
           );
         }
-        // An ended ride the rider has stepped away from stays on the phone and
+        if (showRecoveredRideChoice) {
+          return _RecoveredFlightChoiceScreen(
+            flightName: controller.session?.rideName,
+            flightCode: controller.session?.rideCode,
+            onRejoin: rejoinRecoveredRide,
+            onSetAside: setRecoveredRideAside,
+            onEnd: endRecoveredRide,
+          );
+        }
+        // An ended ride the user has stepped away from stays on the phone and
         // stays archived; it just stops owning the whole screen (#207).
-        if (controller.hasActiveRide && !controller.endedRideSetAside) {
+        if (controller.hasActiveRide && !controller.rideSetAside) {
           return ActiveRideShell(
             key: ValueKey(controller.session!.rideId),
             rideController: controller,
@@ -294,6 +309,7 @@ class _RideRestoreGateState extends State<_RideRestoreGate> {
   Object? _restorationError;
   int _attempt = 0;
   bool _openJoinGroup = false;
+  bool _showRecoveredRideChoice = false;
 
   @override
   void initState() {
@@ -333,6 +349,10 @@ class _RideRestoreGateState extends State<_RideRestoreGate> {
         setState(() {
           _restorationComplete = true;
           _showRestorationFallback = false;
+          _showRecoveredRideChoice =
+              widget.app.controller.hasActiveRide &&
+              widget.app.controller.rideStarted &&
+              !widget.app.controller.rideEnded;
         });
       },
       onError: (Object error, StackTrace _) {
@@ -354,6 +374,25 @@ class _RideRestoreGateState extends State<_RideRestoreGate> {
     if (mounted && _openJoinGroup) setState(() => _openJoinGroup = false);
   }
 
+  void _rejoinRecoveredRide() {
+    if (mounted) setState(() => _showRecoveredRideChoice = false);
+  }
+
+  void _setRecoveredRideAside() {
+    widget.app.controller.setRunningRideAside();
+    if (mounted) setState(() => _showRecoveredRideChoice = false);
+  }
+
+  Future<void> _endRecoveredRide() async {
+    final controller = widget.app.controller;
+    if (controller.isLocalRideLeader) {
+      await controller.endRide();
+    } else {
+      await controller.leaveRide();
+    }
+    if (mounted) setState(() => _showRecoveredRideChoice = false);
+  }
+
   @override
   Widget build(BuildContext context) => widget.app._buildApp(
     restorationComplete: _restorationComplete,
@@ -363,7 +402,121 @@ class _RideRestoreGateState extends State<_RideRestoreGate> {
     openJoinGroup: _openJoinGroup,
     requestJoinGroup: _requestJoinGroup,
     consumeJoinGroupRequest: _consumeJoinGroupRequest,
+    showRecoveredRideChoice: _showRecoveredRideChoice,
+    rejoinRecoveredRide: _rejoinRecoveredRide,
+    setRecoveredRideAside: _setRecoveredRideAside,
+    endRecoveredRide: _endRecoveredRide,
   );
+}
+
+class _RecoveredFlightChoiceScreen extends StatefulWidget {
+  const _RecoveredFlightChoiceScreen({
+    required this.flightName,
+    required this.flightCode,
+    required this.onRejoin,
+    required this.onSetAside,
+    required this.onEnd,
+  });
+
+  final String? flightName;
+  final String? flightCode;
+  final VoidCallback onRejoin;
+  final VoidCallback onSetAside;
+  final Future<void> Function() onEnd;
+
+  @override
+  State<_RecoveredFlightChoiceScreen> createState() =>
+      _RecoveredFlightChoiceScreenState();
+}
+
+class _RecoveredFlightChoiceScreenState
+    extends State<_RecoveredFlightChoiceScreen> {
+  bool _ending = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.flightName?.trim();
+    final description = title?.isNotEmpty == true
+        ? title!
+        : 'Flight ${widget.flightCode ?? ''}'.trim();
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(
+                      Icons.restore,
+                      size: 54,
+                      color: Color(0xFFFF7A1A),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Flight recovered',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '$description was still running when the app closed. '
+                      'Return to it, end it and keep the record, or set it aside.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFFABB5C1),
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      key: const Key('rejoin-recovered-flight'),
+                      onPressed: _ending ? null : widget.onRejoin,
+                      icon: const Icon(Icons.navigation_outlined),
+                      label: const Text('Return to flight'),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      key: const Key('end-recovered-flight'),
+                      onPressed: _ending
+                          ? null
+                          : () async {
+                              setState(() => _ending = true);
+                              try {
+                                await widget.onEnd();
+                              } finally {
+                                if (mounted) setState(() => _ending = false);
+                              }
+                            },
+                      icon: _ending
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.stop_circle_outlined),
+                      label: const Text('End and save flight'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextButton(
+                      key: const Key('set-recovered-flight-aside'),
+                      onPressed: _ending ? null : widget.onSetAside,
+                      child: const Text('Not now — return to setup map'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _RideRestoreScreen extends StatelessWidget {
@@ -379,7 +532,7 @@ class _RideRestoreScreen extends StatelessWidget {
             Icon(Icons.flag_outlined, size: 42, color: Color(0xFFFF7A1A)),
             SizedBox(height: 18),
             Text(
-              'Restoring your ride…',
+              'Restoring your flight…',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
             SizedBox(height: 18),

@@ -237,7 +237,8 @@ void main() {
     );
   });
 
-  test('expands Garmin RoutePoint extension shaping points in order', () {
+  test('Garmin RoutePoint extension points shape the line without becoming '
+      'waypoints', () {
     final route = parser.parse(
       _bytes('''
         <gpx version="1.1"
@@ -265,10 +266,7 @@ void main() {
       51.2,
       51.3,
     ]);
-    expect(
-      route.waypoints.where((waypoint) => waypoint.symbol == 'Shaping point'),
-      hasLength(2),
-    );
+    expect(route.waypoints, isEmpty);
   });
 
   test('bundled demo is valid GPX geometry', () {

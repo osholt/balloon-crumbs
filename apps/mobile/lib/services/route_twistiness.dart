@@ -14,9 +14,9 @@ import '../domain/imported_route.dart';
 /// [chooseWithinDetour], which now reads it the other way up.
 ///
 /// The doc comment here used to claim this was pinned to `routeBendScore` in
-/// `apps/website/planner-core.mjs` by the fixtures in its test. That file does
-/// not exist in this repository and never has; the fixtures pin the score
-/// against itself, which is still worth having but is not a cross-check.
+/// the inherited TEC web planner by fixtures in its test. Balloon Crumbs has a
+/// separate `apps/planner/planner-core.mjs`, but it deliberately has no bendy-
+/// road scorer; the fixtures here therefore pin this implementation only.
 class RouteTwistiness {
   const RouteTwistiness._();
 

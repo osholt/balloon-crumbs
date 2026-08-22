@@ -41,7 +41,9 @@ Two traps come with that:
 Use backticks for the placeholder arguments. Double quotes would need escaping
 for JSON, and Go's template parser rejects the escaped form.
 
-`apps/website/observer-basemap-style.test.mjs` covers all of the above.
+Validate these template rules against the deployed observer map with
+`tools/check-observer-basemap.sh`; the old TEC website unit test was not part of
+the Balloon Crumbs split.
 
 ## Why the tiles are proxied
 

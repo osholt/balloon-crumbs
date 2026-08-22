@@ -273,9 +273,9 @@ class StoredRouteLibrary {
       switch (candidate.origin) {
         StoredRouteOrigin.recordedRoute => 'Recorded on this phone.',
         StoredRouteOrigin.previousRidePlan =>
-          'The planned route of ride ${candidate.rideCode}.',
+          'The planned route of flight ${candidate.rideCode}.',
         StoredRouteOrigin.previousRideTrack =>
-          'Recorded while riding ride ${candidate.rideCode}.',
+          'Recorded while chasing flight ${candidate.rideCode}.',
       };
 
   /// Stands in for the file name a GPX import carries, so every surface that
@@ -297,7 +297,7 @@ class StoredRouteLibrary {
   }) => [
     switch (candidate.origin) {
       StoredRouteOrigin.previousRidePlan =>
-        'This is the route that ride was planned with, not a recording of it.',
+        'This is the route that flight was planned with, not a recording of it.',
       _ when tidied =>
         'This is a tidied recording, not a planned route. Stops and GPS '
             'wander were removed. Every road the bike actually took is kept, '

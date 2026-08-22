@@ -62,8 +62,8 @@ class TestControlServer {
   SituationalAwarenessController get _awareness =>
       _registry.awareness ??
       (throw StateError(
-        'No ride is active, so there is no situational-awareness controller to '
-        'drive. Create or join a ride first.',
+        'No flight is active, so there is no situational-awareness controller to '
+        'drive. Create or join a flight first.',
       ));
 
   HttpServer? _server;
@@ -197,7 +197,7 @@ class TestControlServer {
     if (method == 'GET' && path == '/v1/ride/invite') {
       final session = _ride.session;
       if (session == null) {
-        throw StateError('No ride is active.');
+        throw StateError('No flight is active.');
       }
       await _send(response, HttpStatus.ok, {
         'rideCode': session.rideCode,
@@ -244,7 +244,7 @@ class TestControlServer {
     // rather than accept one we cannot promise to perform.
     if (_ride.busy) {
       throw StateError(
-        'Another ride action is still in flight. Retry in a moment - this '
+        'Another flight action is still running. Retry in a moment - this '
         'request was not performed.',
       );
     }

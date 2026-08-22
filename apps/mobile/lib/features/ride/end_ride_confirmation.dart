@@ -41,7 +41,7 @@ Future<bool> confirmEndRide(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('End this ride?'),
+      title: const Text('End this flight?'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -70,7 +70,7 @@ Future<bool> confirmEndRide(
         FilledButton(
           key: const Key('confirm-end-ride'),
           onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('End ride'),
+          child: const Text('End flight'),
         ),
       ],
     ),
@@ -93,13 +93,13 @@ String endRideConsequence({
   // resume it on. Saying so anyway told a rider alone on a road that they were
   // about to affect people who were not there (#362).
   if (isSolo) {
-    return 'This ends your ride. Location sharing stops on this phone, and '
+    return 'This ends your flight. Location sharing stops on this phone, and '
         'relay recovery stays available for final queued events until you '
-        'file the ended ride.\n\n'
-        '${relayCanCarryReopen ? 'You can resume it within 24 hours without changing the ride code.' : 'This relay cannot resume an ended ride. This action cannot be undone.'}';
+        'file the ended flight.\n\n'
+        '${relayCanCarryReopen ? 'You can resume it within 24 hours without changing the flight code.' : 'This relay cannot resume an ended flight. This action cannot be undone.'}';
   }
-  return 'This ends the group ride for everyone. Location sharing stops on '
+  return 'This ends the group flight for everyone. Location sharing stops on '
       'this phone, and relay recovery stays available for final queued events '
-      'until you file the ended ride.\n\n'
-      '${relayCanCarryReopen ? 'You can resume it within 24 hours without changing the ride code.' : 'This relay cannot resume an ended ride on the other phones. This action cannot be undone for the group.'}';
+      'until you file the ended flight.\n\n'
+      '${relayCanCarryReopen ? 'You can resume it within 24 hours without changing the flight code.' : 'This relay cannot resume an ended flight on the other phones. This action cannot be undone for the group.'}';
 }

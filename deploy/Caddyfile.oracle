@@ -80,6 +80,8 @@
 
 	handle_path /plan/* {
 		root * /srv/planner
+		@planner_shell path /
+		rewrite @planner_shell /planner.html
 		header Cache-Control "no-store"
 		header Pragma "no-cache"
 		header Referrer-Policy "no-referrer"

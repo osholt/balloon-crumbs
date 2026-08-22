@@ -105,7 +105,7 @@ void main() {
     expect(find.byKey(const Key('roster-rider-bill')), findsNothing);
     expect(find.byKey(const Key('roster-departed-notice')), findsOneWidget);
     expect(
-      find.textContaining('record is kept until this ride ends'),
+      find.textContaining('record is kept until this flight ends'),
       findsOneWidget,
     );
 
@@ -116,7 +116,7 @@ void main() {
     // Bill was last known to be.
     expect(find.byKey(const Key('roster-rider-bill')), findsOneWidget);
     expect(
-      find.textContaining('Rider · Left the ride at 14:32'),
+      find.textContaining('Chaser · Left the flight at 14:32'),
       findsOneWidget,
     );
     expect(
@@ -159,7 +159,7 @@ void main() {
     final semantics = tester.getSemantics(
       find.byKey(const Key('roster-rider-bill')),
     );
-    expect(semantics.label, contains('Left the ride at 14:32'));
+    expect(semantics.label, contains('Left the flight at 14:32'));
     expect(semantics.label, contains('Last known position'));
   });
 }

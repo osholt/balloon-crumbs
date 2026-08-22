@@ -186,7 +186,7 @@ class InternetRelayWorker {
       _emit(
         const InternetRelayStatus(
           phase: InternetRelayPhase.unauthorized,
-          message: 'Authenticated ride invitation required',
+          message: 'Authenticated flight invitation required',
         ),
       );
       return;
@@ -213,7 +213,7 @@ class InternetRelayWorker {
         _compatibility = result;
         if (!result.canSynchronize) {
           throw InternetRelayException(
-            result.message ?? 'Ride service compatibility check failed.',
+            result.message ?? 'Flight service compatibility check failed.',
             retryable:
                 result.disposition ==
                 RelayCompatibilityDisposition.temporarilyUnavailable,
@@ -248,8 +248,8 @@ class InternetRelayWorker {
         InternetRelayStatus(
           phase: InternetRelayPhase.syncing,
           message: downloadOnly
-              ? 'Receiving ride updates while a refused update is isolated'
-              : 'Synchronizing queued ride events',
+              ? 'Receiving flight updates while a refused update is isolated'
+              : 'Synchronizing queued flight events',
           lastSuccessfulSync: _status.lastSuccessfulSync,
           pendingEventCount: offerable.length,
           quarantinedEventCount: _quarantinedEventIds.length,
@@ -348,10 +348,10 @@ class InternetRelayWorker {
         InternetRelayStatus(
           phase: phase,
           message: cursorExpired
-              ? 'Refreshing the ride history after a relay update'
+              ? 'Refreshing the flight history after a relay update'
               : isolating
-              ? 'The ride service refused an update; isolating it so the rest '
-                    'of the ride keeps synchronizing'
+              ? 'The flight service refused an update; isolating it so the rest '
+                    'of the flight keeps synchronizing'
               : error.message,
           lastSuccessfulSync: _status.lastSuccessfulSync,
           nextAttemptAt: _clock().add(nextDelay),

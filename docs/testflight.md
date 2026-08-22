@@ -212,8 +212,8 @@ files must name the same host. A test enforces the checked-in copies
 | `ios/Runner/{DebugProfile,Release}.entitlements` | `applinks:<host>` |
 | `ios/Runner/AppDelegate.swift` | accepts incoming links from `<host>` |
 | `android/app/src/main/AndroidManifest.xml` and `MainActivity.kt` | claim and accept `<host>` |
-| `apps/website/.well-known/apple-app-site-association` | `appIDs: ["UY4624PH6X.dev.osholt.ballooncrumbs"]` |
-| `apps/website/.well-known/assetlinks.json` | Play app-signing certificate and Android package |
+| `apps/planner/.well-known/apple-app-site-association` | `appIDs: ["UY4624PH6X.dev.osholt.ballooncrumbs"]` |
+| `apps/planner/.well-known/assetlinks.json` | Play app-signing certificate and Android package |
 
 Get any one of them wrong and the failure is silent: the link opens Safari,
 which is exactly what a link that was never meant to open the app does. There is

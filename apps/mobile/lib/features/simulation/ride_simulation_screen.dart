@@ -33,7 +33,7 @@ class RideSimulationScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: landscape ? 42 : 52,
-        title: const Text('Ride Lab'),
+        title: const Text('Replay'),
         actions: [
           IconButton(
             tooltip: 'Restart simulation',

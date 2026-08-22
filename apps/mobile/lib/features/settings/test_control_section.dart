@@ -92,8 +92,8 @@ class TestControlSection extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'A computer on this network can create rides, join, start them, '
-                'report hazards and read this ride’s roster on this phone. '
+                'A computer on this network can create flights, join, start them, '
+                'report hazards and read this flight’s crew on this phone. '
                 'The screen is being kept awake.\n\n'
                 'Emergency actions, phone numbers and emergency-contact details '
                 'can never be reached this way.\n\n'

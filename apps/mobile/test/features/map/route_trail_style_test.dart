@@ -20,6 +20,7 @@ void main() {
       'travelled': (2.81, 6.52, 7.02),
       'leader trail': (4.22, 9.78, 10.53),
       'balloon ground track': (4.77, 11.06, 11.91),
+      'operational boundary': (3.39, 7.87, 8.47),
       'route start connector': (4.77, 11.06, 11.91),
     };
 

@@ -69,6 +69,13 @@ EVENT_TYPES = {
     "deviceAttachedToCraft",
     "craftPrimaryDeviceNominated",
     "craftChaseAssigned",
+    # Balloon-specific, additive flight context. The landing area is an
+    # approximate shared rendezvous; wind context always carries its source,
+    # valid time, units and whether it is forecast or observed.
+    "landingAreaNoted",
+    "windContextNoted",
+    "operationalBoundaryUpserted",
+    "operationalBoundaryRemoved",
     # Issues #206/#207. The leader saying a ride that ended has not finished
     # after all. Deliberately not "rideResumed", which is the other half of
     # "ridePaused"; conflating them would make a pause look like a resurrection.
@@ -1005,6 +1012,10 @@ class RelayService:
             "deviceAttachedToCraft": timedelta(hours=72),
             "craftPrimaryDeviceNominated": timedelta(hours=72),
             "craftChaseAssigned": timedelta(hours=72),
+            "landingAreaNoted": timedelta(hours=72),
+            "windContextNoted": timedelta(hours=72),
+            "operationalBoundaryUpserted": timedelta(hours=72),
+            "operationalBoundaryRemoved": timedelta(hours=72),
             # Who was asked to cover the back of the group, and what they said.
             # Ride-scoped coordination, not history worth keeping for days.
         }.get(event_type, timedelta(hours=72))

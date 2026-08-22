@@ -68,7 +68,7 @@ RideDiagnosticsTransition rideDiagnosticsTransition({
 /// middle of a ride and does not say so reads as a record of the whole ride with a
 /// quiet first half.
 const rideDiagnosticsStartedMidRideNote =
-    'recording started mid-ride — nothing before this point was recorded';
+    'recording started mid-flight — nothing before this point was recorded';
 
 /// The note a recorder built at the start of a ride opens with.
 const rideDiagnosticsStartedNote = 'recording started';

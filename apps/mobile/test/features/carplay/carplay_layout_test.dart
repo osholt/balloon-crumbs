@@ -82,7 +82,7 @@ void main() {
   group('CarPlay echoes the phone landscape controls (#442)', () {
     test('the ride menu is the same leading compact hamburger', () {
       expect(source, contains('named: "line.3.horizontal"'));
-      expect(source, contains('accessibilityLabel: "Ride actions"'));
+      expect(source, contains('accessibilityLabel: "Flight actions"'));
       expect(source, contains('return CPBarButton(image: image)'));
       expect(source, isNot(contains('CPBarButton(title: "Ride")')));
       expect(

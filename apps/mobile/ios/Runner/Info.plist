@@ -36,12 +36,19 @@
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.xml</string>
+				<string>public.data</string>
 			</array>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
 				<array>
 					<string>gpx</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/gpx+xml</string>
+					<string>application/xml</string>
+					<string>text/xml</string>
 				</array>
 			</dict>
 		</dict>

@@ -105,14 +105,16 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
       if (current != null) {
         final sameRide = current.rideCode == invitation.rideCode;
         await _showMessage(
-          title: sameRide ? 'Already in this ride' : 'A ride is already open',
+          title: sameRide
+              ? 'Already in this flight'
+              : 'A flight is already open',
           message: sameRide
-              ? 'This phone is already in ride ${current.rideCode}.'
-              : 'Ride ${current.rideCode} is still open on this phone. For '
+              ? 'This phone is already in flight ${current.rideCode}.'
+              : 'Flight ${current.rideCode} is still open on this phone. For '
                     'safety, another invitation cannot replace it silently. '
-                    'Leave or end the current ride from Ride actions, then tap '
+                    'Leave or end the current flight from Flight actions, then tap '
                     'the new invitation again.',
-          action: 'Keep current ride',
+          action: 'Keep current flight',
         );
         widget.links.clear();
         return;
@@ -124,7 +126,7 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
         builder: (context) => AlertDialog(
           key: const Key('ride-invitation-link-dialog'),
           icon: const Icon(Icons.group_add_outlined),
-          title: Text('Join ride ${invitation.rideCode}?'),
+          title: Text('Join flight ${invitation.rideCode}?'),
           content: const Text(
             'This private invitation will connect you to the group. Only join '
             'if you recognise the person who shared it.',
@@ -138,7 +140,7 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
             FilledButton(
               key: const Key('accept-ride-invitation-link'),
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Join ride'),
+              child: const Text('Join flight'),
             ),
           ],
         ),
@@ -175,10 +177,10 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
         builder: (context) => AlertDialog(
           key: const Key('ride-invitation-link-error-dialog'),
           icon: const Icon(Icons.link_off_outlined),
-          title: const Text('Could not join this ride'),
+          title: const Text('Could not join this flight'),
           content: Text(
             widget.rideController.errorMessage ??
-                'That invitation could not be checked. Ask the ride lead to '
+                'That invitation could not be checked. Ask the coordinator to '
                     'share a new one.',
           ),
           actions: [

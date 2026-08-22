@@ -5,7 +5,7 @@ import 'package:balloon_crumbs/services/route_twistiness.dart';
 /// Geometry fixtures for the bend score (#46, #182).
 ///
 /// These were described as pinning the score against
-/// `apps/website/planner-core.test.mjs`, so that a drift in either
+/// `apps/planner/planner-core.test.mjs`, so that a drift in either
 /// implementation failed one of two suites. That file does not exist in this
 /// repository and never has, so what these actually do is pin the score against
 /// itself — a regression test, not a cross-check. Still worth having, and worth

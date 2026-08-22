@@ -25,7 +25,7 @@ void main() {
     test('a reopenable ride says it can be resumed', () {
       final text = endRideConsequence(relayCanCarryReopen: true);
 
-      expect(text, contains('ends the group ride for everyone'));
+      expect(text, contains('ends the group flight for everyone'));
       expect(text, contains('resume it within 24 hours'));
       expect(text, isNot(contains('cannot be undone')));
     });
@@ -35,7 +35,7 @@ void main() {
       // needs most.
       final text = endRideConsequence(relayCanCarryReopen: false);
 
-      expect(text, contains('cannot resume an ended ride'));
+      expect(text, contains('cannot resume an ended flight'));
       expect(text, contains('cannot be undone for the group'));
       expect(text, isNot(contains('within 24 hours')));
     });
@@ -107,7 +107,7 @@ void main() {
   test('a solo ride is not ended for everyone', () {
     final solo = endRideConsequence(relayCanCarryReopen: true, isSolo: true);
 
-    expect(solo, contains('This ends your ride.'));
+    expect(solo, contains('This ends your flight.'));
     expect(solo, isNot(contains('everyone')));
     expect(solo, isNot(contains('group')));
     expect(solo, contains('resume it within 24 hours'));

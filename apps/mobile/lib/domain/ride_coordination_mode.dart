@@ -13,13 +13,13 @@ enum RideCoordinationMode {
   bool get isGroup => this != RideCoordinationMode.solo;
 
   String get label => switch (this) {
-    RideCoordinationMode.solo => 'Solo ride',
+    RideCoordinationMode.solo => 'Solo flight',
     RideCoordinationMode.keepTogether => 'Keep-together group',
   };
 
   String get description => switch (this) {
     RideCoordinationMode.solo =>
-      'Navigation and ride recording for just you. No join code or group '
+      'Navigation and flight recording for just you. No join code or group '
           'controls; you can still share a private watcher link.',
     RideCoordinationMode.keepTogether =>
       'Fly as one group with a shared join code.',

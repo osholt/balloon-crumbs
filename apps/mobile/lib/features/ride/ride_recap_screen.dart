@@ -148,7 +148,7 @@ class _RideRecapScreenState extends State<RideRecapScreen> {
           'balloon-crumbs-${widget.summary.rideCode.toLowerCase()}-recap.png';
       await SharePlus.instance.share(
         ShareParams(
-          text: 'Balloon Crumbs ride recap · ${widget.summary.rideCode}',
+          text: 'Balloon Crumbs flight recap · ${widget.summary.rideCode}',
           files: [XFile.fromData(bytes, mimeType: 'image/png', name: fileName)],
           fileNameOverrides: [fileName],
         ),
@@ -214,7 +214,7 @@ class _RideRecapScreenState extends State<RideRecapScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Ride recap')),
+    appBar: AppBar(title: const Text('Flight recap')),
     body: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(20),

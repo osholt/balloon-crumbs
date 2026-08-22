@@ -27,8 +27,11 @@ void main() {
 
     expect(find.text('Watcher link'), findsOneWidget);
     expect(find.textContaining('last-known position'), findsOneWidget);
-    expect(find.textContaining('does not join the ride'), findsOneWidget);
-    expect(find.textContaining('does not share the ride code'), findsOneWidget);
+    expect(find.textContaining('does not join the flight'), findsOneWidget);
+    expect(
+      find.textContaining('does not share the flight code'),
+      findsOneWidget,
+    );
     expect(find.textContaining('not proof that you are safe'), findsOneWidget);
     FilledButton createButton = tester.widget(
       find.byKey(const Key('create-observer-link')),

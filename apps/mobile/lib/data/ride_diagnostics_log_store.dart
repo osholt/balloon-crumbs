@@ -69,7 +69,8 @@ class RideDiagnosticsLog {
       'tail-end-charlie-diagnostics-${rideCode ?? rideId}.txt';
 
   /// Parses the `Ride:` line the recorder's header writes.
-  static String? rideCodeIn(String text) => _headerValue(text, 'Ride:');
+  static String? rideCodeIn(String text) =>
+      _headerValue(text, 'Flight:') ?? _headerValue(text, 'Ride:');
 
   /// Parses the `Written:` line the recorder's header writes.
   ///

@@ -451,7 +451,7 @@ void main() {
           report(type: HazardType.speedCamera).copyWith(confirmations: 3),
           now: reportedAt.add(const Duration(minutes: 2)),
         ),
-        contains('3 riders'),
+        contains('3 crew'),
       );
     });
 
@@ -461,7 +461,7 @@ void main() {
           report(type: HazardType.speedCamera, reporterName: null),
           now: reportedAt.add(const Duration(hours: 1)),
         ),
-        'Speed camera · a rider 1 h ago · ageing',
+        'Speed camera · a crew member 1 h ago · ageing',
       );
     });
 

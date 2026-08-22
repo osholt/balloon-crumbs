@@ -72,8 +72,8 @@ class RideConnectivitySummary {
         state: RideConnectivityState.inactive,
         headline: 'Not sharing your position',
         detail: queuedEventCount == 0
-            ? 'No ride service is connected on this phone.'
-            : 'No ride service is connected on this phone. $queue',
+            ? 'No flight service is connected on this phone.'
+            : 'No flight service is connected on this phone. $queue',
       );
     }
     if (positionsPaused) {
@@ -82,9 +82,9 @@ class RideConnectivitySummary {
         headline: 'The group cannot see where you are',
         detail: queuedEventCount == 0
             ? 'Live positions are paused. They resume on their own once the '
-                  'ride service can be reached.'
+                  'flight service can be reached.'
             : 'Live positions are paused. They resume on their own once the '
-                  'ride service can be reached. $queue',
+                  'flight service can be reached. $queue',
       );
     }
     final staleSince = lastSuccessfulSync == null
@@ -94,7 +94,8 @@ class RideConnectivitySummary {
       return RideConnectivitySummary(
         state: RideConnectivityState.degraded,
         headline: 'Reaching the group, but not just now',
-        detail: 'Nothing has reached the ride service yet on this ride. $queue',
+        detail:
+            'Nothing has reached the flight service yet for this flight. $queue',
       );
     }
     if (staleSince >= staleSyncAfter) {
@@ -102,7 +103,7 @@ class RideConnectivitySummary {
         state: RideConnectivityState.degraded,
         headline: 'Reaching the group, but not just now',
         detail:
-            'The last exchange with the ride service was '
+            'The last exchange with the flight service was '
             '${_ago(staleSince)} ago. $queue',
       );
     }
@@ -116,7 +117,7 @@ class RideConnectivitySummary {
     return const RideConnectivitySummary(
       state: RideConnectivityState.reaching,
       headline: 'Reaching the group',
-      detail: 'Positions and ride events are up to date.',
+      detail: 'Positions and flight events are up to date.',
     );
   }
 
@@ -127,10 +128,10 @@ class RideConnectivitySummary {
   static String _queueSentence(int queuedEventCount) {
     if (queuedEventCount == 0) return 'Nothing is waiting to send.';
     if (queuedEventCount == 1) {
-      return 'One ride event is waiting to send, and will go on the next '
+      return 'One flight event is waiting to send, and will go on the next '
           'exchange.';
     }
-    return '$queuedEventCount ride events are waiting to send, and will go on '
+    return '$queuedEventCount flight events are waiting to send, and will go on '
         'the next exchanges.';
   }
 

@@ -19,7 +19,7 @@
 ///  1. here, for building and parsing links;
 ///  2. the iOS entitlement and native link bridge;
 ///  3. the Android manifest and native link bridge;
-///  4. the hosted Apple and Android association files.
+///  4. the Apple and Android association files hosted from `apps/planner`.
 ///
 /// `test/domain/app_links_test.dart` asserts the checked-in layers agree. A link
 /// that is wrong in any one of them fails silently by opening the browser or by

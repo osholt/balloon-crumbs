@@ -131,6 +131,7 @@ class RideSimulationController extends ChangeNotifier {
   double _baseSpeedMetersPerSecond = 13.4;
   bool _backRiderDelayed = false;
   bool _emitting = false;
+  bool _disposed = false;
   bool _rideStarted;
   Duration _eventElapsed = Duration.zero;
   int _eventSequence = 0;
@@ -303,7 +304,7 @@ class RideSimulationController extends ChangeNotifier {
       agents.add(
         rider(
           id: 'ride-lab-rider-$riderNumber',
-          displayName: 'Rider $riderNumber',
+          displayName: 'Chaser $riderNumber',
           index: nextIndex++,
           role: RideRole.rider,
         ),
@@ -338,6 +339,7 @@ class RideSimulationController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    if (_disposed) return;
     for (final agent in _agents) {
       _recordTravelTrail(agent);
     }
@@ -426,15 +428,15 @@ class RideSimulationController extends ChangeNotifier {
       type: HazardType.roadworks,
       severity: HazardSeverity.caution,
       position: hazardPoint,
-      details: 'Synthetic Ride Lab hazard',
+      details: 'Synthetic flight-replay hazard',
     );
   }
 
   Future<void> _tick(Duration realElapsed) async {
-    if (_state == RideSimulationState.completed) return;
+    if (_disposed || _state == RideSimulationState.completed) return;
     _advanceMotion(realElapsed);
     _eventElapsed += realElapsed;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     if (_eventElapsed < eventInterval || _emitting) return;
     _eventElapsed = Duration.zero;
     await _emitPositions();
@@ -443,13 +445,16 @@ class RideSimulationController extends ChangeNotifier {
   /// Advances virtual time and emits one GPS fix per rider. Public so tests and
   /// scripted demos can progress deterministically without waiting for timers.
   Future<void> advance(Duration realElapsed) async {
-    if (!_rideStarted || _state == RideSimulationState.completed || _emitting) {
+    if (_disposed ||
+        !_rideStarted ||
+        _state == RideSimulationState.completed ||
+        _emitting) {
       return;
     }
     _advanceMotion(realElapsed);
     _eventElapsed = Duration.zero;
     await _emitPositions();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Replaces only the road journey. Balloon time, altitude, position and both
@@ -503,7 +508,7 @@ class RideSimulationController extends ChangeNotifier {
   }
 
   Future<void> _emitPositions() async {
-    if (_emitting) return;
+    if (_disposed || _emitting) return;
     _emitting = true;
     try {
       final recordedAt = _nextRecordedAt();
@@ -512,6 +517,7 @@ class RideSimulationController extends ChangeNotifier {
           (agent: agent, sampled: _sampleAgent(agent)),
       ];
       for (final entry in samples) {
+        if (_disposed) return;
         final agent = entry.agent;
         final sampled = entry.sampled;
         final flight = _balloonFlightAt(agent);
@@ -960,6 +966,7 @@ class RideSimulationController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _timer?.cancel();
     super.dispose();
   }

@@ -171,7 +171,7 @@ class HttpPushRegistrationClient implements PushRegistrationApi {
         session.localRiderId.isEmpty ||
         session.localRiderId.length > 128) {
       throw const InternetRelayException(
-        'Notification registration requires an authenticated ride.',
+        'Notification registration requires an authenticated flight.',
       );
     }
   }

@@ -94,7 +94,7 @@ void main() {
     test('the note names what is missing, not just when it started', () {
       // A log that starts halfway through and does not say so reads as a record of
       // the whole ride with a quiet first half.
-      expect(rideDiagnosticsStartedMidRideNote, contains('mid-ride'));
+      expect(rideDiagnosticsStartedMidRideNote, contains('mid-flight'));
       expect(
         rideDiagnosticsStartedMidRideNote,
         contains('nothing before this point'),

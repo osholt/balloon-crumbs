@@ -29,7 +29,7 @@ class CraftState {
   int get crewCount => deviceIds.length;
 }
 
-/// Every craft in a flight, reconciled from the journal.
+/// Every craft in a ride, reconciled from the journal.
 ///
 /// Replaces the inherited flat rider list. Callers ask for a craft and get one
 /// position, however many phones are aboard it.
@@ -165,6 +165,10 @@ class CraftRosterReducer {
         case RideEventType.iceInfoShared:
         case RideEventType.iceInfoViewed:
         case RideEventType.riderContactShared:
+        case RideEventType.landingAreaNoted:
+        case RideEventType.windContextNoted:
+        case RideEventType.operationalBoundaryUpserted:
+        case RideEventType.operationalBoundaryRemoved:
           break;
       }
     }

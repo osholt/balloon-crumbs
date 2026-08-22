@@ -489,3 +489,53 @@ test("landing-area polygon is closed and bounded", () => {
   assert.deepEqual(polygon[0], polygon.at(-1));
   assert.ok(polygon.every(([longitude, latitude]) => longitude < -2.49 && longitude > -2.51 && latitude < 51.51 && latitude > 51.49));
 });
+
+test("operational boundaries validate several lines, areas and altitude limits", async () => {
+  const { normaliseOperationalBoundary, operationalBoundariesGeoJson } = await import(
+    "./planner-core.mjs"
+  );
+  const line = normaliseOperationalBoundary({
+    id: "restricted-edge",
+    label: "Restricted edge",
+    kind: "line",
+    source: "Pilot briefing",
+    points: [
+      { latitude: 51.4, longitude: -2.7 },
+      { latitude: 51.5, longitude: -2.6 },
+    ],
+  });
+  const area = normaliseOperationalBoundary({
+    id: "avoid-area",
+    label: "Avoid area",
+    kind: "area",
+    source: "Local briefing",
+    points: [
+      { latitude: 51.4, longitude: -2.7 },
+      { latitude: 51.5, longitude: -2.6 },
+      { latitude: 51.4, longitude: -2.5 },
+    ],
+  });
+  const altitude = normaliseOperationalBoundary({
+    id: "height-band",
+    label: "Height band",
+    kind: "altitudeBand",
+    source: "Flight plan",
+    points: [],
+    lowerAltitudeMeters: 200,
+    upperAltitudeMeters: 900,
+    altitudeDatum: "wgs84Geoid",
+  });
+  const geoJson = operationalBoundariesGeoJson([line, area, altitude]);
+
+  assert.equal(geoJson.features.length, 2);
+  assert.equal(geoJson.features[0].geometry.type, "LineString");
+  assert.equal(geoJson.features[1].geometry.type, "Polygon");
+  assert.deepEqual(
+    geoJson.features[1].geometry.coordinates[0][0],
+    geoJson.features[1].geometry.coordinates[0].at(-1),
+  );
+  assert.throws(
+    () => normaliseOperationalBoundary({ ...altitude, lowerAltitudeMeters: 1000 }),
+    /below maximum/,
+  );
+});

@@ -78,11 +78,11 @@ class _RideDiagnosticsSectionState extends State<RideDiagnosticsSection> {
               // stale as soon as the switch moves.
               if (mounted) _reloadLogs();
             },
-            title: const Text('Record ride diagnostics'),
+            title: const Text('Record flight diagnostics'),
             subtitle: const Text(
               'Writes down each turn instruction, when it was spoken, every alert, '
               'and this phone’s own route, so a wrong instruction can be explained '
-              'afterwards. No other rider’s position is recorded. Nothing is sent '
+              'afterwards. No other crew member’s position is recorded. Nothing is sent '
               'anywhere until you choose a recipient when you share it.',
             ),
           ),
@@ -105,8 +105,8 @@ class _RideDiagnosticsSectionState extends State<RideDiagnosticsSection> {
             padding: const EdgeInsets.only(top: 4, bottom: 8),
             child: Text(
               snapshot.connectionState == ConnectionState.waiting
-                  ? 'Looking for recorded rides…'
-                  : 'No recorded rides yet. Switch this on before a ride, and the '
+                  ? 'Looking for recorded flights…'
+                  : 'No recorded flights yet. Switch this on before a flight, and the '
                         'log will be here afterwards.',
               key: const Key('ride-diagnostics-no-logs'),
               style: TextStyle(
@@ -122,7 +122,7 @@ class _RideDiagnosticsSectionState extends State<RideDiagnosticsSection> {
           children: [
             const SizedBox(height: 4),
             Text(
-              'Recorded rides',
+              'Recorded flights',
               style: TextStyle(
                 color: Theme.of(context).hintColor,
                 fontSize: 12.5,
@@ -135,7 +135,7 @@ class _RideDiagnosticsSectionState extends State<RideDiagnosticsSection> {
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 leading: const Icon(Icons.description_outlined),
-                title: Text(log.rideCode ?? 'Ride ${log.rideId}'),
+                title: Text(log.rideCode ?? 'Flight ${log.rideId}'),
                 subtitle: Text(_when(log.writtenAt)),
                 trailing: const Icon(Icons.ios_share, size: 20),
                 enabled: !_sharing,
@@ -153,7 +153,7 @@ class _RideDiagnosticsSectionState extends State<RideDiagnosticsSection> {
     try {
       await SharePlus.instance.share(
         ShareParams(
-          title: 'Ride diagnostics ${log.rideCode ?? log.rideId}',
+          title: 'Flight diagnostics ${log.rideCode ?? log.rideId}',
           subject: 'Balloon Crumbs diagnostics ${log.rideCode ?? log.rideId}',
           files: [
             XFile.fromData(

@@ -54,8 +54,8 @@ enum RideStartChoice {
   };
 
   String get label => switch (this) {
-    RideStartChoice.solo => 'Ride solo',
-    RideStartChoice.group => 'Ride as a group',
+    RideStartChoice.solo => 'Solo flight',
+    RideStartChoice.group => 'Group flight',
   };
 
   String get detail => switch (this) {
@@ -103,6 +103,145 @@ class HomeSearchBar extends StatelessWidget {
           ],
         ),
       ),
+    ),
+  );
+}
+
+/// Secondary place search for centring an intended landing area.
+///
+/// It returns a point only. It does not plan a road route or imply that the
+/// result is accessible, permitted, or suitable for landing.
+class LandingZoneSearchSheet extends StatefulWidget {
+  const LandingZoneSearchSheet({super.key, required this.searchService});
+
+  final DestinationSearchService searchService;
+
+  static Future<DestinationChoice?> show(
+    BuildContext context, {
+    required DestinationSearchService searchService,
+  }) => showModalBottomSheet<DestinationChoice>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: const Color(0xFF171D25),
+    builder: (_) => LandingZoneSearchSheet(searchService: searchService),
+  );
+
+  @override
+  State<LandingZoneSearchSheet> createState() => _LandingZoneSearchSheetState();
+}
+
+class _LandingZoneSearchSheetState extends State<LandingZoneSearchSheet> {
+  final _controller = TextEditingController();
+  List<DestinationMatch>? _results;
+  bool _searching = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final query = _controller.text.trim();
+    if (query.isEmpty || _searching) return;
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.searchService.search(query);
+      if (!mounted) return;
+      setState(() {
+        _results = results;
+        _error = results.isEmpty ? 'Nothing found for “$query”.' : null;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error is FormatException
+            ? error.message
+            : 'Could not search just now. Check your connection and try again.';
+      });
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+          child: Text(
+            'Find an intended landing area',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 18),
+          child: Text(
+            'Search only moves the target pin. Check access, permission and suitability separately.',
+            style: TextStyle(color: Color(0xFFABB5C1)),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+          child: TextField(
+            key: const Key('landing-zone-search-field'),
+            controller: _controller,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _search(),
+            decoration: InputDecoration(
+              hintText: 'Town, postcode, field or landmark',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                tooltip: 'Search',
+                onPressed: _searching ? null : _search,
+                icon: _searching
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.arrow_forward),
+              ),
+            ),
+          ),
+        ),
+        if (_error case final message?)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+            child: Text(
+              message,
+              style: const TextStyle(color: Color(0xFFFFB59A)),
+            ),
+          ),
+        if (_results case final results?)
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: results.length,
+              itemBuilder: (context, index) {
+                final result = results[index];
+                return ListTile(
+                  leading: const Icon(Icons.flag_outlined),
+                  title: Text(result.label),
+                  subtitle: const Text('Use as approximate area centre'),
+                  onTap: () => Navigator.of(context).pop(
+                    DestinationChoice(label: result.label, point: result.point),
+                  ),
+                );
+              },
+            ),
+          ),
+        const SizedBox(height: 12),
+      ],
     ),
   );
 }
@@ -229,7 +368,7 @@ class _HomeDestinationSearchSheetState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Ride to',
+                    'Plan towards',
                     style: TextStyle(color: Color(0xFF8993A0), fontSize: 13),
                   ),
                   const SizedBox(height: 2),
@@ -353,7 +492,7 @@ class _HomeDestinationSearchSheetState
                 ListTile(
                   key: const Key('home-search-join-code'),
                   leading: const Icon(Icons.group_add_outlined),
-                  title: const Text('Join a ride with a code'),
+                  title: const Text('Join a flight with a code'),
                   subtitle: const Text('Six digits from whoever is leading'),
                   onTap: () => Navigator.of(context).pop(
                     const HomeSearchHandoff(HomeSearchHandoffKind.joinWithCode),
@@ -363,7 +502,7 @@ class _HomeDestinationSearchSheetState
                   key: const Key('home-search-stored-route'),
                   leading: const Icon(Icons.bookmark_outline),
                   title: const Text('A route already on this phone'),
-                  subtitle: const Text('Previous rides and recorded routes'),
+                  subtitle: const Text('Previous flights and recorded routes'),
                   onTap: () => Navigator.of(context).pop(
                     const HomeSearchHandoff(HomeSearchHandoffKind.storedRoute),
                   ),

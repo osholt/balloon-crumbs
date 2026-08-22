@@ -2,8 +2,8 @@ enum RideRole { lead, rider }
 
 extension RideRoleLabel on RideRole {
   String get label => switch (this) {
-    RideRole.lead => 'Lead',
-    RideRole.rider => 'Rider',
+    RideRole.lead => 'Pilot',
+    RideRole.rider => 'Chaser',
   };
 }
 

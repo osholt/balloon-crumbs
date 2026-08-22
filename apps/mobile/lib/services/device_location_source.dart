@@ -156,11 +156,11 @@ class GeolocatorDeviceLocationPlatform implements DeviceLocationPlatform {
       // notification that has to accompany it, and the rider can stop the
       // ride from the app it points at.
       foregroundNotificationConfig: const ForegroundNotificationConfig(
-        notificationTitle: 'Sharing your position with your ride',
+        notificationTitle: 'Sharing your position with your flight crew',
         notificationText:
-            'Balloon Crumbs is recording your ride and keeping the group '
-            'up to date. This stops when the ride ends.',
-        notificationChannelName: 'Active ride',
+            'Balloon Crumbs is recording your chase and keeping the crew '
+            'up to date. This stops when the flight ends.',
+        notificationChannelName: 'Active flight',
         setOngoing: true,
         enableWakeLock: true,
       ),
@@ -296,7 +296,7 @@ class DeviceLocationSource {
       DeviceLocationStatus(
         state: DeviceLocationState.sampling,
         message: inspected.backgroundCapable
-            ? 'Sharing your position for this ride, including in the background.'
+            ? 'Sharing your position for this flight, including in the background.'
             : 'Sharing while Balloon Crumbs is visible. Allow “Always” '
                   'location access to keep sharing with another app in front.',
         lastSample: _status.lastSample,
@@ -309,7 +309,7 @@ class DeviceLocationSource {
         DeviceLocationStatus(
           state: DeviceLocationState.sampling,
           message: _status.backgroundCapable
-              ? 'Location is active for this ride, including in the background.'
+              ? 'Location is active for this flight, including in the background.'
               : 'Location is active only while Balloon Crumbs is visible.',
           lastSample: sample,
           backgroundCapable: _status.backgroundCapable,
@@ -404,7 +404,7 @@ class DeviceLocationSource {
               DeviceLocationStatus(
                 state: DeviceLocationState.sampling,
                 message: permission == DeviceLocationPermission.always
-                    ? 'Location is active for this ride, including in the background.'
+                    ? 'Location is active for this flight, including in the background.'
                     : 'Location is active only while Balloon Crumbs is visible.',
                 lastSample: _status.lastSample,
                 backgroundCapable:
@@ -415,7 +415,7 @@ class DeviceLocationSource {
               DeviceLocationStatus(
                 state: DeviceLocationState.ready,
                 message: permission == DeviceLocationPermission.always
-                    ? 'Location is ready. It runs for the length of a ride.'
+                    ? 'Location is ready. It runs for the length of a flight.'
                     : 'Location is ready, but background sharing needs “Always” '
                           'access.',
                 lastSample: _status.lastSample,

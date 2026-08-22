@@ -106,13 +106,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       const SizedBox(height: 28),
       Text(
-        'Keep the whole ride together',
+        'Keep the whole chase crew together',
         style: Theme.of(context).textTheme.displaySmall,
       ),
       const SizedBox(height: 16),
       const Text(
-        'Balloon Crumbs coordinates a private riding group with a shared '
-        'roster, route and safety alerts. Ride events are kept on your phone '
+        'Balloon Crumbs coordinates one balloon and its private chase crew with '
+        'a shared map, rendezvous area and safety alerts. Flight events stay on your phone '
         'first, then relayed by the internet or nearby devices when available.',
         style: TextStyle(color: Color(0xFFBCC5D0), height: 1.5, fontSize: 17),
       ),
@@ -126,7 +126,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       const _InfoCard(
         icon: Icons.cloud_off_outlined,
         title: 'Designed for patchy coverage',
-        body: 'Losing a relay does not erase the ride journal on your phone.',
+        body: 'Losing a relay does not erase the flight journal on your phone.',
       ),
     ],
   );
@@ -140,7 +140,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       const SizedBox(height: 10),
       const Text(
-        'Your saved name, symbol and colour are prefilled whenever you create or join a ride.',
+        'Your saved name, symbol and colour are prefilled whenever you create or join a flight.',
         style: TextStyle(color: Color(0xFFABB5C1), height: 1.4),
       ),
       const SizedBox(height: 24),
@@ -151,7 +151,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         textCapitalization: TextCapitalization.words,
         onChanged: (_) => setState(() => _nameError = null),
         decoration: InputDecoration(
-          labelText: 'Rider name',
+          labelText: 'Crew name',
           hintText: 'How the group will recognise you',
           counterText: '',
           errorText: _nameError,
@@ -182,7 +182,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Semantics(
               button: true,
               selected: color == _riderColor,
-              label: '${color.label} rider colour',
+              label: '${color.label} crew colour',
               child: InkWell(
                 key: Key('onboarding-colour-${color.name}'),
                 customBorder: const CircleBorder(),
@@ -207,7 +207,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       const SizedBox(height: 14),
       const Text(
-        'Lead uses a reserved role colour during a ride.',
+        'The pilot or coordinator uses a reserved role colour during a flight.',
         style: TextStyle(color: Color(0xFF7F8A98), fontSize: 12),
       ),
     ],
@@ -232,7 +232,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 Text(
                   _nameController.text.trim().isEmpty
-                      ? 'Your rider name'
+                      ? 'Your crew name'
                       : _nameController.text.trim(),
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
@@ -258,29 +258,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       const SizedBox(height: 14),
       const _InfoCard(
         icon: Icons.route_outlined,
-        title: 'Lead',
+        title: 'Pilot / coordinator',
         body:
-            'Creates the private code, publishes the group route, starts, pauses and ends the ride.',
+            'Creates the private code, sets the intended landing area, and starts, pauses and ends the flight.',
       ),
       const SizedBox(height: 10),
       const _InfoCard(
         icon: Icons.two_wheeler,
-        title: 'Rider',
+        title: 'Chaser',
         body:
-            'Follows the shared route and can send status, assistance and hazard markers.',
+            'Sees balloon telemetry and chooses guidance to the balloon or intended landing area.',
       ),
       const SizedBox(height: 10),
       const SizedBox(height: 24),
-      Text('The ride flow', style: Theme.of(context).textTheme.titleLarge),
+      Text('The flight flow', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 12),
       const _NumberedStep(
         number: '1',
-        text: 'Create or join with the private six-digit ride code.',
+        text: 'Create or join with the private six-digit flight code.',
       ),
       const _NumberedStep(
         number: '2',
         text:
-            'Check the pre-start roster. Tracking waits for the lead to tap Start ride.',
+            'Check the pre-flight crew. Tracking waits for the coordinator to tap Start flight.',
       ),
       const _NumberedStep(
         number: '3',
@@ -290,11 +290,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       const _NumberedStep(
         number: '4',
         text:
-            'Leave stops sharing for you; End ride is a lead-only group action.',
+            'Leave stops sharing for you; End flight is a coordinator-only group action.',
       ),
       const SizedBox(height: 14),
       const Text(
-        'Treat the ride code like a private invitation. Only share it with riders you expect.',
+        'Treat the flight code like a private invitation. Only share it with crew you expect.',
         style: TextStyle(color: Color(0xFFFFC47A), height: 1.4),
       ),
     ],
@@ -309,7 +309,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       const SizedBox(height: 12),
       const Text(
-        'Internet and nearby-device relays can overlap. “Active” means a rider was seen recently; “stale” means the last signed update is older. The roster shows the evidence it actually has.',
+        'Internet and nearby-device relays can overlap. “Live” means a craft or chaser was seen recently; “stale” means the last signed update is older. The crew view shows the evidence it actually has.',
         style: TextStyle(color: Color(0xFFBCC5D0), height: 1.5),
       ),
       const SizedBox(height: 20),
@@ -317,21 +317,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         icon: Icons.location_on_outlined,
         title: 'Location while using the app',
         body:
-            'Requested when you start foreground ride tracking or ask the map to use your position.',
+            'Requested when you start foreground flight tracking or ask the map to use your position.',
       ),
       const SizedBox(height: 10),
       const _PermissionCard(
         icon: Icons.bluetooth_outlined,
         title: 'Bluetooth and nearby devices',
         body:
-            'Requested when an installed app starts the nearby relay for a live ride.',
+            'Requested when an installed app starts the nearby relay for a live flight.',
       ),
       const SizedBox(height: 10),
       const _PermissionCard(
         icon: Icons.notifications_none,
         title: 'Notifications',
         body:
-            'Requested when you join a live ride if encrypted push delivery is configured. Lock-screen alerts omit coordinates, invitation secrets and medical details.',
+            'Requested when you join a live flight if encrypted push delivery is configured. Lock-screen alerts omit coordinates, invitation secrets and medical details.',
       ),
       const SizedBox(height: 18),
       OutlinedButton.icon(
@@ -351,7 +351,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             border: Border.all(color: const Color(0xFF6F5739)),
           ),
           child: const Text(
-            'You can still create or join a ride. Without location, your live position is unavailable; without nearby access, internet relay may still work. Retry from the feature, or restore blocked access in iOS or Android Settings.',
+            'You can still create or join a flight. Without location, your live position is unavailable; without nearby access, internet relay may still work. Retry from the feature, or restore blocked access in iOS or Android Settings.',
             style: TextStyle(color: Color(0xFFFFD39C), height: 1.4),
           ),
         ),
@@ -374,7 +374,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       const SizedBox(height: 24),
       Text(
-        'You are ready to ride',
+        'You are ready to set up a flight',
         style: Theme.of(context).textTheme.displaySmall,
       ),
       const SizedBox(height: 12),
@@ -389,14 +389,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ? null
             : () => _complete(OnboardingRideChoice.create),
         icon: const Icon(Icons.add_road),
-        label: const Text('Create a ride'),
+        label: const Text('Create a flight'),
       ),
       const SizedBox(height: 12),
       OutlinedButton.icon(
         key: const Key('onboarding-join-ride'),
         onPressed: _saving ? null : () => _complete(OnboardingRideChoice.join),
         icon: const Icon(Icons.group_add_outlined),
-        label: const Text('Join a ride'),
+        label: const Text('Join a flight'),
       ),
       if (_saving) ...[
         const SizedBox(height: 20),

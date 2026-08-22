@@ -42,9 +42,9 @@ class RelayStatusCard extends StatelessWidget {
           // channel was standing in for.
           subtitle: Text(
             status.queuedEventCount == 0
-                ? 'Not carrying ride events yet'
+                ? 'Not carrying flight events yet'
                 : '${status.queuedEventCount} held for nearby, which does not '
-                      'carry ride events yet',
+                      'carry flight events yet',
           ),
         ),
       );

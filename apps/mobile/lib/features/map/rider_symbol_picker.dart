@@ -33,7 +33,7 @@ class RiderSymbolPicker extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const Text('Rider symbol', style: TextStyle(color: Color(0xFFABB5C1))),
+      const Text('Map symbol', style: TextStyle(color: Color(0xFFABB5C1))),
       const SizedBox(height: 8),
       Wrap(
         spacing: 9,
@@ -141,7 +141,7 @@ class RiderSymbolPicker extends StatelessWidget {
               Semantics(
                 button: true,
                 selected: selectedSymbol.emoji == emoji,
-                label: '$emoji rider emoji',
+                label: '$emoji crew emoji',
                 child: InkWell(
                   key: Key(
                     '$keyPrefix-emoji-${emoji.runes.map((rune) => rune.toRadixString(16)).join('-')}',
@@ -282,7 +282,7 @@ class _SymbolChoice extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: true,
     selected: selected,
-    label: '$label rider symbol',
+    label: '$label crew symbol',
     child: InkWell(
       borderRadius: BorderRadius.circular(13),
       onTap: onTap,
