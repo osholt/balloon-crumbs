@@ -47,8 +47,8 @@ void main() {
       await tester.tap(find.text('Bath, Somerset'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Ride solo'), findsOneWidget);
-      expect(find.text('Ride as a group'), findsOneWidget);
+      expect(find.text('Solo flight'), findsOneWidget);
+      expect(find.text('Group flight'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('ride-start-group')));
       await tester.pumpAndSettle();

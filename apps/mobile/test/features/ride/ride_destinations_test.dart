@@ -13,7 +13,7 @@ void main() {
 
       expect(destinations.map((destination) => destination.label), [
         'Map',
-        'Ride',
+        'Flight',
         'Settings',
       ]);
       expect(destinations.map((destination) => destination.index), [0, 1, 2]);
@@ -28,8 +28,8 @@ void main() {
 
       expect(destinations.map((destination) => destination.label), [
         'Map',
-        'Ride Lab',
-        'Ride',
+        'Replay',
+        'Flight',
         'Settings',
       ]);
       expect(destinations.map((destination) => destination.index), [
@@ -39,7 +39,7 @@ void main() {
         3,
       ]);
       expect(
-        destinations.firstWhere((d) => d.label == 'Ride').index,
+        destinations.firstWhere((d) => d.label == 'Flight').index,
         2,
         reason: 'Ride Lab occupies 1 in a simulation',
       );

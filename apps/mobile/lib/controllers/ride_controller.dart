@@ -15,6 +15,7 @@ import '../domain/ice_share.dart';
 import '../domain/imported_route.dart';
 import '../domain/completed_ride_store.dart';
 import '../domain/join_invite.dart';
+import '../domain/landing_zone.dart';
 import '../domain/quick_message.dart';
 import '../domain/ride_coordination_mode.dart';
 import '../domain/ride_event.dart';
@@ -170,9 +171,22 @@ class RideController extends ChangeNotifier {
   /// ride clears `rideEnded`, and the flag with it.
   bool get endedRideSetAside => _endedRideSetAside && rideEnded;
 
+  /// True when any active ride has been moved off the main flight surface.
+  ///
+  /// The journal and session remain intact, but the active shell is unmounted,
+  /// so foreground location sharing is not running while it is set aside.
+  bool get rideSetAside => _endedRideSetAside && hasActiveRide;
+
   /// Steps away from an ended ride, keeping it and all of its data intact.
   void setEndedRideAside() {
     if (!rideEnded || _endedRideSetAside) return;
+    _endedRideSetAside = true;
+    notifyListeners();
+  }
+
+  /// Steps away from a recovered running flight without ending or deleting it.
+  void setRunningRideAside() {
+    if (!hasActiveRide || rideEnded || _endedRideSetAside) return;
     _endedRideSetAside = true;
     notifyListeners();
   }
@@ -195,6 +209,10 @@ class RideController extends ChangeNotifier {
 
   RideRouteState get authoritativeRouteState => _routeState;
   ImportedRoute? get authoritativeRoute => _routeState.route;
+
+  /// The latest pilot-authored intended landing area for this ride.
+  LandingZoneTarget? get landingZone =>
+      const LandingZoneReducer().fromEvents(_events);
 
   /// The reconciled live presence most recently observed, keyed by rider.
   List<LiveRiderPresence> get livePresence => List.unmodifiable(_livePresence);
@@ -554,7 +572,7 @@ class RideController extends ChangeNotifier {
       activeSession.joinToken,
     );
     return 'Join $group in Balloon Crumbs: $link\n\n'
-        'Enter ride code ${activeSession.rideCode} in the app, or paste this '
+        'Enter flight code ${activeSession.rideCode} in the app, or paste this '
         'private invite: $invite.';
   }
 
@@ -691,7 +709,9 @@ class RideController extends ChangeNotifier {
     await _run(() async {
       final activeSession = _requireSession();
       if (!activeSession.isSimulation) {
-        throw const FormatException('Only a simulated ride can be restarted.');
+        throw const FormatException(
+          'Only a simulated flight can be restarted.',
+        );
       }
       await _eventStore.deleteRide(activeSession.rideId);
       await _sessionStore.clear();
@@ -780,7 +800,7 @@ class RideController extends ChangeNotifier {
     await _run(() async {
       final normalisedCode = rideCode.trim();
       if (!RegExp(r'^\d{6}$').hasMatch(normalisedCode)) {
-        throw const FormatException('Enter a valid six-digit ride code.');
+        throw const FormatException('Enter a valid six-digit flight code.');
       }
       final credentials = await _rideCodeDirectory.resolve(
         normalisedCode,
@@ -818,7 +838,7 @@ class RideController extends ChangeNotifier {
       if (_session != null) {
         if (!rideEnded) {
           throw const FormatException(
-            'Finish or leave your current ride before joining another.',
+            'Finish or leave your current flight before joining another.',
           );
         }
         await _archiveCurrentRideIfComplete();
@@ -932,16 +952,16 @@ class RideController extends ChangeNotifier {
     return resolveCraftRoster().forDevice(localRiderId);
   }
 
-  /// Whether this device may start or end the flight, nominate a craft's
+  /// Whether this device may start or end the ride, nominate a craft's
   /// reporting device, or declare a landing.
   ///
   /// Transitional: authority still comes from the inherited leader role. WP4
   /// replaces this with [FlightRole.hasFlightAuthority] once the session carries
-  /// a flight role rather than a ride role. The seam is here so every caller
+  /// a ride role rather than a ride role. The seam is here so every caller
   /// changes in one place.
   bool get hasFlightAuthority => isLocalRideLeader;
 
-  /// Registers a balloon or vehicle in this flight.
+  /// Registers a balloon or vehicle in this ride.
   ///
   /// Idempotent by craft id: re-registering updates the label rather than
   /// creating a second craft, so two devices racing to register the balloon
@@ -1281,7 +1301,9 @@ class RideController extends ChangeNotifier {
     await _run(() async {
       final session = _requireSession();
       if (session.role != RideRole.lead) {
-        throw const FormatException('Only the ride leader can start the ride.');
+        throw const FormatException(
+          'Only the coordinator can start the flight.',
+        );
       }
       await _record(
         type: RideEventType.rideStarted,
@@ -1299,7 +1321,7 @@ class RideController extends ChangeNotifier {
       final session = _requireSession();
       if (!isLocalRideLeader) {
         throw const FormatException(
-          'Only the ride leader can change the group route.',
+          'Only the coordinator can change the group route.',
         );
       }
       final encoded = const RideRouteEncoder().encode(route);
@@ -1334,12 +1356,31 @@ class RideController extends ChangeNotifier {
     });
   }
 
+  Future<void> setLandingZone(LandingZoneTarget target) async {
+    await _run(() async {
+      final session = _requireSession();
+      if (!isLocalRideLeader) {
+        throw const FormatException(
+          'Only the pilot can change the intended landing area.',
+        );
+      }
+      if (!target.isValid) {
+        throw const FormatException('Choose a valid landing area and radius.');
+      }
+      await _record(
+        type: RideEventType.landingAreaNoted,
+        priority: EventPriority.important,
+        payload: target.toEventPayload(leaderRiderId: session.localRiderId),
+      );
+    });
+  }
+
   Future<void> clearRoute() async {
     await _run(() async {
       final session = _requireSession();
       if (!isLocalRideLeader) {
         throw const FormatException(
-          'Only the ride leader can clear the group route.',
+          'Only the coordinator can clear the group route.',
         );
       }
       await _record(
@@ -1359,11 +1400,11 @@ class RideController extends ChangeNotifier {
     await _run(() async {
       final session = _requireSession();
       if (!rideStarted) {
-        throw const FormatException('Start the ride before pausing it.');
+        throw const FormatException('Start the flight before pausing it.');
       }
       if (session.role != RideRole.lead) {
         throw const FormatException(
-          'Only the ride leader can pause the group.',
+          'Only the coordinator can pause the group.',
         );
       }
       await _record(
@@ -1379,7 +1420,7 @@ class RideController extends ChangeNotifier {
     await _run(() async {
       _requireSession();
       if (!isLocalRideLeader) {
-        throw const FormatException('Only the ride leader can end the ride.');
+        throw const FormatException('Only the coordinator can end the flight.');
       }
       await _record(
         type: RideEventType.rideEnded,
@@ -1534,7 +1575,7 @@ class RideController extends ChangeNotifier {
     if (_session != null) {
       if (!rideEnded) {
         throw const FormatException(
-          'Finish or leave your current ride before creating another.',
+          'Finish or leave your current flight before creating another.',
         );
       }
       await _archiveCurrentRideIfComplete();
@@ -1586,7 +1627,7 @@ class RideController extends ChangeNotifier {
         value > RideSession.maximumSimulationRiderCount) {
       throw FormatException(
         'Choose between ${RideSession.minimumSimulationRiderCount} and '
-        '${RideSession.maximumSimulationRiderCount} simulated riders.',
+        '${RideSession.maximumSimulationRiderCount} simulated crew members.',
       );
     }
     return value;
@@ -1623,7 +1664,7 @@ class RideController extends ChangeNotifier {
   RideSession _requireSession() {
     final activeSession = _session;
     if (activeSession == null) {
-      throw StateError('No active ride');
+      throw StateError('No active flight');
     }
     return activeSession;
   }
@@ -1631,7 +1672,7 @@ class RideController extends ChangeNotifier {
   String _normaliseName(String value) {
     final name = value.trim();
     if (name.isEmpty) {
-      throw const FormatException('Enter a rider name.');
+      throw const FormatException('Enter a crew name.');
     }
     return name.length <= 24 ? name : name.substring(0, 24);
   }
@@ -1713,7 +1754,7 @@ class RideController extends ChangeNotifier {
   String? _rideArchiveError;
 
   static const rideArchiveFailedMessage =
-      'This ride could not be added to Previous rides. It is still on this '
+      'This flight could not be added to Previous flights. It is still on this '
       'phone and will be saved again next time you open the app.';
 
   Future<void> _archiveCurrentRideIfComplete({bool force = false}) async {

@@ -59,7 +59,7 @@ class ObserverAccessConfiguration {
     }
     final relayUri = relay.baseUri;
     if (relayUri == null || relayUri.origin != web.origin) {
-      return 'Observer links must use the same service host as the ride relay.';
+      return 'Observer links must use the same service host as the flight relay.';
     }
     return null;
   }
@@ -551,7 +551,7 @@ class HttpObserverAccessClient implements ObserverAccessApi {
   String _rideBearer(RideSession session) {
     if (session.inviteSecret.length < 16) {
       throw const InternetRelayException(
-        'Observer access requires an authenticated ride.',
+        'Observer access requires an authenticated flight.',
       );
     }
     final digest = Hmac(sha256, utf8.encode(session.inviteSecret)).convert(

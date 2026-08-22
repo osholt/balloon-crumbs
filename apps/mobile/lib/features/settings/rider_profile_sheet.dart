@@ -60,14 +60,14 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Rider profile',
+            'Crew profile',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
           Text(
             widget.currentRideActive
-                ? 'Changes are saved for your next ride. Your current ride keeps the identity you joined with so the roster stays consistent.'
-                : 'This identity is prefilled for your next ride.',
+                ? 'Changes are saved for your next flight. Your current flight keeps the identity you joined with so the crew list stays consistent.'
+                : 'This identity is prefilled for your next flight.',
             style: const TextStyle(color: Color(0xFFABB5C1), height: 1.4),
           ),
           const SizedBox(height: 20),
@@ -78,7 +78,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
             textCapitalization: TextCapitalization.words,
             onChanged: (_) => setState(() => _nameError = null),
             decoration: InputDecoration(
-              labelText: 'Rider name',
+              labelText: 'Crew name',
               counterText: '',
               errorText: _nameError,
             ),
@@ -105,7 +105,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
                 Semantics(
                   button: true,
                   selected: color == _color,
-                  label: '${color.label} rider colour',
+                  label: '${color.label} crew colour',
                   child: InkWell(
                     key: Key('profile-colour-${color.name}'),
                     customBorder: const CircleBorder(),
@@ -146,7 +146,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
             icon: const Icon(Icons.replay_outlined),
             label: Text(
               widget.currentRideActive
-                  ? 'Replay guide after this ride'
+                  ? 'Replay guide after this flight'
                   : 'Replay setup guide',
             ),
           ),

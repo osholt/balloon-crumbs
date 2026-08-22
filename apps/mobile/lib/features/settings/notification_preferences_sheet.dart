@@ -39,13 +39,13 @@ class _NotificationPreferencesSheetState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Ride notifications',
+            'Flight notifications',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
           Text(
             widget.controller.statusMessage ??
-                'Choose which background ride updates this phone receives.',
+                'Choose which background flight updates this phone receives.',
             style: const TextStyle(color: Color(0xFFABB5C1), height: 1.4),
           ),
           const SizedBox(height: 18),
@@ -66,7 +66,7 @@ class _NotificationPreferencesSheetState
             contentPadding: EdgeInsets.zero,
             value: _status,
             onChanged: (value) => setState(() => _status = value),
-            title: const Text('Ride and marker status'),
+            title: const Text('Flight and marker status'),
             subtitle: const Text('Resolved, all-passed and marker changes.'),
           ),
           SwitchListTile(
@@ -75,7 +75,7 @@ class _NotificationPreferencesSheetState
             value: _administrative,
             onChanged: (value) => setState(() => _administrative = value),
             title: const Text('Administrative changes'),
-            subtitle: const Text('Ride paused, resumed or ended.'),
+            subtitle: const Text('Flight paused, resumed or ended.'),
           ),
           const SizedBox(height: 14),
           FilledButton(

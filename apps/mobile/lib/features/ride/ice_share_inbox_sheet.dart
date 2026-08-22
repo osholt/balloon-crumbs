@@ -63,8 +63,8 @@ class _IceShareInboxSheetState extends State<IceShareInboxSheet> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Only for this ride - a leader-received contact clears itself '
-              'once the ride ends, unless you called or texted it.',
+              'Only for this flight - a coordinator-received contact clears itself '
+              'once the flight ends, unless you called or texted it.',
               style: TextStyle(color: Color(0xFF98A3B1)),
             ),
             const SizedBox(height: 20),

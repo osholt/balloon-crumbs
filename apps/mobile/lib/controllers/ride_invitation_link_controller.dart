@@ -54,7 +54,7 @@ class RideInvitationLinkController extends ChangeNotifier
     if (invitation == null) {
       _pending = null;
       _errorMessage =
-          'That ride invitation is incomplete or malformed. Ask the ride lead to share it again.';
+          'That flight invitation is incomplete or malformed. Ask the pilot or coordinator to share it again.';
     } else {
       _pending = invitation;
       _errorMessage = null;

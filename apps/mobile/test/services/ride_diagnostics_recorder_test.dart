@@ -382,8 +382,8 @@ void main() {
       final report = recorder.render(rideCode: '123456', appBuild: '1.2.3+46');
 
       expect(report, contains("this phone's own"));
-      expect(report, contains('no ride or invite secret'));
-      expect(report, contains('Ride:  123456'));
+      expect(report, contains('no flight or invite secret'));
+      expect(report, contains('Flight:  123456'));
       expect(report, contains('Build: 1.2.3+46'));
     });
   });

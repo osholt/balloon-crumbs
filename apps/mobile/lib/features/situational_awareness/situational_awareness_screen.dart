@@ -84,7 +84,8 @@ class SituationalAwarenessScreen extends StatelessWidget {
                 const _EmptyCard(
                   icon: Icons.check_circle_outline,
                   title: 'No active road alerts',
-                  detail: 'Report something the riders behind need to know.',
+                  detail:
+                      'Report something the chase crew behind need to know.',
                 )
               else
                 ...controller.activeHazards.map(
@@ -231,8 +232,8 @@ class _PreStartLocationCard extends StatelessWidget {
       title: Text('Current position only before departure'),
       subtitle: Text(
         'If you enable location, the group can see only your latest fresh '
-        'position. Tracks, route progress and ride statistics begin when the '
-        'leader starts the ride.',
+        'position. Tracks, route progress and flight statistics begin when the '
+        'coordinator starts the flight.',
       ),
     ),
   );
@@ -276,7 +277,7 @@ class ForegroundLocationCard extends StatelessWidget {
                     Text(
                       preStart
                           ? 'Your assembly position'
-                          : 'Your ride location',
+                          : 'Your chase location',
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 3),
@@ -413,7 +414,7 @@ class _HazardReportSheetState extends State<HazardReportSheet> {
                   details: _detailsController.text,
                 ),
               ),
-              child: const Text('Share with ride'),
+              child: const Text('Share with flight crew'),
             ),
           ],
         ),

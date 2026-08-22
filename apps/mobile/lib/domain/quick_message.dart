@@ -19,7 +19,7 @@ extension QuickMessageDetails on QuickMessage {
     QuickMessage.assistance => 'Need help',
     QuickMessage.routeBlocked => 'Route blocked',
     QuickMessage.emergencyStop => 'Emergency stop',
-    QuickMessage.allPassed => 'All riders passed',
+    QuickMessage.allPassed => 'All crew passed',
     QuickMessage.resolved => 'Resolved',
   };
 
@@ -45,7 +45,7 @@ extension QuickMessageDetails on QuickMessage {
     QuickMessage.assistance => '$riderName needs help',
     QuickMessage.routeBlocked => '$riderName says the route is blocked',
     QuickMessage.emergencyStop => '$riderName has made an emergency stop',
-    QuickMessage.allPassed => '$riderName says all riders have passed',
+    QuickMessage.allPassed => '$riderName says all crew have passed',
     QuickMessage.resolved => '$riderName says it is resolved',
   };
 

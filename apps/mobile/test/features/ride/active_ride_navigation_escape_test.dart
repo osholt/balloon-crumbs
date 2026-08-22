@@ -65,6 +65,7 @@ void main() {
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(_app(controller));
+    expect(tester.takeException(), isNull, reason: 'initial shell');
     Future<void> pumpUntil(bool Function() satisfied) async {
       for (var attempt = 0; attempt < 60 && !satisfied(); attempt += 1) {
         await tester.pump(const Duration(milliseconds: 100));
@@ -78,6 +79,7 @@ void main() {
     );
     await tester.tap(find.byIcon(Icons.science_outlined));
     await pumpUntil(() => find.text('READY').evaluate().isNotEmpty);
+    expect(tester.takeException(), isNull, reason: 'replay screen');
     await tester.tap(find.byKey(const Key('start-ride-button')));
     // Which dialogs the start puts up depends on whether the bundled demo
     // route has finished loading and whether anyone holds TEC, and that varies
@@ -103,14 +105,17 @@ void main() {
       );
     }
     expect(controller.rideStarted, isTrue);
+    expect(tester.takeException(), isNull, reason: 'flight start');
     // The bikes have to be moving, not merely started: the navigation fix that
     // hides the bar comes from a simulated position.
     await pumpUntil(() => find.text('RUNNING').evaluate().isNotEmpty);
     expect(find.text('RUNNING'), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: 'running replay');
 
     // Back to the map, which is where a rider actually rides.
     await tester.tap(find.text('Map').last);
     await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'map tab');
 
     // Ride until the shell decides the rider is navigating and takes the bar
     // away. That state is the whole point of the test: if it never arrives,
@@ -141,16 +146,19 @@ void main() {
           .evaluate()
           .isNotEmpty,
     );
+    expect(tester.takeException(), isNull, reason: 'flight menu opening');
     // The tile exists as soon as the sheet starts sliding up; tapping then
     // lands on the barrier instead. Let it finish arriving.
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Ride'), findsWidgets);
+    expect(tester.takeException(), isNull, reason: 'flight menu open');
+    expect(find.text('Flight'), findsWidgets);
     expect(find.text('Settings'), findsWidgets);
 
     // Leaving the map puts the rider's navigation back, because the condition
     // that hid it required the map tab.
     await tester.tap(find.byKey(const Key('ride-menu-destination-2')));
     await pumpUntil(() => find.byType(NavigationBar).evaluate().isNotEmpty);
+    expect(tester.takeException(), isNull, reason: 'flight tab');
     expect(find.byType(NavigationBar), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());

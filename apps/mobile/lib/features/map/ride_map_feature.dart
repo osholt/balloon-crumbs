@@ -218,6 +218,7 @@ class RideMapFeature extends StatefulWidget {
     this.riderTrails,
     this.landingZone,
     this.landingZoneUpdates,
+    this.onMapTap,
     this.groupRiderCount,
     this.onOpenRoster,
     this.enforcementAlert,
@@ -284,6 +285,7 @@ class RideMapFeature extends StatefulWidget {
     ValueListenable<List<MapOverlayTrace>>? riderTrails,
     MapLandingZone? landingZone,
     ValueListenable<MapLandingZone?>? landingZoneUpdates,
+    ValueChanged<GeoPoint>? onMapTap,
     int? groupRiderCount,
     VoidCallback? onOpenRoster,
     ValueListenable<EnforcementAlert?>? enforcementAlert,
@@ -345,6 +347,7 @@ class RideMapFeature extends StatefulWidget {
     riderTrails: riderTrails,
     landingZone: landingZone,
     landingZoneUpdates: landingZoneUpdates,
+    onMapTap: onMapTap,
     groupRiderCount: groupRiderCount,
     onOpenRoster: onOpenRoster,
     enforcementAlert: enforcementAlert,
@@ -409,6 +412,7 @@ class RideMapFeature extends StatefulWidget {
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
   final MapLandingZone? landingZone;
   final ValueListenable<MapLandingZone?>? landingZoneUpdates;
+  final ValueChanged<GeoPoint>? onMapTap;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
@@ -613,6 +617,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         riderTrails: widget.riderTrails,
         landingZone: widget.landingZone,
         landingZoneUpdates: widget.landingZoneUpdates,
+        onMapTap: widget.onMapTap,
         groupRiderCount: widget.groupRiderCount,
         onOpenRoster: widget.onOpenRoster,
         enforcementAlert: widget.enforcementAlert,
@@ -701,6 +706,7 @@ class RideMapScreen extends StatefulWidget {
     this.riderTrails,
     this.landingZone,
     this.landingZoneUpdates,
+    this.onMapTap,
     this.groupRiderCount,
     this.onOpenRoster,
     this.enforcementAlert,
@@ -787,6 +793,7 @@ class RideMapScreen extends StatefulWidget {
   final ValueListenable<List<MapOverlayTrace>>? riderTrails;
   final MapLandingZone? landingZone;
   final ValueListenable<MapLandingZone?>? landingZoneUpdates;
+  final ValueChanged<GeoPoint>? onMapTap;
 
   /// Which way the gap to the TEC is going (#181). Null where no trend is
   /// tracked, in which case the gap card shows the distance alone.
@@ -1982,7 +1989,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           ? FloatingActionButton.small(
               key: const Key('ride-menu-button'),
               heroTag: 'balloon-crumbs-menu',
-              tooltip: 'Ride actions',
+              tooltip: 'Flight actions',
               onPressed: widget.onOpenRideMenu,
               backgroundColor: const Color(0xE6252E39),
               foregroundColor: Colors.white,
@@ -2029,7 +2036,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               key: const Key('emergency-alert-button'),
               extendedPadding: actionPadding,
               heroTag: 'balloon-crumbs-emergency-alert',
-              tooltip: 'Alert leader and TEC',
+              tooltip: 'Alert pilot and coordinator',
               onPressed: _emergencyAlertSending ? null : _triggerEmergencyAlert,
               backgroundColor: const Color(0xFFD9304F),
               foregroundColor: Colors.white,
@@ -2065,7 +2072,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               key: const Key('leave-ride-button'),
               extendedPadding: actionPadding,
               heroTag: 'balloon-crumbs-leave',
-              tooltip: 'Stop sharing and leave this ride',
+              tooltip: 'Stop sharing and leave this flight',
               onPressed: widget.onLeaveRide,
               backgroundColor: const Color(0xFF545F6E),
               foregroundColor: Colors.white,
@@ -2549,6 +2556,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
             ),
             initialZoom: 13,
             onMapEvent: _onFlutterMapEvent,
+            onTap: widget.onMapTap == null
+                ? null
+                : (_, point) => widget.onMapTap!(
+                    GeoPoint(
+                      latitude: point.latitude,
+                      longitude: point.longitude,
+                    ),
+                  ),
           )
         : MapOptions(
             initialCenter:
@@ -2560,6 +2575,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
                 ? 11
                 : 14,
             onMapEvent: _onFlutterMapEvent,
+            onTap: widget.onMapTap == null
+                ? null
+                : (_, point) => widget.onMapTap!(
+                    GeoPoint(
+                      latitude: point.latitude,
+                      longitude: point.longitude,
+                    ),
+                  ),
           );
 
     final map = FlutterMap(
@@ -2808,6 +2831,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
               unawaited(_prepareMapLibreStyle());
             },
             onCameraMove: _onMapLibreCameraMove,
+            onMapClick: widget.onMapTap == null
+                ? null
+                : (_, point) => widget.onMapTap!(
+                    GeoPoint(
+                      latitude: point.latitude,
+                      longitude: point.longitude,
+                    ),
+                  ),
             // Without this the platform never reports its camera, and
             // `MapLibreMapController.cameraPosition` keeps the value it was
             // constructed with for the whole ride: iOS returns early from
@@ -3683,7 +3714,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   String _emergencyContactLabel() {
     final contacts = widget.emergencyContacts;
-    if (contacts.isEmpty) return 'the ride group';
+    if (contacts.isEmpty) return 'the flight crew';
     return contacts.map((contact) => contact.shortRoleLabel).join(' and ');
   }
 
@@ -5138,7 +5169,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }) async {
     if (!widget.canEditRoute) {
       throw const FormatException(
-        'Only the ride leader can replace the group route.',
+        'Only the pilot or coordinator can replace the crew route.',
       );
     }
     ImportedRoute? comparisonRoute;
@@ -5190,7 +5221,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }) async {
     if (!widget.canEditRoute) {
       throw const FormatException(
-        'Only the ride leader can replace the group route.',
+        'Only the pilot or coordinator can replace the crew route.',
       );
     }
     final enrichment = await _routeGeometryEnricher.enrich(route);
@@ -5389,7 +5420,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       }
       final connector = ImportedRoute(
         id: 'route-start-${DateTime.now().microsecondsSinceEpoch}',
-        name: 'Ride to route start',
+        name: 'Route to planned start',
         importedAt: DateTime.now().toUtc(),
         sourceFileName: 'route-start',
         paths: [
@@ -5586,7 +5617,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Show the group over another app?'),
         content: const Text(
-          'Android will pin a small, non-interactive route and rider view. '
+          'Android will pin a small, non-interactive route and crew view. '
           'It uses no map tiles and can remain visible while you open your '
           'navigation app. Close it with Android’s Picture-in-Picture control.',
         ),
@@ -5618,7 +5649,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     final currentPosition = _effectivePosition;
     String? status;
     if (widget.groupRiderCount case final count?) {
-      status = '$count rider${count == 1 ? '' : 's'}';
+      status = '$count crew member${count == 1 ? '' : 's'}';
     }
     return GroupPipSnapshot(
       routePaths:
@@ -5744,7 +5775,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         builder: (dialogContext) => AlertDialog(
           title: const Text('Clear the group route?'),
           content: const Text(
-            'The route will be removed for every rider after this signed '
+            'The route will be removed for every crew member after this signed '
             'change is relayed. This cannot be undone offline.',
           ),
           actions: [
@@ -5819,7 +5850,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
       widget.onChangeRouteRequestHandled?.call();
       if (!mounted) return;
       if (!widget.canEditRoute) {
-        _showMessage('Only the ride leader can replace the group route.');
+        _showMessage(
+          'Only the pilot or coordinator can replace the crew route.',
+        );
         return;
       }
       if (sharedFile != null) {
@@ -5853,7 +5886,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   Future<void> _showChangeRouteSheet() async {
     if (!widget.canEditRoute) {
-      _showMessage('Only the ride leader can replace the group route.');
+      _showMessage('Only the pilot or coordinator can replace the crew route.');
       return;
     }
     await showModalBottomSheet<void>(
@@ -5896,7 +5929,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                 key: const Key('use-stored-route-sheet-item'),
                 leading: const Icon(Icons.history),
                 title: const Text('Use a saved route'),
-                subtitle: const Text('A recorded route or a previous ride'),
+                subtitle: const Text('A recorded route or a previous flight'),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _useStoredRoute();
@@ -6386,7 +6419,7 @@ class _WaitingForLeaderRoutePrompt extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'This ride has no group route yet. It will appear here when '
+                'This flight has no crew route yet. It will appear here when '
                 'the leader shares one. The leader can also start without a '
                 'route.',
                 style: TextStyle(color: Color(0xFF98A3B1)),
@@ -6490,7 +6523,7 @@ class _EmergencyActionsSheetState extends State<_EmergencyActionsSheet> {
   Widget build(BuildContext context) {
     final contacts = widget.contacts;
     final recipientLabel = contacts.isEmpty
-        ? 'the ride group'
+        ? 'the flight crew'
         : contacts.map((contact) => contact.shortRoleLabel).join(' and ');
     return SafeArea(
       top: false,
@@ -6581,7 +6614,7 @@ class _EmergencyActionsSheetState extends State<_EmergencyActionsSheet> {
               const SizedBox(height: 6),
               const Text(
                 'Your position is filled in ready to send. Pick who to text - '
-                'the leader and TEC have already had the alert in the app.',
+                'the pilot and coordinator have already had the alert in the app.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Color(0xFF98A3B1), fontSize: 12),
               ),
@@ -6811,7 +6844,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
       button: widget.onTap != null,
       label: widget.onTap == null
           ? null
-          : 'Open ride roster, $riderCount riders',
+          : 'Open flight crew, $riderCount members',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
@@ -6834,7 +6867,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
                     vertical: 3,
                   ),
                   child: Text(
-                    '$riderCount RIDERS',
+                    '$riderCount CREW',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
@@ -9779,7 +9812,7 @@ class _QuickMessageAlertCard extends StatelessWidget {
     final headline = receipt
         // Reads correctly whatever the label says: "saw your need fuel alert"
         // does not, and a label can come from a build this one does not know.
-        ? '${message.firstAcknowledgement?.displayName ?? 'A rider'} saw: '
+        ? '${message.firstAcknowledgement?.displayName ?? 'A chaser'} saw: '
               '${message.label}'
         : message.headline;
     final detail = receipt
@@ -10248,7 +10281,7 @@ class _NoLeaderBanner extends StatelessWidget {
             Icon(Icons.flag_outlined, color: Color(0xFFFF8A6B)),
             SizedBox(width: 8),
             Text(
-              'NO RIDE LEADER',
+              'NO FLIGHT COORDINATOR',
               key: Key('no-leader-banner'),
               style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.7),
             ),
@@ -10280,7 +10313,7 @@ class _RidePausedBanner extends StatelessWidget {
               Icon(Icons.pause_circle_filled, color: Color(0xFFFFC857)),
               SizedBox(width: 8),
               Text(
-                'GROUP RIDE PAUSED',
+                'GROUP FLIGHT PAUSED',
                 style: TextStyle(
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.7,
@@ -10364,7 +10397,7 @@ class _RideCompletionSuggestion extends StatelessWidget {
                 // not the rider's question, and at a glance on a bike the
                 // question is the only part that can be read. The detail stays
                 // one tap away in the confirmation.
-                'All ${assessment.riderCount} riders have finished.',
+                'All ${assessment.riderCount} crew members have finished.',
                 style: (compact
                     ? theme.textTheme.bodyMedium
                     : theme.textTheme.bodyLarge),
@@ -10392,7 +10425,7 @@ class _RideCompletionSuggestion extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
               ),
-              child: const Text('End ride'),
+              child: const Text('End flight'),
             ),
           ],
         ),

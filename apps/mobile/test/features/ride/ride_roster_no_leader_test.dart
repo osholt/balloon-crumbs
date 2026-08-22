@@ -80,11 +80,11 @@ void main() {
       find.byKey(const Key('roster-missing-leader-notice')),
       findsOneWidget,
     );
-    expect(find.text('This ride has no leader'), findsOneWidget);
+    expect(find.text('This flight has no coordinator'), findsOneWidget);
     // States the consequences rather than only the fact.
-    expect(find.textContaining('setting the pace'), findsOneWidget);
-    expect(find.textContaining('Hot Pursuit has no line'), findsOneWidget);
-    expect(find.textContaining('route changes'), findsOneWidget);
+    expect(find.textContaining('pilot or coordinator'), findsOneWidget);
+    expect(find.textContaining('landing-area changes'), findsOneWidget);
+    expect(find.textContaining('takes the lead'), findsOneWidget);
   });
 
   testWidgets('taking the lead records it and closes the roster', (

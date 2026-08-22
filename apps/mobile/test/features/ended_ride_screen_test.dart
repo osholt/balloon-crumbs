@@ -80,7 +80,7 @@ void main() {
       isEmpty,
       reason: 'the ride is archived, so nothing may describe it as destroyed',
     );
-    expect(find.text('Finish and file in Previous rides'), findsOneWidget);
+    expect(find.text('Finish and file in Previous flights'), findsOneWidget);
   });
 
   // #206/#207: the tester was stranded here by an automatic end she did not
@@ -90,7 +90,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('reopen-ended-ride-button')));
     await tester.pumpAndSettle();
-    expect(find.text('Resume this ride?'), findsOneWidget);
+    expect(find.text('Resume this flight?'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('cancel-reopen-ride-button')));
     await tester.pumpAndSettle();
@@ -153,7 +153,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('stays on this phone'), findsOneWidget);
-    expect(find.textContaining('Previous rides'), findsWidgets);
+    expect(find.textContaining('Previous flights'), findsWidgets);
     // The one real consequence, in rider language rather than "relay recovery".
     expect(find.textContaining('stop waiting for them'), findsOneWidget);
   });
@@ -190,7 +190,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.session, isNotNull);
-    expect(find.text('Finish and file in Previous rides'), findsOneWidget);
+    expect(find.text('Finish and file in Previous flights'), findsOneWidget);
   });
 }
 

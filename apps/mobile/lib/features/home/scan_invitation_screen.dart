@@ -111,7 +111,7 @@ class _ScanInvitationScreenState extends State<ScanInvitationScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  'Point the camera at the code on the ride leader’s phone. '
+                  'Point the camera at the code on the pilot or coordinator’s phone. '
                   'This works with no signal.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white, height: 1.4),
@@ -155,7 +155,7 @@ class _CameraUnavailable extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             const Text(
-              'You can still join with the six-digit ride code, or by pasting '
+              'You can still join with the six-digit flight code, or by pasting '
               'the invitation the leader shared. Scanning is the only way that '
               'works with no signal at all.',
               textAlign: TextAlign.center,
@@ -165,7 +165,7 @@ class _CameraUnavailable extends StatelessWidget {
             OutlinedButton(
               key: const Key('invitation-scanner-back'),
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Use a ride code instead'),
+              child: const Text('Use a flight code instead'),
             ),
           ],
         ),

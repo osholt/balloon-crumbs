@@ -300,7 +300,7 @@ void main() {
     expect(delayedTecSpeed, lessThan(normalTecSpeed));
 
     await legacy.reportRoadworks();
-    expect(awareness.activeHazards.single.details, contains('Ride Lab'));
+    expect(awareness.activeHazards.single.details, contains('flight-replay'));
     expect(
       (awareness.activeHazards.single.position.longitude -
               awareness.localLocation!.sample.position.longitude)

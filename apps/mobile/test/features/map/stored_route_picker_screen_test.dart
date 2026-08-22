@@ -30,7 +30,7 @@ void main() {
 
     await _pump(tester, recorded: recorded, places: places);
 
-    expect(find.text('Ride library'), findsOneWidget);
+    expect(find.text('Flight library'), findsOneWidget);
     expect(find.text('RECORDED ROUTES'), findsOneWidget);
     expect(find.text('Ride 392725'), findsOneWidget);
     expect(find.textContaining('Kingswood to Chippenham'), findsOneWidget);

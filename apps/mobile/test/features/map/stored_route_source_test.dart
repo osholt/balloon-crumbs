@@ -44,7 +44,7 @@ void main() {
     await tester.tap(find.byKey(const Key('use-stored-route-empty-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ride library'), findsWidgets);
+    expect(find.text('Flight library'), findsWidgets);
     expect(find.text('RECORDED ROUTES'), findsOneWidget);
     expect(find.text('Scouted loop'), findsOneWidget);
 
@@ -94,9 +94,9 @@ void main() {
     await tester.tap(find.byKey(const Key('use-stored-route-sheet-item')));
     await tester.pumpAndSettle();
 
-    expect(find.text('PREVIOUS RIDES'), findsOneWidget);
+    expect(find.text('PREVIOUS FLIGHTS'), findsOneWidget);
     expect(find.text('Sunday run'), findsOneWidget);
-    expect(find.textContaining('ride AB12CD'), findsOneWidget);
+    expect(find.textContaining('flight AB12CD'), findsOneWidget);
 
     await tester.tap(
       find.byKey(const Key('stored-route-candidate-ride:ride-1:track')),
@@ -227,7 +227,7 @@ void main() {
 
     expect(find.text('No saved routes yet'), findsOneWidget);
     expect(find.text('Sunday run'), findsNothing);
-    expect(find.text('PREVIOUS RIDES'), findsNothing);
+    expect(find.text('PREVIOUS FLIGHTS'), findsNothing);
   });
 
   testWidgets('the raw recorded track stays available and is labelled', (

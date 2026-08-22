@@ -38,8 +38,8 @@ void main() {
       expect(config, isNotNull);
       expect(config!.setOngoing, isTrue);
       // It has to say what is happening and that it ends with the ride.
-      expect(config.notificationText, contains('ride'));
-      expect(config.notificationText, contains('stops when the ride ends'));
+      expect(config.notificationText, contains('chase'));
+      expect(config.notificationText, contains('stops when the flight ends'));
     });
 
     test('every platform keeps the 10 m platform filter', () {
@@ -132,7 +132,7 @@ void main() {
       expect(platform.permissionRequests, 1);
       expect(platform.backgroundPermissionRequests, 1);
       expect(access.backgroundCapable, isTrue);
-      expect(access.message, contains('length of a ride'));
+      expect(access.message, contains('length of a flight'));
       await source.dispose();
       await platform.dispose();
     },

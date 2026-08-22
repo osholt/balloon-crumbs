@@ -42,7 +42,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(find.text('Join ride 123456?'), findsOneWidget);
+      expect(find.text('Join flight 123456?'), findsOneWidget);
       await tester.tap(find.byKey(const Key('accept-ride-invitation-link')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -72,9 +72,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text('A ride is already open'), findsOneWidget);
+    expect(find.text('A flight is already open'), findsOneWidget);
     expect(find.textContaining('cannot replace it silently'), findsOneWidget);
-    await tester.tap(find.text('Keep current ride'));
+    await tester.tap(find.text('Keep current flight'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
@@ -120,7 +120,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text('Could not join this ride'), findsOneWidget);
+    expect(find.text('Could not join this flight'), findsOneWidget);
     expect(find.textContaining('no longer active'), findsOneWidget);
     expect(fixture.rideController.hasActiveRide, isFalse);
   });

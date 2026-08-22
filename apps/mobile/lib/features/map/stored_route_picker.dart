@@ -69,7 +69,7 @@ class _StoredRoutePickerScreenState extends State<StoredRoutePickerScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Ride library')),
+    appBar: AppBar(title: const Text('Flight library')),
     body: FutureBuilder<_StoredRoutePickerData>(
       future: _data,
       builder: (context, snapshot) {
@@ -119,7 +119,7 @@ class _StoredRoutePickerScreenState extends State<StoredRoutePickerScreen> {
                 key: const Key('ride-library-details-and-exports'),
                 onPressed: _openPreviousRideArchive,
                 icon: const Icon(Icons.receipt_long_outlined),
-                label: const Text('Ride details and exports'),
+                label: const Text('Flight details and exports'),
               ),
             ],
             if (recordings.isNotEmpty) ...[
@@ -127,7 +127,7 @@ class _StoredRoutePickerScreenState extends State<StoredRoutePickerScreen> {
               for (final candidate in recordings) _tile(candidate, places),
             ],
             if (rides.isNotEmpty) ...[
-              const _SectionHeading('Previous rides'),
+              const _SectionHeading('Previous flights'),
               for (final candidate in rides) _tile(candidate, places),
             ],
             if (candidates.isNotEmpty) ...[
@@ -211,7 +211,7 @@ class StoredRouteCandidateTile extends StatelessWidget {
         '${_date(candidate.storedAt)}\n'
         '${MeasurementFormatter(distanceUnit).distance(routeLengthMeters(candidate.geometry))} · '
         '${candidate.pointCount} points'
-        '${candidate.rideCode == null ? '' : ' · ride ${candidate.rideCode}'}',
+        '${candidate.rideCode == null ? '' : ' · flight ${candidate.rideCode}'}',
       ),
       isThreeLine: true,
       trailing: const Icon(Icons.chevron_right),
@@ -338,7 +338,7 @@ class _StoredRouteOptionsSheetState extends State<StoredRouteOptionsSheet> {
               ),
             ] else
               const Text(
-                'This is the route that ride was planned with, so it is used '
+                'This is the route that flight was planned with, so it is used '
                 'exactly as it was planned.',
                 style: TextStyle(color: Color(0xFF98A3B1), height: 1.4),
               ),
@@ -348,7 +348,7 @@ class _StoredRouteOptionsSheetState extends State<StoredRouteOptionsSheet> {
               contentPadding: EdgeInsets.zero,
               value: _reversed,
               onChanged: (value) => setState(() => _reversed = value),
-              title: const Text('Ride it in reverse'),
+              title: const Text('Use it in reverse'),
               subtitle: Text(
                 _reversed
                     ? 'Runs from the original finish to the original start. '
@@ -379,8 +379,8 @@ class _StoredRouteOptionsSheetState extends State<StoredRouteOptionsSheet> {
 
 String storedRouteKindLabel(StoredRouteOrigin origin) => switch (origin) {
   StoredRouteOrigin.recordedRoute => 'Recorded route',
-  StoredRouteOrigin.previousRidePlan => 'Previous ride · planned route',
-  StoredRouteOrigin.previousRideTrack => 'Previous ride · recorded track',
+  StoredRouteOrigin.previousRidePlan => 'Previous flight · planned route',
+  StoredRouteOrigin.previousRideTrack => 'Previous flight · recorded track',
 };
 
 class _SectionHeading extends StatelessWidget {
@@ -412,16 +412,16 @@ class _EmptyLibrary extends StatelessWidget {
   Widget build(BuildContext context) => _Message(
     title: 'No saved routes yet',
     body:
-        'Record one with "Record a route" on the home screen, or finish a ride '
-        'and it will appear here. A ride whose geometry has been deleted is '
-        'not listed, because there is nothing left to ride.',
+        'Record one with "Record a chase route" on the home screen, or finish a flight '
+        'and it will appear here. A flight whose geometry has been deleted is '
+        'not listed, because there is no route left to use.',
     action: onOpenPreviousRideArchive == null
         ? null
         : OutlinedButton.icon(
             key: const Key('ride-library-details-and-exports'),
             onPressed: onOpenPreviousRideArchive,
             icon: const Icon(Icons.receipt_long_outlined),
-            label: const Text('Ride details and exports'),
+            label: const Text('Flight details and exports'),
           ),
   );
 }

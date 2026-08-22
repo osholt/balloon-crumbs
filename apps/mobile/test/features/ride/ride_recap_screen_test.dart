@@ -125,7 +125,7 @@ void main() {
     // #124: a ride with no route is valid, and its recap says so.
     await pumpScreen(tester, points: const []);
 
-    expect(find.text('No recorded route for this ride'), findsOneWidget);
+    expect(find.text('No recorded route for this flight'), findsOneWidget);
     expect(find.byKey(const Key('share-recap-image-button')), findsOneWidget);
     expect(
       tester.widget<RideRecapCard>(find.byType(RideRecapCard)).mapLayer,

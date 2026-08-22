@@ -248,7 +248,7 @@ abstract final class HazardMapSymbols {
   /// interaction to read while moving.
   static String describe(HazardReport report, {required DateTime now}) {
     final reporter = report.source == HazardSource.rider
-        ? (report.reporterName ?? 'a rider')
+        ? (report.reporterName ?? 'a crew member')
         : (report.reporterName ?? report.providerId ?? 'a feed');
     // "just now" on a standing record would read as a live sighting. What a
     // rider needs to know instead is that it is fixed, and who says so.
@@ -257,7 +257,7 @@ abstract final class HazardMapSymbols {
     }
     final age = _relativeAge(now.difference(report.updatedAt));
     final confirmations = report.confirmations > 1
-        ? ' · ${report.confirmations} riders'
+        ? ' · ${report.confirmations} crew'
         : '';
     final freshness = freshnessFor(report, now);
     final caveat = freshness == HazardMapFreshness.fresh

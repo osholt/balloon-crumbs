@@ -50,7 +50,7 @@ class PreviousRidesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Previous rides')),
+    appBar: AppBar(title: const Text('Previous flights')),
     body: AnimatedBuilder(
       animation: completedRides,
       builder: (context, _) {
@@ -115,12 +115,12 @@ class _EmptyArchive extends StatelessWidget {
           Icon(Icons.route_outlined, size: 52, color: Color(0xFF7F8A98)),
           SizedBox(height: 16),
           Text(
-            'No previous rides yet',
+            'No previous flights yet',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
           ),
           SizedBox(height: 8),
           Text(
-            'A real ride will appear here after it ends or you leave it.',
+            'A recorded flight will appear here after it ends or you leave it.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Color(0xFFABB5C1)),
           ),
@@ -148,7 +148,7 @@ class _RideTile extends StatelessWidget {
       leading: const CircleAvatar(child: Icon(Icons.two_wheeler)),
       title: Text(ride.title),
       subtitle: Text(
-        '${_date(ride.startedAt)} · $distance · ${ride.riderCount} riders\n'
+        '${_date(ride.startedAt)} · $distance · ${ride.riderCount} crew\n'
         '${ride.traveledRoute == null
             ? 'No GPX trail recorded'
             : ride.hasRecordingGaps
@@ -193,7 +193,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
         title: Text(ride.title),
         actions: [
           IconButton(
-            tooltip: 'Delete ride',
+            tooltip: 'Delete flight',
             onPressed: _confirmDelete,
             icon: const Icon(Icons.delete_outline),
           ),
@@ -231,7 +231,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
                 leading: Icon(Icons.location_disabled_outlined),
                 title: Text('This recording has gaps'),
                 subtitle: Text(
-                  'Location stopped for part of the ride. Missing sections are '
+                  'Location stopped for part of the flight. Missing sections are '
                   'left blank rather than shown as straight lines, and are not '
                   'included in the distance.',
                 ),
@@ -252,9 +252,9 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
                     label: 'Distance',
                     value: formatter.distance(ride.totalDistanceMeters),
                   ),
-                  _Metric(label: 'Riders', value: '${ride.riderCount}'),
+                  _Metric(label: 'Crew', value: '${ride.riderCount}'),
                   _Metric(label: 'Role', value: ride.localRole.name),
-                  _Metric(label: 'Ride code', value: ride.rideCode),
+                  _Metric(label: 'Flight code', value: ride.rideCode),
                 ],
               ),
             ),
@@ -266,7 +266,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
                 ? null
                 : _rideAgain,
             icon: const Icon(Icons.route_outlined),
-            label: const Text('Ride again'),
+            label: const Text('Use route again'),
           ),
           const SizedBox(height: 10),
           FilledButton.icon(
@@ -295,7 +295,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
           ),
           const SizedBox(height: 14),
           const Text(
-            'Ride history is stored locally on this phone. Balloon Crumbs '
+            'Flight history is stored locally on this phone. Balloon Crumbs '
             'does not upload a permanent copy. The native share destination '
             'determines where an exported GPX is saved.',
             style: TextStyle(color: Color(0xFF8994A2), fontSize: 12),
@@ -465,7 +465,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete this ride?'),
+        title: const Text('Delete this flight?'),
         content: const Text(
           'Its local summary and recorded geometry will be removed from this '
           'phone. Files you previously exported are not affected.',
@@ -608,7 +608,7 @@ class _ArchivedRideMapState extends State<ArchivedRideMap> {
                 shape: const CircleBorder(),
                 child: IconButton(
                   key: const Key('archived-ride-fit-route'),
-                  tooltip: 'Fit the whole ride',
+                  tooltip: 'Fit the whole flight',
                   onPressed: _fit,
                   color: Colors.white,
                   icon: const Icon(Icons.fit_screen),

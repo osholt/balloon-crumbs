@@ -51,7 +51,7 @@ Tester release setup is documented for
 apps/mobile/                 Flutter client plus Swift/Kotlin platform bridges
 apps/server/                 FastAPI/PostgreSQL relay inherited from TEC
 apps/planner/                Pilot forecast planner and short-code sharing page
-apps/website/                Safe placeholder for the future public site
+apps/website/                Public product home; the planner is a secondary destination
 deploy/                      Deployment templates; no production credentials
 docs/                        Product, architecture, source, and backlog notes
 .github/workflows/           Mobile and server CI only

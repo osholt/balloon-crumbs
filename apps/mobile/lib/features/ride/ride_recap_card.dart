@@ -85,7 +85,7 @@ class RideRecapCard extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'TAIL END CHARLIE',
+                        'BALLOON CRUMBS',
                         maxLines: 1,
                         softWrap: false,
                         style: TextStyle(
@@ -104,7 +104,7 @@ class RideRecapCard extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerRight,
                       child: Text(
-                        'RIDE ${summary.rideCode}',
+                        'FLIGHT ${summary.rideCode}',
                         maxLines: 1,
                         softWrap: false,
                         textAlign: TextAlign.right,
@@ -135,7 +135,7 @@ class RideRecapCard extends StatelessWidget {
                           // says so rather than failing.
                           Center(
                             child: Text(
-                              'No recorded route for this ride',
+                              'No recorded route for this flight',
                               style: TextStyle(
                                 color: dark ? _muted : _lightMuted,
                               ),
@@ -192,7 +192,7 @@ class RideRecapCard extends StatelessWidget {
                 children: [
                   _Stat(
                     icon: Icons.group_outlined,
-                    label: 'Riders',
+                    label: 'Crew',
                     value: '${summary.riderCount}',
                   ),
                   _Stat(
@@ -207,7 +207,7 @@ class RideRecapCard extends StatelessWidget {
                 children: [
                   _Stat(
                     icon: Icons.timer_outlined,
-                    label: 'Ride time',
+                    label: 'Flight time',
                     value: _duration(summary.rideDuration),
                   ),
                 ],

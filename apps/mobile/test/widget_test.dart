@@ -60,25 +60,25 @@ void main() {
     await tester.pumpWidget(_app(controller));
 
     expect(find.byType(HomeMapBackdrop), findsOneWidget);
-    expect(find.text('Create a ride'), findsOneWidget);
-    expect(find.text('Join a ride'), findsOneWidget);
+    expect(find.text('Create flight'), findsOneWidget);
+    expect(find.text('Join crew'), findsOneWidget);
   });
 
   testWidgets('home screen exposes the two ride entry points', (tester) async {
     final controller = await _controller();
     await tester.pumpWidget(_app(controller));
 
-    expect(find.text('Create a ride'), findsOneWidget);
-    expect(find.text('Join a ride'), findsOneWidget);
+    expect(find.text('Create flight'), findsOneWidget);
+    expect(find.text('Join crew'), findsOneWidget);
     // The simulator is behind "More" now, and there is no heading or paragraph
     // at all: #426 removed the start panel rather than shrinking it, because
     // "I don't want the start screen at all" leaves no room for a smaller one.
     expect(find.text('Ready to ride?'), findsNothing);
-    expect(find.text('Try a simulated ride'), findsNothing);
+    expect(find.text('Replay the Fiesta flight'), findsNothing);
 
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
-    expect(find.text('Try a simulated ride'), findsOneWidget);
+    expect(find.text('Replay the Fiesta flight'), findsOneWidget);
 
     controller.dispose();
   });
@@ -97,8 +97,8 @@ void main() {
 
     expect(
       actions.height,
-      lessThan(screen.height * 0.25),
-      reason: 'the actions are a bar on the map, not a screen in front of it',
+      lessThan(screen.height * 0.4),
+      reason: 'flight setup keeps most of the map available for positioning',
     );
     expect(
       actions.top,
@@ -140,17 +140,17 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Restoring your ride…'), findsOneWidget);
+      expect(find.text('Restoring your flight…'), findsOneWidget);
 
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byKey(const Key('ride-restoration-banner')), findsOneWidget);
-      expect(find.text('Still restoring ride 994954'), findsOneWidget);
+      expect(find.text('Still restoring flight 994954'), findsOneWidget);
       expect(find.byTooltip('Settings'), findsOneWidget);
       expect(
         tester
             .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Create a ride'),
+              find.widgetWithText(FilledButton, 'Create flight'),
             )
             .onPressed,
         isNull,
@@ -158,7 +158,7 @@ void main() {
       expect(
         tester
             .widget<OutlinedButton>(
-              find.widgetWithText(OutlinedButton, 'Join a ride'),
+              find.widgetWithText(OutlinedButton, 'Join crew'),
             )
             .onPressed,
         isNull,
@@ -175,6 +175,36 @@ void main() {
     },
   );
 
+  testWidgets('a recovered running flight asks before taking over the app', (
+    tester,
+  ) async {
+    final controller = await _controller();
+    addTearDown(controller.dispose);
+    await controller.createRide('Oliver', rideName: 'Bath evening');
+    await controller.startRide();
+
+    await tester.pumpWidget(
+      _app(controller, initializeController: () async {}),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Flight recovered'), findsOneWidget);
+    expect(
+      find.textContaining('Bath evening was still running when the app closed'),
+      findsOneWidget,
+    );
+    expect(find.text('Return to flight'), findsOneWidget);
+    expect(find.text('End and save flight'), findsOneWidget);
+    expect(find.text('Not now — return to setup map'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('set-recovered-flight-aside')));
+    await tester.pumpAndSettle();
+
+    expect(controller.rideSetAside, isTrue);
+    expect(find.byType(HomeMapBackdrop), findsOneWidget);
+    expect(find.byKey(const Key('set-aside-ride-banner')), findsOneWidget);
+  });
+
   testWidgets('create ride accepts a web-planner route code', (tester) async {
     final controller = await _controller();
     addTearDown(controller.dispose);
@@ -183,7 +213,7 @@ void main() {
     final plans = _FakePlanDirectory();
 
     await tester.pumpWidget(_app(controller, planDirectory: plans));
-    await tester.tap(find.text('Create a ride'));
+    await tester.tap(find.text('Create flight'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('planned-route-code-field')), findsOneWidget);
@@ -193,17 +223,19 @@ void main() {
       'AB12CD34',
     );
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Create ride'),
+      find.widgetWithText(FilledButton, 'Create private flight'),
       180,
       scrollable: _rideFormScrollable,
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Create ride'));
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Create private flight'),
+    );
     await tester.pumpAndSettle();
 
     expect(plans.requestedCode, 'AB12CD34');
-    expect(find.text('Continue to ride'), findsOneWidget);
+    expect(find.text('Continue to flight'), findsOneWidget);
 
-    await tester.tap(find.text('Continue to ride'));
+    await tester.tap(find.text('Continue to flight'));
     expect(_sharedRoutes.pending?.name, 'Peak Loop.gpx');
   });
 
@@ -212,7 +244,7 @@ void main() {
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(_app(controller));
-    await tester.tap(find.text('Create a ride'));
+    await tester.tap(find.text('Create flight'));
     await tester.pumpAndSettle();
 
     // With the drop-off mode deleted, Solo/Group is the whole choice: the
@@ -223,16 +255,18 @@ void main() {
     await tester.tap(find.text('Solo'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Create ride'),
+      find.widgetWithText(FilledButton, 'Create private flight'),
       180,
       scrollable: _rideFormScrollable,
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Create ride'));
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Create private flight'),
+    );
     await tester.pumpAndSettle();
 
     expect(controller.coordinationMode, RideCoordinationMode.solo);
-    expect(find.text('Continue to ride'), findsNothing);
-    expect(find.text('Ready for solo ride'), findsOneWidget);
+    expect(find.text('Continue to flight'), findsNothing);
+    expect(find.text('Ready for solo flight'), findsOneWidget);
   });
 
   testWidgets('a solo pre-start map can switch straight to joining a group', (
@@ -270,7 +304,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.hasActiveRide, isFalse);
-    expect(find.text('Join your group'), findsOneWidget);
+    expect(find.text('Join the crew'), findsOneWidget);
     expect(find.byKey(const Key('ride-code-field')), findsOneWidget);
     expect(
       find.byKey(const Key('scan-invitation-labelled-button')),
@@ -290,7 +324,7 @@ void main() {
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(_app(controller));
-    await tester.tap(find.text('Join a ride'));
+    await tester.tap(find.text('Join crew'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byKey(const Key('ride-code-field')),
@@ -309,11 +343,11 @@ void main() {
     expect(tester.takeException(), isNull);
 
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Join ride'),
+      find.widgetWithText(FilledButton, 'Join flight'),
       160,
       scrollable: _rideFormScrollable,
     );
-    expect(find.widgetWithText(FilledButton, 'Join ride'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Join flight'), findsOneWidget);
   });
 
   testWidgets('join form explains and clears a remembered ride code', (
@@ -325,7 +359,7 @@ void main() {
     addTearDown(preference.dispose);
 
     await tester.pumpWidget(_app(controller, rideCodePreference: preference));
-    await tester.tap(find.text('Join a ride'));
+    await tester.tap(find.text('Join crew'));
     await tester.pumpAndSettle();
 
     final codeField = tester.widget<TextField>(
@@ -358,27 +392,27 @@ void main() {
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(_app(controller, rideCodePreference: preference));
-    await tester.tap(find.text('Join a ride'));
+    await tester.tap(find.text('Join crew'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('rider-name-field')), 'Oliver');
     await tester.enterText(find.byKey(const Key('ride-code-field')), '123');
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Join ride'),
+      find.widgetWithText(FilledButton, 'Join flight'),
       180,
       scrollable: _rideFormScrollable,
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Join ride'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Join flight'));
     await tester.pumpAndSettle();
     expect(preference.savedCode, '111111');
-    expect(find.text('Enter a valid six-digit ride code.'), findsOneWidget);
+    expect(find.text('Enter a valid six-digit flight code.'), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('ride-code-field')), '222222');
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Join ride'),
+      find.widgetWithText(FilledButton, 'Join flight'),
       180,
       scrollable: _rideFormScrollable,
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Join ride'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Join flight'));
     await tester.pumpAndSettle();
 
     expect(preference.savedCode, '222222');
@@ -395,7 +429,7 @@ void main() {
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(_app(controller));
-    await tester.tap(find.text('Join a ride'));
+    await tester.tap(find.text('Join crew'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('rider-name-field')), 'Oliver');
 
@@ -403,7 +437,7 @@ void main() {
     // no retry.
     await tester.enterText(find.byKey(const Key('ride-code-field')), '123');
     await _tapJoin(tester);
-    expect(find.text('Enter a valid six-digit ride code.'), findsOneWidget);
+    expect(find.text('Enter a valid six-digit flight code.'), findsOneWidget);
     expect(find.byKey(const Key('retry-ride-submit')), findsNothing);
 
     await tester.enterText(find.byKey(const Key('ride-code-field')), '994954');
@@ -470,19 +504,19 @@ void main() {
     expect(find.text('Navigation'), findsOneWidget);
     expect(find.text('Navigation map'), findsOneWidget);
     expect(find.byIcon(Icons.map), findsOneWidget);
-    expect(find.byIcon(Icons.two_wheeler_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.air_outlined), findsOneWidget);
     expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.two_wheeler_outlined));
+    await tester.tap(find.byIcon(Icons.air_outlined));
     await tester.pumpAndSettle();
 
     expect(find.text('Oliver'), findsOneWidget);
-    expect(find.text('Ride actions'), findsOneWidget);
+    expect(find.text('Flight actions'), findsOneWidget);
     expect(find.text('Alerts and reports'), findsOneWidget);
-    expect(find.text('Share ride summary'), findsOneWidget);
-    expect(find.text('Ride roster'), findsWidgets);
+    expect(find.text('Share flight summary'), findsOneWidget);
+    expect(find.text('Flight crew'), findsWidgets);
     expect(find.text('Navigation map'), findsNothing);
-    expect(find.text('End ride'), findsNothing);
+    expect(find.text('End flight'), findsNothing);
 
     expect(find.byKey(const Key('open-ride-actions')), findsNothing);
 
@@ -521,7 +555,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Alerts'), findsNothing);
-    await tester.tap(find.byIcon(Icons.two_wheeler_outlined));
+    await tester.tap(find.byIcon(Icons.air_outlined));
     await tester.pumpAndSettle();
     final alerts = find.byKey(const Key('ride-actions-alerts'));
     await tester.scrollUntilVisible(
@@ -554,8 +588,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('open-rider-profile')));
     await tester.pumpAndSettle();
-    expect(find.text('Rider profile'), findsOneWidget);
-    Navigator.of(tester.element(find.text('Rider profile'))).pop();
+    expect(find.text('Crew profile'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Crew profile'))).pop();
     await tester.pumpAndSettle();
 
     expect(find.text('DISTANCE UNITS'), findsOneWidget);
@@ -585,7 +619,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('start-ride-button')));
     await tester.pumpAndSettle();
-    expect(find.text('Start this ride?'), findsOneWidget);
+    expect(find.text('Start this flight?'), findsOneWidget);
     expect(find.textContaining('No route is selected'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('start-without-route-button')));
@@ -671,7 +705,7 @@ void main() {
 
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(bar.labelBehavior, NavigationDestinationLabelBehavior.alwaysShow);
-    for (final label in ['Map', 'Ride', 'Settings']) {
+    for (final label in ['Map', 'Flight', 'Settings']) {
       expect(find.text(label), findsWidgets, reason: label);
     }
 
@@ -704,7 +738,7 @@ void main() {
       // paid at a standstill.
       expect(rail.minWidth, 72);
       expect(rail.labelType, NavigationRailLabelType.all);
-      for (final label in ['Map', 'Ride', 'Settings']) {
+      for (final label in ['Map', 'Flight', 'Settings']) {
         expect(find.text(label), findsWidgets, reason: label);
       }
 
@@ -718,20 +752,20 @@ void main() {
     await tester.pumpWidget(_app(controller));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.two_wheeler_outlined));
+    await tester.tap(find.byIcon(Icons.air_outlined));
     await tester.pumpAndSettle();
     final leaveOrEnd = find.byKey(const Key('ride-actions-leave-or-end'));
     await tester.ensureVisible(leaveOrEnd);
     await tester.pumpAndSettle();
     await tester.tap(leaveOrEnd);
     await tester.pumpAndSettle();
-    expect(find.text('Leave or end this ride?'), findsOneWidget);
+    expect(find.text('Leave or end this flight?'), findsOneWidget);
 
     await tester.tap(find.text('Leave only'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Create a ride'), findsOneWidget);
-    expect(find.text('Join a ride'), findsOneWidget);
+    expect(find.text('Create flight'), findsOneWidget);
+    expect(find.text('Join crew'), findsOneWidget);
     expect(controller.hasActiveRide, isFalse);
 
     controller.dispose();
@@ -745,7 +779,7 @@ void main() {
     await tester.pumpWidget(_app(controller));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.two_wheeler_outlined));
+    await tester.tap(find.byIcon(Icons.air_outlined));
     await tester.pumpAndSettle();
     final leaveOrEnd = find.byKey(const Key('ride-actions-leave-or-end'));
     await tester.ensureVisible(leaveOrEnd);
@@ -754,19 +788,19 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('end-ride-for-everyone')));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'End ride'));
+    await tester.tap(find.widgetWithText(FilledButton, 'End flight'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ride summary ready'), findsOneWidget);
+    expect(find.text('Flight summary ready'), findsOneWidget);
     // Renamed in #156: the button files the ride to Previous rides, and the old
     // label said it was removed from the phone.
-    expect(find.text('Finish and file in Previous rides'), findsOneWidget);
+    expect(find.text('Finish and file in Previous flights'), findsOneWidget);
     expect(controller.rideEnded, isTrue);
     expect(controller.hasActiveRide, isTrue);
 
-    await tester.tap(find.text('Share ride recap image'));
+    await tester.tap(find.text('Share flight recap image'));
     await tester.pumpAndSettle();
-    expect(find.text('Ride recap'), findsOneWidget);
+    expect(find.text('Flight recap'), findsOneWidget);
     expect(find.byKey(const Key('share-recap-image-button')), findsOneWidget);
 
     controller.dispose();
@@ -783,15 +817,15 @@ void main() {
     await tester.pumpWidget(_app(controller));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ride summary ready'), findsOneWidget);
+    expect(find.text('Flight summary ready'), findsOneWidget);
     final rideCode = controller.session!.rideCode;
 
     await tester.tap(find.byKey(const Key('leave-ended-ride-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Create a ride'), findsOneWidget);
+    expect(find.text('Create flight'), findsOneWidget);
     expect(find.byKey(const Key('set-aside-ride-banner')), findsOneWidget);
-    expect(find.text('Ride $rideCode has ended'), findsOneWidget);
+    expect(find.text('Flight $rideCode has ended'), findsOneWidget);
     // Nothing was given up to get here.
     expect(controller.hasActiveRide, isTrue);
     expect(controller.rideEnded, isTrue);
@@ -799,7 +833,7 @@ void main() {
     await tester.tap(find.byKey(const Key('reopen-set-aside-ride')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ride summary ready'), findsOneWidget);
+    expect(find.text('Flight summary ready'), findsOneWidget);
 
     // The app-bar close is the other way out, and it behaves the same.
     await tester.tap(find.byKey(const Key('leave-ended-ride-screen-button')));
@@ -823,18 +857,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('set-aside-ride-banner')), findsOneWidget);
 
-    await tester.tap(find.text('Create a ride'));
+    await tester.tap(find.text('Create flight'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Create ride'),
+      find.widgetWithText(FilledButton, 'Create private flight'),
       180,
       scrollable: _rideFormScrollable,
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Create ride'));
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Create private flight'),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('Continue to ride'), findsOneWidget);
+    expect(find.text('Continue to flight'), findsOneWidget);
 
-    await tester.tap(find.text('Continue to ride'));
+    await tester.tap(find.text('Continue to flight'));
     await tester.pumpAndSettle();
 
     expect(controller.session?.rideId, isNot(endedRideId));
@@ -895,11 +931,11 @@ Future<RideController> _controller({
 
 Future<void> _tapJoin(WidgetTester tester) async {
   await tester.scrollUntilVisible(
-    find.widgetWithText(FilledButton, 'Join ride'),
+    find.widgetWithText(FilledButton, 'Join flight'),
     180,
     scrollable: _rideFormScrollable,
   );
-  await tester.tap(find.widgetWithText(FilledButton, 'Join ride'));
+  await tester.tap(find.widgetWithText(FilledButton, 'Join flight'));
   await tester.pumpAndSettle();
 }
 

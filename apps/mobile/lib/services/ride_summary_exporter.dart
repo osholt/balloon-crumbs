@@ -124,7 +124,7 @@ class RideSummaryExporter {
     );
     if (trail.length < 2) return null;
     final segments = _continuousTrailSegments(trail);
-    final trackName = session.rideName ?? 'Ride ${session.rideCode}';
+    final trackName = session.rideName ?? 'Flight ${session.rideCode}';
     return ImportedRoute(
       id: session.rideId,
       name: trackName,
@@ -167,13 +167,13 @@ class RideSummaryExporter {
     ).distance(summary.totalDistanceMeters);
     final buffer = StringBuffer()
       ..writeln('Balloon Crumbs summary · ${summary.rideCode}')
-      ..writeln('Rider: ${summary.displayName}')
-      ..writeln('Riders on this ride: ${summary.riderCount}')
+      ..writeln('Crew member: ${summary.displayName}')
+      ..writeln('Crew in this flight: ${summary.riderCount}')
       ..writeln('Started: ${summary.startedAt.toLocal().toIso8601String()}')
       ..writeln(
-        'Ended: ${summary.endedAt?.toLocal().toIso8601String() ?? 'ride still active'}',
+        'Ended: ${summary.endedAt?.toLocal().toIso8601String() ?? 'flight still active'}',
       )
-      ..writeln('Ride time: ${_duration(summary.rideDuration)}')
+      ..writeln('Flight time: ${_duration(summary.rideDuration)}')
       ..writeln('Distance covered: $distance')
       ..writeln('Events recorded: ${summary.eventCount}');
     return buffer.toString().trimRight();
@@ -383,7 +383,7 @@ class SystemRideSummarySharer implements RideSummarySharer {
         '${summary.rideCode}.txt';
     await SharePlus.instance.share(
       ShareParams(
-        title: 'Ride summary ${summary.rideCode}',
+        title: 'Flight summary ${summary.rideCode}',
         subject: 'Balloon Crumbs summary ${summary.rideCode}',
         text: exporter.toPlainText(summary, distanceUnit: distanceUnit),
         files: [

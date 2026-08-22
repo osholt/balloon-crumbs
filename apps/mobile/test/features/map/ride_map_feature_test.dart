@@ -401,7 +401,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('group-mini-map')), findsOneWidget);
-    expect(find.text('3 RIDERS'), findsOneWidget);
+    expect(find.text('3 CREW'), findsOneWidget);
   });
 
   testWidgets('a reported camera and police sighting draw their symbols', (
@@ -2442,7 +2442,7 @@ void main() {
       expect(landscapeMiniMap.left, closeTo(10, 1));
       expect(landscapeMiniMap.bottom, closeTo(390 - 10, 1));
       expect(find.byKey(const Key('ride-clock')), findsOneWidget);
-      expect(find.text('3 RIDERS'), findsOneWidget);
+      expect(find.text('3 CREW'), findsOneWidget);
       expect(find.byKey(const Key('mini-map-you-legend')), findsOneWidget);
       expect(find.byKey(const Key('mini-map-north-indicator')), findsOneWidget);
       expect(find.byKey(const Key('mini-map-scale')), findsOneWidget);
@@ -2535,7 +2535,7 @@ void main() {
       ];
       await tester.pump();
       expect(find.byKey(const Key('group-mini-map')), findsOneWidget);
-      expect(find.text('4 RIDERS'), findsOneWidget);
+      expect(find.text('4 CREW'), findsOneWidget);
       tester.view.physicalSize = const Size(844, 390);
       await tester.pump();
       final layer = tester.widget<PolylineLayer>(find.byType(PolylineLayer));
@@ -2869,7 +2869,7 @@ void main() {
     // Pausing/resuming and ending the ride are leader actions that live in
     // the ride menu (see active_ride_shell.dart), not on the map itself -
     // this only covers the paused-state banner the map still shows.
-    expect(find.text('GROUP RIDE PAUSED'), findsOneWidget);
+    expect(find.text('GROUP FLIGHT PAUSED'), findsOneWidget);
     await tester.tap(find.byKey(const Key('leave-ride-button')));
     await tester.pump();
     expect(leaves, 1);
@@ -2967,10 +2967,10 @@ void main() {
 
       final size = tester.view.physicalSize / tester.view.devicePixelRatio;
       expect(find.byType(AppBar), findsNothing);
-      expect(find.text('GROUP RIDE PAUSED'), findsOneWidget);
+      expect(find.text('GROUP FLIGHT PAUSED'), findsOneWidget);
 
       final rects = <String, Rect>{
-        'ride-paused-banner': tester.getRect(find.text('GROUP RIDE PAUSED')),
+        'ride-paused-banner': tester.getRect(find.text('GROUP FLIGHT PAUSED')),
       };
       for (final key in overlayKeys) {
         final finder = find.byKey(Key(key));
@@ -3642,7 +3642,7 @@ void main() {
     expect(find.byKey(const Key('emergency-alert-button')), findsOneWidget);
     expect(find.byKey(const Key('leave-ride-button')), findsOneWidget);
     expect(find.byKey(const Key('report-sighting-button')), findsOneWidget);
-    expect(find.text('GROUP RIDE PAUSED'), findsOneWidget);
+    expect(find.text('GROUP FLIGHT PAUSED'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('leave-ride-button')));
     await tester.pump();
@@ -3675,7 +3675,7 @@ void main() {
     expect(find.byKey(const Key('emergency-alert-button')), findsOneWidget);
     expect(find.byKey(const Key('leave-ride-button')), findsOneWidget);
     expect(find.byKey(const Key('ride-menu-button')), findsOneWidget);
-    expect(find.text('GROUP RIDE PAUSED'), findsOneWidget);
+    expect(find.text('GROUP FLIGHT PAUSED'), findsOneWidget);
     expect(find.byKey(const Key('navigation-guidance-banner')), findsNothing);
     // Not a nag: a route-less ride is a mode, not a state to prompt about.
     expect(find.text('Choose a route'), findsNothing);
@@ -4168,7 +4168,7 @@ void main() {
 
     await tester.pumpWidget(screen(paused: true));
     await tester.pumpAndSettle();
-    expect(find.text('GROUP RIDE PAUSED'), findsOneWidget);
+    expect(find.text('GROUP FLIGHT PAUSED'), findsOneWidget);
     expect(
       {
         for (final key in const [

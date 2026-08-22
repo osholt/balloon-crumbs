@@ -96,18 +96,18 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
             const SizedBox(height: 8),
             const Text(
               'Creates a private, read-only web link for one trusted contact. '
-              'It shares your last-known position, update freshness, ride '
+              'It shares your last-known position, update freshness, flight '
               'status and your help or emergency-stop status. The watcher '
-              'does not join the ride or appear in the rider list.',
+              'does not join the flight or appear in the crew list.',
             ),
             const SizedBox(height: 8),
             Text(
               _scope == ObserverAccessScope.group
-                  ? 'It never shares the ride code, location trails, nearby '
+                  ? 'It never shares the flight code, location trails, nearby '
                         'identifiers, phone numbers, emergency-contact details '
                         'or participant controls. A missing update is not proof '
-                        'that a rider is safe.'
-                  : 'It does not share the ride code, other riders, your '
+                        'that a crew member is safe.'
+                  : 'It does not share the flight code, other crew, your '
                         'location trail, route, nearby identities or emergency '
                         'contact details. A missing update is not proof that '
                         'you are safe.',
@@ -140,11 +140,11 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
               const SizedBox(height: 8),
               Text(
                 _scope == ObserverAccessScope.group
-                    ? 'The watcher will see the current rider list, each '
-                          'rider’s last-known position and freshness, and the '
+                    ? 'The watcher will see the current crew list, each '
+                          'member’s last-known position and freshness, and the '
                           'planned route outline. Tell the whole group before '
                           'creating this link.'
-                    : 'This follows only your phone. Other riders and the '
+                    : 'This follows only your phone. Other crew and the '
                           'planned route stay private.',
                 style: const TextStyle(color: Color(0xFFA9B4C2)),
               ),
@@ -265,7 +265,7 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
             ),
             const SizedBox(height: 8),
             if (!widget.controller.busy && widget.controller.grants.isEmpty)
-              const Text('No safety links have been created for this ride.'),
+              const Text('No safety links have been created for this flight.'),
             for (final grant in widget.controller.grants)
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -299,9 +299,9 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
     await SharePlus.instance.share(
       ShareParams(
         text: invite.grant.scope == ObserverAccessScope.group
-            ? 'Watch our group ride using this private, read-only, '
+            ? 'Watch our balloon flight using this private, read-only, '
                   'time-limited Balloon Crumbs link:\n${invite.shareUri}'
-            : 'Follow my last-known ride progress using this private, '
+            : 'Follow my last-known flight progress using this private, '
                   'time-limited Balloon Crumbs link:\n${invite.shareUri}',
         sharePositionOrigin: origin,
       ),

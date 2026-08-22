@@ -133,7 +133,7 @@ class UnitSettingsSheet extends StatelessWidget {
           Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 20),
           Text(
-            'RIDER PROFILE',
+            'CREW PROFILE',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: const Color(0xFF8D98A7),
               letterSpacing: 1.1,
@@ -146,7 +146,7 @@ class UnitSettingsSheet extends StatelessWidget {
             leading: const Icon(Icons.two_wheeler),
             title: Text(
               riderProfile.displayName.isEmpty
-                  ? 'Set up rider profile'
+                  ? 'Set up crew profile'
                   : riderProfile.displayName,
             ),
             subtitle: Text(
@@ -666,7 +666,7 @@ class _NaturalVoicePackSetting extends StatelessWidget {
               const SizedBox(height: 6),
               const Text(
                 'A more expressive British voice generated on this phone for '
-                'complete directions, road names and rider alerts. The same '
+                'complete directions, road names and crew alerts. The same '
                 'voice works on iPhone and Android without a connection.',
               ),
               const SizedBox(height: 8),

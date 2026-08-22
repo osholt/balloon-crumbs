@@ -73,16 +73,16 @@ class RideJoinPayload {
     if (parts.length != 5 ||
         (parts.first != scheme && parts.first != legacyScheme)) {
       throw const FormatException(
-        'That code is not a Balloon Crumbs ride invitation.',
+        'That code is not a Balloon Crumbs flight invitation.',
       );
     }
     final [_, rideCode, rideId, inviteSecret, joinToken] = parts;
 
     if (!RegExp(r'^\d{6}$').hasMatch(rideCode)) {
-      throw const FormatException('That invitation has no valid ride code.');
+      throw const FormatException('That invitation has no valid flight code.');
     }
     if (rideId.isEmpty || rideId.length > 128) {
-      throw const FormatException('That invitation has no valid ride.');
+      throw const FormatException('That invitation has no valid flight.');
     }
     // Below 16 characters the secret cannot drive authenticated transport - the
     // relay, push registration and the event authenticator all check the same

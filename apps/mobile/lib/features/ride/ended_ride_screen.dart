@@ -86,12 +86,12 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Resume this ride?'),
+        title: const Text('Resume this flight?'),
         content: const Text(
-          'The ride goes back to running for everyone, on the same ride code. '
-          'Riders who already left stay out until they rejoin.\n\n'
+          'The flight goes back to running for everyone, on the same flight code. '
+          'Crew who already left stay out until they rejoin.\n\n'
           'One thing does not come back: emergency contact details other '
-          'riders shared with you were cleared when the ride ended.',
+          'crew shared with you were cleared when the flight ended.',
         ),
         actions: [
           TextButton(
@@ -102,7 +102,7 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
           FilledButton(
             key: const Key('confirm-reopen-ride-button'),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Resume ride'),
+            child: const Text('Resume flight'),
           ),
         ],
       ),
@@ -122,21 +122,22 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
   }
 
   static String _reopenFailure(RideReopenOutcome outcome) => switch (outcome) {
-    RideReopenOutcome.notLeader => 'Only the ride leader can resume a ride.',
+    RideReopenOutcome.notLeader =>
+      'Only the pilot or coordinator can resume a flight.',
     RideReopenOutcome.windowExpired =>
-      'This ride ended too long ago to resume. Start a new one.',
+      'This flight ended too long ago to resume. Start a new one.',
     RideReopenOutcome.relayUnsupported =>
-      'The ride service cannot carry a resume yet, so the rest of the group '
-          'would not see it. Start a new ride instead.',
-    RideReopenOutcome.notEnded => 'This ride is already running.',
+      'The flight service cannot carry a resume yet, so the rest of the crew '
+          'would not see it. Start a new flight instead.',
+    RideReopenOutcome.notEnded => 'This flight is already running.',
     RideReopenOutcome.failed || RideReopenOutcome.reopened =>
-      'Could not resume the ride. Please try again.',
+      'Could not resume the flight. Please try again.',
   };
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Ride ended'),
+      title: const Text('Flight ended'),
       leading: IconButton(
         key: const Key('leave-ended-ride-screen-button'),
         tooltip: 'Back to the map',
@@ -171,7 +172,7 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'This ride was not saved',
+                          'This flight was not saved',
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
@@ -217,8 +218,8 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
                       children: [
                         Text(
                           endedBy.displayName == null
-                              ? 'The ride leader ended this ride for everyone'
-                              : '${endedBy.displayName} ended this ride for '
+                              ? 'The coordinator ended this flight for everyone'
+                              : '${endedBy.displayName} ended this flight for '
                                     'everyone',
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(color: const Color(0xFFFFF1E4)),
@@ -241,19 +242,19 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
             ),
           ),
         Text(
-          'Ride summary ready',
+          'Flight summary ready',
           style: Theme.of(context).textTheme.headlineMedium,
         ),
         const SizedBox(height: 8),
         const Text(
           'Location sharing is stopped. Relay recovery stays available so the '
-          'final marker and ride-ended events can still be delivered after a '
+          'final marker and flight-ended events can still be delivered after a '
           'temporary loss of signal.',
           style: TextStyle(color: Color(0xFFABB5C1), height: 1.45),
         ),
         const SizedBox(height: 8),
         const Text(
-          'This ride is already saved in Previous rides. You can leave this '
+          'This flight is already saved in Previous flights. You can leave this '
           'screen any time — nothing here has to be done now.',
           style: TextStyle(color: Color(0xFF7F8A98), height: 1.45),
         ),
@@ -289,14 +290,14 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
         FilledButton.icon(
           onPressed: () => _shareSummary(context),
           icon: const Icon(Icons.ios_share),
-          label: const Text('Share ride summary'),
+          label: const Text('Share flight summary'),
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
           key: const Key('share-recap-image-entry-button'),
           onPressed: () => _openRecap(context),
           icon: const Icon(Icons.image_outlined),
-          label: const Text('Share ride recap image'),
+          label: const Text('Share flight recap image'),
         ),
         // Above the shares and the filing, because a leader who is here by
         // mistake is mid-ride and has a group waiting (#206).
@@ -306,7 +307,7 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
             key: const Key('reopen-ended-ride-button'),
             onPressed: _reopening ? null : () => _confirmReopen(context),
             icon: const Icon(Icons.play_arrow_outlined),
-            label: const Text("This ride hasn't finished — resume it"),
+            label: const Text("This flight hasn't finished — resume it"),
           ),
         ],
         const SizedBox(height: 12),
@@ -316,7 +317,7 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
           // Not a delete icon: this files the ride, and the icon is read before
           // the label (#156).
           icon: const Icon(Icons.inventory_2_outlined),
-          label: const Text('Finish and file in Previous rides'),
+          label: const Text('Finish and file in Previous flights'),
         ),
       ],
     ),
@@ -341,7 +342,7 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
     } on Object catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not share ride summary: $error')),
+        SnackBar(content: Text('Could not share flight summary: $error')),
       );
     }
   }
@@ -383,11 +384,11 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('File this ride in Previous rides?'),
+        title: const Text('File this flight in Previous flights?'),
         content: const Text(
-          'The ride stays on this phone, in Previous rides, with its summary '
+          'The flight stays on this phone, in Previous flights, with its summary '
           'and recorded route.\n\n'
-          'One thing stops: if another rider\'s last few events have not '
+          'One thing stops: if another crew member\'s last few events have not '
           'reached this phone yet, it will stop waiting for them.',
         ),
         actions: [
@@ -399,7 +400,7 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
           FilledButton(
             key: const Key('confirm-file-ended-ride-button'),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('File ride'),
+            child: const Text('File flight'),
           ),
         ],
       ),

@@ -1,16 +1,210 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-GB">
   <head>
-    <meta charset="utf-8" />
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Balloon Crumbs — concept scaffold</title>
+    <meta
+      name="description"
+      content="Balloon Crumbs helps a balloon crew set an intended landing area, share live flight context, and coordinate the chase when coverage is patchy."
+    />
+    <meta name="theme-color" content="#111821" />
+    <meta property="og:title" content="Balloon Crumbs | One balloon. One shared picture." />
+    <meta
+      property="og:description"
+      content="Account-free, offline-first coordination for balloon crews and chasers."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>Balloon Crumbs | One balloon. One shared picture.</title>
   </head>
   <body>
-    <main>
-      <h1>Balloon Crumbs</h1>
-      <p>An account-free, offline-first coordination concept for balloon crews and chasers.</p>
-      <p>This development scaffold is not an aviation or navigation product.</p>
+    <header class="site-header wrap">
+      <a class="brand" href="#top" aria-label="Balloon Crumbs home">
+        <span class="brand-mark" aria-hidden="true">●</span>
+        <span>Balloon Crumbs</span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#testing">Closed testing</a>
+        <a class="nav-button" href="/planner.html">Open planner</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero wrap">
+        <div class="hero-copy">
+          <p class="eyebrow"><span></span> Offline-first balloon coordination</p>
+          <h1>One balloon.<br />One shared picture.</h1>
+          <p class="hero-intro">
+            Set an intended landing area, share the balloon’s latest position,
+            and help every chaser choose the road guidance they need — even when
+            mobile coverage comes and goes.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="/planner.html">Plan a flight</a>
+            <a class="button button-secondary" href="#how-it-works">See the flight flow</a>
+            <a
+              class="button button-secondary"
+              href="https://github.com/osholt/balloon-crumbs"
+            >View the project <span aria-hidden="true">↗</span></a>
+          </div>
+          <p class="testing-note">Development build for controlled iOS and Android testing.</p>
+        </div>
+
+        <div class="hero-art" aria-label="Balloon Crumbs chase map concept">
+          <div class="map-card">
+            <div class="map-road road-one"></div>
+            <div class="map-road road-two"></div>
+            <div class="map-road road-three"></div>
+            <div class="landing-area">
+              <span class="landing-flag" aria-hidden="true">⚑</span>
+            </div>
+            <div class="flight-track" aria-hidden="true"></div>
+            <div class="balloon-marker" aria-label="Balloon position">●</div>
+            <div class="chaser-marker chaser-one" aria-label="Chaser one">1</div>
+            <div class="chaser-marker chaser-two" aria-label="Chaser two">2</div>
+            <div class="map-status"><span></span> Live · fix 4s ago</div>
+            <div class="target-control">
+              <small>Directions to</small>
+              <strong>Intended landing area</strong>
+              <span aria-hidden="true">⌄</span>
+            </div>
+          </div>
+          <div class="telemetry-card">
+            <div><small>Speed</small><strong>8 kt</strong></div>
+            <div><small>Altitude</small><strong>1,240 ft</strong></div>
+            <div><small>Course</small><strong>NE · 042°</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="proof-strip wrap" aria-label="Key benefits">
+        <div><strong>Set the area first</strong><span>tap the map and choose a radius</span></div>
+        <div><strong>See what is known</strong><span>position, age, speed, altitude and course</span></div>
+        <div><strong>Keep the journal local</strong><span>relay when a connection is available</span></div>
+      </section>
+
+      <section class="story wrap" id="how-it-works">
+        <div class="section-heading">
+          <p class="eyebrow"><span></span> From setup to retrieve</p>
+          <h2>Start with the flight, not a search box.</h2>
+          <p>
+            The map is the setup surface. Move around it, place an approximate
+            landing area, choose its radius, then share one short private code
+            with the chase crew.
+          </p>
+        </div>
+        <ol class="steps">
+          <li>
+            <span class="step-number">01</span>
+            <h3>Set an intention</h3>
+            <p>Tap the map or reuse a previous area. Search is there when planning needs it.</p>
+          </li>
+          <li>
+            <span class="step-number">02</span>
+            <h3>Bring the crew in</h3>
+            <p>Create an account-free flight and share its short code or QR invitation.</p>
+          </li>
+          <li>
+            <span class="step-number">03</span>
+            <h3>Chase the right target</h3>
+            <p>Keep the balloon in view and choose guidance to it or to the intended rendezvous.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="feature-section" id="features">
+        <div class="wrap feature-grid">
+          <article class="feature-card feature-wide">
+            <div>
+              <p class="eyebrow"><span></span> Clear live context</p>
+              <h2>Useful at a glance. Honest about age.</h2>
+              <p>
+                Balloon position, speed, altitude and course sit beside fix age
+                and a clear live, relayed, stale or unknown state. No certainty is implied.
+              </p>
+            </div>
+            <div class="readout" aria-label="Example flight readout">
+              <span><small>Balloon</small><strong>Live</strong></span>
+              <span><small>Fix age</small><strong>4 sec</strong></span>
+              <span><small>Road target</small><strong>Landing area</strong></span>
+            </div>
+          </article>
+
+          <article class="feature-card feature-orange">
+            <span class="feature-icon" aria-hidden="true">◎</span>
+            <h3>A radius, not false precision.</h3>
+            <p>
+              Intended landing areas remain approximate. The crew still verifies
+              road access, landowner permission and present conditions.
+            </p>
+          </article>
+
+          <article class="feature-card feature-blue">
+            <span class="feature-icon" aria-hidden="true">↺</span>
+            <h3>Replay the whole flight.</h3>
+            <p>
+              Review the balloon track, chase route, recorded wind and other
+              available craft positions as one time-aligned flight.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="principles wrap">
+        <div class="principles-art" aria-hidden="true">
+          <div class="mini-balloon">●</div>
+          <div class="wind-line line-a"></div>
+          <div class="wind-line line-b"></div>
+          <div class="wind-line line-c"></div>
+        </div>
+        <div class="section-heading">
+          <p class="eyebrow"><span></span> Built for imperfect information</p>
+          <h2>A coordination aid, not an aviation authority.</h2>
+          <p>
+            Weather, wind, airspace, altitude and landing predictions need a
+            visible source, timestamp, units and limitations. Drivers are routed
+            to road-accessible rendezvous points, never blindly to a coordinate.
+          </p>
+          <ul class="checklist">
+            <li>Account-free operation membership via a short code or QR</li>
+            <li>Offline-first event journal with transport-neutral updates</li>
+            <li>Voice-first driver interaction, subject to physical hardware testing</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="testing wrap" id="testing">
+        <div>
+          <p class="eyebrow"><span></span> Closed testing</p>
+          <h2>Built in the open. Proved in the field.</h2>
+          <p>
+            Balloon Crumbs is in active development for controlled testers. It
+            is not an emergency service, certified navigation product or source
+            of authoritative flight information.
+          </p>
+        </div>
+        <div class="testing-actions">
+          <a class="button button-primary" href="https://github.com/osholt/balloon-crumbs">
+            Follow development <span aria-hidden="true">↗</span>
+          </a>
+          <span>Google Play closed testing is being prepared.</span>
+        </div>
+      </section>
     </main>
+
+    <footer class="site-footer wrap">
+      <a class="brand" href="#top">
+        <span class="brand-mark brand-mark-small" aria-hidden="true">●</span>
+        <span>Balloon Crumbs</span>
+      </a>
+      <p>One balloon. One shared picture.</p>
+      <nav aria-label="Footer navigation">
+        <a href="/planner.html">Flight planner</a>
+        <a href="https://github.com/osholt/balloon-crumbs">GitHub</a>
+      </nav>
+    </footer>
   </body>
 </html>

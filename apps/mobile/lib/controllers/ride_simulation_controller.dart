@@ -303,7 +303,7 @@ class RideSimulationController extends ChangeNotifier {
       agents.add(
         rider(
           id: 'ride-lab-rider-$riderNumber',
-          displayName: 'Rider $riderNumber',
+          displayName: 'Chaser $riderNumber',
           index: nextIndex++,
           role: RideRole.rider,
         ),
@@ -426,7 +426,7 @@ class RideSimulationController extends ChangeNotifier {
       type: HazardType.roadworks,
       severity: HazardSeverity.caution,
       position: hazardPoint,
-      details: 'Synthetic Ride Lab hazard',
+      details: 'Synthetic flight-replay hazard',
     );
   }
 

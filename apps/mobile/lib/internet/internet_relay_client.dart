@@ -495,7 +495,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
     final contentType = response.headers['content-type']?.toLowerCase();
     if (contentType == null || !contentType.contains('application/json')) {
       throw const RideCodeDirectoryException(
-        'Ride code service returned an invalid response.',
+        'Flight code service returned an invalid response.',
       );
     }
     try {
@@ -531,7 +531,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
       // Deliberately not interpolated: a transport or TLS error message can
       // carry the relay hostname and port.
       throw const RideCodeDirectoryException(
-        'Ride code service returned an invalid response.',
+        'Flight code service returned an invalid response.',
       );
     }
   }
@@ -541,12 +541,12 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
       return await _client.send(request).timeout(configuration.headerTimeout);
     } on TimeoutException {
       throw const RideCodeDirectoryException(
-        'Ride code service timed out. Check your connection and try again.',
+        'Flight code service timed out. Check your connection and try again.',
         retryable: true,
       );
     } on http.ClientException {
       throw const RideCodeDirectoryException(
-        'Ride code service is temporarily unavailable. Check your connection and try again.',
+        'Flight code service is temporarily unavailable. Check your connection and try again.',
         retryable: true,
       );
     }
@@ -585,7 +585,8 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
         // A real disagreement about the protocol. Updating the app is the only
         // way through it, so saying so now beats a confusing failure later.
         throw RideCodeDirectoryException(
-          result.message ?? 'This app and the ride service are not compatible.',
+          result.message ??
+              'This app and the flight service are not compatible.',
         );
       } on InternetRelayException {
         if (attempt >= _compatibilityProbeAttempts - 1) return;
@@ -598,7 +599,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
     final declaredLength = response.contentLength;
     if (declaredLength != null && declaredLength > 2048) {
       throw const RideCodeDirectoryException(
-        'Ride code service returned an oversized response.',
+        'Flight code service returned an oversized response.',
       );
     }
     final bytes = BytesBuilder(copy: false);
@@ -608,14 +609,14 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
       )) {
         if (bytes.length + chunk.length > 2048) {
           throw const RideCodeDirectoryException(
-            'Ride code service returned an oversized response.',
+            'Flight code service returned an oversized response.',
           );
         }
         bytes.add(chunk);
       }
     } on TimeoutException {
       throw const RideCodeDirectoryException(
-        'Ride code service timed out. Check your connection and try again.',
+        'Flight code service timed out. Check your connection and try again.',
         retryable: true,
       );
     }
@@ -626,7 +627,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
     final error = configuration.configurationError;
     if (error != null) {
       throw const RideCodeDirectoryException(
-        'Joining by ride code needs the Balloon Crumbs service to be connected.',
+        'Joining by flight code needs the Balloon Crumbs service to be connected.',
       );
     }
   }
@@ -638,31 +639,31 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
         session.inviteSecret.length < 16 ||
         session.joinToken.length < 16) {
       throw const RideCodeDirectoryException(
-        'This ride cannot be shared with a code.',
+        'This flight cannot be shared with a code.',
       );
     }
   }
 
   RideCodeDirectoryException _directoryFailure(int status) => switch (status) {
     400 => const RideCodeDirectoryException(
-      'Enter a valid six-digit ride code.',
+      'Enter a valid six-digit flight code.',
     ),
     404 => const RideCodeDirectoryException(
-      'That ride code is not active. Check it with the ride lead.',
+      'That flight code is not active. Check it with the pilot or coordinator.',
     ),
     409 => const RideCodeDirectoryException(
-      'That ride code is already in use. A new code will be chosen.',
+      'That flight code is already in use. A new code will be chosen.',
       codeConflict: true,
     ),
     429 => const RideCodeDirectoryException(
-      'Too many ride-code attempts. Please wait a moment and try again.',
+      'Too many flight-code attempts. Please wait a moment and try again.',
       retryable: true,
     ),
     401 || 403 => const RideCodeDirectoryException(
-      'Ride code service rejected this ride.',
+      'Flight code service rejected this flight.',
     ),
     _ => RideCodeDirectoryException(
-      'Ride code service returned HTTP $status.',
+      'Flight code service returned HTTP $status.',
       retryable: status >= 500,
     ),
   };
@@ -671,7 +672,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
     final code = value.trim();
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
       throw const RideCodeDirectoryException(
-        'Enter a valid six-digit ride code.',
+        'Enter a valid six-digit flight code.',
       );
     }
     return code;
@@ -744,14 +745,16 @@ class HttpInternetRelayClient
     }
     if (session.inviteSecret.length < 16) {
       throw const InternetRelayException(
-        'Internet relay requires an authenticated ride invitation.',
+        'Internet relay requires an authenticated flight invitation.',
       );
     }
     if (session.rideId.isEmpty ||
         session.rideId.length > 128 ||
         session.localRiderId.isEmpty ||
         session.localRiderId.length > 128) {
-      throw const InternetRelayException('Ride or device identity is invalid.');
+      throw const InternetRelayException(
+        'Flight or device identity is invalid.',
+      );
     }
     if (events.length > configuration.maximumUploadEvents) {
       throw const InternetRelayException('Upload event limit exceeded.');
@@ -953,7 +956,7 @@ class HttpInternetRelayClient
     return InternetRelayException(
       serverMessage ??
           (unauthorized
-              ? 'Internet relay rejected this ride credential.'
+              ? 'Internet relay rejected this flight credential.'
               : 'Internet relay returned HTTP $status.'),
       retryable: retryable,
       unauthorized: unauthorized,
@@ -993,7 +996,7 @@ class HttpInternetRelayClient
         event.signature.isEmpty ||
         event.signature.length > 256) {
       throw InternetRelayException(
-        'Event ${event.id} is invalid for this ride.',
+        'Event ${event.id} is invalid for this flight.',
       );
     }
   }
@@ -1049,7 +1052,7 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
     if (!servesLivePresence &&
         !compatibility.supports(RelayProtocolCapabilities.preStartPresence)) {
       throw const InternetRelayException(
-        'This ride service does not support live rider positions yet.',
+        'This flight service does not support live crew positions yet.',
         code: 'feature_unsupported',
       );
     }
@@ -1064,12 +1067,12 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
         session.localRiderId.length > 128 ||
         session.inviteSecret.length < 16) {
       throw const InternetRelayException(
-        'Ride identity is invalid for pre-start positions.',
+        'Flight identity is invalid for pre-start positions.',
       );
     }
     if (position != null && position.riderId != session.localRiderId) {
       throw const InternetRelayException(
-        'A rider can only publish their own pre-start position.',
+        'A crew member can only publish their own pre-start position.',
       );
     }
     final bodyBytes = utf8.encode(
@@ -1334,7 +1337,7 @@ Future<RelayCompatibilityResult> _fetchCompatibility({
         capabilities: const {},
         checkedAt: now,
         validUntil: now.add(const Duration(minutes: 5)),
-        message: 'Legacy protocol-1 relay; newer ride features stay local.',
+        message: 'Legacy protocol-1 relay; newer flight features stay local.',
       );
     }
     final body = bytes.takeBytes();
@@ -1353,7 +1356,7 @@ Future<RelayCompatibilityResult> _fetchCompatibility({
         // Fall through to the bounded status message.
       }
       throw InternetRelayException(
-        message ?? 'Ride service compatibility check failed.',
+        message ?? 'Flight service compatibility check failed.',
         retryable: response.statusCode == 429 || response.statusCode >= 500,
         statusCode: response.statusCode,
         code: code,
@@ -1395,9 +1398,9 @@ Future<RelayCompatibilityResult> _fetchCompatibility({
         : RelayCompatibilityDisposition.compatible;
     final message = switch (disposition) {
       RelayCompatibilityDisposition.updateRequired =>
-        'Update Balloon Crumbs before joining or synchronizing this ride.',
+        'Update Balloon Crumbs before joining or synchronizing this flight.',
       RelayCompatibilityDisposition.serverUpgradeRequired =>
-        'This app is newer than the configured ride service. Try again after the service is updated.',
+        'This app is newer than the configured flight service. Try again after the service is updated.',
       _ => null,
     };
     return RelayCompatibilityResult(
@@ -1415,13 +1418,13 @@ Future<RelayCompatibilityResult> _fetchCompatibility({
   } on TimeoutException {
     if (cached != null && now.isBefore(cached.validUntil)) return cached;
     throw const InternetRelayException(
-      'Ride service compatibility check timed out.',
+      'Flight service compatibility check timed out.',
       retryable: true,
       code: 'temporarily_unavailable',
     );
   } on FormatException {
     throw const InternetRelayException(
-      'The ride service compatibility response could not be read.',
+      'The flight service compatibility response could not be read.',
     );
   } on Object {
     // A transport or TLS failure message can name the relay host and port, so
@@ -1429,7 +1432,7 @@ Future<RelayCompatibilityResult> _fetchCompatibility({
     // class of failure, not a protocol disagreement.
     if (cached != null && now.isBefore(cached.validUntil)) return cached;
     throw const InternetRelayException(
-      'Ride service is temporarily unavailable. Check your connection and try again.',
+      'Flight service is temporarily unavailable. Check your connection and try again.',
       retryable: true,
       code: 'temporarily_unavailable',
     );

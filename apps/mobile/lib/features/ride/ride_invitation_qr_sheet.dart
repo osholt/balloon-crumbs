@@ -81,7 +81,7 @@ class RideInvitationQrSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'Ride ${session.rideCode}',
+            'Flight ${session.rideCode}',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium,
           ),
@@ -94,8 +94,8 @@ class RideInvitationQrSheet extends StatelessWidget {
               border: Border.all(color: const Color(0xFFFFA76B)),
             ),
             child: const Text(
-              'Anyone who photographs this code can join the ride. Show it to '
-              'the riders you meant to, then close this.',
+              'Anyone who photographs this code can join the flight. Show it to '
+              'the crew you meant to, then close this.',
               style: TextStyle(color: Color(0xFFE3CBB6), height: 1.45),
             ),
           ),

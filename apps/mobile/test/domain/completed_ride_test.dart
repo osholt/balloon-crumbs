@@ -25,7 +25,7 @@ void main() {
 
     final restored = CompletedRide.fromJson(json);
 
-    expect(restored.title, 'Ride 123456');
+    expect(restored.title, 'Flight 123456');
     expect(restored.traveledRoute, isNull);
     expect(restored.riderCount, 4);
   });

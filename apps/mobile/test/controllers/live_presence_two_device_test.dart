@@ -529,7 +529,7 @@ class _FakeRelay {
     if (!servesLive &&
         !capabilities.contains(RelayProtocolCapabilities.preStartPresence)) {
       throw const InternetRelayException(
-        'This ride service does not support live rider positions yet.',
+        'This flight service does not support live crew positions yet.',
         code: 'feature_unsupported',
       );
     }

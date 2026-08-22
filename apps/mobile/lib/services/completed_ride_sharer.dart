@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../domain/completed_ride.dart';
 import '../domain/distance_unit.dart';
+import '../domain/ride_role.dart';
 import 'gpx_exporter.dart';
 import 'measurement_formatter.dart';
 
@@ -34,14 +35,14 @@ class SystemCompletedRideSharer implements CompletedRideSharer {
       distanceUnit,
     ).distance(ride.totalDistanceMeters);
     final text = [
-      'Balloon Crumbs ride · ${ride.title}',
-      'Ride code: ${ride.rideCode}',
-      'Rider: ${ride.localDisplayName} (${ride.localRole.name})',
+      'Balloon Crumbs flight · ${ride.title}',
+      'Flight code: ${ride.rideCode}',
+      'Crew member: ${ride.localDisplayName} (${ride.localRole.label})',
       'Started: ${ride.startedAt.toLocal().toIso8601String()}',
       'Ended: ${ride.endedAt.toLocal().toIso8601String()}',
       'Duration: ${_duration(ride.duration)}',
       'Distance: $distance',
-      'Riders: ${ride.riderCount}',
+      'Crew: ${ride.riderCount}',
     ].join('\n');
     await SharePlus.instance.share(
       ShareParams(
@@ -59,7 +60,7 @@ class SystemCompletedRideSharer implements CompletedRideSharer {
   }) async {
     final route = ride.traveledRoute;
     if (route == null) {
-      throw StateError('This ride has no recorded local trail to export.');
+      throw StateError('This flight has no recorded local trail to export.');
     }
     final fileName = gpxExporter.fileName(route);
     final bytes = Uint8List.fromList(utf8.encode(gpxExporter.export(route)));

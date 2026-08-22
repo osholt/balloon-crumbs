@@ -38,8 +38,9 @@ class CompletedRide {
   final ImportedRoute? plannedRoute;
   final ImportedRoute? traveledRoute;
 
-  String get title =>
-      rideName?.trim().isNotEmpty == true ? rideName!.trim() : 'Ride $rideCode';
+  String get title => rideName?.trim().isNotEmpty == true
+      ? rideName!.trim()
+      : 'Flight $rideCode';
 
   Duration get duration => endedAt.difference(startedAt).abs();
 

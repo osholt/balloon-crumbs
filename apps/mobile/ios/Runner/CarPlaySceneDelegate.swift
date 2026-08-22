@@ -742,7 +742,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     let image = mapButtonImage(
       named: "line.3.horizontal",
       color: CarPlayPalette.actionInk,
-      accessibilityLabel: "Ride actions"
+      accessibilityLabel: "Flight actions"
     ) ?? UIImage()
     return CPBarButton(image: image) { [weak self, weak interfaceController] _ in
       guard

@@ -38,10 +38,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('ride-completion-suggestion')), findsOneWidget);
-    expect(find.textContaining('4 of 4 riders'), findsOneWidget);
+    expect(find.textContaining('4 of 4 crew members'), findsOneWidget);
     expect(find.textContaining('94% of the route'), findsOneWidget);
     expect(
-      find.textContaining('resume this ride within 24 hours'),
+      find.textContaining('resume this flight within 24 hours'),
       findsOneWidget,
     );
 
@@ -69,7 +69,10 @@ void main() {
     await tester.tap(find.text('Check completion'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('cannot resume an ended ride'), findsOneWidget);
+    expect(
+      find.textContaining('cannot resume an ended flight'),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('confirm-completed-ride')), findsOneWidget);
   });
 }

@@ -68,7 +68,7 @@ class _RideRosterSheetState extends State<RideRosterSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Ride roster',
+                          'Flight crew',
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
                         Text(
@@ -139,8 +139,8 @@ class _RideRosterSheetState extends State<RideRosterSheet> {
                   ? Center(
                       child: Text(
                         _filter == _RosterFilter.left
-                            ? 'Nobody has left this ride.'
-                            : 'No riders match this filter.',
+                            ? 'Nobody has left this flight.'
+                            : 'No crew match this filter.',
                         style: const TextStyle(color: Color(0xFF9DA8B6)),
                       ),
                     )
@@ -229,14 +229,14 @@ class _MissingLeaderNotice extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'This ride has no leader',
+                    'This flight has no coordinator',
                     style: TextStyle(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 3),
                   const Text(
-                    'The leader has left. Nobody is setting the pace, Hot '
-                    'Pursuit has no line to follow, and route changes '
-                    'cannot be published until somebody takes the lead.',
+                    'The pilot or coordinator has left. Shared route and '
+                    'landing-area changes cannot be published until someone '
+                    'takes the lead.',
                     style: TextStyle(color: Color(0xFFE4D6D2), height: 1.35),
                   ),
                   const SizedBox(height: 8),
@@ -279,9 +279,9 @@ class _DepartedRidersNotice extends StatelessWidget {
         Expanded(
           child: Text(
             departed == 1
-                ? '1 rider has left. Their record is kept until this ride ends.'
-                : '$departed riders have left. Their records are kept until '
-                      'this ride ends.',
+                ? '1 crew member has left. Their record is kept until this flight ends.'
+                : '$departed crew members have left. Their records are kept until '
+                      'this flight ends.',
             style: const TextStyle(color: Color(0xFF9DA8B6), height: 1.3),
           ),
         ),
@@ -314,7 +314,7 @@ class _ParticipantTile extends StatelessWidget {
     // known to be, so an absent position is stated rather than left blank.
     final lastKnownPosition = participant.hasLeft
         ? participant.lastKnownPositionLabel ??
-              'No position for this rider reached this phone'
+              'No position for this crew member reached this phone'
         : null;
     final rejoin = participant.rejoinLabel;
     final semanticLabel = [
@@ -374,7 +374,7 @@ class _ParticipantTile extends StatelessWidget {
 
   static String _roleLabel(RideRole role) => switch (role) {
     RideRole.lead => 'Lead',
-    RideRole.rider => 'Rider',
+    RideRole.rider => 'Chaser',
   };
 
   static String _lastSeenLabel(DateTime value, DateTime now) {

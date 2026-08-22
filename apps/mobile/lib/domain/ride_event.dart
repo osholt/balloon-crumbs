@@ -41,12 +41,12 @@ enum RideEventType {
   /// [ridePaused] and [rideResumed] already decide whether it is paused.
   rideReopened,
 
-  /// A balloon or vehicle is part of this flight (WP3).
+  /// A balloon or vehicle is part of this ride (WP3).
   ///
   /// Appended rather than replacing [riderJoined]: a device still joins, and now
   /// also says which craft it is aboard. An older build skips these and sees the
   /// flat participant list it already understands, which is the degradation we
-  /// want — it loses craft grouping, not the flight.
+  /// want — it loses craft grouping, not the ride.
   craftRegistered,
 
   /// A device is aboard a craft. Re-sent on a move, so the latest wins: handing a
@@ -64,6 +64,13 @@ enum RideEventType {
   /// mid-flight is a new event rather than a schema change. Redundant while
   /// there is one balloon; the thing that makes several balloons cheap later.
   craftChaseAssigned,
+
+  /// The pilot selects or updates an approximate intended rendezvous area.
+  ///
+  /// This is deliberately separate from the road route: every chase vehicle
+  /// must route from its own position to a safe road-accessible point serving
+  /// the area, while the balloon ground track remains independent.
+  landingAreaNoted,
 }
 
 enum EventPriority { routine, important, critical }

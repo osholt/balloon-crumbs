@@ -63,8 +63,8 @@ enum PresenceClockBasis {
 
 extension PresenceClockBasisLabels on PresenceClockBasis {
   String get label => switch (this) {
-    PresenceClockBasis.sharedRelayClock => 'Timed by the ride service',
-    PresenceClockBasis.publisherClock => "Timed by the rider's own phone",
+    PresenceClockBasis.sharedRelayClock => 'Timed by the flight service',
+    PresenceClockBasis.publisherClock => "Timed by the crew member's own phone",
   };
 }
 
@@ -128,7 +128,7 @@ extension LivePresenceSourceLabels on LivePresenceSource {
     LivePresenceSource.localDevice => 'This phone',
     LivePresenceSource.internetPresence => 'Internet presence',
     LivePresenceSource.nearbyPresence => 'Nearby presence',
-    LivePresenceSource.journal => 'Ride journal',
+    LivePresenceSource.journal => 'Flight journal',
   };
 }
 
@@ -337,7 +337,7 @@ class PresenceLimitation {
     riderDisplayName: displayName,
     message:
         "$displayName's app is older — their live position will not appear "
-        'once the ride starts until they update.',
+        'once the flight starts until they update.',
   );
 
   /// Names a peer whose phone clock disagrees with the ride service.
@@ -355,8 +355,8 @@ class PresenceLimitation {
     riderDisplayName: displayName,
     message:
         "$displayName's phone clock is ${formatPresenceAge(offset.abs())} "
-        '${offset.isNegative ? 'ahead of' : 'behind'} the ride service, so '
-        'their position is timed by the ride service instead. Their location '
+        '${offset.isNegative ? 'ahead of' : 'behind'} the flight service, so '
+        'their position is timed by the flight service instead. Their location '
         'is still live.',
   );
 
@@ -366,41 +366,41 @@ class PresenceLimitation {
     kind: PresenceLimitationKind.positionsUnreadable,
     message:
         '$count live position${count == 1 ? '' : 's'} could not be read and '
-        'were skipped. Every other rider is unaffected.',
+        'were skipped. Every other crew member is unaffected.',
   );
 
   static const serviceCapabilityMissing = PresenceLimitation(
     kind: PresenceLimitationKind.serviceCapabilityMissing,
     message:
-        'The ride service does not support live rider positions yet, so only '
-        'saved ride history is shared.',
+        'The flight service does not support live crew positions yet, so only '
+        'saved flight history is shared.',
   );
 
   static const serviceUnreachable = PresenceLimitation(
     kind: PresenceLimitationKind.serviceUnreachable,
     message:
-        'Live rider positions are paused because the ride service cannot be '
+        'Live crew positions are paused because the flight service cannot be '
         'reached. They resume automatically.',
   );
 
   static const serviceUnauthorized = PresenceLimitation(
     kind: PresenceLimitationKind.serviceUnauthorized,
     message:
-        'The ride service rejected this ride invitation, so live rider '
+        'The flight service rejected this flight invitation, so live crew '
         'positions are unavailable. Re-join with a fresh invite.',
   );
 
   static const clientUpdateRequired = PresenceLimitation(
     kind: PresenceLimitationKind.clientUpdateRequired,
     message:
-        'Update Balloon Crumbs: this build is older than the ride service '
-        'supports, so live rider positions are unavailable.',
+        'Update Balloon Crumbs: this build is older than the flight service '
+        'supports, so live crew positions are unavailable.',
   );
 
   static const serviceUpgradeRequired = PresenceLimitation(
     kind: PresenceLimitationKind.serviceUpgradeRequired,
     message:
-        'This app is newer than the ride service, so live rider positions are '
+        'This app is newer than the flight service, so live crew positions are '
         'unavailable until the service is updated.',
   );
 
@@ -408,24 +408,24 @@ class PresenceLimitation {
       PresenceLimitation(
         kind: PresenceLimitationKind.unsupportedEventsIgnored,
         message:
-            '$count ride update${count == 1 ? '' : 's'} from a newer app '
+            '$count flight update${count == 1 ? '' : 's'} from a newer app '
             'version could not be read and were skipped. Everything else in '
-            'the ride is unaffected.',
+            'the flight is unaffected.',
       );
 
   static PresenceLimitation uploadCapabilityMissing(int count) =>
       PresenceLimitation(
         kind: PresenceLimitationKind.uploadCapabilityMissing,
         message:
-            '$count ride update${count == 1 ? '' : 's'} stayed on this phone '
-            'because the ride service does not support them yet.',
+            '$count flight update${count == 1 ? '' : 's'} stayed on this phone '
+            'because the flight service does not support them yet.',
       );
 
   static PresenceLimitation uploadQuarantined(int count) => PresenceLimitation(
     kind: PresenceLimitationKind.uploadQuarantined,
     message:
-        '$count ride update${count == 1 ? '' : 's'} were set aside because the '
-        'ride service refused them. Joining, positions and alerts keep working.',
+        '$count flight update${count == 1 ? '' : 's'} were set aside because the '
+        'flight service refused them. Joining, positions and alerts keep working.',
   );
 
   /// The outgoing direction for #128 part 1: this build can ask, the relay
@@ -435,8 +435,9 @@ class PresenceLimitation {
   static const rejoinSharingUnsupportedByService = PresenceLimitation(
     kind: PresenceLimitationKind.rejoinSharingUnsupportedByService,
     message:
-        'The ride service is too old to send your rejoin route to the ride '
-        'leader. You still have it on this phone; the leader will not see it.',
+        'The flight service is too old to send your rejoin route to the flight '
+        'coordinator. You still have it on this phone; the coordinator will not '
+        'see it.',
   );
 
   /// #188. A new event type is rejected outright by an older *build*, and
@@ -446,9 +447,9 @@ class PresenceLimitation {
   static const riderContactSharingUnsupportedByService = PresenceLimitation(
     kind: PresenceLimitationKind.riderContactSharingUnsupportedByService,
     message:
-        'The ride service is too old to pass on your phone number, so nobody '
-        'has been given it. Your emergency alert still reaches the leader and '
-        'TEC in the app.',
+        'The flight service is too old to pass on your phone number, so nobody '
+        'has been given it. Your emergency alert still reaches the pilot and '
+        'coordinator in the app.',
   );
 }
 

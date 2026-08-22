@@ -15,7 +15,7 @@ void main() {
     final profile = await RiderProfileController.load();
     await tester.pumpWidget(_app(profile));
 
-    expect(find.text('Keep the whole ride together'), findsOneWidget);
+    expect(find.text('Keep the whole chase crew together'), findsOneWidget);
     await tester.tap(find.byKey(const Key('onboarding-continue')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('skip-onboarding-tour')));
@@ -50,7 +50,7 @@ void main() {
     await tester.tap(purpleColour);
     await tester.tap(find.byKey(const Key('skip-onboarding-tour')));
     await tester.pumpAndSettle();
-    expect(find.text('You are ready to ride'), findsOneWidget);
+    expect(find.text('You are ready to set up a flight'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('onboarding-join-ride')));
     await tester.pumpAndSettle();
@@ -105,7 +105,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Keep the whole ride together'), findsOneWidget);
+    expect(find.text('Keep the whole chase crew together'), findsOneWidget);
     expect(find.byKey(const Key('onboarding-continue')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

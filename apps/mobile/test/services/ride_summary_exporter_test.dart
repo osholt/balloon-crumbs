@@ -60,7 +60,7 @@ void main() {
     expect(summary.riderCount, 2);
     expect(summary.totalDistanceMeters, closeTo(1111.95, 1));
     expect(exporter.toCsv(summary), contains('"rider_count","2"'));
-    expect(exporter.toPlainText(summary), contains('Riders on this ride: 2'));
+    expect(exporter.toPlainText(summary), contains('Crew in this flight: 2'));
   });
 
   test("builds a GPX track from the local rider's own trail", () {

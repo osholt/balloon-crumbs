@@ -1,69 +1,48 @@
 import 'package:flutter/material.dart';
 
-/// The ride actions, as a bar standing on the map (#426).
-///
-/// ## What this replaces
-///
-/// #405 asked for the app to open on the map. #407 delivered a map *behind* a
-/// full-screen panel: a brand mark, a heading, a paragraph, four buttons, two
-/// links and a footer, over a gradient scrim covering the whole screen. From the
-/// ride:
-///
-/// > This isn't really what I meant by map view to start the ride. It should be
-/// > usable for free roam navigation rather than blocking the whole screen.
-///
-/// and then, when it was still there:
-///
-/// > To be clear I don't want the start screen at all. I want the selection of
-/// > starting a ride to happen from the map view.
-///
-/// So the panel is gone rather than shrunk. The map is the surface — pannable,
-/// zoomable, readable, with a position on it — and starting a ride is one bar at
-/// the bottom of it.
-///
-/// ## Why a bar and not a sheet
-///
-/// A sheet has to be summoned, and the two things a rider does here are start a
-/// ride and join one. Putting those behind a gesture to keep the map clean would
-/// trade the reported problem for a worse one: the map was never the thing in the
-/// way.
-///
-/// Everything that is *not* one of those two — the simulator, recording a route,
-/// previous rides, the build identity — is behind [Icons.more_horiz], because each
-/// is used occasionally and none is worth a permanent strip of map.
+import '../map/ride_map_feature.dart';
+
+/// Ride setup controls that sit on the home map.
 class HomeRideActions extends StatelessWidget {
   const HomeRideActions({
     super.key,
     required this.onCreate,
     required this.onJoin,
     required this.onMore,
+    required this.onSelectLandingZone,
+    required this.onCancelSelection,
+    required this.onPreviousLandingZones,
+    required this.onRadiusChanged,
+    required this.radiusMeters,
+    required this.recentLandingZoneCount,
+    this.landingZone,
+    this.selectingLandingZone = false,
     this.enabled = true,
   });
 
   final VoidCallback? onCreate;
   final VoidCallback? onJoin;
   final VoidCallback onMore;
-
-  /// False while the controller is busy or a restoration is still being retried,
-  /// which is the same gate the old panel used.
+  final VoidCallback onSelectLandingZone;
+  final VoidCallback onCancelSelection;
+  final VoidCallback? onPreviousLandingZones;
+  final ValueChanged<double> onRadiusChanged;
+  final double radiusMeters;
+  final int recentLandingZoneCount;
+  final MapLandingZone? landingZone;
+  final bool selectingLandingZone;
   final bool enabled;
 
-  /// Height the map should keep clear at the bottom.
-  ///
-  /// A constant rather than a measurement because the map's own controls have to
-  /// be placed above it, and a layout that measured this would need a frame to
-  /// settle before the map knew where to put them.
-  static const reservedHeight = 84.0;
+  static const reservedHeight = 214.0;
+  static const radiusChoices = [250.0, 500.0, 1000.0];
 
   @override
   Widget build(BuildContext context) => Container(
     key: const Key('home-ride-actions'),
-    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
     decoration: const BoxDecoration(
-      // Opaque behind the buttons only. The whole-screen gradient that used to
-      // carry legibility is what made the map wallpaper.
       color: Color(0xF21A2029),
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       boxShadow: [
         BoxShadow(
           color: Color(0x66000000),
@@ -74,36 +53,119 @@ class HomeRideActions extends StatelessWidget {
     ),
     child: SafeArea(
       top: false,
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            flex: 3,
-            child: FilledButton.icon(
-              key: const Key('home-create-ride'),
-              onPressed: enabled ? onCreate : null,
-              icon: const Icon(Icons.add_road),
-              label: const Text('Create a ride'),
+          Row(
+            children: [
+              const Icon(Icons.flag_rounded, color: Color(0xFFFFC857)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      selectingLandingZone
+                          ? 'Tap the map to place the area'
+                          : landingZone?.label ?? 'Intended landing area',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      selectingLandingZone
+                          ? 'Pan or zoom first; the next tap sets its centre.'
+                          : landingZone == null
+                          ? 'Optional and approximate — access is not verified.'
+                          : 'Approximate rendezvous; verify road access and permission.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFABB5C1),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                key: const Key('select-landing-zone'),
+                onPressed: selectingLandingZone
+                    ? onCancelSelection
+                    : onSelectLandingZone,
+                child: Text(selectingLandingZone ? 'Cancel' : 'Set on map'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                const Text(
+                  'Radius',
+                  style: TextStyle(
+                    color: Color(0xFFABB5C1),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                for (final radius in radiusChoices) ...[
+                  ChoiceChip(
+                    key: Key('landing-radius-${radius.toInt()}'),
+                    label: Text(radius < 1000 ? '${radius.toInt()} m' : '1 km'),
+                    selected: radiusMeters == radius,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => onRadiusChanged(radius),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                const SizedBox(width: 4),
+                TextButton(
+                  key: const Key('previous-landing-zones'),
+                  onPressed: recentLandingZoneCount == 0
+                      ? null
+                      : onPreviousLandingZones,
+                  child: Text(
+                    recentLandingZoneCount == 0
+                        ? 'Previous'
+                        : 'Previous ($recentLandingZoneCount)',
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 2,
-            child: OutlinedButton.icon(
-              key: const Key('home-join-ride'),
-              onPressed: enabled ? onJoin : null,
-              icon: const Icon(Icons.group_add_outlined),
-              label: const Text('Join a ride'),
-            ),
-          ),
-          const SizedBox(width: 4),
-          // A word, not a bare icon. #306 was raised because the only way to
-          // find a feature was an unlabelled icon, and moving the occasional
-          // actions behind `more_horiz` alone would have reintroduced exactly
-          // that — an overflow nobody can read is not reachable.
-          TextButton(
-            key: const Key('home-more-actions'),
-            onPressed: onMore,
-            child: const Text('More'),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: FilledButton.icon(
+                  key: const Key('home-create-flight'),
+                  onPressed: enabled ? onCreate : null,
+                  icon: const Icon(Icons.air_outlined),
+                  label: const Text('Create flight'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: OutlinedButton.icon(
+                  key: const Key('home-join-flight'),
+                  onPressed: enabled ? onJoin : null,
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: const Text('Join crew'),
+                ),
+              ),
+              const SizedBox(width: 4),
+              TextButton(
+                key: const Key('home-more-actions'),
+                onPressed: onMore,
+                child: const Text('More'),
+              ),
+            ],
           ),
         ],
       ),

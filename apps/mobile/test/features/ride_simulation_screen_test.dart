@@ -12,6 +12,10 @@ void main() {
   testWidgets('Ride Lab disables motion before the leader starts the ride', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final session = RideSession(
       rideId: 'staged-sim-ride',
       rideCode: 'SIM123',
@@ -122,7 +126,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Ride Lab'), findsOneWidget);
+    expect(find.text('Replay'), findsOneWidget);
     expect(find.text('LIVE DEMO CRAFT'), findsOneWidget);
     expect(find.text('Balloon'), findsWidgets);
     expect(find.text('Land Rover'), findsOneWidget);

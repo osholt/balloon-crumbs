@@ -1,5 +1,9 @@
 # Website
 
-Placeholder for the future Balloon Crumbs public site and bounded observer view.
-The inherited Tail End Charlie website was deliberately not copied because it
-contains product-specific claims, domains, imagery, and discovery data.
+Static Balloon Crumbs product home. It follows the information hierarchy of the
+Tail End Charlie site without copying its motorcycle claims or imagery: product
+story first, planner as a secondary destination, then controlled-testing and
+safety limits.
+
+`noindex` remains deliberate while the product is limited to controlled testers.
+No deployment, real domain or tester contact address is configured here.

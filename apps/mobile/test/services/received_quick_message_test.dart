@@ -157,7 +157,7 @@ void main() {
       _quickMessage(id: 'msg-1', deviceId: 'bill', message: QuickMessage.fuel),
     ]);
 
-    expect(messages.single.headline, 'A rider needs fuel');
+    expect(messages.single.headline, 'A crew member needs fuel');
   });
 
   test('a kind only a newer build knows keeps the sender own words', () {

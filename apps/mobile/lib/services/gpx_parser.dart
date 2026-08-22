@@ -135,16 +135,10 @@ class GpxParser {
           );
         }
         for (final shapingPoint in _routePointExtensionPoints(routePoint)) {
-          final shapingPosition = parsePoint(shapingPoint);
-          points.add(shapingPosition);
-          routeWaypoints.add(
-            RouteWaypoint(
-              point: shapingPosition,
-              name: 'Shaping point ${routeWaypoints.length + 1}',
-              description: 'Soft route shaping point',
-              symbol: 'Shaping point',
-            ),
-          );
+          // Garmin `<gpxx:rpt>` values are decoded leg geometry, not places a
+          // person chose. They shape the line but must not become thousands of
+          // rendered and listed waypoint markers (#574).
+          points.add(parsePoint(shapingPoint));
         }
       }
       if (points.isEmpty) continue;
@@ -315,10 +309,8 @@ List<RoutePath> _withoutDuplicateRepresentations(List<RoutePath> paths) {
         path.kind == RoutePathKind.route &&
         path.points.length >= 2 &&
         tracks.any(
-          // A sparser line only: a route carrying more detail than the track is
-          // not the representation to throw away.
           (track) =>
-              track.points.length > path.points.length &&
+              _comparablyDense(track: track.points, route: path.points) &&
               path.points.every(
                 (point) =>
                     _metresFromPath(point, track.points) <=
@@ -329,6 +321,16 @@ List<RoutePath> _withoutDuplicateRepresentations(List<RoutePath> paths) {
   }
   return List.unmodifiable(kept);
 }
+
+/// A track within ten per cent of the route's point count is a fair substitute.
+///
+/// Garmin leg geometry can make the duplicate route marginally denser than the
+/// track. Genuinely different sparse/detailed representations differ by much
+/// more and remain separate.
+bool _comparablyDense({
+  required List<GeoPoint> track,
+  required List<GeoPoint> route,
+}) => track.length * 1.1 >= route.length;
 
 /// How far a route point may sit from the track and still be the same journey.
 ///

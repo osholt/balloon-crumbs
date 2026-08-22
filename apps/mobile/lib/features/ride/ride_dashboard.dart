@@ -168,8 +168,8 @@ class _RideHeader extends StatelessWidget {
               children: [
                 Text(
                   coordinationMode == RideCoordinationMode.solo
-                      ? 'SOLO RIDE'
-                      : 'RIDE $rideCode',
+                      ? 'SOLO FLIGHT'
+                      : 'FLIGHT $rideCode',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.w800,
@@ -236,9 +236,9 @@ class _ConnectionCard extends StatelessWidget {
               key: const Key('dashboard-open-roster'),
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.groups_2_outlined),
-              title: const Text('Ride roster'),
+              title: const Text('Flight crew'),
               subtitle: Text(
-                '${controller.liveParticipants.length} current riders · '
+                '${controller.liveParticipants.length} current crew · '
                 'presence and transport status',
               ),
               trailing: const Icon(Icons.chevron_right),
@@ -445,7 +445,7 @@ class _RideCodeCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Share this ride code',
+                    'Share this flight code',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 5),
@@ -534,7 +534,7 @@ class _EventTimeline extends StatelessWidget {
           child: events.isEmpty
               ? const Padding(
                   padding: EdgeInsets.all(20),
-                  child: Text('No ride events yet.'),
+                  child: Text('No flight events yet.'),
                 )
               : Column(
                   children: [
@@ -567,11 +567,11 @@ class _EventRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = switch (event.type) {
-      RideEventType.rideCreated => 'Ride created',
-      RideEventType.riderJoined => 'Joined ride',
-      RideEventType.riderLeft => 'Left ride',
+      RideEventType.rideCreated => 'Flight created',
+      RideEventType.riderJoined => 'Joined flight',
+      RideEventType.riderLeft => 'Left flight',
       RideEventType.roleChanged => 'Role changed',
-      RideEventType.rideStarted => 'Ride started',
+      RideEventType.rideStarted => 'Flight started',
       // Also the acknowledgement of another rider's message, which is a
       // `statusMessage` carrying `acknowledgesQuickMessageEventId` and the label
       // "Seen: <what they raised>" (#151). One row either way: the log records
@@ -585,16 +585,16 @@ class _EventRow extends StatelessWidget {
       RideEventType.routeRevisionChunk => 'Route revision received',
       RideEventType.routeRevisionPublished => 'Group route updated',
       RideEventType.routeCleared => 'Group route cleared',
-      RideEventType.ridePaused => 'Ride paused',
-      RideEventType.rideResumed => 'Ride resumed',
-      RideEventType.rideEnded => 'Ride ended',
+      RideEventType.ridePaused => 'Flight paused',
+      RideEventType.rideResumed => 'Flight resumed',
+      RideEventType.rideEnded => 'Flight ended',
       // Says what happened rather than what it undid: the journal keeps both
       // events, and a rider reading the log should see the sequence.
-      RideEventType.rideReopened => 'Ride reopened by the leader',
+      RideEventType.rideReopened => 'Flight reopened by the coordinator',
       RideEventType.iceInfoShared => 'Emergency contact shared',
       RideEventType.iceInfoViewed => 'Emergency contact viewed',
       // WP3. Named by craft label rather than id: a log a crew reads at the end
-      // of a flight should say "Vehicle 2 joined", not a device identifier.
+      // of a ride should say "Vehicle 2 joined", not a device identifier.
       RideEventType.craftRegistered =>
         '${event.payload['label'] ?? 'A craft'} joined the flight',
       RideEventType.deviceAttachedToCraft =>
@@ -605,13 +605,14 @@ class _EventRow extends StatelessWidget {
       RideEventType.craftChaseAssigned =>
         '${event.payload['vehicleLabel'] ?? 'A vehicle'} is now chasing '
             '${event.payload['targetLabel'] ?? 'the balloon'}',
+      RideEventType.landingAreaNoted => 'Intended landing area updated',
       // #188. The activity list says a number was shared and with whom, never
       // what the number is: this is a log, not a place to read a number off a
       // screen.
       RideEventType.riderContactShared =>
         event.payload['recipientRiderIds'] == null
-            ? 'Phone number shared with the ride'
-            : 'Phone number shared with the leader and TEC',
+            ? 'Phone number shared with the flight crew'
+            : 'Phone number shared with the pilot and coordinator',
     };
     final time = TimeOfDay.fromDateTime(event.createdAt).format(context);
     return ListTile(

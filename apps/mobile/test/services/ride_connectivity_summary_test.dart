@@ -80,16 +80,16 @@ void main() {
     expect(summary.state, RideConnectivityState.degraded);
     expect(
       summary.detail,
-      contains('Nothing has reached the ride service yet'),
+      contains('Nothing has reached the flight service yet'),
     );
   });
 
   test('a queue is reported with what will happen to it', () {
     expect(
       summarise(queuedEventCount: 106).detail,
-      '106 ride events are waiting to send, and will go on the next exchanges.',
+      '106 flight events are waiting to send, and will go on the next exchanges.',
     );
-    expect(summarise(queuedEventCount: 1).detail, contains('One ride event'));
+    expect(summarise(queuedEventCount: 1).detail, contains('One flight event'));
     expect(summarise().detail, isNot(contains('waiting to send')));
   });
 
@@ -111,13 +111,13 @@ void main() {
 
     expect(summary.state, RideConnectivityState.inactive);
     expect(summary.headline, 'Not sharing your position');
-    expect(summary.detail, contains('No ride service is connected'));
+    expect(summary.detail, contains('No flight service is connected'));
   });
 
   test('an inactive transport still accounts for a backlog', () {
     expect(
       summarise(transportActive: false, queuedEventCount: 4).detail,
-      contains('4 ride events are waiting'),
+      contains('4 flight events are waiting'),
     );
   });
 }

@@ -167,7 +167,7 @@ class RideParticipant {
   String get stateLabel {
     final departedAt = leftAt;
     final base = switch (state) {
-      RideMembershipState.joined => 'Joined · waiting to ride',
+      RideMembershipState.joined => 'Joined · waiting to launch',
       RideMembershipState.active => 'Active now',
       // Not "location is stale". Positions are reported on distance travelled
       // (#166), so a rider at a set of lights has an old position and is
@@ -178,8 +178,8 @@ class RideParticipant {
       // nor inactive, and the row stays until the ride is over.
       RideMembershipState.left =>
         departedAt == null
-            ? 'Left the ride'
-            : 'Left the ride at ${formatRideClockTime(departedAt)}',
+            ? 'Left the flight'
+            : 'Left the flight at ${formatRideClockTime(departedAt)}',
       RideMembershipState.expired => 'Expired',
     };
     if (state == RideMembershipState.left ||
@@ -235,7 +235,7 @@ class RideParticipant {
     if (internet && nearby) return 'Internet + nearby';
     if (internet) return 'Internet relay';
     if (nearby) return 'Nearby relay';
-    return 'Saved ride journal';
+    return 'Saved flight journal';
   }
 
   RideParticipant copyWith({
