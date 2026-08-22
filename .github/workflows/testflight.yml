@@ -209,6 +209,7 @@ jobs:
             -archivePath "$PWD/build/ios/archive/Runner.xcarchive" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM=UY4624PH6X \
             PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
             archive
 
