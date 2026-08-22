@@ -51,6 +51,10 @@ Oracle deployment. The origin also serves `/plan/` as a recovery path. The
 OpenAIP key stays in the host environment and is attached as a request header
 by Caddy; it is never shipped to Pages or browser code.
 
+The same origin serves the mobile app's public `/privacy.html` and `/terms.html`
+pages. Keep those documents aligned with the shipped app's data handling and
+retention before submitting a store release.
+
 The vendored MapLibre GL JS distribution and licence are copied from the pinned
 5.24.0 assets already used by the Tail End Charlie website.
 
