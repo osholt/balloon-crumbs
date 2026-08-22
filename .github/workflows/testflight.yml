@@ -65,9 +65,12 @@ jobs:
           # Re-encode the same identity with the older Apple-compatible
           # PBESv1 scheme before importing it; the secret and its password do
           # not change and the private key never leaves the runner.
-          python3 -m pip install --quiet --disable-pip-version-check \
-            "cryptography==50.0.0"
-          python3 - "$certificate" "$CERTIFICATE_PASSWORD" <<'PY'
+          pkcs12_venv="$RUNNER_TEMP/pkcs12-venv"
+          python3 -m venv "$pkcs12_venv"
+          "$pkcs12_venv/bin/python" -m pip install \
+            --quiet --disable-pip-version-check "cryptography==50.0.0"
+          "$pkcs12_venv/bin/python" \
+            - "$certificate" "$CERTIFICATE_PASSWORD" <<'PY'
           import pathlib
           import sys
 
