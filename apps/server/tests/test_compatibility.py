@@ -10,6 +10,7 @@ CURRENT_CAPABILITIES = [
     "live-presence-v2",
     "membership-v1",
     "observer-access-v1",
+    "pilot-handover-v1",
     "pre-start-presence-v1",
     "push-notifications-v1",
     "ride-reopen-v1",

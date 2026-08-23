@@ -75,6 +75,11 @@ abstract final class RelayProtocolCapabilities {
   /// this" instead of appearing to have shared a number that went nowhere.
   static const riderContactSharing = 'rider-contact-sharing-v1';
 
+  /// Two-party pilot authority transfer. Older relays reject its additive
+  /// event names, so clients must withhold them and state the limitation until
+  /// the service advertises support.
+  static const pilotHandover = 'pilot-handover-v1';
+
   /// Anonymous rider verdicts on catalogued roads (issue #159).
   ///
 
@@ -97,6 +102,7 @@ abstract final class RelayProtocolCapabilities {
     trafficIncidents,
     trafficReroutes,
     riderContactSharing,
+    pilotHandover,
     rideReopen,
   };
 }

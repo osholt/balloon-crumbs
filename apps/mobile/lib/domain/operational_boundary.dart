@@ -191,6 +191,8 @@ class OperationalBoundaryReducer {
         case RideEventType.landingAreaNoted:
         case RideEventType.windContextNoted:
         case RideEventType.chaseGuidanceTargetSelected:
+        case RideEventType.pilotHandoverOffered:
+        case RideEventType.pilotHandoverAccepted:
           break;
       }
     }

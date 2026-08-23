@@ -107,6 +107,54 @@ void main() {
     },
   );
 
+  test(
+    'pilot handover is offered, accepted and applied on both devices',
+    () async {
+      await controller.createRide('Oliver');
+      final crew = await joinedController(FlightRole.balloonCrew);
+
+      for (final event in crew.events) {
+        controller.ingestStoredEvent(event);
+      }
+      for (final event in controller.events) {
+        crew.ingestStoredEvent(event);
+      }
+
+      await controller.offerPilotHandover(crew.session!.localRiderId);
+      expect(controller.errorMessage, isNull);
+      final offer = controller.events.singleWhere(
+        (event) => event.type == RideEventType.pilotHandoverOffered,
+      );
+      expect(offer.expiresAt, isNull, reason: 'the accepted pair must replay');
+      expect(
+        DateTime.parse(offer.payload['expiresAt']! as String),
+        DateTime.utc(2026, 7, 16, 12, 10),
+      );
+      expect(controller.hasFlightAuthority, isTrue);
+
+      expect(crew.ingestStoredEvent(offer), isTrue);
+      expect(crew.pendingLocalPilotHandover, isNotNull);
+      expect(crew.hasFlightAuthority, isFalse);
+
+      await crew.acceptPilotHandover();
+      expect(crew.errorMessage, isNull);
+      expect(crew.session?.flightRole, FlightRole.pilot);
+      expect(crew.session?.role, RideRole.lead);
+      expect(crew.hasFlightAuthority, isTrue);
+      final acceptance = crew.events.last;
+      expect(acceptance.type, RideEventType.pilotHandoverAccepted);
+
+      expect(controller.ingestStoredEvent(acceptance), isTrue);
+      expect(controller.session?.flightRole, FlightRole.balloonCrew);
+      expect(controller.session?.role, RideRole.rider);
+      expect(controller.hasFlightAuthority, isFalse);
+      expect(
+        controller.participantFor(crew.session!.localRiderId)?.flightRole,
+        FlightRole.pilot,
+      );
+    },
+  );
+
   test('ride coordination mode is persisted and published', () async {
     await controller.createRide(
       'Oliver',

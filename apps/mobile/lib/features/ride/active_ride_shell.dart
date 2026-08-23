@@ -480,6 +480,10 @@ class _RideActionsPanel extends StatelessWidget {
     required this.canChangeRoute,
     required this.onAlertsAndReports,
     required this.onShareSummary,
+    required this.canOfferPilotHandover,
+    required this.onOfferPilotHandover,
+    required this.pendingPilotHandoverFrom,
+    required this.onAcceptPilotHandover,
     required this.onOpenRoster,
     required this.onShareRoster,
     required this.onChangeRoute,
@@ -518,6 +522,10 @@ class _RideActionsPanel extends StatelessWidget {
   final bool canChangeRoute;
   final VoidCallback onAlertsAndReports;
   final VoidCallback onShareSummary;
+  final bool canOfferPilotHandover;
+  final VoidCallback onOfferPilotHandover;
+  final String? pendingPilotHandoverFrom;
+  final VoidCallback onAcceptPilotHandover;
   final VoidCallback onOpenRoster;
   final VoidCallback onShareRoster;
   final VoidCallback onChangeRoute;
@@ -606,6 +614,26 @@ class _RideActionsPanel extends StatelessWidget {
             subtitle: const Text('Current flight details and recorded route'),
             onTap: onShareSummary,
           ),
+          if (canOfferPilotHandover)
+            ListTile(
+              key: const Key('flight-offer-pilot-handover'),
+              leading: const Icon(Icons.swap_horiz_rounded),
+              title: const Text('Transfer pilot role'),
+              subtitle: const Text(
+                'Offer authority to an active crew member in the balloon',
+              ),
+              onTap: onOfferPilotHandover,
+            ),
+          if (pendingPilotHandoverFrom != null)
+            ListTile(
+              key: const Key('flight-accept-pilot-handover'),
+              leading: const Icon(Icons.how_to_reg_outlined),
+              title: const Text('Accept pilot handover'),
+              subtitle: Text(
+                '$pendingPilotHandoverFrom offered you flight authority. The transfer happens only after you accept.',
+              ),
+              onTap: onAcceptPilotHandover,
+            ),
           const Divider(height: 20),
           if (flightRole.isChasing && maneuverCount > 0)
             ListTile(
@@ -5459,6 +5487,115 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
   }
 
+  List<RideParticipant> get _pilotHandoverTargets {
+    final balloonDeviceIds =
+        widget.rideController.resolveCraftRoster().balloon?.deviceIds.toSet() ??
+        const <String>{};
+    return widget.rideController.liveParticipants
+        .where(
+          (participant) =>
+              !participant.isLocal &&
+              participant.flightRole == FlightRole.balloonCrew &&
+              balloonDeviceIds.contains(participant.riderId),
+        )
+        .toList(growable: false);
+  }
+
+  String? get _pendingPilotHandoverFrom {
+    final offer = widget.rideController.pendingLocalPilotHandover;
+    if (offer == null) return null;
+    return widget.rideController
+            .participantFor(offer.fromDeviceId)
+            ?.displayName ??
+        'The current pilot';
+  }
+
+  Future<void> _offerPilotHandover() async {
+    final targets = _pilotHandoverTargets;
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No active balloon crew member is available for pilot handover.',
+          ),
+        ),
+      );
+      return;
+    }
+    final target = await showModalBottomSheet<RideParticipant>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ListTile(
+            title: Text('Transfer pilot role'),
+            subtitle: Text(
+              'Choose someone in the balloon. They become pilot only after accepting the ten-minute offer; you remain pilot until then.',
+            ),
+          ),
+          for (final participant in targets)
+            ListTile(
+              key: Key('pilot-handover-target-${participant.riderId}'),
+              leading: const Icon(Icons.person_outline),
+              title: Text(participant.displayName),
+              subtitle: Text(participant.stateLabel),
+              onTap: () => Navigator.pop(sheetContext, participant),
+            ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+    if (target == null || !mounted) return;
+    await widget.rideController.offerPilotHandover(target.riderId);
+    if (!mounted) return;
+    final error = widget.rideController.errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error ??
+              'Pilot handover offered to ${target.displayName}. You retain authority until they accept.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _acceptPilotHandover() async {
+    final offer = widget.rideController.pendingLocalPilotHandover;
+    if (offer == null) return;
+    final pilot = widget.rideController.participantFor(offer.fromDeviceId);
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Accept pilot authority?'),
+        content: Text(
+          '${pilot?.displayName ?? 'The current pilot'} will become balloon crew and this device will gain authority to update landing intent and end the flight.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            key: const Key('confirm-pilot-handover'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Accept handover'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    await widget.rideController.acceptPilotHandover();
+    if (!mounted) return;
+    final error = widget.rideController.errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error ?? 'Pilot handover accepted. You are now pilot.'),
+      ),
+    );
+  }
+
   Widget _buildRideActions() => _RideActionsPanel(
     flightRole:
         widget.rideController.session?.flightRole ?? FlightRole.observer,
@@ -5466,6 +5603,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     canChangeRoute: _isSimulation || widget.rideController.hasFlightAuthority,
     onAlertsAndReports: _openAlertsAndReports,
     onShareSummary: _shareCurrentRideSummary,
+    canOfferPilotHandover:
+        widget.rideController.hasFlightAuthority &&
+        _pilotHandoverTargets.isNotEmpty,
+    onOfferPilotHandover: () => unawaited(_offerPilotHandover()),
+    pendingPilotHandoverFrom: _pendingPilotHandoverFrom,
+    onAcceptPilotHandover: () => unawaited(_acceptPilotHandover()),
     onOpenRoster: _openRoster,
     onShareRoster: _shareRoster,
     onChangeRoute: _requestRouteChange,

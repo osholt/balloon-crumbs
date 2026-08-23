@@ -225,7 +225,9 @@ class RelayEngine {
       RideEventType.routeRevisionChunk ||
       RideEventType.routeRevisionPublished ||
       RideEventType.routeCleared ||
-      RideEventType.chaseGuidanceTargetSelected => const Duration(hours: 72),
+      RideEventType.chaseGuidanceTargetSelected ||
+      RideEventType.pilotHandoverOffered ||
+      RideEventType.pilotHandoverAccepted => const Duration(hours: 72),
       _ => switch (event.priority) {
         EventPriority.routine => const Duration(hours: 2),
         EventPriority.important => const Duration(hours: 8),

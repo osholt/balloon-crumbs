@@ -1272,6 +1272,8 @@ class _EventRow extends StatelessWidget {
       RideEventType.chaseGuidanceTargetSelected =>
         '${event.payload['vehicleLabel'] ?? 'Chase vehicle'} now targets '
             '${event.payload['target'] == 'balloon' ? 'the balloon' : 'the intended landing area'}',
+      RideEventType.pilotHandoverOffered => 'Pilot handover offered',
+      RideEventType.pilotHandoverAccepted => 'Pilot handover accepted',
       // #188. The activity list says a number was shared and with whom, never
       // what the number is: this is a log, not a place to read a number off a
       // screen.

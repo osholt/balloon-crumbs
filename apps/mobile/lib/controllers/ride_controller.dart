@@ -31,6 +31,7 @@ import '../domain/session_store.dart';
 import '../features/map/craft_icon.dart';
 import '../relay/live_presence.dart';
 import '../services/nearby_bridge.dart';
+import '../services/pilot_handover.dart';
 import '../services/completed_ride_archiver.dart';
 import '../services/ride_event_authenticator.dart';
 import '../services/ride_lifecycle.dart';
@@ -209,6 +210,15 @@ class RideController extends ChangeNotifier {
   bool get rideStarted => _lifecycle.started;
   DateTime? get rideStartedAt => _lifecycle.startedAt;
   FlightRole? get localFlightRole => _session?.flightRole;
+
+  PilotAuthorityState get pilotAuthority =>
+      const PilotAuthorityReducer().fromEvents(events: _events, now: _clock());
+
+  PilotHandoverOffer? get pendingLocalPilotHandover {
+    final localId = _session?.localRiderId;
+    return localId == null ? null : pilotAuthority.pendingFor(localId);
+  }
+
   String? get localCraftId => _session?.localCraftId;
 
   /// Legacy compatibility name retained while inherited surfaces are migrated.
@@ -684,6 +694,9 @@ class RideController extends ChangeNotifier {
     if (_affectsLifecycleOrRoute(event.type)) {
       _rebuildLifecycle();
     }
+    if (event.type == RideEventType.pilotHandoverAccepted) {
+      _applyLocalPilotAuthorityFromEvents();
+    }
     if (notify) notifyListeners();
     return true;
   }
@@ -1019,6 +1032,62 @@ class RideController extends ChangeNotifier {
         type: RideEventType.roleChanged,
         priority: EventPriority.important,
         payload: {'role': updated.role.name, 'flightRole': role.name},
+      );
+    });
+  }
+
+  Future<void> offerPilotHandover(String targetDeviceId) async {
+    await _run(() async {
+      final session = _requireSession();
+      if (!hasFlightAuthority ||
+          pilotAuthority.pilotDeviceId != session.localRiderId) {
+        throw const FormatException(
+          'Only the current pilot can offer handover.',
+        );
+      }
+      final balloon = resolveCraftRoster().balloon;
+      final target = participantFor(targetDeviceId);
+      if (balloon == null ||
+          !balloon.deviceIds.contains(targetDeviceId) ||
+          target == null ||
+          target.flightRole != FlightRole.balloonCrew ||
+          !target.isIncludedInLiveCount) {
+        throw const FormatException(
+          'Choose an active balloon crew member for pilot handover.',
+        );
+      }
+      final now = _clock();
+      final expiresAt = now.add(const Duration(minutes: 10));
+      await _record(
+        type: RideEventType.pilotHandoverOffered,
+        priority: EventPriority.important,
+        payload: {
+          'transferId': _idFactory(),
+          'fromDeviceId': session.localRiderId,
+          'toDeviceId': targetDeviceId,
+          'expiresAt': expiresAt.toUtc().toIso8601String(),
+        },
+      );
+    });
+  }
+
+  Future<void> acceptPilotHandover() async {
+    await _run(() async {
+      final session = _requireSession();
+      final offer = pendingLocalPilotHandover;
+      if (offer == null || offer.toDeviceId != session.localRiderId) {
+        throw const FormatException(
+          'No current pilot handover offer is available for this device.',
+        );
+      }
+      await _record(
+        type: RideEventType.pilotHandoverAccepted,
+        priority: EventPriority.important,
+        payload: {
+          'transferId': offer.transferId,
+          'fromDeviceId': offer.fromDeviceId,
+          'toDeviceId': offer.toDeviceId,
+        },
       );
     });
   }
@@ -2224,6 +2293,35 @@ class RideController extends ChangeNotifier {
     _invalidateMembershipProjection();
     _landingZoneDirty = true;
     _operationalBoundaryDirty = true;
+    _applyLocalPilotAuthorityFromEvents();
+  }
+
+  void _applyLocalPilotAuthorityFromEvents() {
+    final session = _session;
+    if (session == null) return;
+    final authority = const PilotAuthorityReducer().fromEvents(
+      events: _events,
+      now: _clock(),
+    );
+    // Existing TEC-derived builds transferred the legacy lead role with a
+    // roleChanged event. Preserve that replay until this journal contains the
+    // new two-party handover protocol; otherwise merely upgrading the app
+    // would silently give authority back to the original creator.
+    if (!authority.hasAcceptedHandover) return;
+    final pilotDeviceId = authority.pilotDeviceId;
+    if (pilotDeviceId == null) return;
+    final isPilot = pilotDeviceId == session.localRiderId;
+    final flightRole = isPilot
+        ? FlightRole.pilot
+        : session.flightRole == FlightRole.pilot
+        ? FlightRole.balloonCrew
+        : session.flightRole;
+    final legacyRole = isPilot ? RideRole.lead : RideRole.rider;
+    if (session.flightRole == flightRole && session.role == legacyRole) return;
+    final updated = session.copyWith(role: legacyRole, flightRole: flightRole);
+    _session = updated;
+    _invalidateMembershipProjection();
+    unawaited(_sessionStore.save(updated));
   }
 
   void _rebuildLifecycle() {

@@ -92,6 +92,14 @@ enum RideEventType {
   /// attached to the same vehicle therefore converge on the same choice while
   /// separate vehicles can make independent decisions.
   chaseGuidanceTargetSelected,
+
+  /// The current pilot offers authority to a named balloon-crew device.
+  /// The offer expires and does not change authority by itself.
+  pilotHandoverOffered,
+
+  /// The named recipient accepts a still-valid handover offer. Reducers apply
+  /// the demotion and promotion atomically from this one shared journal fact.
+  pilotHandoverAccepted,
 }
 
 enum EventPriority { routine, important, critical }

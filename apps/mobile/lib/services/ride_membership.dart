@@ -7,6 +7,7 @@ import '../features/map/craft_icon.dart';
 import '../relay/live_presence.dart';
 import 'ride_event_authenticator.dart';
 import 'ride_lifecycle.dart';
+import 'pilot_handover.dart';
 
 /// The membership lifecycle from #27, with #144's departure retention.
 ///
@@ -706,7 +707,31 @@ class RideMembershipReducer {
             if (byJoin != 0) return byJoin;
             return left.riderId.compareTo(right.riderId);
           });
-    return List.unmodifiable(_withOneLeader(result, leadClaimedAt));
+    final pilotAuthority = const PilotAuthorityReducer().fromEvents(
+      events: ordered,
+      now: now,
+    );
+    final pilotDeviceId = pilotAuthority.pilotDeviceId;
+    final authorityResolved =
+        !pilotAuthority.hasAcceptedHandover || pilotDeviceId == null
+        ? result
+        : [
+            for (final participant in result)
+              if (participant.riderId == pilotDeviceId)
+                participant.copyWith(
+                  role: RideRole.lead,
+                  flightRole: FlightRole.pilot,
+                )
+              else if (participant.role == RideRole.lead ||
+                  participant.flightRole == FlightRole.pilot)
+                participant.copyWith(
+                  role: RideRole.rider,
+                  flightRole: FlightRole.balloonCrew,
+                )
+              else
+                participant,
+          ];
+    return List.unmodifiable(_withOneLeader(authorityResolved, leadClaimedAt));
   }
 
   /// Leaves exactly one rider holding [RideRole.lead].

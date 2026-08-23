@@ -728,13 +728,13 @@ and a UI rebuild cannot change authority.
 
 ### P0.1 Production roles and crafts
 
-- [ ] Creating a flight writes pilot role, balloon registration and device
+- [x] Creating a flight writes pilot role, balloon registration and device
       attachment before opening the flight view.
-- [ ] Joining requires an airborne/vehicle assignment and a compatible role.
-- [ ] Vehicle creation/selection is idempotent and persists through restart.
-- [ ] Three devices in one balloon produce one craft marker and track.
-- [ ] Invalid role/craft combinations open a repair flow, never a guessed view.
-- [ ] Pilot handover is explicit, accepted and journalled.
+- [x] Joining requires an airborne/vehicle assignment and a compatible role.
+- [x] Vehicle creation/selection is idempotent and persists through restart.
+- [x] Three devices in one balloon produce one craft marker and track.
+- [x] Invalid role/craft combinations open a repair flow, never a guessed view.
+- [x] Pilot handover is explicit, accepted and journalled.
 
 ### P0.2 Vocabulary migration
 
@@ -748,24 +748,24 @@ and a UI rebuild cannot change authority.
 
 ### P0.3 Distinct live experiences
 
-- [ ] Pilot and balloon crew never render speed limits, road alerts, turn
+- [x] Pilot and balloon crew never render speed limits, road alerts, turn
       guidance, road progress or navigation export.
-- [ ] Pilot can update landing intent; balloon crew sees it without authority.
-- [ ] Driver view keeps road instructions and speed information reachable at a
+- [x] Pilot can update landing intent; balloon crew sees it without authority.
+- [x] Driver view keeps road instructions and speed information reachable at a
       glance and hides airborne editing controls.
-- [ ] Chase crew sees the full tactical map and can control only its attached
+- [x] Chase crew sees the full tactical map and can control only its attached
       vehicle's target.
-- [ ] Role change updates the shell without losing flight or craft state.
+- [x] Role change updates the shell without losing flight or craft state.
 
 ### P0.4 Shared craft telemetry and tracks
 
-- [ ] Balloon and every chase vehicle location appears on every authorised
+- [x] Balloon and every chase vehicle location appears on every authorised
       device with fix age and live/relayed/stale/unknown state.
-- [ ] Each craft's actual track is shared and survives disconnect/reconnect.
-- [ ] Balloon track segments use the common altitude palette; missing altitude
+- [x] Each craft's actual track is shared and survives disconnect/reconnect.
+- [x] Balloon track segments use the common altitude palette; missing altitude
       is grey and described accessibly.
-- [ ] Chase tracks use craft identity styling and never inherit altitude colour.
-- [ ] Out-of-order or duplicate fixes cannot regress a craft position or track.
+- [x] Chase tracks use craft identity styling and never inherit altitude colour.
+- [x] Out-of-order or duplicate fixes cannot regress a craft position or track.
 
 ### P0.5 Structured planner plan
 
