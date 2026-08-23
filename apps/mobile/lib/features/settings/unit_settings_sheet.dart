@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../controllers/chase_vehicle_controller.dart';
 import '../../controllers/distance_unit_controller.dart';
 import '../../controllers/map_style_mode_controller.dart';
+import '../../controllers/land_access_note_controller.dart';
 import '../../controllers/rider_profile_controller.dart';
 import '../../controllers/route_progress_display_controller.dart';
 import '../../controllers/speed_limit_display_controller.dart';
@@ -14,6 +15,7 @@ import '../../controllers/spoken_guidance_controller.dart';
 import '../../controllers/test_control_controller.dart';
 import '../../domain/app_links.dart';
 import '../../domain/distance_unit.dart';
+import '../../domain/geo_point.dart';
 import '../../domain/map_style_mode.dart';
 import '../../domain/rider_color.dart';
 import '../../services/basemap_configuration.dart';
@@ -22,6 +24,7 @@ import '../../services/natural_voice_pack.dart';
 import '../../services/spoken_guidance.dart';
 import 'about_build_sheet.dart';
 import 'chase_vehicle_sheet.dart';
+import 'land_access_notes_screen.dart';
 import 'rider_profile_sheet.dart';
 import 'ride_diagnostics_section.dart';
 import 'test_control_section.dart';
@@ -41,6 +44,8 @@ class UnitSettingsSheet extends StatelessWidget {
     this.testControl,
     this.spokenGuidance,
     this.rideDiagnostics,
+    this.landAccessNotes,
+    this.currentPosition,
     this.embedded = false,
   });
 
@@ -67,6 +72,8 @@ class UnitSettingsSheet extends StatelessWidget {
 
   /// Off, and absent from an ordinary build (#419).
   final RideDiagnosticsController? rideDiagnostics;
+  final LandAccessNoteController? landAccessNotes;
+  final GeoPoint? currentPosition;
 
   /// Present only in a build carrying the test-control define. Null everywhere
   /// else, and [TestControlSection] renders nothing when the define is absent,
@@ -95,6 +102,8 @@ class UnitSettingsSheet extends StatelessWidget {
     TestControlController? testControl,
     SpokenGuidanceController? spokenGuidance,
     RideDiagnosticsController? rideDiagnostics,
+    LandAccessNoteController? landAccessNotes,
+    GeoPoint? currentPosition,
   }) => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -112,6 +121,8 @@ class UnitSettingsSheet extends StatelessWidget {
       testControl: testControl,
       spokenGuidance: spokenGuidance,
       rideDiagnostics: rideDiagnostics,
+      landAccessNotes: landAccessNotes,
+      currentPosition: currentPosition,
     ),
   );
 
@@ -198,6 +209,42 @@ class UnitSettingsSheet extends StatelessWidget {
                 if (!embedded) Navigator.of(context).pop();
                 unawaited(
                   ChaseVehicleSheet.show(appContext, controller: chaseVehicle),
+                );
+              },
+            ),
+          ],
+          if (landAccessNotes case final landAccessNotes?) ...[
+            const SizedBox(height: 16),
+            Text(
+              'PRIVATE LAND ACCESS',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: const Color(0xFF8D98A7),
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ListTile(
+              key: const Key('open-land-access-notes'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.place_outlined),
+              title: const Text('Recovery access notes'),
+              subtitle: const Text(
+                'Encrypted on this phone; never a public permission score.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final appContext = Navigator.of(
+                  context,
+                  rootNavigator: true,
+                ).context;
+                if (!embedded) Navigator.of(context).pop();
+                unawaited(
+                  LandAccessNotesScreen.show(
+                    appContext,
+                    controller: landAccessNotes,
+                    recordedBy: riderProfile.displayName,
+                    initialPoint: currentPosition,
+                  ),
                 );
               },
             ),

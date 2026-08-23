@@ -12,6 +12,7 @@ import '../../controllers/distance_unit_controller.dart';
 import '../../controllers/foreground_location_controller.dart';
 import '../../controllers/internet_relay_controller.dart';
 import '../../controllers/map_style_mode_controller.dart';
+import '../../controllers/land_access_note_controller.dart';
 import '../../controllers/nearby_relay_controller.dart';
 import '../../controllers/observer_access_controller.dart';
 import '../../controllers/pre_start_presence_controller.dart';
@@ -103,6 +104,7 @@ import '../../services/road_routing.dart';
 import '../../services/ride_connectivity_summary.dart';
 import '../../services/trail_display_simplifier.dart';
 import '../map/hazard_map_symbol.dart';
+import '../map/land_access_note_map_projection.dart';
 import '../map/maneuver_diagnostics.dart';
 import '../map/maneuver_list_screen.dart';
 import '../map/craft_icon.dart';
@@ -307,6 +309,7 @@ class ActiveRideShell extends StatefulWidget {
     this.testControlRegistry,
     this.spokenGuidance,
     this.rideDiagnostics,
+    this.landAccessNotes,
     this.onJoinGroupRequested,
   });
 
@@ -326,6 +329,7 @@ class ActiveRideShell extends StatefulWidget {
   /// Records what the app said beside what the bike did (#419). Null, or off,
   /// in every ordinary build.
   final RideDiagnosticsController? rideDiagnostics;
+  final LandAccessNoteController? landAccessNotes;
 
   /// Returns an unstarted solo rider to the established group-join sheet.
   /// The shell owns leaving because it must stop its ride-scoped services first;
@@ -1545,6 +1549,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // menu, the door closest to hand while riding — showed it on and recorded
     // nothing (#457).
     widget.rideDiagnostics?.addListener(_onRideDiagnosticsChanged);
+    widget.landAccessNotes?.addListener(_onLandAccessNotesChanged);
+    if (widget.landAccessNotes?.loaded == false) {
+      unawaited(widget.landAccessNotes!.load());
+    }
     if (widget.enableNativeServices && widget.spokenGuidance != null) {
       _spokenGuidance = SpokenGuidanceSpeaker(
         widget.spokenGuidance!.createEngine(onOutput: _recordSpeechOutput),
@@ -2878,6 +2886,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       now: now,
     );
     final overlays = <MapOverlayMarker>[
+      ..._landAccessMapMarkers(now),
       for (final judgement in hazardJudgements)
         if (judgement.isVisible) _hazardOverlayMarker(judgement.report, now),
       if (widget.rideController.flightLanding.landing case final landing?)
@@ -3687,7 +3696,29 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       ..._originalLandingEnvelopeTraces,
       ..._liveProjectionTraces,
       ..._operationalBoundaryTraces,
+      ..._landAccessMapTraces,
     ]);
+  }
+
+  void _onLandAccessNotesChanged() {
+    if (!mounted) return;
+    _updateMapOverlays(updateDerivedState: false);
+    _pushRiderTrails();
+  }
+
+  List<MapOverlayMarker> _landAccessMapMarkers(DateTime now) {
+    final controller = widget.landAccessNotes;
+    if (controller == null || !controller.showOnMap) return const [];
+    return projectLandAccessNotes(controller.notes, now: now).markers;
+  }
+
+  List<MapOverlayTrace> get _landAccessMapTraces {
+    final controller = widget.landAccessNotes;
+    if (controller == null || !controller.showOnMap) return const [];
+    return projectLandAccessNotes(
+      controller.notes,
+      now: DateTime.now().toUtc(),
+    ).traces;
   }
 
   List<MapOverlayTrace> get _sharedForecastTraces {
@@ -7186,6 +7217,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       testControl: widget.testControl,
       spokenGuidance: widget.spokenGuidance,
       rideDiagnostics: widget.rideDiagnostics,
+      landAccessNotes: widget.landAccessNotes,
+      currentPosition: _mapPosition.value == null
+          ? null
+          : awareness_geo.GeoPoint(
+              latitude: _mapPosition.value!.latitude,
+              longitude: _mapPosition.value!.longitude,
+            ),
       embedded: true,
     ),
   );
@@ -7315,6 +7353,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // copy of the log that was ever in memory (#456).
     unawaited(_diagnosticsWriter?.flush());
     widget.rideDiagnostics?.removeListener(_onRideDiagnosticsChanged);
+    widget.landAccessNotes?.removeListener(_onLandAccessNotesChanged);
     widget.spokenGuidance?.removeListener(_onSpokenGuidanceChanged);
     unawaited(_screenAwakeCoordinator.stop());
     widget.rideController.removeListener(_onRideControllerChanged);

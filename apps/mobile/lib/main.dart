@@ -5,6 +5,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'app/balloon_crumbs_app.dart';
 import 'controllers/distance_unit_controller.dart';
+import 'controllers/land_access_note_controller.dart';
 import 'controllers/completed_rides_controller.dart';
 import 'controllers/map_style_mode_controller.dart';
 import 'controllers/ride_code_preference_controller.dart';
@@ -20,6 +21,7 @@ import 'controllers/spoken_guidance_controller.dart';
 import 'controllers/test_control_controller.dart';
 import 'data/json_file_recorded_route_store.dart';
 import 'data/json_file_completed_ride_store.dart';
+import 'data/secure_land_access_note_store.dart';
 import 'data/shared_preferences_session_store.dart';
 import 'data/secure_crew_room_store.dart';
 import 'data/sqlite_event_store.dart';
@@ -102,6 +104,9 @@ Future<void> main() async {
     completedRideStore: completedRides,
     crewRoomStore: const SecureCrewRoomStore(),
   );
+  final landAccessNotes = LandAccessNoteController(
+    const SecureLandAccessNoteStore(),
+  );
 
   // The registry is created unconditionally - it is one nullable field - but the
   // server only binds a port when the define is present and the in-app switch is
@@ -136,6 +141,7 @@ Future<void> main() async {
       testControlRegistry: testControlRegistry,
       spokenGuidance: spokenGuidance,
       rideDiagnostics: rideDiagnostics,
+      landAccessNotes: landAccessNotes,
       initializeController: controller.initialize,
     ),
   );
