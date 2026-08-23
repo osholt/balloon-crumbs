@@ -11,6 +11,7 @@ import '../domain/craft.dart';
 import '../services/craft_roster.dart';
 import '../domain/event_store.dart';
 import '../domain/flight_replay.dart';
+import '../domain/flight_role.dart';
 import '../domain/geo_point.dart' as awareness_geo;
 import '../domain/ice_share.dart';
 import '../domain/imported_route.dart';
@@ -206,7 +207,12 @@ class RideController extends ChangeNotifier {
 
   bool get rideStarted => _lifecycle.started;
   DateTime? get rideStartedAt => _lifecycle.startedAt;
-  bool get isLocalRideLeader => _session?.role == RideRole.lead;
+  FlightRole? get localFlightRole => _session?.flightRole;
+  String? get localCraftId => _session?.localCraftId;
+
+  /// Legacy compatibility name retained while inherited surfaces are migrated.
+  /// Flight authority now comes only from the explicit pilot assignment.
+  bool get isLocalRideLeader => hasFlightAuthority;
   RidePhase get ridePhase => rideEnded
       ? RidePhase.ended
       : rideStarted
@@ -279,6 +285,7 @@ class RideController extends ChangeNotifier {
       localRiderId: activeSession.localRiderId,
       localDisplayName: activeSession.displayName,
       localRole: activeSession.role,
+      localFlightRole: activeSession.flightRole,
       localJoinedAt: activeSession.joinedAt,
       localMotorcycleStyle: activeSession.motorcycleStyle,
       localRiderColor: activeSession.riderColor,
@@ -775,7 +782,7 @@ class RideController extends ChangeNotifier {
     final activeSession = _requireSession();
     if (activeSession.isSimulation ||
         activeSession.coordinationMode == RideCoordinationMode.solo ||
-        activeSession.role != RideRole.lead) {
+        !hasFlightAuthority) {
       return;
     }
     var session = activeSession;
@@ -807,6 +814,8 @@ class RideController extends ChangeNotifier {
   Future<void> joinRideFromInvitation(
     RideJoinPayload invitation,
     String displayName, {
+    FlightRole flightRole = FlightRole.chaseCrew,
+    String vehicleLabel = 'Land Rover',
     CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
@@ -818,6 +827,8 @@ class RideController extends ChangeNotifier {
         inviteSecret: invitation.inviteSecret,
         joinToken: invitation.joinToken,
         displayName: displayName,
+        flightRole: flightRole,
+        vehicleLabel: vehicleLabel,
         motorcycleStyle: motorcycleStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
@@ -828,6 +839,8 @@ class RideController extends ChangeNotifier {
   Future<void> joinRide(
     String rideCode,
     String displayName, {
+    FlightRole flightRole = FlightRole.chaseCrew,
+    String vehicleLabel = 'Land Rover',
     CraftIconStyle motorcycleStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
@@ -848,6 +861,8 @@ class RideController extends ChangeNotifier {
         inviteSecret: credentials.inviteSecret,
         joinToken: credentials.joinToken,
         displayName: displayName,
+        flightRole: flightRole,
+        vehicleLabel: vehicleLabel,
         motorcycleStyle: motorcycleStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
@@ -862,6 +877,8 @@ class RideController extends ChangeNotifier {
     required String inviteSecret,
     required String joinToken,
     required String displayName,
+    required FlightRole flightRole,
+    required String vehicleLabel,
     required CraftIconStyle motorcycleStyle,
     required RiderSymbol riderSymbol,
     required RiderColor riderColor,
@@ -887,6 +904,22 @@ class RideController extends ChangeNotifier {
         joinToken: joinToken,
       );
       final now = _clock();
+      if (flightRole == FlightRole.pilot || flightRole == FlightRole.observer) {
+        throw const FormatException(
+          'Join as balloon crew, a chase driver, or chase crew.',
+        );
+      }
+      final craftKind = flightRole.isAboardBalloon
+          ? CraftKind.balloon
+          : CraftKind.vehicle;
+      final craftLabel = craftKind == CraftKind.balloon
+          ? 'Balloon'
+          : _normaliseVehicleLabel(vehicleLabel);
+      final craftId = _craftIdFor(
+        rideId: credentials.rideId,
+        kind: craftKind,
+        label: craftLabel,
+      );
       final session = RideSession(
         rideId: credentials.rideId,
         rideCode: credentials.rideCode,
@@ -895,6 +928,8 @@ class RideController extends ChangeNotifier {
         localRiderId: _localRiderIdForRide(credentials.rideId),
         displayName: _normaliseName(displayName),
         role: RideRole.rider,
+        flightRole: flightRole,
+        localCraftId: craftId,
         joinedAt: now,
         motorcycleStyle: motorcycleStyle,
         riderSymbol: riderSymbol,
@@ -910,10 +945,29 @@ class RideController extends ChangeNotifier {
         payload: {
           'displayName': session.displayName,
           'role': session.role.name,
+          'flightRole': session.flightRole.name,
           'motorcycleStyle': session.riderSymbol.wireValue(
             session.motorcycleStyle,
           ),
           'riderColor': session.riderColor.name,
+        },
+      );
+      await _record(
+        type: RideEventType.craftRegistered,
+        priority: EventPriority.important,
+        payload: {
+          'craftId': craftId,
+          'kind': craftKind.name,
+          'label': craftLabel,
+        },
+      );
+      await _record(
+        type: RideEventType.deviceAttachedToCraft,
+        priority: EventPriority.important,
+        payload: {
+          'deviceId': session.localRiderId,
+          'craftId': craftId,
+          'craftLabel': craftLabel,
         },
       );
     }
@@ -928,6 +982,42 @@ class RideController extends ChangeNotifier {
       await _record(
         type: RideEventType.roleChanged,
         payload: {'role': role.name},
+      );
+    });
+  }
+
+  /// Changes this device's non-authority role without moving it to another
+  /// craft. Pilot handover is deliberately a separate accepted protocol.
+  Future<void> setFlightRole(FlightRole role) async {
+    await _run(() async {
+      final activeSession = _requireSession();
+      if (role == FlightRole.pilot ||
+          activeSession.flightRole == FlightRole.pilot) {
+        throw const FormatException(
+          'Use pilot handover to transfer authority.',
+        );
+      }
+      final craft = localCraft;
+      final compatible = switch (role) {
+        FlightRole.balloonCrew => craft?.isBalloon == true,
+        FlightRole.chaseDriver ||
+        FlightRole.chaseCrew => craft != null && !craft.isBalloon,
+        FlightRole.observer => true,
+        FlightRole.pilot => false,
+      };
+      if (!compatible) {
+        throw const FormatException('That role does not match this craft.');
+      }
+      final updated = activeSession.copyWith(
+        flightRole: role,
+        requiresFlightAssignment: false,
+      );
+      _session = updated;
+      await _sessionStore.save(updated);
+      await _record(
+        type: RideEventType.roleChanged,
+        priority: EventPriority.important,
+        payload: {'role': updated.role.name, 'flightRole': role.name},
       );
     });
   }
@@ -991,11 +1081,15 @@ class RideController extends ChangeNotifier {
   /// Whether this device may start or end the ride, nominate a craft's
   /// reporting device, or declare a landing.
   ///
-  /// Transitional: authority still comes from the inherited leader role. WP4
-  /// replaces this with [FlightRole.hasFlightAuthority] once the session carries
-  /// a ride role rather than a ride role. The seam is here so every caller
-  /// changes in one place.
-  bool get hasFlightAuthority => isLocalRideLeader;
+  /// The inherited leader flag remains on the wire for older builds, but it no
+  /// longer grants authority. A restored legacy session is deliberately denied
+  /// authority until its explicit flight assignment has been repaired.
+  bool get hasFlightAuthority {
+    final session = _session;
+    return session != null &&
+        !session.requiresFlightAssignment &&
+        session.flightRole.hasFlightAuthority;
+  }
 
   /// Registers a balloon or vehicle in this ride.
   ///
@@ -1336,10 +1430,8 @@ class RideController extends ChangeNotifier {
     if (rideStarted || rideEnded) return;
     await _run(() async {
       final session = _requireSession();
-      if (session.role != RideRole.lead) {
-        throw const FormatException(
-          'Only the coordinator can start the flight.',
-        );
+      if (!hasFlightAuthority) {
+        throw const FormatException('Only the pilot can start the flight.');
       }
       await _record(
         type: RideEventType.rideStarted,
@@ -1355,9 +1447,9 @@ class RideController extends ChangeNotifier {
   Future<void> publishRoute(ImportedRoute route) async {
     await _run(() async {
       final session = _requireSession();
-      if (!isLocalRideLeader) {
+      if (!hasFlightAuthority) {
         throw const FormatException(
-          'Only the coordinator can change the group route.',
+          'Only the pilot can change the forecast plan.',
         );
       }
       final encoded = const RideRouteEncoder().encode(route);
@@ -1395,7 +1487,7 @@ class RideController extends ChangeNotifier {
   Future<void> setLandingZone(LandingZoneTarget target) async {
     await _run(() async {
       final session = _requireSession();
-      if (!isLocalRideLeader) {
+      if (!hasFlightAuthority) {
         throw const FormatException(
           'Only the pilot can change the intended landing area.',
         );
@@ -1414,7 +1506,7 @@ class RideController extends ChangeNotifier {
   Future<void> noteWindContext(FlightReplayWindContext context) async {
     await _run(() async {
       _requireSession();
-      if (!isLocalRideLeader) return;
+      if (!hasFlightAuthority) return;
       final source = context.source.trim();
       if (source.isEmpty ||
           source.length > 120 ||
@@ -1449,7 +1541,7 @@ class RideController extends ChangeNotifier {
   Future<void> upsertOperationalBoundary(OperationalBoundary boundary) async {
     await _run(() async {
       final session = _requireSession();
-      if (!isLocalRideLeader) {
+      if (!hasFlightAuthority) {
         throw const FormatException(
           'Only the pilot can change operational boundaries.',
         );
@@ -1470,7 +1562,7 @@ class RideController extends ChangeNotifier {
   Future<void> removeOperationalBoundary(String boundaryId) async {
     await _run(() async {
       final session = _requireSession();
-      if (!isLocalRideLeader) {
+      if (!hasFlightAuthority) {
         throw const FormatException(
           'Only the pilot can change operational boundaries.',
         );
@@ -1492,9 +1584,9 @@ class RideController extends ChangeNotifier {
   Future<void> clearRoute() async {
     await _run(() async {
       final session = _requireSession();
-      if (!isLocalRideLeader) {
+      if (!hasFlightAuthority) {
         throw const FormatException(
-          'Only the coordinator can clear the group route.',
+          'Only the pilot can clear the forecast plan.',
         );
       }
       await _record(
@@ -1512,14 +1604,12 @@ class RideController extends ChangeNotifier {
   Future<void> _setRidePaused(bool paused) async {
     if (ridePaused == paused) return;
     await _run(() async {
-      final session = _requireSession();
+      _requireSession();
       if (!rideStarted) {
         throw const FormatException('Start the flight before pausing it.');
       }
-      if (session.role != RideRole.lead) {
-        throw const FormatException(
-          'Only the coordinator can pause the group.',
-        );
+      if (!hasFlightAuthority) {
+        throw const FormatException('Only the pilot can pause the flight.');
       }
       await _record(
         type: paused ? RideEventType.ridePaused : RideEventType.rideResumed,
@@ -1533,8 +1623,8 @@ class RideController extends ChangeNotifier {
     if (rideEnded) return;
     await _run(() async {
       _requireSession();
-      if (!isLocalRideLeader) {
-        throw const FormatException('Only the coordinator can end the flight.');
+      if (!hasFlightAuthority) {
+        throw const FormatException('Only the pilot can end the flight.');
       }
       await _record(
         type: RideEventType.rideEnded,
@@ -1699,6 +1789,11 @@ class RideController extends ChangeNotifier {
     final now = _clock();
     final normalisedRideName = rideName?.trim();
     final rideId = _idFactory();
+    final balloonCraftId = _craftIdFor(
+      rideId: rideId,
+      kind: CraftKind.balloon,
+      label: 'Balloon',
+    );
     final session = RideSession(
       rideId: rideId,
       rideCode: _generateCode(),
@@ -1707,6 +1802,8 @@ class RideController extends ChangeNotifier {
       localRiderId: _localRiderIdForRide(rideId),
       displayName: normalisedDisplayName,
       role: RideRole.lead,
+      flightRole: FlightRole.pilot,
+      localCraftId: balloonCraftId,
       joinedAt: now,
       isSimulation: isSimulation,
       simulationRiderCount: simulationRiderCount,
@@ -1725,6 +1822,7 @@ class RideController extends ChangeNotifier {
       payload: {
         'displayName': session.displayName,
         'role': session.role.name,
+        'flightRole': session.flightRole.name,
         if (isSimulation) 'simulation': true,
         'motorcycleStyle': session.riderSymbol.wireValue(
           session.motorcycleStyle,
@@ -1732,6 +1830,33 @@ class RideController extends ChangeNotifier {
         'riderColor': session.riderColor.name,
         'coordinationMode': session.coordinationMode.name,
         if (session.rideName != null) 'rideName': session.rideName,
+      },
+    );
+    await _record(
+      type: RideEventType.craftRegistered,
+      priority: EventPriority.important,
+      payload: {
+        'craftId': balloonCraftId,
+        'kind': CraftKind.balloon.name,
+        'label': 'Balloon',
+      },
+    );
+    await _record(
+      type: RideEventType.deviceAttachedToCraft,
+      priority: EventPriority.important,
+      payload: {
+        'deviceId': session.localRiderId,
+        'craftId': balloonCraftId,
+        'craftLabel': 'Balloon',
+      },
+    );
+    await _record(
+      type: RideEventType.craftPrimaryDeviceNominated,
+      priority: EventPriority.important,
+      payload: {
+        'craftId': balloonCraftId,
+        'deviceId': session.localRiderId,
+        'craftLabel': 'Balloon',
       },
     );
   }
@@ -1789,6 +1914,31 @@ class RideController extends ChangeNotifier {
       throw const FormatException('Enter a crew name.');
     }
     return name.length <= 24 ? name : name.substring(0, 24);
+  }
+
+  String _normaliseVehicleLabel(String value) {
+    final label = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (label.isEmpty) {
+      throw const FormatException('Name the chase vehicle.');
+    }
+    return label.length <= 32 ? label : label.substring(0, 32);
+  }
+
+  String _craftIdFor({
+    required String rideId,
+    required CraftKind kind,
+    required String label,
+  }) {
+    if (kind == CraftKind.balloon) return 'balloon-$rideId';
+    final canonicalLabel = label
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .toLowerCase();
+    final digest = sha256.convert(
+      utf8.encode('balloon-crumbs-vehicle-v1\n$rideId\n$canonicalLabel'),
+    );
+    final suffix = base64Url.encode(digest.bytes).replaceAll('=', '');
+    return 'vehicle-${suffix.substring(0, 20)}';
   }
 
   String _generateCode() => List.generate(6, (_) => _random.nextInt(10)).join();

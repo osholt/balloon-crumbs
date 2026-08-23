@@ -1,4 +1,5 @@
 import '../domain/ride_event.dart';
+import '../domain/flight_role.dart';
 import '../domain/ride_role.dart';
 import '../domain/rider_color.dart';
 import '../domain/rider_location.dart';
@@ -84,6 +85,7 @@ class RideParticipant {
     required this.riderId,
     required this.displayName,
     required this.role,
+    this.flightRole = FlightRole.observer,
     required this.joinedAt,
     required this.lastSeenAt,
     required this.state,
@@ -103,6 +105,7 @@ class RideParticipant {
   final String riderId;
   final String displayName;
   final RideRole role;
+  final FlightRole flightRole;
   final DateTime joinedAt;
   final DateTime lastSeenAt;
   final DateTime? leftAt;
@@ -241,6 +244,7 @@ class RideParticipant {
   RideParticipant copyWith({
     String? displayName,
     RideRole? role,
+    FlightRole? flightRole,
     DateTime? joinedAt,
     DateTime? lastSeenAt,
     DateTime? leftAt,
@@ -260,6 +264,7 @@ class RideParticipant {
     riderId: riderId,
     displayName: displayName ?? this.displayName,
     role: role ?? this.role,
+    flightRole: flightRole ?? this.flightRole,
     joinedAt: joinedAt ?? this.joinedAt,
     lastSeenAt: lastSeenAt ?? this.lastSeenAt,
     leftAt: clearLeftAt ? null : (leftAt ?? this.leftAt),
@@ -378,6 +383,7 @@ class RideMembershipReducer {
     required String localRiderId,
     required String localDisplayName,
     required RideRole localRole,
+    FlightRole localFlightRole = FlightRole.observer,
     required DateTime localJoinedAt,
     required CraftIconStyle localMotorcycleStyle,
     required RiderColor localRiderColor,
@@ -402,6 +408,7 @@ class RideMembershipReducer {
         riderId: localRiderId,
         displayName: localDisplayName,
         role: localRole,
+        flightRole: localFlightRole,
         joinedAt: localJoinedAt,
         lastSeenAt: localJoinedAt,
         state: RideMembershipState.joined,
@@ -434,6 +441,7 @@ class RideMembershipReducer {
         final displayName = _nonEmptyString(event.payload['displayName']);
         final role = _role(event.payload['role']);
         if (displayName == null || role == null) continue;
+        final flightRole = flightRoleFromName(event.payload['flightRole']);
         final isLocal = event.deviceId == localRiderId;
         final joiningRole = isLocal ? localRole : role;
         if (joiningRole == RideRole.lead) {
@@ -443,6 +451,7 @@ class RideMembershipReducer {
           riderId: event.deviceId,
           displayName: isLocal ? localDisplayName : displayName,
           role: joiningRole,
+          flightRole: isLocal ? localFlightRole : flightRole,
           joinedAt: event.createdAt,
           lastSeenAt: event.createdAt,
           state: RideMembershipState.joined,
@@ -524,11 +533,16 @@ class RideMembershipReducer {
       if (event.type == RideEventType.roleChanged) {
         final role = _role(event.payload['role']);
         if (role == null) continue;
+        final flightRole = flightRoleFromName(
+          event.payload['flightRole'],
+          fallback: existing.flightRole,
+        );
         if (role == RideRole.lead) {
           leadClaimedAt[event.deviceId] = event.createdAt;
         }
         participants[event.deviceId] = existing.copyWith(
           role: existing.isLocal ? localRole : role,
+          flightRole: existing.isLocal ? localFlightRole : flightRole,
           lastSeenAt: event.createdAt,
           transportEvidence: Set.unmodifiable(evidence),
         );

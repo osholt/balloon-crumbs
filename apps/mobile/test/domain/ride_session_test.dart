@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:balloon_crumbs/domain/flight_role.dart';
 import 'package:balloon_crumbs/domain/ride_coordination_mode.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
@@ -19,6 +20,37 @@ void main() {
 
   test('simulation marker survives session persistence', () {
     expect(RideSession.fromJson(session.toJson()).isSimulation, isTrue);
+  });
+
+  test('flight role and craft assignment survive session persistence', () {
+    final assigned = RideSession(
+      rideId: 'flight',
+      rideCode: '123456',
+      inviteSecret: 'secret',
+      joinToken: 'aTokenWithPlentyOfEntropy',
+      localRiderId: 'crew',
+      displayName: 'Alex',
+      role: RideRole.rider,
+      flightRole: FlightRole.chaseDriver,
+      localCraftId: 'vehicle-land-rover',
+      joinedAt: DateTime.utc(2026, 8, 23),
+    );
+
+    final restored = RideSession.fromJson(assigned.toJson());
+    expect(restored.flightRole, FlightRole.chaseDriver);
+    expect(restored.localCraftId, 'vehicle-land-rover');
+    expect(restored.requiresFlightAssignment, isFalse);
+  });
+
+  test('legacy sessions restore least-privileged and require assignment', () {
+    final legacy = session.toJson()
+      ..remove('flightRole')
+      ..remove('localCraftId');
+
+    final restored = RideSession.fromJson(legacy);
+    expect(restored.flightRole, FlightRole.observer);
+    expect(restored.localCraftId, isNull);
+    expect(restored.requiresFlightAssignment, isTrue);
   });
 
   test(

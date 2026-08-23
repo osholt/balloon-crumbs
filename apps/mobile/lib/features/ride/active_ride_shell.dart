@@ -31,6 +31,7 @@ import '../../data/secure_observer_grant_store.dart';
 import '../../domain/event_store.dart';
 import '../../domain/completed_ride_store.dart';
 import '../../domain/flight_replay.dart';
+import '../../domain/flight_role.dart';
 import '../../domain/geo_point.dart' as awareness_geo;
 import '../../domain/hazard.dart';
 import '../../domain/imported_route.dart' as route_domain;
@@ -3829,9 +3830,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final session = widget.rideController.session;
-    final isBalloonView = _isSimulation
-        ? session?.role == RideRole.lead
-        : widget.rideController.localCraft?.isBalloon == true;
+    final isBalloonView = session?.flightRole.isAboardBalloon == true;
     final landingZoneUpdates = _isSimulation
         ? _simulationLandingZone
         : _sharedLandingZone;

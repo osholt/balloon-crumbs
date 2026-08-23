@@ -22,6 +22,7 @@ import '../../domain/imported_route.dart' show GeoPoint;
 import '../../domain/geo_point.dart' as awareness_geo;
 import '../../domain/landing_zone.dart';
 import '../../domain/map_style_mode.dart';
+import '../../domain/flight_role.dart';
 import '../../services/road_routing.dart';
 import 'home_destination_search.dart';
 import 'home_map_backdrop.dart';
@@ -1070,10 +1071,12 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
   );
   final _rideNameController = TextEditingController();
   final _planCodeController = TextEditingController();
+  final _vehicleLabelController = TextEditingController(text: 'Land Rover');
   final _codeFocusNode = FocusNode();
   final _codeFieldKey = GlobalKey();
   RideCoordinationMode _selectedCoordinationMode =
       RideCoordinationMode.keepTogether;
+  FlightRole _selectedJoinRole = FlightRole.chaseCrew;
 
   /// Set once a created ride's code needs sharing before handing off to the
   /// map - the moment a leader most needs it, with people waiting nearby.
@@ -1103,6 +1106,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
     _codeController.dispose();
     _rideNameController.dispose();
     _planCodeController.dispose();
+    _vehicleLabelController.dispose();
     super.dispose();
   }
 
@@ -1140,8 +1144,8 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
               const SizedBox(height: 8),
               Text(
                 widget.creating
-                    ? 'You will become the pilot/coordinator and get a six-digit code to share.'
-                    : 'Enter the six-digit code shared by the pilot or coordinator. You need a connection once to join, then the app keeps using the secure relay.',
+                    ? 'You will become the pilot and get a six-digit code to share.'
+                    : 'Choose your job, then enter the six-digit code shared by the pilot. You need a connection once to join, then the app keeps using the secure relay.',
                 style: const TextStyle(color: Color(0xFFABB5C1)),
               ),
               const SizedBox(height: 24),
@@ -1213,6 +1217,63 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
                     suffixIcon: const Icon(Icons.qr_code),
                   ),
                 ),
+                const SizedBox(height: 12),
+              ],
+              if (!widget.creating) ...[
+                Text(
+                  'Your role in this flight',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      key: const Key('join-role-balloon-crew'),
+                      selected: _selectedJoinRole == FlightRole.balloonCrew,
+                      avatar: const Icon(Icons.air, size: 18),
+                      label: const Text('Balloon crew'),
+                      onSelected: (_) => setState(
+                        () => _selectedJoinRole = FlightRole.balloonCrew,
+                      ),
+                    ),
+                    ChoiceChip(
+                      key: const Key('join-role-chase-driver'),
+                      selected: _selectedJoinRole == FlightRole.chaseDriver,
+                      avatar: const Icon(Icons.directions_car, size: 18),
+                      label: const Text('Driver'),
+                      onSelected: (_) => setState(
+                        () => _selectedJoinRole = FlightRole.chaseDriver,
+                      ),
+                    ),
+                    ChoiceChip(
+                      key: const Key('join-role-chase-crew'),
+                      selected: _selectedJoinRole == FlightRole.chaseCrew,
+                      avatar: const Icon(Icons.groups_2_outlined, size: 18),
+                      label: const Text('Chase crew'),
+                      onSelected: (_) => setState(
+                        () => _selectedJoinRole = FlightRole.chaseCrew,
+                      ),
+                    ),
+                  ],
+                ),
+                if (_selectedJoinRole.isChasing) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('join-vehicle-label-field'),
+                    controller: _vehicleLabelController,
+                    maxLength: 32,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Chase vehicle',
+                      helperText:
+                          'Use the same name as crewmates in this vehicle.',
+                      hintText: 'e.g. Land Rover',
+                      counterText: '',
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
               ],
               TextField(
@@ -1424,6 +1485,8 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
       await widget.controller.joinRide(
         code,
         name,
+        flightRole: _selectedJoinRole,
+        vehicleLabel: _vehicleLabelController.text,
         motorcycleStyle: widget.riderProfile.motorcycleStyle,
         riderSymbol: widget.riderProfile.riderSymbol,
         riderColor: widget.riderProfile.riderColor,
@@ -1519,6 +1582,8 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
     await widget.controller.joinRideFromInvitation(
       invitation,
       name,
+      flightRole: _selectedJoinRole,
+      vehicleLabel: _vehicleLabelController.text,
       motorcycleStyle: widget.riderProfile.motorcycleStyle,
       riderSymbol: widget.riderProfile.riderSymbol,
       riderColor: widget.riderProfile.riderColor,
