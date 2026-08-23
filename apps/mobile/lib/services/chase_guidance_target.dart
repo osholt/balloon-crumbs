@@ -1,4 +1,5 @@
 import '../domain/craft.dart';
+import '../domain/flight_landing.dart';
 import '../domain/geo_point.dart';
 import '../domain/landing_zone.dart';
 import '../domain/ride_event.dart';
@@ -86,6 +87,8 @@ class ChaseGuidanceSelectionReducer {
         case RideEventType.roleChanged:
         case RideEventType.rideStarted:
         case RideEventType.flightStartedByCrew:
+        case RideEventType.flightLanded:
+        case RideEventType.flightLandingRetracted:
         case RideEventType.statusMessage:
         case RideEventType.riderLocationUpdated:
         case RideEventType.hazardReported:
@@ -157,9 +160,10 @@ class ChaseGuidanceTargetResolver {
     required DateTime now,
     LandingZoneTarget? landingZone,
     LocationSample? balloonFix,
+    FlightLanding? landing,
   }) => switch (target) {
     ChaseGuidanceTarget.landingArea => _landingArea(landingZone),
-    ChaseGuidanceTarget.balloon => _balloon(balloonFix, now),
+    ChaseGuidanceTarget.balloon => _balloon(balloonFix, now, landing),
   };
 
   ChaseGuidanceDestination? _landingArea(LandingZoneTarget? target) {
@@ -174,7 +178,23 @@ class ChaseGuidanceTargetResolver {
     );
   }
 
-  ChaseGuidanceDestination? _balloon(LocationSample? fix, DateTime now) {
+  ChaseGuidanceDestination? _balloon(
+    LocationSample? fix,
+    DateTime now,
+    FlightLanding? landing,
+  ) {
+    if (landing?.location case final landedFix?) {
+      return ChaseGuidanceDestination(
+        kind: ChaseGuidanceTarget.balloon,
+        point: landedFix.position,
+        label:
+            '${landing!.locationConfidence?.label ?? 'Best-known landing'} · LANDED',
+        maximumRoadSeparationMeters: landing.hasConfirmedLocation
+            ? 800
+            : maximumBalloonRoadSeparationMeters,
+        observedAt: landing.declaredAt,
+      );
+    }
     if (fix == null || fix.ageAt(now) > maximumBalloonFixAge) return null;
     return ChaseGuidanceDestination(
       kind: ChaseGuidanceTarget.balloon,

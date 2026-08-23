@@ -139,4 +139,18 @@ void main() {
       LiveFlightProjectionStatus.staleWind,
     );
   });
+
+  test('stops extending the forecast envelope after LANDED', () {
+    final result = const LiveFlightProjectionEngine().evaluate(
+      plan: null,
+      balloonFix: null,
+      wind: null,
+      now: DateTime.utc(2026, 8, 23, 8),
+      flightLanded: true,
+    );
+
+    expect(result.status, LiveFlightProjectionStatus.landed);
+    expect(result.projection, isNull);
+    expect(result.message, contains('no longer extended'));
+  });
 }

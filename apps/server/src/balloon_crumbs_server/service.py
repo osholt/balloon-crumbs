@@ -91,6 +91,8 @@ EVENT_TYPES = {
     # Field-operations lifecycle. Clients validate the signed author's explicit
     # chase role; the relay remains payload-opaque and only bounds/carries it.
     "flightStartedByCrew",
+    "flightLanded",
+    "flightLandingRetracted",
 }
 PRIORITIES = {"routine", "important", "critical"}
 EVENT_FIELDS = {
@@ -1047,6 +1049,8 @@ class RelayService:
             "craftPrimaryDeviceNominated": timedelta(hours=72),
             "craftChaseAssigned": timedelta(hours=72),
             "flightStartedByCrew": timedelta(hours=72),
+            "flightLanded": timedelta(hours=72),
+            "flightLandingRetracted": timedelta(hours=72),
             "landingAreaNoted": timedelta(hours=72),
             "windContextNoted": timedelta(hours=72),
             "operationalBoundaryUpserted": timedelta(hours=72),

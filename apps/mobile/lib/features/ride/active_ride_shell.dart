@@ -31,6 +31,7 @@ import '../../data/secure_observer_grant_store.dart';
 import '../../domain/event_store.dart';
 import '../../domain/completed_ride_store.dart';
 import '../../domain/flight_replay.dart';
+import '../../domain/flight_landing.dart';
 import '../../domain/flight_role.dart';
 import '../../domain/geo_point.dart' as awareness_geo;
 import '../../domain/hazard.dart';
@@ -480,6 +481,11 @@ class _RideActionsPanel extends StatelessWidget {
     required this.canChangeRoute,
     required this.onAlertsAndReports,
     required this.onShareSummary,
+    required this.landing,
+    required this.canManageRecovery,
+    required this.onMarkLanded,
+    required this.onRetractLanding,
+    required this.onCompleteRecovery,
     required this.canOfferPilotHandover,
     required this.onOfferPilotHandover,
     required this.pendingPilotHandoverFrom,
@@ -522,6 +528,11 @@ class _RideActionsPanel extends StatelessWidget {
   final bool canChangeRoute;
   final VoidCallback onAlertsAndReports;
   final VoidCallback onShareSummary;
+  final FlightLanding? landing;
+  final bool canManageRecovery;
+  final VoidCallback onMarkLanded;
+  final VoidCallback onRetractLanding;
+  final VoidCallback onCompleteRecovery;
   final bool canOfferPilotHandover;
   final VoidCallback onOfferPilotHandover;
   final String? pendingPilotHandoverFrom;
@@ -597,6 +608,79 @@ class _RideActionsPanel extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
           Text(detail, style: const TextStyle(color: Color(0xFF98A3B1))),
+          const SizedBox(height: 14),
+          if (landing == null && canManageRecovery)
+            FilledButton.icon(
+              key: const Key('mark-flight-landed'),
+              onPressed: onMarkLanded,
+              icon: const Icon(Icons.flag_outlined),
+              label: const Text('MARK BALLOON LANDED'),
+            )
+          else if (landing case final landing?)
+            Card(
+              key: const Key('flight-landed-status'),
+              color: const Color(0xFF17382F),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.flag_circle, color: Color(0xFF72D5A4)),
+                        SizedBox(width: 10),
+                        Text(
+                          'BALLOON LANDED',
+                          style: TextStyle(
+                            color: Color(0xFFBFF5D9),
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${landing.evidence.label} · ${landing.declaredByDisplayName} (${landing.declaredByRole.label})',
+                    ),
+                    if (landing.locationConfidence case final confidence?)
+                      Text(
+                        confidence.label,
+                        style: const TextStyle(color: Color(0xFFB9C8C2)),
+                      )
+                    else
+                      const Text(
+                        'No landing coordinate supplied',
+                        style: TextStyle(color: Color(0xFFFFC857)),
+                      ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Live locations remain shared until Recovery complete.',
+                      style: TextStyle(color: Color(0xFFB9C8C2)),
+                    ),
+                    if (canManageRecovery) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        children: [
+                          TextButton(
+                            key: const Key('retract-flight-landed'),
+                            onPressed: onRetractLanding,
+                            child: const Text('Retract'),
+                          ),
+                          FilledButton(
+                            key: const Key('complete-recovery'),
+                            onPressed: onCompleteRecovery,
+                            child: const Text('Recovery complete'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
           if (flightRole.isChasing)
             ListTile(
@@ -1312,10 +1396,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   );
   final ValueNotifier<MapLandingZone?> _sharedLandingZone = ValueNotifier(null);
   bool _selectingLandingZone = false;
+  bool _selectingConfirmedLandingPoint = false;
   _OperationalBoundaryDraft? _operationalBoundaryDraft;
   double _landingRadiusMeters = 500;
   ChaseGuidanceTarget? _chaseGuidanceTarget;
   String? _observedLandingGuidanceRevision;
+  String? _observedFlightLandingEventId;
   bool _chaseGuidanceRouting = false;
   DateTime? _lastChaseGuidanceRouteAt;
   awareness_geo.GeoPoint? _lastChaseGuidanceTarget;
@@ -1909,9 +1995,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   Future<void> _initializeChaseGuidanceTarget() async {
     if (!_isChaserPerspective) return;
+    final flightLanding = widget.rideController.flightLanding.landing;
+    _observedFlightLandingEventId = flightLanding?.eventId;
     final shared = widget.rideController.localChaseGuidanceSelection;
     final initial =
-        shared?.target ??
+        (flightLanding == null
+            ? shared?.target
+            : ChaseGuidanceTarget.balloon) ??
         (widget.rideController.landingZone == null
             ? ChaseGuidanceTarget.balloon
             : ChaseGuidanceTarget.landingArea);
@@ -2701,6 +2791,21 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final overlays = <MapOverlayMarker>[
       for (final judgement in hazardJudgements)
         if (judgement.isVisible) _hazardOverlayMarker(judgement.report, now),
+      if (widget.rideController.flightLanding.landing case final landing?)
+        if (landing.location case final location?)
+          MapOverlayMarker(
+            id: 'confirmed-flight-landing-${landing.eventId}',
+            point: route_domain.GeoPoint(
+              latitude: location.position.latitude,
+              longitude: location.position.longitude,
+              recordedAt: landing.declaredAt,
+            ),
+            label:
+                'LANDED · ${landing.locationConfidence?.label ?? 'location supplied'} · ${landing.declaredByDisplayName}',
+            motorcycleStyle: CraftIconStyle.balloon,
+            riderDisplayName: 'LANDED',
+            color: const Color(0xFF72D5A4),
+          ),
       ...(simulatedRiders == null
               ? _productionCraftMapLocations(
                   craftRoster!,
@@ -3020,7 +3125,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (_autoEndingRide ||
         !widget.rideController.rideStarted ||
         widget.rideController.rideEnded ||
-        widget.rideController.ridePaused) {
+        widget.rideController.ridePaused ||
+        !widget.rideController.flightLanding.isLanded) {
       return;
     }
     final session = widget.rideController.session;
@@ -3088,7 +3194,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       );
       if (decision == RideCompletionDecision.endForEveryone) {
         _rideCompletionSuggestion.value = null;
-        await widget.rideController.endRide();
+        await widget.rideController.completeRecovery();
       }
     } catch (error, stackTrace) {
       if (kDebugMode) {
@@ -3546,12 +3652,24 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final landingTargetChanged =
         landingRevision != _observedLandingGuidanceRevision;
     _observedLandingGuidanceRevision = landingRevision;
+    final flightLanding = widget.rideController.flightLanding.landing;
+    final flightLandingChanged =
+        flightLanding?.eventId != _observedFlightLandingEventId;
+    _observedFlightLandingEventId = flightLanding?.eventId;
     _syncSharedLandingZone();
     _syncOperationalBoundaries();
     if (_isChaserPerspective && _chaseGuidanceTarget == null) {
       _chaseGuidanceTarget = widget.rideController.landingZone == null
           ? ChaseGuidanceTarget.balloon
           : ChaseGuidanceTarget.landingArea;
+    }
+    if (_isChaserPerspective && flightLandingChanged && flightLanding != null) {
+      _chaseGuidanceTarget = ChaseGuidanceTarget.balloon;
+      unawaited(
+        widget.rideController.setLocalChaseGuidanceTarget(
+          ChaseGuidanceTarget.balloon,
+        ),
+      );
     }
     final session = widget.rideController.session;
     final rideStarted =
@@ -3581,6 +3699,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _refreshChaseGuidanceIfNeeded(
           force:
               chaseTargetChanged ||
+              (flightLandingChanged && flightLanding != null) ||
               (landingTargetChanged &&
                   _chaseGuidanceTarget == ChaseGuidanceTarget.landingArea),
         ),
@@ -4191,7 +4310,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       riderTrails: _riderTrails,
       landingZone: landingZoneUpdates.value,
       landingZoneUpdates: landingZoneUpdates,
-      onMapTap: _selectingLandingZone || boundaryDraft != null
+      onMapTap:
+          _selectingLandingZone ||
+              _selectingConfirmedLandingPoint ||
+              boundaryDraft != null
           ? _handleFlightSetupMapTap
           : null,
       windForecastController: isDriverView ? null : _windForecastController,
@@ -4290,7 +4412,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           flightRole == FlightRole.balloonCrew ||
           flightRole == FlightRole.chaseCrew,
     );
-    if (!_selectingLandingZone && boundaryDraft == null) return map;
+    if (!_selectingLandingZone &&
+        !_selectingConfirmedLandingPoint &&
+        boundaryDraft == null) {
+      return map;
+    }
     return Stack(
       children: [
         Positioned.fill(child: map),
@@ -4307,7 +4433,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               child: Row(
                 children: [
                   Icon(
-                    boundaryDraft == null
+                    _selectingConfirmedLandingPoint
+                        ? Icons.flag_circle_outlined
+                        : boundaryDraft == null
                         ? Icons.touch_app
                         : Icons.polyline_outlined,
                     color: const Color(0xFFFFC857),
@@ -4315,7 +4443,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      boundaryDraft == null
+                      _selectingConfirmedLandingPoint
+                          ? 'Tap the map at the balloon’s confirmed landing point'
+                          : boundaryDraft == null
                           ? 'Tap the map to update the intended landing area · ${_landingRadiusMeters < 1000 ? '${_landingRadiusMeters.toInt()} m' : '${(_landingRadiusMeters / 1000).toStringAsFixed(1)} km'} radius'
                           : boundaryDraft.kind == OperationalBoundaryKind.line
                           ? 'Tap two points for ${boundaryDraft.label} · ${boundaryDraft.points.length}/2'
@@ -4345,6 +4475,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   Future<void> _handleFlightSetupMapTap(route_domain.GeoPoint point) async {
+    if (_selectingConfirmedLandingPoint) {
+      await _declareManuallyMarkedLanding(point);
+      return;
+    }
     if (_selectingLandingZone) {
       await _updateLandingZoneFromMap(point);
       return;
@@ -4363,6 +4497,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   void _cancelMapSelection() {
     setState(() {
       _selectingLandingZone = false;
+      _selectingConfirmedLandingPoint = false;
       _operationalBoundaryDraft = null;
     });
     _syncOperationalBoundaries();
@@ -4424,6 +4559,180 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return;
     }
     setState(() => _selectingLandingZone = false);
+  }
+
+  Future<void> _markFlightLanded() async {
+    final controller = widget.rideController;
+    if (!controller.canManageRecovery ||
+        !controller.rideStarted ||
+        controller.rideEnded ||
+        controller.flightLanding.isLanded) {
+      return;
+    }
+    if (!_relayCanCarryCrewFlightLifecycle) {
+      _showRideSnackBar(
+        'This flight service cannot yet share LANDED state. Update the service before declaring landing.',
+      );
+      return;
+    }
+    final evidence = await showModalBottomSheet<FlightLandingEvidence>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(bottom: 16),
+        children: [
+          const ListTile(
+            title: Text('How was landing confirmed?'),
+            subtitle: Text(
+              'This is shared with the whole recovery crew. Tracking continues until Recovery complete.',
+            ),
+          ),
+          for (final value in FlightLandingEvidence.values)
+            ListTile(
+              key: Key('landing-evidence-${value.name}'),
+              leading: Icon(switch (value) {
+                FlightLandingEvidence.aboard => Icons.airplanemode_inactive,
+                FlightLandingEvidence.witnessed => Icons.visibility_outlined,
+                FlightLandingEvidence.radioConfirmed => Icons.radio_outlined,
+                FlightLandingEvidence.manuallyMarked =>
+                  Icons.add_location_alt_outlined,
+              }),
+              title: Text(value.label),
+              subtitle: Text(switch (value) {
+                FlightLandingEvidence.aboard =>
+                  'Use the latest fix from this device in the balloon.',
+                FlightLandingEvidence.witnessed =>
+                  'Keep the latest balloon fix labelled best-known.',
+                FlightLandingEvidence.radioConfirmed =>
+                  'Keep the latest balloon fix labelled best-known.',
+                FlightLandingEvidence.manuallyMarked =>
+                  'Tap the confirmed landing point on the map.',
+              }),
+              onTap: () => Navigator.pop(context, value),
+            ),
+        ],
+      ),
+    );
+    if (evidence == null || !mounted) return;
+    if (evidence == FlightLandingEvidence.manuallyMarked) {
+      setState(() {
+        _selectedIndex = 0;
+        _selectingConfirmedLandingPoint = true;
+        _selectingLandingZone = false;
+        _operationalBoundaryDraft = null;
+      });
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Mark balloon LANDED?'),
+        content: Text(
+          '${evidence.label} will be recorded for the whole crew. Location sharing and chase guidance continue during recovery.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            key: const Key('confirm-flight-landed'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.flag),
+            label: const Text('Mark LANDED'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await controller.declareFlightLanded(
+      evidence: evidence,
+      balloonFix: _latestBalloonFix(),
+    );
+    if (!mounted) return;
+    _showRideSnackBar(
+      controller.errorMessage ??
+          'LANDED shared. Location sharing continues during recovery.',
+    );
+  }
+
+  Future<void> _declareManuallyMarkedLanding(
+    route_domain.GeoPoint point,
+  ) async {
+    await widget.rideController.declareFlightLanded(
+      evidence: FlightLandingEvidence.manuallyMarked,
+      balloonFix: LocationSample(
+        position: awareness_geo.GeoPoint(
+          latitude: point.latitude,
+          longitude: point.longitude,
+        ),
+        recordedAt: DateTime.now(),
+        accuracyMeters: 0,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _selectingConfirmedLandingPoint = false);
+    _showRideSnackBar(
+      widget.rideController.errorMessage ??
+          'Crew-marked landing point shared. Tracking continues.',
+    );
+  }
+
+  Future<void> _retractFlightLanding() async {
+    final landing = widget.rideController.flightLanding.landing;
+    if (landing == null || !_relayCanCarryCrewFlightLifecycle) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Retract LANDED?'),
+        content: const Text(
+          'Use this only when the landing report was mistaken. The crew will return to live-flight guidance.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep LANDED'),
+          ),
+          FilledButton(
+            key: const Key('confirm-retract-landing'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Retract'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.rideController.retractFlightLanding(
+      reason: 'Landing report corrected by crew',
+    );
+  }
+
+  Future<void> _completeRecovery() async {
+    if (!widget.rideController.flightLanding.isLanded) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recovery complete?'),
+        content: const Text(
+          'The balloon and crew have been recovered. This ends the shared flight and stops live location publication for everyone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep tracking'),
+          ),
+          FilledButton(
+            key: const Key('confirm-recovery-complete'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Recovery complete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.rideController.completeRecovery();
   }
 
   LocationSample? _latestBalloonFix() {
@@ -4492,6 +4801,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       fix?.altitudeMeters?.toStringAsFixed(1) ?? 'none',
       field?.fetchedAt.toUtc().toIso8601String() ?? 'none',
       field?.validAt.toUtc().toIso8601String() ?? 'none',
+      widget.rideController.flightLanding.landing?.eventId ?? 'flying',
       now.millisecondsSinceEpoch ~/ const Duration(seconds: 15).inMilliseconds,
     ].join(':');
     if (fingerprint == _liveFlightProjectionFingerprint) return;
@@ -4502,6 +4812,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       wind: field,
       now: now,
       allowReferenceWind: _isSimulation,
+      flightLanded: widget.rideController.flightLanding.isLanded,
     );
     _pushRiderTrails();
     if (mounted) setState(() {});
@@ -4517,6 +4828,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       now: DateTime.now(),
       landingZone: widget.rideController.landingZone,
       balloonFix: _latestBalloonFix(),
+      landing: widget.rideController.flightLanding.landing,
     );
   }
 
@@ -4970,6 +5282,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   String get _projectedRideState {
     if (widget.rideController.rideEnded) return 'Flight ended';
+    if (widget.rideController.flightLanding.isLanded) {
+      return 'Balloon landed · recovery in progress';
+    }
     if (widget.rideController.ridePaused) return 'Flight paused';
     if (widget.rideController.rideStarted) return 'Flight in progress';
     return 'Waiting for the pilot or coordinator to start';
@@ -5623,6 +5938,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     canChangeRoute: _isSimulation || widget.rideController.hasFlightAuthority,
     onAlertsAndReports: _openAlertsAndReports,
     onShareSummary: _shareCurrentRideSummary,
+    landing: widget.rideController.flightLanding.landing,
+    canManageRecovery:
+        !_isSimulation &&
+        widget.rideController.rideStarted &&
+        !widget.rideController.rideEnded &&
+        widget.rideController.canManageRecovery,
+    onMarkLanded: () => unawaited(_markFlightLanded()),
+    onRetractLanding: () => unawaited(_retractFlightLanding()),
+    onCompleteRecovery: () => unawaited(_completeRecovery()),
     canOfferPilotHandover:
         widget.rideController.hasFlightAuthority &&
         _pilotHandoverTargets.isNotEmpty,
@@ -6343,6 +6667,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final generatedAt = controller.nextSnapshotGeneratedAt();
     final rideStatus = widget.rideController.rideEnded
         ? 'ended'
+        : widget.rideController.flightLanding.isLanded
+        ? 'landed'
         : widget.rideController.ridePaused
         ? 'paused'
         : widget.rideController.rideStarted
@@ -6384,6 +6710,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       if (event.type == RideEventType.rideStarted ||
           event.type == RideEventType.ridePaused ||
           event.type == RideEventType.rideResumed ||
+          event.type == RideEventType.flightLanded ||
+          event.type == RideEventType.flightLandingRetracted ||
           event.type == RideEventType.rideEnded) {
         return event.createdAt;
       }

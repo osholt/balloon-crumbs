@@ -113,6 +113,8 @@ class FlightReplayArchiver {
         case RideEventType.roleChanged:
         case RideEventType.rideStarted:
         case RideEventType.flightStartedByCrew:
+        case RideEventType.flightLanded:
+        case RideEventType.flightLandingRetracted:
         case RideEventType.statusMessage:
         case RideEventType.hazardReported:
         case RideEventType.hazardCleared:

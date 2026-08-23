@@ -452,7 +452,9 @@ class InternetRelayWorker {
       RideEventType.pilotHandoverAccepted =>
         RelayProtocolCapabilities.pilotHandover,
       RideEventType.rideReopened => RelayProtocolCapabilities.rideReopen,
-      RideEventType.flightStartedByCrew =>
+      RideEventType.flightStartedByCrew ||
+      RideEventType.flightLanded ||
+      RideEventType.flightLandingRetracted =>
         RelayProtocolCapabilities.crewFlightLifecycle,
       _ => null,
     };

@@ -65,6 +65,12 @@ extension FlightRoleLabel on FlightRole {
   /// out of this path for the same workload reason as the pilot, and observers
   /// are always read-only.
   bool get mayStartFlight => hasFlightAuthority || isChasing;
+
+  /// Whether this role may publish shared landing/recovery state.
+  ///
+  /// Field evidence can come from the basket, a witness or radio traffic, so
+  /// every operational role is allowed while observers remain read-only.
+  bool get mayManageRecovery => this != FlightRole.observer;
 }
 
 /// Reads a role name that another build may have written.

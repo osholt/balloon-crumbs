@@ -69,6 +69,9 @@ class RideLifecycleReducer {
               event.payload['flightRole'] == recordedRole.name) {
             return RideLifecycle(startEvent: event);
           }
+        case RideEventType.flightLanded:
+        case RideEventType.flightLandingRetracted:
+          break;
         case RideEventType.craftRegistered:
           final craftId = event.payload['craftId'];
           if (craftId is String && event.payload['kind'] == 'vehicle') {
