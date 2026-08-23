@@ -180,17 +180,21 @@ rather than trusting this, and fails with that question if it is missing.
 
 ### Why signing is overridden on the command line
 
-The Xcode project stays on **automatic** signing, because that is what works on a
-Mac with an Apple ID and it means a local build needs no exported material at
-all. A runner has no Apple ID, so the workflow passes `CODE_SIGN_STYLE=Manual`,
-an identity and a profile name to `xcodebuild` instead of editing the project.
+The Xcode project stays on **automatic** signing for normal local builds, because
+that is what works on a Mac with an Apple ID and it means a local build needs no
+exported material at all. A runner has no Apple ID, so the workflow passes
+`CODE_SIGN_STYLE=Manual`, an identity, a team, and a CI-only profile variable to
+`xcodebuild`. Runner's Release configuration maps that variable to
+`PROVISIONING_PROFILE_SPECIFIER`; dependency resource bundles do not, because
+they cannot use an application provisioning profile. With the variable unset,
+the local automatic-signing path is unchanged.
 
-Editing the project to suit CI is the trade the inherited setup made, and its own
-runbook then documented the consequence: the profile name had to match in three
-places, and this repository shipped a stale one — `Hot Pursuit CarPlay Navigation
-App Store`, from two product names ago. CI now reads the name out of the profile
-it just imported and writes the export options from that, so there is no second
-copy to go stale.
+The inherited setup made the profile name match in three places, and its own
+runbook documented the consequence: this repository shipped a stale one — `Hot
+Pursuit CarPlay Navigation App Store`, from two product names ago. CI now reads
+the name out of the profile it just imported, passes it through the target-scoped
+variable, and writes the export options from that, so there is no second copy to
+go stale.
 
 ### Build numbers
 

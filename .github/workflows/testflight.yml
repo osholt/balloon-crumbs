@@ -195,12 +195,11 @@ jobs:
             --dart-define=BALLOON_CRUMBS_PUSH_ENABLED=false \
             --dart-define=BALLOON_CRUMBS_RIDE_DIAGNOSTICS=true
 
-          # Signing is overridden on the command line rather than in the project.
-          # The Xcode project stays on automatic signing because that is what
-          # works on a Mac with an Apple ID; a runner has none, so it has to be
-          # told the identity and the profile explicitly. Editing the project to
-          # suit CI would break the local path, which is the trade the inherited
-          # setup made and then documented as a trap.
+          # Keep local builds automatic, but give CI's manual identity and team
+          # to every target. Runner maps the custom profile variable below to
+          # PROVISIONING_PROFILE_SPECIFIER only in its Release configuration;
+          # passing Xcode's setting globally would incorrectly attach the app
+          # profile to Swift Package and CocoaPods resource bundles.
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
@@ -210,7 +209,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM=UY4624PH6X \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            BALLOON_CRUMBS_PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
             archive
 
           # Written here, from the profile CI actually imported, for the same
