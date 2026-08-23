@@ -14,15 +14,20 @@ from .conftest import event, ride_token
 SECRET = "0123456789abcdef0123456789abcdef"
 
 
-def _position(latitude: float) -> dict:
+def _position(
+    latitude: float,
+    *,
+    recorded_at: datetime | None = None,
+    display_name: str = "Alex",
+) -> dict:
     return {
-        "displayName": "Alex",
+        "displayName": display_name,
         "role": "rider",
         "motorcycleStyle": "adventure",
         "riderColor": "blue",
         "sample": {
             "position": {"latitude": latitude, "longitude": -2.4},
-            "recordedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "recordedAt": (recorded_at or datetime.now(UTC)).isoformat().replace("+00:00", "Z"),
             "accuracyMeters": 4,
             "speedMetersPerSecond": 0,
             "headingDegrees": 90,
@@ -156,3 +161,70 @@ def test_presence_requires_matching_authenticated_device(client, synchronize) ->
     )
 
     assert response.status_code == 400
+
+
+def test_five_devices_survive_a_45_minute_pre_launch_without_ghosts(client, synchronize) -> None:
+    """The long field lobby is a heartbeat test, not a sleep in CI.
+
+    Five synthetic devices publish every 30 seconds for the observed 45-minute
+    setup window. Reusing one installation id after a process restart must
+    replace that row rather than invent a sixth crew member.
+    """
+
+    ride_id = "synthetic-long-pre-launch"
+    bearer_token = ride_token(ride_id, SECRET)
+    assert synchronize(client, ride_id=ride_id, secret=SECRET).status_code == 200
+    service = client.app.state.service
+    session_factory = client.app.state.session_factory
+    start = datetime(2026, 8, 24, 9, tzinfo=UTC)
+    devices = [f"synthetic-device-{index}" for index in range(5)]
+
+    def publish(device_id: str, at: datetime, *, restarted: bool = False) -> dict:
+        index = devices.index(device_id)
+        request = PresenceSyncRequest(
+            protocolVersion=1,
+            deviceId=device_id,
+            position=_position(
+                52.0 + index * 0.001,
+                recorded_at=at,
+                display_name=(
+                    f"Synthetic crew {index} (restarted)"
+                    if restarted
+                    else f"Synthetic crew {index}"
+                ),
+            ),
+        )
+        with session_factory() as session:
+            return service.synchronize_pre_start_presence(
+                session,
+                ride_id=ride_id,
+                bearer_token=bearer_token,
+                device_header=device_id,
+                request=request,
+                live_presence=True,
+                now=at,
+            )
+
+    latest: dict = {}
+    for heartbeat in range(91):
+        at = start + timedelta(seconds=heartbeat * 30)
+        for device_id in devices:
+            latest = publish(device_id, at)
+        assert len(latest["positions"]) == 5
+        assert {item["riderId"] for item in latest["positions"]} == set(devices)
+
+    restarted_at = start + timedelta(minutes=45, seconds=5)
+    latest = publish(devices[2], restarted_at, restarted=True)
+
+    assert len(latest["positions"]) == 5
+    restarted = next(item for item in latest["positions"] if item["riderId"] == devices[2])
+    assert restarted["displayName"].endswith("(restarted)")
+    with session_factory() as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(PreStartPosition)
+                .where(PreStartPosition.ride_id == ride_id)
+            )
+            == 5
+        )

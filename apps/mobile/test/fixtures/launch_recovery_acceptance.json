@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "name": "Synthetic long launch-to-recovery",
+  "seed": 742023,
+  "generatedCoordinates": true,
+  "startTime": "2026-08-24T09:00:00Z",
+  "preLaunchSeconds": 2700,
+  "crafts": [
+    {"id": "synthetic-balloon", "kind": "balloon"},
+    {"id": "synthetic-vehicle-a", "kind": "vehicle"},
+    {"id": "synthetic-vehicle-b", "kind": "vehicle"},
+    {"id": "synthetic-vehicle-c", "kind": "vehicle"}
+  ],
+  "devices": [
+    {"id": "synthetic-pilot", "role": "pilot", "craftId": "synthetic-balloon"},
+    {"id": "synthetic-balloon-crew", "role": "balloonCrew", "craftId": "synthetic-balloon"},
+    {"id": "synthetic-driver-a", "role": "chaseDriver", "craftId": "synthetic-vehicle-a"},
+    {"id": "synthetic-crew-b", "role": "chaseCrew", "craftId": "synthetic-vehicle-b"},
+    {"id": "synthetic-driver-c", "role": "chaseDriver", "craftId": "synthetic-vehicle-c"}
+  ],
+  "timeline": [
+    {"atSeconds": 0, "event": "settingUp"},
+    {"atSeconds": 900, "event": "deviceReconnect", "deviceId": "synthetic-crew-b"},
+    {"atSeconds": 2700, "event": "flightStartedByCrew", "deviceId": "synthetic-driver-a"},
+    {"atSeconds": 3900, "event": "intendedLandingUpdated", "deviceId": "synthetic-pilot"},
+    {"atSeconds": 6600, "event": "flightLanded", "evidence": "radioConfirmed"},
+    {"atSeconds": 7200, "event": "flightLandingRetracted"},
+    {"atSeconds": 7320, "event": "flightLanded", "evidence": "witnessed"},
+    {"atSeconds": 7800, "event": "recoveryComplete"}
+  ],
+  "faults": [
+    {"atSeconds": 3000, "kind": "gpsLoss", "deviceId": "synthetic-pilot", "durationSeconds": 55},
+    {"atSeconds": 3300, "kind": "staleWind", "durationSeconds": 600},
+    {"atSeconds": 4200, "kind": "relayDelay", "durationSeconds": 40},
+    {"atSeconds": 4260, "kind": "outOfOrderReplay", "deviceId": "synthetic-driver-c"}
+  ],
+  "carPlay": {
+    "orientations": ["northUp", "directionUp"],
+    "targets": ["balloonRendezvous", "intendedLandingArea"],
+    "reconnectAtSeconds": 4500
+  }
+}
