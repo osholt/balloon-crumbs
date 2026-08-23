@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     join_code_lookup_rate_limit_requests: int = Field(default=30, ge=1, le=1000)
     join_code_lookup_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
     join_code_global_rate_limit_requests: int = Field(default=20, ge=1, le=1000)
+    crew_room_rate_limit_requests: int = Field(default=30, ge=1, le=1000)
+    crew_room_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
     # Browser origins allowed to call the relay. Named `discovery_*` while the
     # discovery web surface was the only cross-origin caller; the observer page is
     # served from the marketing site, so it outlived discovery and this is not a
@@ -106,6 +108,10 @@ class Settings(BaseSettings):
             # recovery tracking. Additive so older relays reject rather than
             # silently storing an event they did not negotiate.
             "crew-flight-lifecycle-v1",
+            # Persistent aliases point at fresh, encrypted operations. Alias
+            # knowledge alone grants no access; returning and invitation
+            # credentials are independently revocable.
+            "crew-rooms-v1",
         ]
     )
     required_capabilities: list[str] = Field(default_factory=list)

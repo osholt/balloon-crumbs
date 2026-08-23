@@ -7,6 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
 
+import '../data/in_memory_crew_room_store.dart';
+import '../domain/crew_room.dart';
+import '../domain/crew_room_store.dart';
 import '../domain/craft.dart';
 import '../services/craft_roster.dart';
 import '../services/chase_guidance_target.dart';
@@ -43,6 +46,7 @@ import '../services/received_quick_message.dart';
 import '../services/ride_route_reducer.dart';
 import '../services/rider_contact_share.dart';
 import '../internet/internet_relay_client.dart';
+import '../internet/crew_room_directory.dart';
 
 typedef Clock = DateTime Function();
 typedef IdFactory = String Function();
@@ -80,13 +84,18 @@ class RideController extends ChangeNotifier {
     IdFactory? idFactory,
     Random? random,
     RideCodeDirectory? rideCodeDirectory,
+    CrewRoomDirectory? crewRoomDirectory,
+    CrewRoomStore? crewRoomStore,
     this._completedRideStore,
     this._installationId,
   }) : _clock = clock ?? DateTime.now,
        _idFactory = idFactory ?? const Uuid().v7,
        _random = random ?? Random.secure(),
        _rideCodeDirectory =
-           rideCodeDirectory ?? HttpRideCodeDirectory.fromEnvironment();
+           rideCodeDirectory ?? HttpRideCodeDirectory.fromEnvironment(),
+       _crewRoomDirectory =
+           crewRoomDirectory ?? HttpCrewRoomDirectory.fromEnvironment(),
+       _crewRoomStore = crewRoomStore ?? InMemoryCrewRoomStore();
 
   static const endedRideRecoveryWindow = Duration(hours: 24);
 
@@ -99,6 +108,9 @@ class RideController extends ChangeNotifier {
   final CompletedRideStore? _completedRideStore;
   final String? _installationId;
   final RideCodeDirectory _rideCodeDirectory;
+  final CrewRoomDirectory _crewRoomDirectory;
+  final CrewRoomStore _crewRoomStore;
+  List<CrewRoomMembership> _crewRooms = const [];
 
   RideSession? _session;
   List<RideEvent> _events = <RideEvent>[];
@@ -143,6 +155,13 @@ class RideController extends ChangeNotifier {
   final Set<String> _usedIceShareEventIds = {};
 
   RideSession? get session => _session;
+  List<CrewRoomMembership> get crewRooms => List.unmodifiable(_crewRooms);
+  CrewRoomMembership? get currentCrewRoom {
+    final roomId = _session?.crewRoomId;
+    if (roomId == null) return null;
+    return _crewRooms.where((room) => room.roomId == roomId).firstOrNull;
+  }
+
   EventStore get eventStore => _eventStore;
   List<RideEvent> get events => UnmodifiableListView(_events);
   int get eventCount => _events.length;
@@ -637,6 +656,7 @@ class RideController extends ChangeNotifier {
 
   Future<void> initialize() async {
     _nearbyCapabilities = await _nearbyBridge.capabilities();
+    _crewRooms = await _crewRoomStore.loadAll();
     _session = await _sessionStore.load();
     final activeSession = _session;
     if (activeSession != null) {
@@ -755,8 +775,12 @@ class RideController extends ChangeNotifier {
     RiderColor riderColor = riderColorDefault,
     RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,
     String? rideName,
+    String? crewRoomAlias,
   }) async {
     await _run(() async {
+      final roomAlias = crewRoomAlias == null || crewRoomAlias.trim().isEmpty
+          ? null
+          : normaliseCrewRoomAlias(crewRoomAlias);
       await _createRide(
         displayName: displayName,
         motorcycleStyle: motorcycleStyle,
@@ -765,7 +789,251 @@ class RideController extends ChangeNotifier {
         coordinationMode: coordinationMode,
         rideName: rideName,
       );
+      if (roomAlias != null) {
+        final operation = _requireSession();
+        final deviceId = _newCrewRoomDeviceId();
+        try {
+          final access = await _crewRoomDirectory.create(
+            alias: roomAlias,
+            deviceId: deviceId,
+            displayName: operation.displayName,
+            operation: operation,
+          );
+          final membership = CrewRoomMembership(
+            roomId: access.roomId,
+            alias: access.alias,
+            deviceId: deviceId,
+            deviceCredential: access.deviceCredential,
+            displayName: operation.displayName,
+            flightRole: FlightRole.pilot,
+            owner: access.owner,
+            operationGeneration: access.operationGeneration,
+            operationExpiresAt: access.operationExpiresAt,
+            inviteToken: access.inviteToken,
+          );
+          await _saveCrewRoomMembership(membership);
+          final updated = operation.copyWith(crewRoomId: access.roomId);
+          _session = updated;
+          await _sessionStore.save(updated);
+        } on Object {
+          await _removeRideData();
+          rethrow;
+        }
+      }
     });
+  }
+
+  Future<void> startNewCrewRoomOperation(
+    CrewRoomMembership membership, {
+    required String displayName,
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
+    RiderSymbol riderSymbol = riderSymbolDefault,
+    RiderColor riderColor = riderColorDefault,
+  }) async {
+    await _run(() async {
+      if (!membership.owner) {
+        throw const FormatException(
+          'Only the crew room owner can start a fresh flight.',
+        );
+      }
+      await _createRide(
+        displayName: displayName,
+        motorcycleStyle: motorcycleStyle,
+        riderSymbol: riderSymbol,
+        riderColor: riderColor,
+        coordinationMode: RideCoordinationMode.keepTogether,
+        crewRoomId: membership.roomId,
+      );
+      final operation = _requireSession();
+      try {
+        final access = await _crewRoomDirectory.startOperation(
+          membership: membership,
+          operation: operation,
+        );
+        await _saveCrewRoomMembership(
+          membership.copyWith(
+            operationGeneration: access.operationGeneration,
+            operationExpiresAt: access.operationExpiresAt,
+            inviteToken: access.inviteToken,
+          ),
+        );
+      } on Object {
+        await _removeRideData();
+        rethrow;
+      }
+    });
+  }
+
+  Future<void> openCrewRoom(CrewRoomMembership membership) async {
+    await _run(() async {
+      final access = await _crewRoomDirectory.open(membership);
+      final operation = access.operation;
+      if (operation == null) {
+        throw const FormatException(
+          'This crew room has no active flight. Ask its owner to start one.',
+        );
+      }
+      await _joinWithCredentials(
+        rideId: operation.rideId,
+        rideCode: operation.rideCode,
+        inviteSecret: operation.inviteSecret,
+        joinToken: operation.joinToken,
+        displayName: membership.displayName,
+        flightRole: membership.flightRole,
+        vehicleLabel: membership.vehicleLabel,
+        motorcycleStyle: craftIconStyleDefault,
+        riderSymbol: riderSymbolDefault,
+        riderColor: riderColorDefault,
+        crewRoomId: access.roomId,
+        allowPilotRole: access.owner,
+      );
+      await _saveCrewRoomMembership(
+        CrewRoomMembership(
+          roomId: access.roomId,
+          alias: access.alias,
+          deviceId: membership.deviceId,
+          deviceCredential: access.deviceCredential,
+          displayName: membership.displayName,
+          flightRole: membership.flightRole,
+          vehicleLabel: membership.vehicleLabel,
+          owner: access.owner,
+          operationGeneration: access.operationGeneration,
+          operationExpiresAt: access.operationExpiresAt,
+          inviteToken:
+              access.owner &&
+                  access.operationGeneration == membership.operationGeneration
+              ? membership.inviteToken
+              : null,
+        ),
+      );
+    });
+  }
+
+  Future<void> joinCrewRoom({
+    required String alias,
+    required String inviteToken,
+    required String displayName,
+    required FlightRole flightRole,
+    String vehicleLabel = 'Land Rover',
+    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
+    RiderSymbol riderSymbol = riderSymbolDefault,
+    RiderColor riderColor = riderColorDefault,
+  }) async {
+    await _run(() async {
+      final deviceId = _newCrewRoomDeviceId();
+      final access = await _crewRoomDirectory.join(
+        alias: alias,
+        inviteToken: inviteToken,
+        deviceId: deviceId,
+        displayName: _normaliseName(displayName),
+      );
+      final operation = access.operation;
+      if (operation == null) {
+        throw const FormatException(
+          'That crew room invitation has no active flight.',
+        );
+      }
+      await _joinWithCredentials(
+        rideId: operation.rideId,
+        rideCode: operation.rideCode,
+        inviteSecret: operation.inviteSecret,
+        joinToken: operation.joinToken,
+        displayName: displayName,
+        flightRole: flightRole,
+        vehicleLabel: vehicleLabel,
+        motorcycleStyle: motorcycleStyle,
+        riderSymbol: riderSymbol,
+        riderColor: riderColor,
+        crewRoomId: access.roomId,
+      );
+      await _saveCrewRoomMembership(
+        CrewRoomMembership(
+          roomId: access.roomId,
+          alias: access.alias,
+          deviceId: deviceId,
+          deviceCredential: access.deviceCredential,
+          displayName: _normaliseName(displayName),
+          flightRole: flightRole,
+          vehicleLabel: vehicleLabel,
+          owner: access.owner,
+          operationGeneration: access.operationGeneration,
+          operationExpiresAt: access.operationExpiresAt,
+        ),
+      );
+    });
+  }
+
+  Future<List<CrewRoomDevice>> crewRoomDevices(CrewRoomMembership membership) =>
+      _crewRoomDirectory.devices(membership);
+
+  Future<void> renameCrewRoom(
+    CrewRoomMembership membership,
+    String newAlias,
+  ) async {
+    await _run(() async {
+      final alias = await _crewRoomDirectory.rename(membership, newAlias);
+      await _saveCrewRoomMembership(membership.copyWith(alias: alias));
+    });
+  }
+
+  Future<void> transferCrewRoom(
+    CrewRoomMembership membership,
+    String targetDeviceId,
+  ) async {
+    await _run(() async {
+      await _crewRoomDirectory.transfer(membership, targetDeviceId);
+      await _saveCrewRoomMembership(
+        CrewRoomMembership(
+          roomId: membership.roomId,
+          alias: membership.alias,
+          deviceId: membership.deviceId,
+          deviceCredential: membership.deviceCredential,
+          displayName: membership.displayName,
+          flightRole: membership.flightRole,
+          vehicleLabel: membership.vehicleLabel,
+          owner: false,
+          operationGeneration: membership.operationGeneration,
+          operationExpiresAt: membership.operationExpiresAt,
+        ),
+      );
+    });
+  }
+
+  Future<void> revokeCrewRoomDevice(
+    CrewRoomMembership membership,
+    String targetDeviceId,
+  ) => _run(() => _crewRoomDirectory.revoke(membership, targetDeviceId));
+
+  Future<void> deleteCrewRoom(CrewRoomMembership membership) async {
+    await _run(() async {
+      await _crewRoomDirectory.delete(membership);
+      await _crewRoomStore.delete(membership.roomId);
+      _crewRooms = _crewRooms
+          .where((room) => room.roomId != membership.roomId)
+          .toList(growable: false);
+    });
+  }
+
+  Future<void> forgetCrewRoom(CrewRoomMembership membership) async {
+    await _crewRoomStore.delete(membership.roomId);
+    _crewRooms = _crewRooms
+        .where((room) => room.roomId != membership.roomId)
+        .toList(growable: false);
+    notifyListeners();
+  }
+
+  String _newCrewRoomDeviceId() {
+    final seed = _installationId ?? _idFactory();
+    final digest = sha256.convert(utf8.encode('crew-room-device-v1\n$seed'));
+    return 'room-device-${digest.toString().substring(0, 32)}';
+  }
+
+  Future<void> _saveCrewRoomMembership(CrewRoomMembership membership) async {
+    await _crewRoomStore.upsert(membership);
+    _crewRooms = [
+      ..._crewRooms.where((room) => room.roomId != membership.roomId),
+      membership,
+    ]..sort((a, b) => a.alias.compareTo(b.alias));
   }
 
   Future<void> createSimulationRide({
@@ -858,8 +1126,11 @@ class RideController extends ChangeNotifier {
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
   }) async {
-    await _run(
-      () => _joinWithCredentials(
+    await _run(() async {
+      final roomDeviceId = invitation.crewRoomId == null
+          ? null
+          : _newCrewRoomDeviceId();
+      await _joinWithCredentials(
         rideId: invitation.rideId,
         rideCode: invitation.rideCode,
         inviteSecret: invitation.inviteSecret,
@@ -870,8 +1141,47 @@ class RideController extends ChangeNotifier {
         motorcycleStyle: motorcycleStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
-      ),
-    );
+        crewRoomId: invitation.crewRoomId,
+      );
+      final roomId = invitation.crewRoomId;
+      final alias = invitation.crewRoomAlias;
+      final roomInvite = invitation.crewRoomInviteToken;
+      if (roomId == null ||
+          alias == null ||
+          roomInvite == null ||
+          roomDeviceId == null) {
+        return;
+      }
+      try {
+        final access = await _crewRoomDirectory.join(
+          alias: alias,
+          inviteToken: roomInvite,
+          deviceId: roomDeviceId,
+          displayName: _normaliseName(displayName),
+        );
+        if (access.roomId != roomId) return;
+        await _saveCrewRoomMembership(
+          CrewRoomMembership(
+            roomId: roomId,
+            alias: access.alias,
+            deviceId: roomDeviceId,
+            deviceCredential: access.deviceCredential,
+            displayName: _normaliseName(displayName),
+            flightRole: flightRole,
+            vehicleLabel: vehicleLabel,
+            owner: access.owner,
+            operationGeneration: access.operationGeneration,
+            operationExpiresAt: access.operationExpiresAt,
+          ),
+        );
+      } on CrewRoomDirectoryException catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            'Joined flight offline; returning room access was deferred: $error',
+          );
+        }
+      }
+    });
   }
 
   Future<void> joinRide(
@@ -920,6 +1230,8 @@ class RideController extends ChangeNotifier {
     required CraftIconStyle motorcycleStyle,
     required RiderSymbol riderSymbol,
     required RiderColor riderColor,
+    String? crewRoomId,
+    bool allowPilotRole = false,
   }) async {
     {
       // Deep links can arrive while any screen is open. Never let a join path
@@ -942,7 +1254,8 @@ class RideController extends ChangeNotifier {
         joinToken: joinToken,
       );
       final now = _clock();
-      if (flightRole == FlightRole.pilot || flightRole == FlightRole.observer) {
+      if ((flightRole == FlightRole.pilot && !allowPilotRole) ||
+          flightRole == FlightRole.observer) {
         throw const FormatException(
           'Join as balloon crew, a chase driver, or chase crew.',
         );
@@ -965,13 +1278,14 @@ class RideController extends ChangeNotifier {
         joinToken: credentials.joinToken,
         localRiderId: _localRiderIdForRide(credentials.rideId),
         displayName: _normaliseName(displayName),
-        role: RideRole.rider,
+        role: flightRole == FlightRole.pilot ? RideRole.lead : RideRole.rider,
         flightRole: flightRole,
         localCraftId: craftId,
         joinedAt: now,
         motorcycleStyle: motorcycleStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
+        crewRoomId: crewRoomId,
       );
       _session = session;
       await _sessionStore.save(session);
@@ -2097,6 +2411,7 @@ class RideController extends ChangeNotifier {
     RiderColor riderColor = riderColorDefault,
     RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,
     String? rideName,
+    String? crewRoomId,
   }) async {
     // The home screen deliberately remains available while an ended ride is
     // set aside (#207). Creating its replacement must file that completed ride
@@ -2144,6 +2459,7 @@ class RideController extends ChangeNotifier {
       rideName: normalisedRideName == null || normalisedRideName.isEmpty
           ? null
           : normalisedRideName,
+      crewRoomId: crewRoomId,
     );
     _session = session;
     await _sessionStore.save(session);
@@ -2216,6 +2532,9 @@ class RideController extends ChangeNotifier {
       // The rider's own input. Retrying it unchanged would fail identically.
       _errorMessage = error.message;
     } on RideCodeDirectoryException catch (error) {
+      _errorMessage = error.message;
+      _errorIsRetryable = error.retryable;
+    } on CrewRoomDirectoryException catch (error) {
       _errorMessage = error.message;
       _errorIsRetryable = error.retryable;
     } on Object catch (error, stackTrace) {
@@ -2505,6 +2824,7 @@ class RideController extends ChangeNotifier {
   void dispose() {
     _endedRideCleanupTimer?.cancel();
     _rideCodeDirectory.close();
+    _crewRoomDirectory.close();
     _eventStore.close();
     super.dispose();
   }

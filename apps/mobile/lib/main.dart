@@ -21,6 +21,7 @@ import 'controllers/test_control_controller.dart';
 import 'data/json_file_recorded_route_store.dart';
 import 'data/json_file_completed_ride_store.dart';
 import 'data/shared_preferences_session_store.dart';
+import 'data/secure_crew_room_store.dart';
 import 'data/sqlite_event_store.dart';
 import 'services/nearby_bridge.dart';
 import 'services/test_control_registry.dart';
@@ -99,6 +100,7 @@ Future<void> main() async {
     const NearbyBridge(),
     installationId: riderProfile.installationId,
     completedRideStore: completedRides,
+    crewRoomStore: const SecureCrewRoomStore(),
   );
 
   // The registry is created unconditionally - it is one nullable field - but the

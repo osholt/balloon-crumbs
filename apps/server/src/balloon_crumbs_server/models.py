@@ -77,6 +77,57 @@ class RideJoinCode(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class CrewRoom(Base):
+    """Persistent named crew directory containing only encrypted room data."""
+
+    __tablename__ = "crew_rooms"
+    __table_args__ = (
+        UniqueConstraint("alias_digest", name="uq_crew_room_alias_digest"),
+        Index("ix_crew_rooms_operation_expiry", "operation_expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    alias_digest: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    alias_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    owner_device_digest: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    invite_token_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    operation_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    operation_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    operation_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    devices: Mapped[list[CrewRoomDevice]] = relationship(
+        back_populates="room",
+        cascade="all, delete-orphan",
+    )
+
+
+class CrewRoomDevice(Base):
+    """One independently revocable returning-device credential."""
+
+    __tablename__ = "crew_room_devices"
+    __table_args__ = (
+        UniqueConstraint("room_id", "device_digest", name="uq_crew_room_device_identity"),
+        Index("ix_crew_room_devices_active", "room_id", "revoked_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    room_id: Mapped[str] = mapped_column(
+        String(128),
+        ForeignKey("crew_rooms.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    device_digest: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    credential_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    profile_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    room: Mapped[CrewRoom] = relationship(back_populates="devices")
+
+
 class RidePlan(Base):
     """An encrypted, pre-ride forecast plan behind a short lookup code.
 

@@ -31,6 +31,7 @@ class RideSession {
     this.riderColor = riderColorDefault,
     this.coordinationMode = RideCoordinationMode.keepTogether,
     this.rideName,
+    this.crewRoomId,
   }) : flightRole =
            flightRole ??
            (role == RideRole.lead ? FlightRole.pilot : FlightRole.chaseCrew),
@@ -79,6 +80,9 @@ class RideSession {
   /// identifiable by their six-digit code even with no name set.
   final String? rideName;
 
+  /// Opaque persistent room identity, never an access credential.
+  final String? crewRoomId;
+
   RideSession copyWith({
     RideRole? role,
     FlightRole? flightRole,
@@ -87,6 +91,7 @@ class RideSession {
     String? rideCode,
     int? simulationRiderCount,
     RideCoordinationMode? coordinationMode,
+    String? crewRoomId,
   }) => RideSession(
     rideId: rideId,
     rideCode: rideCode ?? this.rideCode,
@@ -107,6 +112,7 @@ class RideSession {
     riderColor: riderColor,
     coordinationMode: coordinationMode ?? this.coordinationMode,
     rideName: rideName,
+    crewRoomId: crewRoomId ?? this.crewRoomId,
   );
 
   Map<String, Object?> toJson() => {
@@ -128,6 +134,7 @@ class RideSession {
     'riderColor': riderColor.name,
     'coordinationMode': coordinationMode.name,
     if (rideName != null) 'rideName': rideName,
+    if (crewRoomId != null) 'crewRoomId': crewRoomId,
   };
 
   factory RideSession.fromJson(Map<String, Object?> json) {
@@ -161,6 +168,7 @@ class RideSession {
         json['coordinationMode'] as String?,
       ),
       rideName: json['rideName'] as String?,
+      crewRoomId: json['crewRoomId'] as String?,
     );
   }
 

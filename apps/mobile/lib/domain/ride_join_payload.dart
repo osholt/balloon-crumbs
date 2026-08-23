@@ -29,6 +29,9 @@ class RideJoinPayload {
     required this.rideCode,
     required this.inviteSecret,
     required this.joinToken,
+    this.crewRoomId,
+    this.crewRoomAlias,
+    this.crewRoomInviteToken,
   });
 
   /// Version prefix, so a payload from a future format is **rejected** rather
@@ -58,9 +61,24 @@ class RideJoinPayload {
   final String rideCode;
   final String inviteSecret;
   final String joinToken;
+  final String? crewRoomId;
+  final String? crewRoomAlias;
+  final String? crewRoomInviteToken;
 
-  String encode() =>
-      [scheme, rideCode, rideId, inviteSecret, joinToken].join(_separator);
+  String encode() {
+    final base = [scheme, rideCode, rideId, inviteSecret, joinToken];
+    if (crewRoomId == null ||
+        crewRoomAlias == null ||
+        crewRoomInviteToken == null) {
+      return base.join(_separator);
+    }
+    return [
+      ...base,
+      crewRoomId!,
+      crewRoomAlias!,
+      crewRoomInviteToken!,
+    ].join(_separator);
+  }
 
   /// Parses [raw], or throws [FormatException] with a reason a person can act on.
   ///
@@ -70,13 +88,16 @@ class RideJoinPayload {
   /// from a camera - anyone can print one.
   static RideJoinPayload decode(String raw) {
     final parts = raw.trim().split(_separator);
-    if (parts.length != 5 ||
+    if ((parts.length != 5 && parts.length != 8) ||
         (parts.first != scheme && parts.first != legacyScheme)) {
       throw const FormatException(
         'That code is not a Balloon Crumbs flight invitation.',
       );
     }
-    final [_, rideCode, rideId, inviteSecret, joinToken] = parts;
+    final rideCode = parts[1];
+    final rideId = parts[2];
+    final inviteSecret = parts[3];
+    final joinToken = parts[4];
 
     if (!RegExp(r'^\d{6}$').hasMatch(rideCode)) {
       throw const FormatException('That invitation has no valid flight code.');
@@ -98,11 +119,35 @@ class RideJoinPayload {
         'That invitation is incomplete and cannot join securely.',
       );
     }
+    String? crewRoomId;
+    String? crewRoomAlias;
+    String? crewRoomInviteToken;
+    if (parts.length == 8) {
+      crewRoomId = parts[5];
+      crewRoomAlias = parts[6];
+      crewRoomInviteToken = parts[7];
+      if (crewRoomId.isEmpty || crewRoomId.length > 128) {
+        throw const FormatException('That invitation has no valid crew room.');
+      }
+      if (!RegExp(r'^[A-Z0-9]{5,12}$').hasMatch(crewRoomAlias)) {
+        throw const FormatException(
+          'That invitation has no valid crew room alias.',
+        );
+      }
+      if (!RegExp(r'^cri1_[A-Za-z0-9_-]{43}$').hasMatch(crewRoomInviteToken)) {
+        throw const FormatException(
+          'That invitation cannot grant returning crew access.',
+        );
+      }
+    }
     return RideJoinPayload(
       rideId: rideId,
       rideCode: rideCode,
       inviteSecret: inviteSecret,
       joinToken: joinToken,
+      crewRoomId: crewRoomId,
+      crewRoomAlias: crewRoomAlias,
+      crewRoomInviteToken: crewRoomInviteToken,
     );
   }
 

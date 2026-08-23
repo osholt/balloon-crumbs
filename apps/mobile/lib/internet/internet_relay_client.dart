@@ -94,6 +94,7 @@ abstract final class RelayProtocolCapabilities {
   /// A chase-role device starting live tracking at balloon release. Kept
   /// additive because older clients understand only pilot-authored rideStarted.
   static const crewFlightLifecycle = 'crew-flight-lifecycle-v1';
+  static const crewRooms = 'crew-rooms-v1';
 
   static const current = {
     rideStart,
@@ -109,6 +110,7 @@ abstract final class RelayProtocolCapabilities {
     pilotHandover,
     rideReopen,
     crewFlightLifecycle,
+    crewRooms,
   };
 }
 

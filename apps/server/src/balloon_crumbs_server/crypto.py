@@ -24,7 +24,20 @@ def token_hash(token: str) -> bytes:
 
 class DataCipher:
     def __init__(self, key: bytes) -> None:
+        self._blind_index_key = hashlib.sha256(b"balloon-crumbs-blind-index-v1\x00" + key).digest()
         self._cipher = AESGCM(key)
+
+    def blind_index(self, value: str, *, namespace: str) -> bytes:
+        """Return a keyed lookup digest without storing guessable plaintext.
+
+        Crew-room aliases are intentionally memorable and therefore cannot be
+        protected by an ordinary SHA-256 digest.  A database-only disclosure
+        must not turn into an offline alias directory, so lookup uses a keyed,
+        namespace-separated HMAC derived from the data-encryption key.
+        """
+
+        message = f"{namespace}\n{value}".encode()
+        return hmac.new(self._blind_index_key, message, hashlib.sha256).digest()
 
     def encrypt_json(self, value: Any, *, associated_data: bytes) -> bytes:
         nonce = os.urandom(12)
