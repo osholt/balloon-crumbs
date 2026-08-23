@@ -16,6 +16,7 @@ void main() {
           {
             'latitude': 51.4 + index * 0.001,
             'longitude': -2.7 + index * 0.001,
+            'elevation': 92 + index,
             'hourly': {
               'time': [
                 '2026-08-21T09:00',
@@ -55,6 +56,12 @@ void main() {
     );
     expect(field.validAt, DateTime.utc(2026, 8, 21, 10));
     expect(field.origin, WindForecastOrigin.openMeteoUkmo);
+    expect(
+      field.groundElevationAt(
+        const GeoPoint(latitude: 51.404, longitude: -2.696),
+      ),
+      96,
+    );
     final vector = field.at(
       const GeoPoint(latitude: 51.404, longitude: -2.696),
       500,

@@ -433,6 +433,8 @@ class _RoleLivePanel extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _RoadRouteOverview(route: vehicleRoadRoute),
+              const SizedBox(height: 12),
+              _LiveProjectionSummary(assessment: liveFlightProjection),
               if (role == FlightRole.chaseCrew) ...[
                 const SizedBox(height: 12),
                 _FlightPlanOverview(summary: summary),
@@ -443,8 +445,6 @@ class _RoleLivePanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _WindSummary(wind: wind),
-                const SizedBox(height: 12),
-                _LiveProjectionSummary(assessment: liveFlightProjection),
               ],
             ] else ...[
               _FlightPlanOverview(summary: summary, reduced: true),
@@ -587,16 +587,20 @@ class _LiveProjectionSummary extends StatelessWidget {
         icon: Icons.online_prediction_outlined,
         title: 'Live projection unavailable',
         detail:
-            '${value?.message ?? 'Waiting for structured plan, balloon telemetry and fresh wind.'} The original forecast remains unchanged.',
+            '${value?.message ?? 'Waiting for balloon telemetry, terrain reference and fresh wind.'} Any original forecast remains unchanged.',
       );
     }
     final landing = projection.computedAt.add(projection.duration);
+    final followsPlan =
+        projection.basis == LiveFlightProjectionBasis.structuredPlan;
     return _InformationRow(
       key: const Key('role-live-flight-projection'),
       icon: Icons.online_prediction,
-      title: 'Live projection · landing about ${_formatTime(context, landing)}',
+      title: followsPlan
+          ? 'Live projection · planned landing about ${_formatTime(context, landing)}'
+          : 'Live possible-landing estimate · 20–120 min range',
       detail:
-          '${projection.windSource} · wind valid ${_formatTime(context, projection.windValidAt)} · recalculated ${_compactAge(DateTime.now().difference(projection.computedAt))} ago · ${projection.landingEnvelope.isEmpty ? 'endpoint spread unavailable' : 'possible-landing envelope shown'}. Forecast model only; landing suitability and access are unverified.',
+          '${projection.windSource} · wind valid ${_formatTime(context, projection.windValidAt)} · recalculated ${_compactAge(DateTime.now().difference(projection.computedAt))} ago · ${projection.landingEnvelope.isEmpty ? 'endpoint spread unavailable' : 'possible-landing envelope shown'}. ${projection.limitations} Forecast model only; landing suitability and access are unverified.',
     );
   }
 }

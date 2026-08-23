@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:balloon_crumbs/domain/altitude.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/domain/map_orientation.dart';
 import 'package:balloon_crumbs/domain/route_store.dart';
 import 'package:balloon_crumbs/domain/distance_unit.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart' as live;
@@ -121,6 +122,7 @@ void main() {
         httpClient: MockClient((_) async => http.Response('', 404)),
       );
       addTearDown(cache.dispose);
+      MapOrientationMode? requestedOrientation;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -142,6 +144,8 @@ void main() {
             onLeaveRide: () async {},
             onOpenRideMenu: () async {},
             perspective: RideMapPerspective.balloon,
+            mapOrientation: MapOrientationMode.northUp,
+            onMapOrientationChanged: (mode) => requestedOrientation = mode,
             distanceUnit: DistanceUnit.miles,
             localMotorcycleStyle: CraftIconStyle.fourByFour,
           ),
@@ -172,6 +176,7 @@ void main() {
           'emergency-alert-button',
           'leave-ride-button',
           'navigation-follow-button',
+          'map-orientation-toggle',
         ];
         final rects = <String, Rect>{};
         for (final key in requiredKeys) {
@@ -214,6 +219,9 @@ void main() {
       await expectUnclutteredChrome(const Size(390, 844));
 
       expect(find.byKey(const Key('balloon-altitude-card')), findsOneWidget);
+      expect(find.text('North up'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('map-orientation-toggle')));
+      expect(requestedOrientation, MapOrientationMode.directionUp);
       expect(find.byKey(const Key('ride-clock')), findsOneWidget);
       expect(
         tester.getTopLeft(find.byKey(const Key('ride-clock'))).dy,

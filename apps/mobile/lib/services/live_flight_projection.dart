@@ -19,6 +19,8 @@ enum LiveFlightProjectionStatus {
   landed,
 }
 
+enum LiveFlightProjectionBasis { structuredPlan, liveRecoveryEstimate }
+
 class LiveFlightProjection {
   const LiveFlightProjection({
     required this.track,
@@ -28,6 +30,8 @@ class LiveFlightProjection {
     required this.windFetchedAt,
     required this.windSource,
     required this.duration,
+    required this.basis,
+    required this.limitations,
   });
 
   final List<route.GeoPoint> track;
@@ -37,6 +41,8 @@ class LiveFlightProjection {
   final DateTime windFetchedAt;
   final String windSource;
   final Duration duration;
+  final LiveFlightProjectionBasis basis;
+  final String limitations;
 }
 
 class LiveFlightProjectionAssessment {
@@ -51,13 +57,13 @@ class LiveFlightProjectionAssessment {
     LiveFlightProjectionStatus.available =>
       'Recalculated from the latest balloon fix and forecast wind.',
     LiveFlightProjectionStatus.noStructuredPlan =>
-      'A structured forecast plan is needed for a live projection.',
+      'A live estimate needs terrain-referenced altitude or a structured plan.',
     LiveFlightProjectionStatus.noBalloonFix =>
       'Waiting for the balloon position and altitude.',
     LiveFlightProjectionStatus.staleBalloonFix =>
       'The balloon fix is too old to project safely.',
     LiveFlightProjectionStatus.noCompatibleAltitude =>
-      'The balloon altitude datum cannot be compared with the plan.',
+      'The balloon altitude cannot yet be related to forecast height and terrain.',
     LiveFlightProjectionStatus.noWind => 'No forecast wind field is available.',
     LiveFlightProjectionStatus.staleWind =>
       'The forecast wind field is stale; the last projection is not extended.',
@@ -74,8 +80,9 @@ class LiveFlightProjectionAssessment {
 ///
 /// This is deliberately deterministic and has no network dependency. The wind
 /// controller fetches a bounded field; this engine only consumes a fresh field,
-/// applies the imported ascent/descent limits, and labels the result as model
-/// output. It never changes the pilot's intended landing area.
+/// applies imported ascent/descent limits when supplied, and otherwise explores
+/// a bounded range of plausible flight times and wind levels. Every result is
+/// labelled as model output. It never changes the pilot's intended landing area.
 class LiveFlightProjectionEngine {
   const LiveFlightProjectionEngine({
     this.maximumFixAge = const Duration(seconds: 45),
@@ -96,17 +103,13 @@ class LiveFlightProjectionEngine {
     required LocationSample? balloonFix,
     required WindForecastField? wind,
     required DateTime now,
+    LocationSample? balloonReferenceFix,
     bool allowReferenceWind = false,
     bool flightLanded = false,
   }) {
     if (flightLanded) {
       return const LiveFlightProjectionAssessment(
         LiveFlightProjectionStatus.landed,
-      );
-    }
-    if (plan == null) {
-      return const LiveFlightProjectionAssessment(
-        LiveFlightProjectionStatus.noStructuredPlan,
       );
     }
     if (balloonFix == null || balloonFix.altitudeMeters == null) {
@@ -118,12 +121,6 @@ class LiveFlightProjectionEngine {
     if (balloonFix.ageAt(utcNow) > maximumFixAge) {
       return const LiveFlightProjectionAssessment(
         LiveFlightProjectionStatus.staleBalloonFix,
-      );
-    }
-    final altitudeMsl = _altitudeMsl(plan, balloonFix);
-    if (altitudeMsl == null) {
-      return const LiveFlightProjectionAssessment(
-        LiveFlightProjectionStatus.noCompatibleAltitude,
       );
     }
     if (wind == null) {
@@ -149,18 +146,44 @@ class LiveFlightProjectionEngine {
       );
     }
 
-    final duration = _boundedDuration(plan);
+    final inputs = _projectionInputs(
+      plan: plan,
+      fix: balloonFix,
+      referenceFix: balloonReferenceFix,
+      wind: wind,
+    );
+    if (inputs == null) {
+      return const LiveFlightProjectionAssessment(
+        LiveFlightProjectionStatus.noCompatibleAltitude,
+      );
+    }
+
+    final duration = inputs.duration;
     final primary = _integrate(
       start: balloonFix.position,
-      startAltitudeMsl: altitudeMsl,
+      startAltitudeMsl: inputs.startAltitudeMsl,
       duration: duration,
       wind: wind,
-      altitudeAt: (fraction) =>
-          _plannedAltitude(plan, fraction, startAltitudeMsl: altitudeMsl),
-      constraints: plan.constraints,
+      altitudeAt: plan == null
+          ? (fraction) => _candidateAltitude(
+              fraction: fraction,
+              duration: duration,
+              startAltitudeMsl: inputs.startAltitudeMsl,
+              targetAltitudeMsl: inputs.startAltitudeMsl,
+              landingAltitudeMsl: inputs.landingAltitudeMsl,
+              maximumAscentRate:
+                  inputs.constraints.maximumAscentRateMetersPerSecond,
+              maximumDescentRate:
+                  inputs.constraints.maximumDescentRateMetersPerSecond,
+            )
+          : (fraction) => _plannedAltitude(
+              plan,
+              fraction,
+              startAltitudeMsl: inputs.startAltitudeMsl,
+            ),
+      constraints: inputs.constraints,
       retainTrack: true,
       startedAt: utcNow,
-      datum: balloonFix.altitudeDatum,
     );
     if (primary == null) {
       return const LiveFlightProjectionAssessment(
@@ -169,33 +192,42 @@ class LiveFlightProjectionEngine {
     }
 
     final endpoints = <route.GeoPoint>[];
-    for (final level in openMeteoWindAltitudeLevels) {
-      final target = math.min(
-        level.toDouble(),
-        plan.constraints.altitudeCeilingMetersMsl,
-      );
-      if (target < plan.launchElevationMetersMsl) continue;
-      final endpoint = _integrate(
-        start: balloonFix.position,
-        startAltitudeMsl: altitudeMsl,
-        duration: duration,
-        wind: wind,
-        altitudeAt: (fraction) => _candidateAltitude(
-          fraction: fraction,
-          duration: duration,
-          startAltitudeMsl: altitudeMsl,
-          targetAltitudeMsl: target,
-          landingAltitudeMsl: plan.launchElevationMetersMsl,
-          maximumAscentRate: plan.constraints.maximumAscentRateMetersPerSecond,
-          maximumDescentRate:
-              plan.constraints.maximumDescentRateMetersPerSecond,
-        ),
-        constraints: plan.constraints,
-        retainTrack: false,
-        startedAt: utcNow,
-        datum: balloonFix.altitudeDatum,
-      )?.last;
-      if (endpoint != null) endpoints.add(endpoint);
+    final candidateDurations = plan == null
+        ? [
+            for (final minutes in const [20, 40, 60, 90, 120])
+              Duration(minutes: minutes),
+          ]
+        : [duration];
+    for (final candidateDuration in candidateDurations) {
+      if (candidateDuration > maximumDuration) continue;
+      for (final level in openMeteoWindAltitudeLevels) {
+        final target = math.min(
+          level.toDouble(),
+          inputs.constraints.altitudeCeilingMetersMsl,
+        );
+        if (target < inputs.landingAltitudeMsl) continue;
+        final endpoint = _integrate(
+          start: balloonFix.position,
+          startAltitudeMsl: inputs.startAltitudeMsl,
+          duration: candidateDuration,
+          wind: wind,
+          altitudeAt: (fraction) => _candidateAltitude(
+            fraction: fraction,
+            duration: candidateDuration,
+            startAltitudeMsl: inputs.startAltitudeMsl,
+            targetAltitudeMsl: target,
+            landingAltitudeMsl: inputs.landingAltitudeMsl,
+            maximumAscentRate:
+                inputs.constraints.maximumAscentRateMetersPerSecond,
+            maximumDescentRate:
+                inputs.constraints.maximumDescentRateMetersPerSecond,
+          ),
+          constraints: inputs.constraints,
+          retainTrack: false,
+          startedAt: utcNow,
+        )?.last;
+        if (endpoint != null) endpoints.add(endpoint);
+      }
     }
     endpoints.add(primary.last);
     final envelope = _convexHull(endpoints);
@@ -209,8 +241,76 @@ class LiveFlightProjectionEngine {
         windFetchedAt: wind.fetchedAt.toUtc(),
         windSource: wind.sourceLabel,
         duration: duration,
+        basis: plan == null
+            ? LiveFlightProjectionBasis.liveRecoveryEstimate
+            : LiveFlightProjectionBasis.structuredPlan,
+        limitations: plan == null
+            ? 'No flight plan: explores 20–120 minute continuations and '
+                  'available wind levels using forecast terrain and 5 m/s '
+                  'vertical-rate bounds.'
+            : 'Uses the shared plan duration, altitude ceiling and vertical-rate bounds.',
       ),
     );
+  }
+
+  _ProjectionInputs? _projectionInputs({
+    required ForecastPlanDocument? plan,
+    required LocationSample fix,
+    required LocationSample? referenceFix,
+    required WindForecastField wind,
+  }) {
+    if (plan != null) {
+      final altitude = _altitudeMsl(plan, fix);
+      if (altitude == null) return null;
+      return _ProjectionInputs(
+        startAltitudeMsl: altitude,
+        landingAltitudeMsl: plan.launchElevationMetersMsl,
+        constraints: plan.constraints,
+        duration: _boundedDuration(plan),
+      );
+    }
+    final ground = wind.groundElevationAt(fix.position);
+    if (ground == null) return null;
+    final altitude = switch (fix.altitudeDatum) {
+      AltitudeDatum.wgs84Geoid => fix.altitudeMeters,
+      AltitudeDatum.relativeToLaunch => ground + fix.altitudeMeters!,
+      AltitudeDatum.wgs84Ellipsoid => _terrainReferencedEllipsoidAltitude(
+        fix: fix,
+        referenceFix: referenceFix,
+        wind: wind,
+      ),
+      AltitudeDatum.unknown => null,
+    };
+    if (altitude == null || !altitude.isFinite) return null;
+    final ceiling = math.max(altitude, 2000.0);
+    return _ProjectionInputs(
+      startAltitudeMsl: altitude,
+      landingAltitudeMsl: ground,
+      constraints: ForecastPlanConstraints(
+        altitudeCeilingMetersMsl: ceiling,
+        maximumAscentRateMetersPerSecond: 5,
+        maximumDescentRateMetersPerSecond: 5,
+        minimumDurationMinutes: 10,
+        maximumDurationMinutes: 120,
+      ),
+      duration: const Duration(minutes: 60),
+    );
+  }
+
+  static double? _terrainReferencedEllipsoidAltitude({
+    required LocationSample fix,
+    required LocationSample? referenceFix,
+    required WindForecastField wind,
+  }) {
+    if (referenceFix == null ||
+        referenceFix.altitudeDatum != AltitudeDatum.wgs84Ellipsoid ||
+        referenceFix.altitudeMeters == null) {
+      return null;
+    }
+    final referenceGround = wind.groundElevationAt(referenceFix.position);
+    if (referenceGround == null) return null;
+    return referenceGround +
+        math.max(0, fix.altitudeMeters! - referenceFix.altitudeMeters!);
   }
 
   Duration _boundedDuration(ForecastPlanDocument plan) {
@@ -300,15 +400,12 @@ class LiveFlightProjectionEngine {
     required ForecastPlanConstraints constraints,
     required bool retainTrack,
     required DateTime startedAt,
-    required AltitudeDatum datum,
   }) {
     final totalSeconds = duration.inMilliseconds / 1000;
     final stepSeconds = math.max(1.0, step.inMilliseconds / 1000);
     var position = start;
     var altitude = startAltitudeMsl;
-    final output = <route.GeoPoint>[
-      _routePoint(position, altitude, startedAt, datum),
-    ];
+    final output = <route.GeoPoint>[_routePoint(position, altitude, startedAt)];
     for (var elapsed = 0.0; elapsed < totalSeconds;) {
       final seconds = math.min(stepSeconds, totalSeconds - elapsed);
       final nextElapsed = elapsed + seconds;
@@ -336,7 +433,6 @@ class LiveFlightProjectionEngine {
             position,
             altitude,
             startedAt.add(Duration(milliseconds: (elapsed * 1000).round())),
-            datum,
           ),
         );
       }
@@ -348,15 +444,12 @@ class LiveFlightProjectionEngine {
     live.GeoPoint point,
     double altitudeMsl,
     DateTime recordedAt,
-    AltitudeDatum sourceDatum,
   ) => route.GeoPoint(
     latitude: point.latitude,
     longitude: point.longitude,
     elevationMeters: altitudeMsl,
     altitudeSource: AltitudeSource.unknown,
-    altitudeDatum: sourceDatum == AltitudeDatum.relativeToLaunch
-        ? AltitudeDatum.wgs84Geoid
-        : sourceDatum,
+    altitudeDatum: AltitudeDatum.wgs84Geoid,
     recordedAt: recordedAt,
   );
 
@@ -418,4 +511,18 @@ class LiveFlightProjectionEngine {
     if (hull.length < 3) return const [];
     return List.unmodifiable([...hull, hull.first]);
   }
+}
+
+class _ProjectionInputs {
+  const _ProjectionInputs({
+    required this.startAltitudeMsl,
+    required this.landingAltitudeMsl,
+    required this.constraints,
+    required this.duration,
+  });
+
+  final double startAltitudeMsl;
+  final double landingAltitudeMsl;
+  final ForecastPlanConstraints constraints;
+  final Duration duration;
 }

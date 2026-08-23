@@ -22,6 +22,7 @@ import '../../domain/altitude.dart';
 import '../../domain/distance_unit.dart';
 import '../../domain/hazard.dart';
 import '../../domain/imported_route.dart';
+import '../../domain/map_orientation.dart';
 import '../../domain/quick_message.dart';
 import '../../domain/recorded_route_store.dart';
 import '../../domain/ride_role.dart';
@@ -282,6 +283,9 @@ class RideMapFeature extends StatefulWidget {
     this.aeronauticalChartConfiguration =
         const AeronauticalChartConfiguration(),
     this.windForecastController,
+    this.mapOrientation = MapOrientationMode.directionUp,
+    this.onMapOrientationChanged,
+    this.showAeronauticalChart = false,
   });
 
   factory RideMapFeature.fromEnvironment({
@@ -347,6 +351,9 @@ class RideMapFeature extends StatefulWidget {
     bool? showForecastContext,
     AeronauticalChartConfiguration? aeronauticalChartConfiguration,
     WindForecastController? windForecastController,
+    MapOrientationMode mapOrientation = MapOrientationMode.directionUp,
+    ValueChanged<MapOrientationMode>? onMapOrientationChanged,
+    bool showAeronauticalChart = false,
   }) => RideMapFeature(
     key: key,
     currentPosition: currentPosition,
@@ -413,6 +420,9 @@ class RideMapFeature extends StatefulWidget {
         aeronauticalChartConfiguration ??
         AeronauticalChartConfiguration.fromEnvironment(),
     windForecastController: windForecastController,
+    mapOrientation: mapOrientation,
+    onMapOrientationChanged: onMapOrientationChanged,
+    showAeronauticalChart: showAeronauticalChart,
   );
 
   final ValueListenable<GeoPoint?>? currentPosition;
@@ -515,6 +525,9 @@ class RideMapFeature extends StatefulWidget {
   final bool? showForecastContext;
   final AeronauticalChartConfiguration aeronauticalChartConfiguration;
   final WindForecastController? windForecastController;
+  final MapOrientationMode mapOrientation;
+  final ValueChanged<MapOrientationMode>? onMapOrientationChanged;
+  final bool showAeronauticalChart;
 
   @override
   State<RideMapFeature> createState() => _RideMapFeatureState();
@@ -678,6 +691,9 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         showForecastContext: widget.showForecastContext,
         aeronauticalChartConfiguration: widget.aeronauticalChartConfiguration,
         windForecastController: widget.windForecastController,
+        mapOrientation: widget.mapOrientation,
+        onMapOrientationChanged: widget.onMapOrientationChanged,
+        showAeronauticalChart: widget.showAeronauticalChart,
       );
     },
   );
@@ -780,6 +796,9 @@ class RideMapScreen extends StatefulWidget {
     this.aeronauticalChartConfiguration =
         const AeronauticalChartConfiguration(),
     this.windForecastController,
+    this.mapOrientation = MapOrientationMode.directionUp,
+    this.onMapOrientationChanged,
+    this.showAeronauticalChart = false,
   });
 
   final RouteStore routeStore;
@@ -904,6 +923,9 @@ class RideMapScreen extends StatefulWidget {
   final bool? showForecastContext;
   final AeronauticalChartConfiguration aeronauticalChartConfiguration;
   final WindForecastController? windForecastController;
+  final MapOrientationMode mapOrientation;
+  final ValueChanged<MapOrientationMode>? onMapOrientationChanged;
+  final bool showAeronauticalChart;
 
   @override
   State<RideMapScreen> createState() => _RideMapScreenState();
@@ -939,8 +961,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
       _isBalloonView ? CraftIconStyle.balloon : widget.localMotorcycleStyle;
 
   bool get _showAeronauticalChart =>
+      widget.showAeronauticalChart &&
       _showsForecastContext &&
       widget.aeronauticalChartConfiguration.isCurrentAt(DateTime.now());
+
+  double get _effectiveCameraBearingDegrees =>
+      widget.mapOrientation == MapOrientationMode.northUp
+      ? 0
+      : _cameraBearingDegrees;
 
   bool get _showWindForecast {
     final controller = widget.windForecastController;
@@ -1306,6 +1334,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
       oldWidget.windForecastController?.removeListener(_onWindForecastChanged);
       widget.windForecastController?.addListener(_onWindForecastChanged);
       _onWindForecastChanged();
+    }
+    if (oldWidget.mapOrientation != widget.mapOrientation && _navigationMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_followNavigationCamera(force: true));
+      });
     }
     if (oldWidget.speedLimitDisplay != widget.speedLimitDisplay) {
       if (_ownsSpeedLimitDisplay) _speedLimitDisplay.dispose();
@@ -2248,6 +2281,28 @@ class _RideMapScreenState extends State<RideMapScreen> {
               label: const Text('Follow me'),
             )
           : null;
+      final orientation = widget.onMapOrientationChanged == null
+          ? null
+          : FilledButton.tonalIcon(
+              key: const Key('map-orientation-toggle'),
+              onPressed: () => widget.onMapOrientationChanged!(
+                widget.mapOrientation.toggled,
+              ),
+              icon: Icon(
+                widget.mapOrientation == MapOrientationMode.northUp
+                    ? Icons.explore_outlined
+                    : Icons.navigation_outlined,
+              ),
+              label: Text(widget.mapOrientation.label),
+            );
+      final cameraControls = orientation == null && followMe == null
+          ? null
+          : Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [?orientation, ?followMe],
+            );
 
       if (landscape) {
         final actionLeft =
@@ -2359,7 +2414,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                 child: _chromeRail(
                   key: const Key('map-landscape-right-rail'),
                   alignment: CrossAxisAlignment.end,
-                  children: [?followMe, ?guidance],
+                  children: [?cameraControls, ?guidance],
                 ),
               ),
             ),
@@ -2472,8 +2527,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
                   // Rare, and its own run: it appears only when the map is off
                   // the rider, and the alternative was shrinking a target to fit
                   // it beside three others.
-                  if (followMe != null)
-                    Align(alignment: Alignment.centerLeft, child: followMe),
+                  if (cameraControls != null)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: cameraControls,
+                    ),
                   ?actionCluster,
                   ?completionSuggestion,
                 ],
@@ -3173,11 +3231,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
     );
     var target = lookAhead == 0
         ? position
-        : _pointAhead(position, _cameraBearingDegrees, lookAhead);
+        : _pointAhead(position, _effectiveCameraBearingDegrees, lookAhead);
     if (lateralOffset != 0) {
       target = _pointAhead(
         target,
-        _cameraBearingDegrees + (lateralOffset > 0 ? 90 : -90),
+        _effectiveCameraBearingDegrees + (lateralOffset > 0 ? 90 : -90),
         lateralOffset.abs(),
       );
     }
@@ -3897,7 +3955,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         longitude: framing.target.longitude,
         zoom: cameraPlan.zoom,
         tilt: _basemap.usesMapLibre ? cameraPlan.tilt : 0,
-        bearing: _cameraBearingDegrees,
+        bearing: _effectiveCameraBearingDegrees,
         sourceViewportHeightPixels: _mapViewportHeightPixels,
         sourceViewportWidthPixels: _mapViewportWidthPixels,
         riderViewportFraction: cameraPlan.riderViewportFraction,
@@ -3919,7 +3977,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       longitude: framing.target.longitude,
       zoom: cameraPlan.zoom,
       tilt: cameraPlan.tilt,
-      bearing: _cameraBearingDegrees,
+      bearing: _effectiveCameraBearingDegrees,
     )) {
       return;
     }
@@ -3940,7 +3998,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               ),
               zoom: cameraPlan.zoom,
               tilt: cameraPlan.tilt,
-              bearing: _cameraBearingDegrees,
+              bearing: _effectiveCameraBearingDegrees,
             ),
           ),
           duration: cameraDuration,
@@ -3957,7 +4015,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       _mapController.moveAndRotateAnimatedRaw(
         _latLng(framing.target),
         cameraPlan.zoom,
-        _cameraBearingDegrees,
+        _effectiveCameraBearingDegrees,
         offset: Offset.zero,
         duration: cameraDuration,
         curve: transitionDuration == null
@@ -3981,8 +4039,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
   }
 
   /// A balloon needs geographic context, not a tilted road corridor. It stays
-  /// north-up at a deliberately wider scale, centred on the aircraft, while a
-  /// pan still hands control back to the pilot until they tap Follow me.
+  /// centred at a deliberately wider scale while the selected orientation sets
+  /// the map bearing. A pan still hands control back until Follow me is tapped.
   Future<void> _followBalloonCamera({
     bool force = false,
     Duration? transitionDuration,
@@ -4011,7 +4069,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         longitude: position.longitude,
         zoom: zoom,
         tilt: 0,
-        bearing: 0,
+        bearing: _effectiveCameraBearingDegrees,
         sourceViewportHeightPixels: _mapViewportHeightPixels,
         sourceViewportWidthPixels: _mapViewportWidthPixels,
         riderViewportFraction: 0.5,
@@ -4031,7 +4089,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               target: ml.LatLng(position.latitude, position.longitude),
               zoom: zoom,
               tilt: 0,
-              bearing: 0,
+              bearing: _effectiveCameraBearingDegrees,
             ),
           ),
           duration: transitionDuration ?? const Duration(milliseconds: 480),
@@ -4040,7 +4098,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         _mapController.moveAndRotateAnimatedRaw(
           _latLng(position),
           zoom,
-          0,
+          _effectiveCameraBearingDegrees,
           offset: Offset.zero,
           duration: transitionDuration ?? const Duration(milliseconds: 480),
           curve: Curves.easeInOutCubic,
@@ -4130,12 +4188,15 @@ class _RideMapScreenState extends State<RideMapScreen> {
     final style = overlay.motorcycleStyle;
     return style == null
         ? _IconBadge(icon: overlay.icon, badgeColor: overlay.color, size: 34)
-        : RiderMarkerBadge(
-            style: style,
-            symbol: overlay.riderSymbol,
-            displayName: overlay.riderDisplayName ?? overlay.label,
-            badgeColor: overlay.color,
-            size: 34,
+        : GestureDetector(
+            onTap: () => _showMessage(overlay.label),
+            child: RiderMarkerBadge(
+              style: style,
+              symbol: overlay.riderSymbol,
+              displayName: overlay.riderDisplayName ?? overlay.label,
+              badgeColor: overlay.color,
+              size: 34,
+            ),
           );
   }
 

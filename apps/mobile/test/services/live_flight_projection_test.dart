@@ -71,6 +71,85 @@ void main() {
     },
   );
 
+  test('forms a bounded live recovery envelope without an imported plan', () {
+    final now = DateTime.utc(2026, 8, 23, 7, 5);
+    final result = const LiveFlightProjectionEngine().evaluate(
+      plan: null,
+      balloonFix: LocationSample(
+        position: const GeoPoint(latitude: 51.5, longitude: -2.6),
+        recordedAt: now.subtract(const Duration(seconds: 5)),
+        accuracyMeters: 6,
+        altitudeMeters: 300,
+        altitudeSource: AltitudeSource.gnss,
+        altitudeDatum: AltitudeDatum.wgs84Geoid,
+      ),
+      wind: WindForecastField(
+        columns: const [
+          WindForecastColumn(
+            position: GeoPoint(latitude: 51.5, longitude: -2.6),
+            groundElevationMetersMsl: 92,
+            vectors: vectors,
+          ),
+        ],
+        validAt: now,
+        fetchedAt: now.subtract(const Duration(minutes: 3)),
+        origin: WindForecastOrigin.openMeteoUkmo,
+        sourceLabel: OpenMeteoWindProvider.sourceLabel,
+      ),
+      now: now,
+    );
+
+    expect(result.status, LiveFlightProjectionStatus.available);
+    expect(
+      result.projection?.basis,
+      LiveFlightProjectionBasis.liveRecoveryEstimate,
+    );
+    expect(result.projection?.track.first.elevationMeters, 300);
+    expect(result.projection?.landingEnvelope.length, greaterThanOrEqualTo(4));
+    expect(result.projection?.limitations, contains('20–120 minute'));
+  });
+
+  test('terrain-references Android ellipsoid movement from its first fix', () {
+    final now = DateTime.utc(2026, 8, 23, 7, 5);
+    const position = GeoPoint(latitude: 51.5, longitude: -2.6);
+    final result = const LiveFlightProjectionEngine().evaluate(
+      plan: null,
+      balloonReferenceFix: LocationSample(
+        position: position,
+        recordedAt: now.subtract(const Duration(minutes: 5)),
+        accuracyMeters: 6,
+        altitudeMeters: 150,
+        altitudeSource: AltitudeSource.gnss,
+        altitudeDatum: AltitudeDatum.wgs84Ellipsoid,
+      ),
+      balloonFix: LocationSample(
+        position: position,
+        recordedAt: now,
+        accuracyMeters: 6,
+        altitudeMeters: 350,
+        altitudeSource: AltitudeSource.gnss,
+        altitudeDatum: AltitudeDatum.wgs84Ellipsoid,
+      ),
+      wind: WindForecastField(
+        columns: const [
+          WindForecastColumn(
+            position: position,
+            groundElevationMetersMsl: 92,
+            vectors: vectors,
+          ),
+        ],
+        validAt: now,
+        fetchedAt: now,
+        origin: WindForecastOrigin.openMeteoUkmo,
+        sourceLabel: OpenMeteoWindProvider.sourceLabel,
+      ),
+      now: now,
+    );
+
+    expect(result.status, LiveFlightProjectionStatus.available);
+    expect(result.projection?.track.first.elevationMeters, 292);
+  });
+
   test('refuses stale fixes, stale wind and incompatible altitude data', () {
     final now = DateTime.utc(2026, 8, 23, 7, 5);
     final field = WindForecastField(

@@ -38,6 +38,7 @@ import '../../domain/hazard.dart';
 import '../../domain/imported_route.dart' as route_domain;
 import '../../domain/landing_zone.dart';
 import '../../domain/live_route_state.dart';
+import '../../domain/map_orientation.dart';
 import '../../domain/operational_boundary.dart';
 import '../../domain/map_style_mode.dart';
 import '../../domain/quick_message.dart';
@@ -76,6 +77,7 @@ import '../../services/fixed_speed_camera_provider.dart';
 import '../../services/gpx_import_source.dart';
 import '../../services/measurement_formatter.dart';
 import '../../services/live_flight_projection.dart';
+import '../../services/map_orientation_preferences.dart';
 import '../../services/native_push_token_source.dart';
 import '../../services/open_meteo_wind.dart';
 import '../../services/operational_boundary_monitor.dart';
@@ -379,6 +381,8 @@ class _CraftMapLocation {
     required this.riderSymbol,
     required this.riderColor,
     required this.altitudeMeters,
+    required this.speedMetersPerSecond,
+    required this.headingDegrees,
     required this.point,
   });
 
@@ -391,8 +395,36 @@ class _CraftMapLocation {
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final double? altitudeMeters;
+  final double? speedMetersPerSecond;
+  final double? headingDegrees;
   final route_domain.GeoPoint point;
 }
+
+@visibleForTesting
+String? craftGroundMotionLabel({
+  required double? speedMetersPerSecond,
+  required double? headingDegrees,
+}) {
+  final parts = <String>[];
+  if (speedMetersPerSecond != null &&
+      speedMetersPerSecond.isFinite &&
+      speedMetersPerSecond >= 0) {
+    parts.add('${(speedMetersPerSecond * 3.6).round()} km/h');
+  }
+  if (headingDegrees != null && headingDegrees.isFinite) {
+    final heading = headingDegrees.round() % 360;
+    const compass = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    parts.add('${compass[((heading + 22.5) ~/ 45) % 8]} $heading°');
+  }
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
+@visibleForTesting
+bool roleShowsLiveRecoveryProjection(FlightRole? role) =>
+    role == FlightRole.pilot ||
+    role == FlightRole.balloonCrew ||
+    role == FlightRole.chaseDriver ||
+    role == FlightRole.chaseCrew;
 
 /// What the ride map should present of the quick messages in the journal, and
 /// the most urgent one per sender so their marker can say what they raised.
@@ -1414,6 +1446,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         LiveFlightProjectionStatus.noStructuredPlan,
       );
   String? _liveFlightProjectionFingerprint;
+  LocationSample? _balloonReferenceFix;
   String? _recordedWindContextFingerprint;
   bool _simulationRerouteInFlight = false;
   Duration? _lastSimulationRerouteElapsed;
@@ -1441,6 +1474,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   String? _trafficRerouteError;
   int _routeGeneration = 0;
   int _selectedIndex = 0;
+  late MapOrientationMode _mapOrientationMode;
+  MapOrientationPreferences? _mapOrientationPreferences;
   Object? _changeRouteRequestToken;
   PickedGpxFile? _pendingSharedGpxFile;
   PendingInAppRoute? _pendingInAppRoute;
@@ -1492,6 +1527,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   @override
   void initState() {
     super.initState();
+    _mapOrientationMode =
+        widget.rideController.session?.flightRole.isAboardBalloon == true
+        ? MapOrientationMode.northUp
+        : MapOrientationMode.directionUp;
+    unawaited(_loadMapOrientation());
     WidgetsBinding.instance.addObserver(this);
     // Headless and test surfaces have no audio to speak through, and must not
     // construct a platform speech engine.
@@ -1578,6 +1618,33 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _updateMapOverlays(updateDerivedState: false);
       },
     );
+  }
+
+  MapOrientationScope get _mapOrientationScope =>
+      widget.rideController.session?.flightRole.isAboardBalloon == true
+      ? MapOrientationScope.phoneBalloon
+      : MapOrientationScope.phoneChase;
+
+  Future<void> _loadMapOrientation() async {
+    final preferences = MapOrientationPreferences(
+      await SharedPreferences.getInstance(),
+    );
+    final fallback = _mapOrientationMode;
+    final stored = preferences.read(_mapOrientationScope, fallback: fallback);
+    if (!mounted) return;
+    setState(() {
+      _mapOrientationPreferences = preferences;
+      _mapOrientationMode = stored;
+    });
+  }
+
+  Future<void> _setMapOrientation(MapOrientationMode mode) async {
+    if (_mapOrientationMode == mode) return;
+    setState(() => _mapOrientationMode = mode);
+    final preferences = _mapOrientationPreferences;
+    if (preferences != null) {
+      await preferences.write(_mapOrientationScope, mode);
+    }
   }
 
   /// A GPX file can arrive (via the platform's "Open in..." delivery) while
@@ -2616,6 +2683,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               : reporter?.riderSymbol ?? riderSymbolDefault,
           riderColor: reporter?.riderColor ?? riderColorDefault,
           altitudeMeters: sample.altitudeMeters,
+          speedMetersPerSecond: sample.speedMetersPerSecond,
+          headingDegrees: sample.headingDegrees,
           point: route_domain.GeoPoint(
             latitude: sample.position.latitude,
             longitude: sample.position.longitude,
@@ -2827,6 +2896,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                         riderSymbol: rider.riderSymbol,
                         riderColor: rider.riderColor,
                         altitudeMeters: rider.altitudeMeters,
+                        speedMetersPerSecond: rider.speedMetersPerSecond,
+                        headingDegrees: rider.headingDegrees,
                         point: route_domain.GeoPoint(
                           latitude: rider.position.latitude,
                           longitude: rider.position.longitude,
@@ -2862,6 +2933,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             final label = [
               location.displayName,
               roleSuffix,
+              ?craftGroundMotionLabel(
+                speedMetersPerSecond: location.speedMetersPerSecond,
+                headingDegrees: location.headingDegrees,
+              ),
               if (isBalloonCraft && location.altitudeMeters != null)
                 '${location.altitudeMeters!.round()} m',
               ?ageSuffix,
@@ -3266,6 +3341,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final tracks = const CraftTrackReducer().fromEvents(
       widget.rideController.events,
     );
+    final balloonTrack = tracks.where((track) => track.isBalloon).firstOrNull;
+    if (balloonTrack?.samples.firstOrNull case final reference?) {
+      final previous = _balloonReferenceFix;
+      if (previous == null ||
+          reference.recordedAt.isBefore(previous.recordedAt)) {
+        _balloonReferenceFix = reference;
+      }
+    }
     final roster = widget.rideController.resolveCraftRoster();
     _publishRiderTrails(
       [
@@ -3442,9 +3525,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   List<MapOverlayTrace> get _liveProjectionTraces {
-    final role = widget.rideController.session?.flightRole;
     final projection = _liveFlightProjection.projection;
-    if (role == FlightRole.chaseDriver || projection == null) return const [];
+    if (projection == null) return const [];
     final validAt = projection.windValidAt.toLocal();
     return [
       if (projection.track.length >= 2)
@@ -3452,7 +3534,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           id: 'live-flight-projection',
           points: _balloonTrailSimplifier.simplify(projection.track),
           label:
-              'Live projection · ${projection.windSource} · wind valid $validAt',
+              'Live projection · ${projection.windSource} · wind valid $validAt · ${projection.limitations}',
           kind: RiderTrailKind.liveProjectionTrack,
         ),
       if (projection.landingEnvelope.length >= 4)
@@ -3460,7 +3542,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           id: 'live-possible-landing-envelope',
           points: _trailSimplifier.simplify(projection.landingEnvelope),
           label:
-              'Live possible-landing envelope · forecast wind valid $validAt · suitability unverified',
+              'Live possible-landing envelope · forecast wind valid $validAt · ${projection.limitations} Landing suitability and access unverified.',
           kind: RiderTrailKind.liveLandingEnvelope,
         ),
     ];
@@ -3539,7 +3621,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     return WindForecastField(
       columns: [
         for (final point in windForecastGrid(flight.launch))
-          WindForecastColumn(position: point, vectors: vectors),
+          WindForecastColumn(
+            position: point,
+            vectors: vectors,
+            groundElevationMetersMsl: flight.launchElevationMetres,
+          ),
       ],
       validAt: sourceTime,
       fetchedAt: sourceTime,
@@ -3967,8 +4053,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   void _refreshWindForFlightContext() {
     final wind = _windForecastController;
-    final role = widget.rideController.session?.flightRole;
-    if (wind == null || role == FlightRole.chaseDriver) return;
+    if (wind == null) return;
     final balloon = _latestBalloonFix();
     final local = _mapPosition.value;
     final center =
@@ -4411,6 +4496,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           flightRole == FlightRole.pilot ||
           flightRole == FlightRole.balloonCrew ||
           flightRole == FlightRole.chaseCrew,
+      mapOrientation: _mapOrientationMode,
+      onMapOrientationChanged: (mode) => unawaited(_setMapOrientation(mode)),
     );
     if (!_selectingLandingZone &&
         !_selectingConfirmedLandingPoint &&
@@ -4784,10 +4871,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   void _refreshLiveFlightProjection() {
     final role = widget.rideController.session?.flightRole;
-    final showsProjection =
-        role == FlightRole.pilot ||
-        role == FlightRole.balloonCrew ||
-        role == FlightRole.chaseCrew;
+    final showsProjection = roleShowsLiveRecoveryProjection(role);
     final plan = showsProjection
         ? _liveRoutes.sharedFlightPlan?.forecastPlan
         : null;
@@ -4811,6 +4895,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       balloonFix: fix,
       wind: field,
       now: now,
+      balloonReferenceFix: _balloonReferenceFix,
       allowReferenceWind: _isSimulation,
       flightLanded: widget.rideController.flightLanding.isLanded,
     );
