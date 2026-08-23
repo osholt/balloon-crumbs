@@ -10,6 +10,7 @@ import '../../controllers/chase_vehicle_controller.dart';
 import '../../controllers/distance_unit_controller.dart';
 import '../../controllers/completed_rides_controller.dart';
 import '../../controllers/map_style_mode_controller.dart';
+import '../../controllers/land_access_note_controller.dart';
 import '../../controllers/ride_code_preference_controller.dart';
 import '../../controllers/ride_controller.dart';
 import '../../controllers/route_progress_display_controller.dart';
@@ -68,6 +69,7 @@ class HomeScreen extends StatefulWidget {
     this.testControl,
     this.spokenGuidance,
     this.rideDiagnostics,
+    this.landAccessNotes,
     this.restoringRideCode,
     this.restorationError,
     this.onRetryRestoration,
@@ -102,6 +104,7 @@ class HomeScreen extends StatefulWidget {
   /// *here* offers the recorder too — wiring only the ride shell's sheet is
   /// what hid it from a tester who had never started a ride (#419).
   final RideDiagnosticsController? rideDiagnostics;
+  final LandAccessNoteController? landAccessNotes;
 
   final String? restoringRideCode;
   final Object? restorationError;
@@ -502,6 +505,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           testControl: widget.testControl,
                           spokenGuidance: widget.spokenGuidance,
                           rideDiagnostics: widget.rideDiagnostics,
+                          landAccessNotes: widget.landAccessNotes,
+                          currentPosition: _position.value == null
+                              ? null
+                              : awareness_geo.GeoPoint(
+                                  latitude: _position.value!.latitude,
+                                  longitude: _position.value!.longitude,
+                                ),
                         ),
                         icon: const Icon(Icons.settings_outlined),
                       ),

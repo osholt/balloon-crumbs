@@ -6,6 +6,7 @@ import '../controllers/chase_vehicle_controller.dart';
 import '../controllers/distance_unit_controller.dart';
 import '../controllers/completed_rides_controller.dart';
 import '../controllers/map_style_mode_controller.dart';
+import '../controllers/land_access_note_controller.dart';
 import '../controllers/ride_code_preference_controller.dart';
 import '../controllers/ride_controller.dart';
 import '../controllers/ride_invitation_link_controller.dart';
@@ -45,6 +46,7 @@ class BalloonCrumbsApp extends StatelessWidget {
     this.testControlRegistry,
     this.spokenGuidance,
     this.rideDiagnostics,
+    this.landAccessNotes,
     this.enableNativeServices = true,
     this.initializeController,
     this.startupFallbackAfter = const Duration(seconds: 2),
@@ -77,6 +79,7 @@ class BalloonCrumbsApp extends StatelessWidget {
   /// Records what the app said beside what the bike did, when an instrumented
   /// build has it switched on (#419). Null in an ordinary build.
   final RideDiagnosticsController? rideDiagnostics;
+  final LandAccessNoteController? landAccessNotes;
 
   final bool enableNativeServices;
 
@@ -146,6 +149,7 @@ class BalloonCrumbsApp extends StatelessWidget {
             testControl: testControl,
             spokenGuidance: spokenGuidance,
             rideDiagnostics: rideDiagnostics,
+            landAccessNotes: landAccessNotes,
             restoringRideCode: controller.session?.rideCode,
             restorationError: restorationError,
             onRetryRestoration: retryRestoration,
@@ -186,6 +190,7 @@ class BalloonCrumbsApp extends StatelessWidget {
             testControlRegistry: testControlRegistry,
             spokenGuidance: spokenGuidance,
             rideDiagnostics: rideDiagnostics,
+            landAccessNotes: landAccessNotes,
             onJoinGroupRequested: requestJoinGroup,
           );
         }
@@ -208,6 +213,7 @@ class BalloonCrumbsApp extends StatelessWidget {
           testControl: testControl,
           spokenGuidance: spokenGuidance,
           rideDiagnostics: rideDiagnostics,
+          landAccessNotes: landAccessNotes,
           openJoinGroup: openJoinGroup,
           onJoinGroupOpened: consumeJoinGroupRequest,
           enableNativeServices: enableNativeServices,
