@@ -738,12 +738,12 @@ and a UI rebuild cannot change authority.
 
 ### P0.2 Vocabulary migration
 
-- [ ] A test scans all production user-visible strings and fails on whole-word
+- [x] A test scans all production user-visible strings and fails on whole-word
       `ride`, `rider`, `leader`, `bike` or `motorcycle`, excluding documented
       compatibility/debug fixtures.
-- [ ] Navigation labels, dialogs, snackbars, notifications, accessibility text,
+- [x] Navigation labels, dialogs, snackbars, notifications, accessibility text,
       CarPlay/Android projections and exports use flight/craft roles.
-- [ ] Internal legacy field names are documented and cannot be accidentally
+- [x] Internal legacy field names are documented and cannot be accidentally
       rendered directly.
 
 ### P0.3 Distinct live experiences

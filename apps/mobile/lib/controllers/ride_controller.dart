@@ -1996,7 +1996,7 @@ class RideController extends ChangeNotifier {
       _errorMessage = 'That action could not be saved. Please try again.';
       _errorIsRetryable = true;
       if (kDebugMode) {
-        debugPrint('Ride action failed: $error\n$stackTrace');
+        debugPrint('Flight action failed: $error\n$stackTrace');
       }
     } finally {
       _busy = false;
@@ -2156,7 +2156,9 @@ class RideController extends ChangeNotifier {
     } on Object catch (error, stackTrace) {
       _rideArchiveError = rideArchiveFailedMessage;
       if (kDebugMode) {
-        debugPrint('Could not archive the completed ride: $error\n$stackTrace');
+        debugPrint(
+          'Could not archive the completed flight: $error\n$stackTrace',
+        );
       }
     }
   }

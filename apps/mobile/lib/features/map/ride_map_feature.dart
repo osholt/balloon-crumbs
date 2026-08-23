@@ -2932,7 +2932,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               commanded.target,
             );
       debugPrint(
-        'Ride map camera: centre=${camera.target.latitude.toStringAsFixed(6)},'
+        'Flight map camera: centre=${camera.target.latitude.toStringAsFixed(6)},'
         '${camera.target.longitude.toStringAsFixed(6)} '
         'zoom=${camera.zoom.toStringAsFixed(2)} '
         'follow=$_navigationMode '
@@ -3557,7 +3557,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
     _mapPointerOrigins[event.pointer] = event.localPosition;
     if (_mapPointerOrigins.length > 1) {
       if (kDebugMode) {
-        debugPrint('Ride map gesture: pinch started; handing camera to rider.');
+        debugPrint(
+          'Flight map gesture: pinch started; handing camera to crew.',
+        );
       }
       _suppressFollowForMapGesture();
     }
@@ -3568,7 +3570,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     if (origin != null && (event.localPosition - origin).distance >= 8) {
       if (kDebugMode) {
         debugPrint(
-          'Ride map gesture: pan threshold crossed; handing camera to rider.',
+          'Flight map gesture: pan threshold crossed; handing camera to crew.',
         );
       }
       _suppressFollowForMapGesture();
@@ -4489,7 +4491,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     } on Object catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint(
-          'Could not prepare MapLibre ride layers: $error\n$stackTrace',
+          'Could not prepare MapLibre flight layers: $error\n$stackTrace',
         );
       }
     }
@@ -4572,7 +4574,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await controller.setGeoJsonSource(_overlaySource, _overlayGeoJson());
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('Could not refresh MapLibre ride layers: $error');
+        debugPrint('Could not refresh MapLibre flight layers: $error');
       }
     }
   }

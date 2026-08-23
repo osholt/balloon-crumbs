@@ -198,7 +198,9 @@ class RelayEngine {
     if (config.rideId.isEmpty ||
         config.localDeviceId.isEmpty ||
         config.rideSecret.length < 16) {
-      throw ArgumentError('A complete, authenticated ride session is required');
+      throw ArgumentError(
+        'A complete, authenticated flight session is required',
+      );
     }
     await stop();
     _config = config;
@@ -216,7 +218,7 @@ class RelayEngine {
   Future<void> enqueueLocal(RideEvent event) async {
     final config = _requireConfig();
     if (event.rideId != config.rideId) {
-      throw ArgumentError('Cannot relay an event from another ride');
+      throw ArgumentError('Cannot relay an event from another flight');
     }
     final now = _clock();
     final defaultLifetime = switch (event.type) {

@@ -181,15 +181,15 @@ class RideSummaryExporter {
 
   String toCsv(RideSummary summary) {
     final rows = <List<Object?>>[
-      ['ride_code', summary.rideCode],
-      ['ride_id', summary.rideId],
-      ['rider', summary.displayName],
+      ['flight_code', summary.rideCode],
+      ['flight_id', summary.rideId],
+      ['crew_member', summary.displayName],
       ['started_at_utc', summary.startedAt.toUtc().toIso8601String()],
       ['ended_at_utc', summary.endedAt?.toUtc().toIso8601String()],
       ['generated_at_utc', summary.generatedAt.toUtc().toIso8601String()],
-      ['ride_duration_seconds', summary.rideDuration.inSeconds],
+      ['flight_duration_seconds', summary.rideDuration.inSeconds],
       ['event_count', summary.eventCount],
-      ['rider_count', summary.riderCount],
+      ['crew_count', summary.riderCount],
       ['distance_meters', summary.totalDistanceMeters.round()],
     ];
     return '${rows.map(_csvRow).join('\r\n')}\r\n';

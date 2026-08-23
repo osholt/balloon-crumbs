@@ -25,7 +25,7 @@ class RideEventAuthenticator {
   /// also releases its entry when the event is collected, so a removed ride
   /// leaves nothing behind.
   static final Expando<_Verdict> _verdicts = Expando<_Verdict>(
-    'ride event signature verdict',
+    'flight event signature verdict',
   );
 
   /// How many events have actually been authenticated, as opposed to answered

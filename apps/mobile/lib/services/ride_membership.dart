@@ -295,7 +295,7 @@ class RideLiveView {
   RideLiveView._(this.participants, this.renderedPositions)
     : assert(
         participants.every((participant) => participant.hasStatedPositionState),
-        'A rider in the live count must have a position or a stated reason.',
+        'A crew member in the live count must have a position or a stated reason.',
       );
 
   /// Builds the reconciled view from the membership roster and the reconciled

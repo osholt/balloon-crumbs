@@ -117,6 +117,27 @@ import 'observer_access_sheet.dart';
 import 'ride_dashboard.dart';
 import 'ride_roster_sheet.dart';
 
+const _driverTargetChangeMaximumSpeedMetersPerSecond = 0.75;
+const _driverTargetChangeMaximumFixAge = Duration(seconds: 10);
+
+@visibleForTesting
+bool canChangeChaseGuidanceTarget({
+  required FlightRole role,
+  required MapNavigationPosition? navigation,
+  required DateTime now,
+}) {
+  if (role == FlightRole.chaseCrew) return true;
+  if (role != FlightRole.chaseDriver || navigation == null) return false;
+  final age = now.difference(navigation.recordedAt);
+  final speed = navigation.speedMetersPerSecond;
+  return !age.isNegative &&
+      age <= _driverTargetChangeMaximumFixAge &&
+      speed != null &&
+      speed.isFinite &&
+      speed >= 0 &&
+      speed <= _driverTargetChangeMaximumSpeedMetersPerSecond;
+}
+
 /// Whether a newly calculated route should wait before replacing the current
 /// junction instruction.
 ///
@@ -1369,7 +1390,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       wakeLock: widget.screenWakeLock,
       reassertInterval: widget.screenWakeReassertInterval,
       onError: (error, _) {
-        if (kDebugMode) debugPrint('Could not enforce ride wake lock: $error');
+        if (kDebugMode) {
+          debugPrint('Could not enforce flight wake lock: $error');
+        }
       },
     )..start();
     final carPlayRouting = RoutingConfiguration.fromEnvironment();
@@ -3028,7 +3051,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       }
     } catch (error, stackTrace) {
       if (kDebugMode) {
-        debugPrint('Could not end the completed ride: $error\n$stackTrace');
+        debugPrint('Could not end the completed flight: $error\n$stackTrace');
       }
     } finally {
       _autoEndingRide = false;
@@ -3630,7 +3653,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       await locationController.resumeIfAuthorized();
     } on Object catch (error, stackTrace) {
       if (kDebugMode) {
-        debugPrint('Could not start GPS before the ride: $error\n$stackTrace');
+        debugPrint(
+          'Could not start GPS before the flight: $error\n$stackTrace',
+        );
       }
     }
   }
@@ -4449,6 +4474,24 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   Future<void> _chooseChaseGuidanceTarget() async {
+    final role = widget.rideController.session?.flightRole;
+    if (role == null ||
+        !canChangeChaseGuidanceTarget(
+          role: role,
+          navigation: _mapNavigationPosition.value,
+          now: DateTime.now(),
+        )) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Stop the chase vehicle before changing its guidance target.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     final landing = _currentChaseGuidanceDestination(
       target: ChaseGuidanceTarget.landingArea,
     );
@@ -4672,7 +4715,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         distanceMeters: previous.distanceMeters,
         armed: false,
         clearedBy: _dismissedEnforcementAlertId == previous.hazard.id
-            ? 'rider tap'
+            ? 'crew tap'
             : 'no longer detected',
       );
     }
@@ -4931,14 +4974,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               !locationController.status.canSample)) {
         final added = _warnings.add(
           'Open Balloon Crumbs on the iPhone and allow location access before '
-          'starting the ride from CarPlay.',
+          'starting the flight from CarPlay.',
         );
         _updateMapOverlays(updateDerivedState: false);
         if (added && mounted) setState(() {});
         return;
       }
 
-      _diagnostics?.recordNote('start ride accepted from CarPlay');
+      _diagnostics?.recordNote('start flight accepted from CarPlay');
       if (await _commitRideStart(source: 'CarPlay')) {
         await _resumeLocationForActiveRide();
       }
@@ -4959,11 +5002,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return true;
     } on Object catch (error, stackTrace) {
       _diagnostics?.recordNote(
-        'start ride failed from $source: ${error.runtimeType}: $error',
+        'start flight failed from $source: ${error.runtimeType}: $error',
       );
       if (kDebugMode) {
         debugPrint(
-          'Could not start the ride from $source: $error\n$stackTrace',
+          'Could not start the flight from $source: $error\n$stackTrace',
         );
       }
       final message = source == 'CarPlay'
@@ -5274,7 +5317,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // the gate; no entry at all means the tap never reached Dart.
     final controller = widget.rideController;
     _diagnostics?.recordNote(
-      'start ride tapped on the phone: '
+      'start flight tapped on the phone: '
       'role=${controller.session?.role.name ?? 'none'} '
       'started=${controller.rideStarted} '
       'busy=${controller.busy} '
@@ -5282,7 +5325,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
     if (_rideStartFlowInProgress) {
       _diagnostics?.recordNote(
-        'start ride refused before the dialog: another start flow is active',
+        'start flight refused before the dialog: another start flow is active',
       );
       return;
     }
@@ -5290,7 +5333,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     try {
       if (!controller.hasFlightAuthority || controller.rideStarted) {
         _diagnostics?.recordNote(
-          'start ride refused before the dialog: not the leader, or already '
+          'start flight refused before the dialog: no pilot authority, or already '
           'started',
         );
         return;
@@ -5348,7 +5391,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         ),
       );
       _diagnostics?.recordNote(
-        'start ride decision: ${decision?.name ?? 'dismissed'}',
+        'start flight decision: ${decision?.name ?? 'dismissed'}',
       );
       if (decision == _StartRideDecision.chooseRoute) {
         _requestRouteChange();
@@ -5439,7 +5482,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         !_isSimulation &&
         _isChaserPerspective &&
         widget.rideController.rideStarted &&
-        !widget.rideController.rideEnded,
+        !widget.rideController.rideEnded &&
+        canChangeChaseGuidanceTarget(
+          role:
+              widget.rideController.session?.flightRole ?? FlightRole.observer,
+          navigation: _mapNavigationPosition.value,
+          now: DateTime.now(),
+        ),
     chaseGuidanceLabel: _chaseGuidanceRouting
         ? 'Calculating a road rendezvous…'
         : _chaseGuidanceTarget == null
@@ -6264,30 +6313,46 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     await widget.rideController.restartSimulationRide(riderCount: riderCount);
   }
 
-  Widget _buildDetails() => RideDashboard(
-    controller: widget.rideController,
-    distanceUnits: widget.distanceUnits,
-    rideActions: _buildRideActions(),
-    onOpenRoster: _openRoster,
-    relayController: _relayController,
-    internetRelayController: _internetRelayController,
-    onSendQuickMessage: _sendLocalQuickMessage,
-    localObserverAssistanceActive:
-        _observerAccessController?.localAssistance != null,
-    serviceWarning: _warnings.isEmpty ? null : _warnings.join('\n'),
-    connectivity: _connectivitySummary,
-    sharedFlightPlan: _liveRoutes.sharedFlightPlan,
-    vehicleRoadRoute: _liveRoutes.vehicleRoadRoute,
-    navigationPosition: _mapNavigationPosition,
-    windForecast: _windForecastController,
-    liveFlightProjection: _liveFlightProjection,
-    chaseGuidanceLabel: _chaseGuidanceRouting
-        ? 'Calculating a road rendezvous…'
-        : _chaseGuidanceTarget?.label,
-    onUpdateFlightPlan: _requestRouteChange,
-    onUpdateLandingArea: () => unawaited(_chooseLandingZoneOnMap()),
-    onChooseChaseGuidance: () => unawaited(_chooseChaseGuidanceTarget()),
-  );
+  Widget _buildDetails() {
+    final role =
+        widget.rideController.session?.flightRole ?? FlightRole.observer;
+    final canChangeChaseTarget = canChangeChaseGuidanceTarget(
+      role: role,
+      navigation: _mapNavigationPosition.value,
+      now: DateTime.now(),
+    );
+    return RideDashboard(
+      controller: widget.rideController,
+      distanceUnits: widget.distanceUnits,
+      rideActions: _buildRideActions(),
+      onOpenRoster: _openRoster,
+      relayController: _relayController,
+      internetRelayController: _internetRelayController,
+      onSendQuickMessage: _sendLocalQuickMessage,
+      localObserverAssistanceActive:
+          _observerAccessController?.localAssistance != null,
+      serviceWarning: _warnings.isEmpty ? null : _warnings.join('\n'),
+      connectivity: _connectivitySummary,
+      sharedFlightPlan: _liveRoutes.sharedFlightPlan,
+      vehicleRoadRoute: _liveRoutes.vehicleRoadRoute,
+      navigationPosition: _mapNavigationPosition,
+      windForecast: _windForecastController,
+      liveFlightProjection: _liveFlightProjection,
+      chaseGuidanceLabel: _chaseGuidanceRouting
+          ? 'Calculating a road rendezvous…'
+          : role == FlightRole.chaseDriver && !canChangeChaseTarget
+          ? [
+              if (_chaseGuidanceTarget != null) _chaseGuidanceTarget!.label,
+              'stop to change target',
+            ].join(' · ')
+          : _chaseGuidanceTarget?.label,
+      onUpdateFlightPlan: _requestRouteChange,
+      onUpdateLandingArea: () => unawaited(_chooseLandingZoneOnMap()),
+      onChooseChaseGuidance: canChangeChaseTarget
+          ? () => unawaited(_chooseChaseGuidanceTarget())
+          : null,
+    );
+  }
 
   Widget _buildSettings() => SafeArea(
     child: UnitSettingsSheet(

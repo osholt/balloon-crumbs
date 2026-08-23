@@ -130,7 +130,7 @@ class RelayProtocol {
     }
     final rideId = _boundedString(json['rideId'], 'rideId', 128);
     if (rideId != expectedRideId) {
-      throw const RelayProtocolException('Frame belongs to another ride');
+      throw const RelayProtocolException('Frame belongs to another flight');
     }
     final senderId = _boundedString(json['senderId'], 'senderId', 128);
     final frameId = _boundedString(json['frameId'], 'frameId', 128);
@@ -183,7 +183,7 @@ class RelayProtocol {
       );
       if (riderId != senderId) {
         throw const RelayProtocolException(
-          'Presence rider does not match sender',
+          'Presence participant does not match sender',
         );
       }
       final expiresAt = _date(presence['expiresAt'], 'presence expiresAt');
@@ -284,7 +284,7 @@ class RelayProtocol {
         throw const RelayProtocolException('Event schema is invalid');
       }
       if (event.rideId != rideId) {
-        throw const RelayProtocolException('Event ride does not match frame');
+        throw const RelayProtocolException('Event flight does not match frame');
       }
       final firstSeenAt = _date(queued['firstSeenAt'], 'firstSeenAt');
       final expiresAt = _date(queued['expiresAt'], 'expiresAt');
@@ -412,7 +412,7 @@ class RelayProtocol {
 
   void _requireSecret(String secret) {
     if (secret.length < 16 || secret.length > 512) {
-      throw const RelayProtocolException('Ride secret is unavailable');
+      throw const RelayProtocolException('Flight secret is unavailable');
     }
   }
 }

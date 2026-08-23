@@ -328,12 +328,12 @@ void main() {
         hazardType: 'speedCamera',
         distanceMeters: 0,
         armed: false,
-        clearedBy: 'rider tap',
+        clearedBy: 'crew tap',
       );
 
       final report = recorder.render();
       expect(report, contains('ENFORCE    armed  speedCamera  1600 m'));
-      expect(report, contains('cleared by rider tap'));
+      expect(report, contains('cleared by crew tap'));
     });
 
     test('a recalculation is recorded either way (#414)', () {
