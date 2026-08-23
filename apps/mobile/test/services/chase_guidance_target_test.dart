@@ -1,5 +1,7 @@
+import 'package:balloon_crumbs/domain/craft.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart';
 import 'package:balloon_crumbs/domain/landing_zone.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
 import 'package:balloon_crumbs/domain/rider_location.dart';
 import 'package:balloon_crumbs/services/chase_guidance_target.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -79,7 +81,97 @@ void main() {
       isTrue,
     );
   });
+
+  test('devices aboard one vehicle share its latest target choice', () {
+    final events = [
+      _event('register', 'driver', RideEventType.craftRegistered, now, {
+        'craftId': 'rover',
+        'kind': CraftKind.vehicle.name,
+      }),
+      _event(
+        'attach-driver',
+        'driver',
+        RideEventType.deviceAttachedToCraft,
+        now.add(const Duration(seconds: 1)),
+        {'craftId': 'rover', 'deviceId': 'driver'},
+      ),
+      _event(
+        'attach-crew',
+        'crew',
+        RideEventType.deviceAttachedToCraft,
+        now.add(const Duration(seconds: 2)),
+        {'craftId': 'rover', 'deviceId': 'crew'},
+      ),
+      _event(
+        'driver-choice',
+        'driver',
+        RideEventType.chaseGuidanceTargetSelected,
+        now.add(const Duration(seconds: 3)),
+        {'craftId': 'rover', 'target': 'balloon'},
+      ),
+      _event(
+        'crew-choice',
+        'crew',
+        RideEventType.chaseGuidanceTargetSelected,
+        now.add(const Duration(seconds: 4)),
+        {'craftId': 'rover', 'target': 'landingArea'},
+      ),
+    ];
+
+    final selection = const ChaseGuidanceSelectionReducer().fromEvents(
+      events,
+    )['rover'];
+
+    expect(selection?.target, ChaseGuidanceTarget.landingArea);
+    expect(selection?.changedByDeviceId, 'crew');
+  });
+
+  test('a device cannot redirect a different chase vehicle', () {
+    final events = [
+      _event('register-a', 'driver-a', RideEventType.craftRegistered, now, {
+        'craftId': 'rover-a',
+        'kind': CraftKind.vehicle.name,
+      }),
+      _event('register-b', 'driver-b', RideEventType.craftRegistered, now, {
+        'craftId': 'rover-b',
+        'kind': CraftKind.vehicle.name,
+      }),
+      _event(
+        'attach-a',
+        'driver-a',
+        RideEventType.deviceAttachedToCraft,
+        now.add(const Duration(seconds: 1)),
+        {'craftId': 'rover-a', 'deviceId': 'driver-a'},
+      ),
+      _event(
+        'wrong-vehicle',
+        'driver-a',
+        RideEventType.chaseGuidanceTargetSelected,
+        now.add(const Duration(seconds: 2)),
+        {'craftId': 'rover-b', 'target': 'balloon'},
+      ),
+    ];
+
+    expect(const ChaseGuidanceSelectionReducer().fromEvents(events), isEmpty);
+  });
 }
+
+RideEvent _event(
+  String id,
+  String deviceId,
+  RideEventType type,
+  DateTime createdAt,
+  Map<String, Object?> payload,
+) => RideEvent(
+  id: id,
+  rideId: 'flight',
+  deviceId: deviceId,
+  type: type,
+  priority: EventPriority.important,
+  createdAt: createdAt,
+  payload: payload,
+  signature: '0' * 64,
+);
 
 LocationSample _fix(DateTime recordedAt) => LocationSample(
   position: const GeoPoint(latitude: 51.45, longitude: -2.61),

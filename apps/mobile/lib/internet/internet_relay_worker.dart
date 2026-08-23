@@ -448,6 +448,9 @@ class InternetRelayWorker {
       RideEventType.routeCleared => RelayProtocolCapabilities.routeRevisions,
       RideEventType.riderContactShared =>
         RelayProtocolCapabilities.riderContactSharing,
+      RideEventType.pilotHandoverOffered ||
+      RideEventType.pilotHandoverAccepted =>
+        RelayProtocolCapabilities.pilotHandover,
       RideEventType.rideReopened => RelayProtocolCapabilities.rideReopen,
       _ => null,
     };

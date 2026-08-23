@@ -74,6 +74,9 @@ class RideLifecycleReducer {
         case RideEventType.windContextNoted:
         case RideEventType.operationalBoundaryUpserted:
         case RideEventType.operationalBoundaryRemoved:
+        case RideEventType.chaseGuidanceTargetSelected:
+        case RideEventType.pilotHandoverOffered:
+        case RideEventType.pilotHandoverAccepted:
           break;
       }
     }

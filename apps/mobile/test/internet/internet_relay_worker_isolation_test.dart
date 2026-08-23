@@ -211,6 +211,13 @@ void main() {
           createdAt: _base.add(const Duration(seconds: 1)),
         ),
       );
+      await eventStore.append(
+        _event(
+          id: 'pilot-offer',
+          type: RideEventType.pilotHandoverOffered,
+          createdAt: _base.add(const Duration(seconds: 2)),
+        ),
+      );
       final api = _LegacyRelayApi();
       final worker = InternetRelayWorker(
         api: api,
@@ -225,7 +232,7 @@ void main() {
       await worker.start(_session);
       final status = await synced.timeout(const Duration(seconds: 2));
 
-      expect(status.unsupportedUploadCount, 1);
+      expect(status.unsupportedUploadCount, 2);
       expect(
         status.limitations.map((limitation) => limitation.kind),
         contains(PresenceLimitationKind.uploadCapabilityMissing),

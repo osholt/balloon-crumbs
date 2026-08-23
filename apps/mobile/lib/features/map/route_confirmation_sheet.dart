@@ -74,14 +74,22 @@ class RouteConfirmationSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isForecast = route.isBalloonForecast;
     final formatter = MeasurementFormatter(distanceUnit);
     final effectiveDistance = distanceMeters ?? routeLengthMeters(route);
+    final forecastDuration = isForecast ? _forecastDuration(route) : null;
+    final effectiveDuration = duration ?? forecastDuration;
     final maneuverCount = const NavigationGuidancePlanner()
         .instructions(route)
         .length;
     final visibleWarnings = [
       ...warnings.where((warning) => warning.trim().isNotEmpty),
-      ?materialRouteChangeWarning(previousRoute, route, distanceUnit),
+      if (isForecast)
+        'Forecast only: the balloon cannot follow this line. Wind, airspace '
+            'and landing conditions can change; check current aviation '
+            'information and landing suitability before launch.',
+      if (!isForecast)
+        ?materialRouteChangeWarning(previousRoute, route, distanceUnit),
     ];
 
     return SafeArea(
@@ -92,7 +100,7 @@ class RouteConfirmationSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Use this route?',
+              isForecast ? 'Use this forecast plan?' : 'Use this route?',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 6),
@@ -110,14 +118,47 @@ class RouteConfirmationSheet extends StatelessWidget {
                   icon: Icons.straighten,
                   label: formatter.distance(effectiveDistance),
                 ),
-                if (duration case final duration?)
+                if (effectiveDuration case final duration?)
                   _Fact(icon: Icons.schedule, label: _durationLabel(duration)),
-                _Fact(
-                  icon: Icons.turn_right,
-                  label: maneuverCount == 1 ? '1 turn' : '$maneuverCount turns',
-                ),
+                if (isForecast)
+                  if (_maximumAltitude(route) case final altitude?)
+                    _Fact(
+                      icon: Icons.height,
+                      label: 'Max ${altitude.round()} m MSL',
+                    )
+                  else
+                    const _Fact(
+                      icon: Icons.height,
+                      label: 'Altitude unavailable',
+                    )
+                else
+                  _Fact(
+                    icon: Icons.turn_right,
+                    label: maneuverCount == 1
+                        ? '1 turn'
+                        : '$maneuverCount turns',
+                  ),
               ],
             ),
+            if (isForecast) ...[
+              const SizedBox(height: 12),
+              Text(
+                _forecastWindow(context, route) ??
+                    'The forecast time is not included in this file.',
+                key: const Key('forecast-plan-time'),
+                style: const TextStyle(color: Color(0xFFB9C4D1)),
+              ),
+              if (route.description case final description?) ...[
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    color: Color(0xFF9CA7B5),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ],
             if (visibleWarnings.isNotEmpty) ...[
               const SizedBox(height: 16),
               // Scrolls rather than truncates: a matched import can produce
@@ -176,7 +217,9 @@ class RouteConfirmationSheet extends StatelessWidget {
                     onPressed: () => Navigator.of(
                       context,
                     ).pop(RouteConfirmationAction.confirm),
-                    child: const Text('Use this route'),
+                    child: Text(
+                      isForecast ? 'Use forecast plan' : 'Use this route',
+                    ),
                   ),
                 ),
               ],
@@ -191,6 +234,44 @@ class RouteConfirmationSheet extends StatelessWidget {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     return hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m';
+  }
+
+  static List<GeoPoint> _forecastPoints(ImportedRoute route) => route.paths
+      .expand((path) => path.points)
+      .where((point) => point.recordedAt != null)
+      .toList(growable: false);
+
+  static Duration? _forecastDuration(ImportedRoute route) {
+    final points = _forecastPoints(route);
+    if (points.length < 2) return null;
+    final duration = points.last.recordedAt!.difference(
+      points.first.recordedAt!,
+    );
+    return duration.isNegative ? null : duration;
+  }
+
+  static double? _maximumAltitude(ImportedRoute route) => route.paths
+      .expand((path) => path.points)
+      .map((point) => point.elevationMeters)
+      .nonNulls
+      .fold<double?>(null, (highest, value) {
+        if (highest == null || value > highest) return value;
+        return highest;
+      });
+
+  static String? _forecastWindow(BuildContext context, ImportedRoute route) {
+    final points = _forecastPoints(route);
+    if (points.isEmpty) return null;
+    final localizations = MaterialLocalizations.of(context);
+    final use24Hour = MediaQuery.alwaysUse24HourFormatOf(context);
+    String time(DateTime value) => localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(value.toLocal()),
+      alwaysUse24HourFormat: use24Hour,
+    );
+    final start = points.first.recordedAt!.toLocal();
+    final end = points.last.recordedAt!.toLocal();
+    return 'Forecast ${localizations.formatMediumDate(start)} · '
+        '${time(start)}–${time(end)} local';
   }
 }
 

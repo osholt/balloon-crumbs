@@ -19,6 +19,33 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test(
+    'forecast context follows the assigned role rather than camera mode',
+    () {
+      expect(
+        rideMapShowsForecastContext(perspective: RideMapPerspective.balloon),
+        isTrue,
+        reason: 'airborne views default to forecast context',
+      );
+      expect(
+        rideMapShowsForecastContext(
+          perspective: RideMapPerspective.chase,
+          explicitPreference: true,
+        ),
+        isTrue,
+        reason: 'chase crew retain wind and airspace in the tactical camera',
+      );
+      expect(
+        rideMapShowsForecastContext(
+          perspective: RideMapPerspective.chase,
+          explicitPreference: false,
+        ),
+        isFalse,
+        reason: 'the driver road view explicitly suppresses forecast controls',
+      );
+    },
+  );
+
   testWidgets(
     'balloon map shows aircraft telemetry and suppresses driving chrome',
     (tester) async {
@@ -324,7 +351,79 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('balloon map draws an advisory forecast without road controls', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'balloon-forecast-map',
+    );
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final cache = OfflineTileCache(
+      rootDirectory: directory,
+      configuration: const BasemapConfiguration(),
+      httpClient: MockClient((_) async => http.Response('', 404)),
+    );
+    addTearDown(cache.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: RideMapScreen(
+          routeStore: InMemoryRouteStore(_forecastRoute),
+          routeImporter: RouteImporter(source: const _NoFileSource()),
+          offlineTileCache: cache,
+          perspective: RideMapPerspective.balloon,
+          rideStarted: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final layer = tester.widget<PolylineLayer>(find.byType(PolylineLayer));
+    expect(
+      layer.polylines.any(
+        (line) =>
+            line.color == BalloonAltitudeStyle.colorForMeters(510) &&
+            line.points.length == 2,
+      ),
+      isTrue,
+      reason:
+          'the forecast line should remain visible and altitude-coloured for the pilot',
+    );
+    expect(find.byTooltip('Fit forecast plan'), findsOneWidget);
+    expect(find.byTooltip('Navigate or export route'), findsNothing);
+    expect(find.text('All turns for this route'), findsNothing);
+  });
 }
+
+final _forecastRoute = ImportedRoute(
+  id: 'balloon-forecast',
+  name: 'Bath forecast',
+  purpose: ImportedRoutePurpose.balloonForecast,
+  importedAt: DateTime.utc(2026, 8, 23),
+  sourceFileName: 'forecast.gpx',
+  paths: [
+    RoutePath(
+      kind: RoutePathKind.track,
+      points: [
+        GeoPoint(
+          latitude: 51.4459,
+          longitude: -2.6413,
+          elevationMeters: 120,
+          recordedAt: DateTime.utc(2026, 8, 23, 6),
+        ),
+        GeoPoint(
+          latitude: 51.4128,
+          longitude: -2.7585,
+          elevationMeters: 900,
+          recordedAt: DateTime.utc(2026, 8, 23, 7, 15),
+        ),
+      ],
+    ),
+  ],
+  waypoints: const [],
+);
 
 final _roadRoute = ImportedRoute(
   id: 'chase-road',

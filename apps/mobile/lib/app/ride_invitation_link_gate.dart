@@ -6,6 +6,17 @@ import '../controllers/ride_code_preference_controller.dart';
 import '../controllers/ride_controller.dart';
 import '../controllers/ride_invitation_link_controller.dart';
 import '../controllers/rider_profile_controller.dart';
+import '../domain/flight_role.dart';
+
+class _InvitationJoinDecision {
+  const _InvitationJoinDecision({
+    required this.role,
+    required this.vehicleLabel,
+  });
+
+  final FlightRole role;
+  final String vehicleLabel;
+}
 
 /// Presents one native App/Universal Link as a deliberate join action.
 ///
@@ -120,32 +131,88 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
         return;
       }
 
-      final shouldJoin = await showDialog<bool>(
+      var selectedRole = FlightRole.chaseCrew;
+      final vehicleLabelController = TextEditingController(text: 'Land Rover');
+      final decision = await showDialog<_InvitationJoinDecision>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          key: const Key('ride-invitation-link-dialog'),
-          icon: const Icon(Icons.group_add_outlined),
-          title: Text('Join flight ${invitation.rideCode}?'),
-          content: const Text(
-            'This private invitation will connect you to the group. Only join '
-            'if you recognise the person who shared it.',
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            key: const Key('ride-invitation-link-dialog'),
+            icon: const Icon(Icons.group_add_outlined),
+            title: Text('Join flight ${invitation.rideCode}?'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'This private invitation will connect you to the group. Only join if you recognise the person who shared it.',
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Your role',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final role in const [
+                        FlightRole.balloonCrew,
+                        FlightRole.chaseDriver,
+                        FlightRole.chaseCrew,
+                      ])
+                        ChoiceChip(
+                          key: Key('invitation-role-${role.name}'),
+                          selected: selectedRole == role,
+                          label: Text(role.label),
+                          onSelected: (_) =>
+                              setDialogState(() => selectedRole = role),
+                        ),
+                    ],
+                  ),
+                  if (selectedRole.isChasing) ...[
+                    const SizedBox(height: 14),
+                    TextField(
+                      key: const Key('invitation-vehicle-label'),
+                      controller: vehicleLabelController,
+                      maxLength: 32,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Chase vehicle',
+                        helperText:
+                            'Use the same name as crewmates in this vehicle.',
+                        counterText: '',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                key: const Key('decline-ride-invitation-link'),
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Not now'),
+              ),
+              FilledButton(
+                key: const Key('accept-ride-invitation-link'),
+                onPressed: () => Navigator.of(context).pop(
+                  _InvitationJoinDecision(
+                    role: selectedRole,
+                    vehicleLabel: vehicleLabelController.text,
+                  ),
+                ),
+                child: const Text('Join flight'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              key: const Key('decline-ride-invitation-link'),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Not now'),
-            ),
-            FilledButton(
-              key: const Key('accept-ride-invitation-link'),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Join flight'),
-            ),
-          ],
         ),
       );
-      if (shouldJoin != true || !mounted) {
+      vehicleLabelController.dispose();
+      if (decision == null || !mounted) {
         widget.links.clear();
         return;
       }
@@ -154,6 +221,8 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
       await widget.rideController.joinRide(
         invitation.rideCode,
         profile.displayName,
+        flightRole: decision.role,
+        vehicleLabel: decision.vehicleLabel,
         joinToken: invitation.joinToken,
         motorcycleStyle: profile.motorcycleStyle,
         riderSymbol: profile.riderSymbol,
@@ -180,7 +249,7 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
           title: const Text('Could not join this flight'),
           content: Text(
             widget.rideController.errorMessage ??
-                'That invitation could not be checked. Ask the coordinator to '
+                'That invitation could not be checked. Ask the pilot to '
                     'share a new one.',
           ),
           actions: [

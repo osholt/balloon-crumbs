@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/domain/altitude.dart';
+import 'package:balloon_crumbs/domain/imported_route.dart';
 import 'package:balloon_crumbs/services/gpx_parser.dart';
 
 void main() {
@@ -76,6 +77,37 @@ void main() {
     expect(point.altitudeSource, AltitudeSource.gnss);
     expect(point.altitudeDatum, AltitudeDatum.wgs84Ellipsoid);
     expect(point.altitudeAccuracyMeters, 7.25);
+  });
+
+  test('recognises a web-planner balloon forecast', () {
+    final route = parser.parse(
+      _bytes('''
+        <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+          <metadata>
+            <name>Bath forecast</name>
+            <desc>Forecast-only wind drift. Not a controllable route.</desc>
+          </metadata>
+          <trk>
+            <name>Bath forecast</name>
+            <type>balloon-flight-forecast</type>
+            <trkseg>
+              <trkpt lat="51.38" lon="-2.36">
+                <ele>120</ele><time>2026-08-23T06:00:00Z</time>
+              </trkpt>
+              <trkpt lat="51.42" lon="-2.20">
+                <ele>900</ele><time>2026-08-23T07:15:00Z</time>
+              </trkpt>
+            </trkseg>
+          </trk>
+        </gpx>
+      '''),
+      routeId: 'forecast',
+      sourceFileName: 'forecast.gpx',
+      importedAt: DateTime.utc(2026, 8, 22),
+    );
+
+    expect(route.purpose, ImportedRoutePurpose.balloonForecast);
+    expect(route.isBalloonForecast, isTrue);
   });
 
   test('malformed altitude evidence degrades without losing <ele>', () {

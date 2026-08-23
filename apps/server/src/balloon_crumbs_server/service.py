@@ -76,6 +76,14 @@ EVENT_TYPES = {
     "windContextNoted",
     "operationalBoundaryUpserted",
     "operationalBoundaryRemoved",
+    # One shared navigation target per chase vehicle. The relay carries the
+    # choice; each vehicle still computes and validates its own road route.
+    "chaseGuidanceTargetSelected",
+    # Pilot authority changes only after a signed offer from the current pilot
+    # and a signed acceptance from the named balloon-crew device. The relay is
+    # deliberately payload-opaque; clients validate and reduce the pair.
+    "pilotHandoverOffered",
+    "pilotHandoverAccepted",
     # Issues #206/#207. The leader saying a ride that ended has not finished
     # after all. Deliberately not "rideResumed", which is the other half of
     # "ridePaused"; conflating them would make a pause look like a resurrection.
@@ -560,6 +568,8 @@ class RelayService:
         *,
         name: str | None,
         gpx: str,
+        forecast_plan: dict[str, Any] | None = None,
+        forecast_plan_point_count: int = 0,
         now: datetime | None = None,
     ) -> dict[str, str]:
         """A plan is unrelated to the live ride/join-code tables: it never
@@ -577,12 +587,22 @@ class RelayService:
             )
         except GpxValidationError as error:
             raise RelayServiceError(400, str(error)) from error
+        if forecast_plan is not None:
+            if forecast_plan.get("gpxFallback") != gpx:
+                raise RelayServiceError(400, "Structured plan GPX fallback does not match")
+            if forecast_plan_point_count > self._settings.maximum_plan_points:
+                raise RelayServiceError(400, "Structured plan has too many geometry points")
         expires_at = now + timedelta(days=self._settings.plan_retention_days)
         with session.begin():
             session.execute(delete(RidePlan).where(RidePlan.expires_at <= now))
             for _ in range(8):
                 code = self._generate_plan_code()
-                ciphertext = self._cipher.encrypt_json(gpx, associated_data=self._plan_aad(code))
+                encrypted_value: str | dict[str, Any] = (
+                    gpx if forecast_plan is None else {"gpx": gpx, "forecastPlan": forecast_plan}
+                )
+                ciphertext = self._cipher.encrypt_json(
+                    encrypted_value, associated_data=self._plan_aad(code)
+                )
                 try:
                     with session.begin_nested():
                         session.add(
@@ -617,18 +637,29 @@ class RelayService:
                     session.delete(record)
                 raise RelayServiceError(404, "Plan not found")
             try:
-                gpx = self._cipher.decrypt_json(
+                decrypted = self._cipher.decrypt_json(
                     record.gpx_ciphertext,
                     associated_data=self._plan_aad(code),
                 )
             except ValueError as error:
                 raise RelayServiceError(500, "Plan record is invalid") from error
-            if not isinstance(gpx, str):
+            if isinstance(decrypted, str):
+                gpx = decrypted
+                forecast_plan = None
+            elif isinstance(decrypted, dict):
+                gpx = decrypted.get("gpx")
+                forecast_plan = decrypted.get("forecastPlan")
+            else:
+                raise RelayServiceError(500, "Plan record is invalid")
+            if not isinstance(gpx, str) or (
+                forecast_plan is not None and not isinstance(forecast_plan, dict)
+            ):
                 raise RelayServiceError(500, "Plan record is invalid")
             return {
                 "code": record.code,
                 "name": record.name,
                 "gpx": gpx,
+                "forecastPlan": forecast_plan,
                 "createdAt": self._as_utc(record.created_at).isoformat(),
                 "expiresAt": self._as_utc(record.expires_at).isoformat(),
             }
@@ -1016,6 +1047,9 @@ class RelayService:
             "windContextNoted": timedelta(hours=72),
             "operationalBoundaryUpserted": timedelta(hours=72),
             "operationalBoundaryRemoved": timedelta(hours=72),
+            "chaseGuidanceTargetSelected": timedelta(hours=72),
+            "pilotHandoverOffered": timedelta(hours=72),
+            "pilotHandoverAccepted": timedelta(hours=72),
             # Who was asked to cover the back of the group, and what they said.
             # Ride-scoped coordination, not history worth keeping for days.
         }.get(event_type, timedelta(hours=72))

@@ -7,6 +7,7 @@ import 'package:balloon_crumbs/data/in_memory_session_store.dart';
 import 'package:balloon_crumbs/domain/quick_message.dart';
 import 'package:balloon_crumbs/domain/completed_ride_store.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/flight_role.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart' as route_domain;
 import 'package:balloon_crumbs/domain/ride_event.dart';
 import 'package:balloon_crumbs/domain/ride_coordination_mode.dart';
@@ -52,20 +53,107 @@ void main() {
 
   tearDown(() => controller.dispose());
 
-  test('new ride is persisted with lead role and a signed event', () async {
-    await controller.createRide('Oliver');
+  Future<RideController> joinedController(FlightRole role) async {
+    await controller.publishRideCode();
+    final joined = RideController(
+      InMemoryEventStore(),
+      InMemorySessionStore(),
+      const _FakeNearbyBridge(),
+      clock: () => DateTime.utc(2026, 7, 16, 12, 1),
+      idFactory: () => 'joined-${(id++).toString().padLeft(3, '0')}',
+      random: Random(84),
+      rideCodeDirectory: rideCodes,
+    );
+    addTearDown(joined.dispose);
+    await joined.initialize();
+    await joined.joinRide(
+      controller.session!.rideCode,
+      'Alex',
+      flightRole: role,
+    );
+    return joined;
+  }
 
-    expect(controller.session?.role, RideRole.lead);
-    expect(controller.session?.displayName, 'Oliver');
-    expect(controller.session?.rideCode, matches(RegExp(r'^\d{6}$')));
-    expect(controller.events, hasLength(1));
-    expect(controller.events.single.type, RideEventType.rideCreated);
-    expect(controller.events.single.signature, hasLength(64));
-    expect(controller.rideStarted, isFalse);
+  test(
+    'new flight persists pilot role and atomic balloon assignment',
+    () async {
+      await controller.createRide('Oliver');
 
-    final restored = await sessionStore.load();
-    expect(restored?.rideId, controller.session?.rideId);
-  });
+      expect(controller.session?.role, RideRole.lead);
+      expect(controller.session?.flightRole, FlightRole.pilot);
+      expect(controller.hasFlightAuthority, isTrue);
+      expect(controller.session?.displayName, 'Oliver');
+      expect(controller.session?.rideCode, matches(RegExp(r'^\d{6}$')));
+      expect(controller.events, hasLength(4));
+      expect(controller.events.first.type, RideEventType.rideCreated);
+      expect(
+        controller.events.map((event) => event.type),
+        containsAllInOrder([
+          RideEventType.rideCreated,
+          RideEventType.craftRegistered,
+          RideEventType.deviceAttachedToCraft,
+          RideEventType.craftPrimaryDeviceNominated,
+        ]),
+      );
+      expect(
+        controller.events.every((event) => event.signature.length == 64),
+        isTrue,
+      );
+      expect(controller.localCraft?.isBalloon, isTrue);
+      expect(controller.rideStarted, isFalse);
+
+      final restored = await sessionStore.load();
+      expect(restored?.rideId, controller.session?.rideId);
+    },
+  );
+
+  test(
+    'pilot handover is offered, accepted and applied on both devices',
+    () async {
+      await controller.createRide('Oliver');
+      final crew = await joinedController(FlightRole.balloonCrew);
+
+      for (final event in crew.events) {
+        controller.ingestStoredEvent(event);
+      }
+      for (final event in controller.events) {
+        crew.ingestStoredEvent(event);
+      }
+
+      await controller.offerPilotHandover(crew.session!.localRiderId);
+      expect(controller.errorMessage, isNull);
+      final offer = controller.events.singleWhere(
+        (event) => event.type == RideEventType.pilotHandoverOffered,
+      );
+      expect(offer.expiresAt, isNull, reason: 'the accepted pair must replay');
+      expect(
+        DateTime.parse(offer.payload['expiresAt']! as String),
+        DateTime.utc(2026, 7, 16, 12, 10),
+      );
+      expect(controller.hasFlightAuthority, isTrue);
+
+      expect(crew.ingestStoredEvent(offer), isTrue);
+      expect(crew.pendingLocalPilotHandover, isNotNull);
+      expect(crew.hasFlightAuthority, isFalse);
+
+      await crew.acceptPilotHandover();
+      expect(crew.errorMessage, isNull);
+      expect(crew.session?.flightRole, FlightRole.pilot);
+      expect(crew.session?.role, RideRole.lead);
+      expect(crew.hasFlightAuthority, isTrue);
+      final acceptance = crew.events.last;
+      expect(acceptance.type, RideEventType.pilotHandoverAccepted);
+
+      expect(controller.ingestStoredEvent(acceptance), isTrue);
+      expect(controller.session?.flightRole, FlightRole.balloonCrew);
+      expect(controller.session?.role, RideRole.rider);
+      expect(controller.hasFlightAuthority, isFalse);
+      expect(
+        controller.participantFor(crew.session!.localRiderId)?.flightRole,
+        FlightRole.pilot,
+      );
+    },
+  );
 
   test('ride coordination mode is persisted and published', () async {
     await controller.createRide(
@@ -79,7 +167,9 @@ void main() {
     );
     expect(controller.coordinationMode, RideCoordinationMode.keepTogether);
     expect(
-      controller.events.single.payload['coordinationMode'],
+      controller.events
+          .singleWhere((event) => event.type == RideEventType.rideCreated)
+          .payload['coordinationMode'],
       RideCoordinationMode.keepTogether.name,
     );
   });
@@ -237,7 +327,7 @@ void main() {
 
   test('a non-leader cannot publish or clear the group route', () async {
     await controller.createRide('Oliver');
-    await controller.setRole(RideRole.rider);
+    final follower = await joinedController(FlightRole.chaseCrew);
     final route = route_domain.ImportedRoute(
       id: 'route-a',
       name: 'Wrong route',
@@ -252,28 +342,26 @@ void main() {
       waypoints: const [],
     );
 
-    await controller.publishRoute(route);
-    expect(controller.authoritativeRoute, isNull);
-    expect(controller.errorMessage, contains('Only the coordinator'));
+    await follower.publishRoute(route);
+    expect(follower.authoritativeRoute, isNull);
+    expect(follower.errorMessage, contains('Only the pilot'));
 
-    controller.clearError();
-    await controller.clearRoute();
-    expect(controller.authoritativeRouteState.hasDecision, isFalse);
-    expect(controller.errorMessage, contains('Only the coordinator'));
+    follower.clearError();
+    await follower.clearRoute();
+    expect(follower.authoritativeRouteState.hasDecision, isFalse);
+    expect(follower.errorMessage, contains('Only the pilot'));
   });
 
   test('a non-leader cannot start the ride', () async {
     await controller.createRide('Oliver');
-    await controller.setRole(RideRole.rider);
+    final follower = await joinedController(FlightRole.balloonCrew);
 
-    await controller.startRide();
+    await follower.startRide();
 
-    expect(controller.rideStarted, isFalse);
-    expect(controller.errorMessage, contains('Only the coordinator'));
+    expect(follower.rideStarted, isFalse);
+    expect(follower.errorMessage, contains('Only the pilot'));
     expect(
-      controller.events.where(
-        (event) => event.type == RideEventType.rideStarted,
-      ),
+      follower.events.where((event) => event.type == RideEventType.rideStarted),
       isEmpty,
     );
   });
@@ -348,7 +436,7 @@ void main() {
     expect(controller.session?.simulationRiderCount, 30);
     expect(controller.session?.displayName, 'Demo Lead');
     expect(controller.events.first.payload['simulation'], isTrue);
-    expect(controller.events, hasLength(1));
+    expect(controller.events, hasLength(4));
     expect(controller.rideStarted, isFalse);
 
     await controller.startRide();
@@ -382,7 +470,7 @@ void main() {
       InMemorySessionStore(),
       const _FakeNearbyBridge(),
       clock: () => DateTime.utc(2026, 7, 16, 12),
-      idFactory: () => 'follower-id',
+      idFactory: () => 'follower-${id++}',
       random: Random(7),
       rideCodeDirectory: rideCodes,
     );
@@ -404,7 +492,7 @@ void main() {
       InMemorySessionStore(),
       const _FakeNearbyBridge(),
       clock: () => DateTime.utc(2026, 7, 16, 12),
-      idFactory: () => 'follower-id',
+      idFactory: () => 'follower-${id++}',
       random: Random(7),
       rideCodeDirectory: rideCodes,
     );
@@ -415,10 +503,12 @@ void main() {
     expect(follower.session?.rideCode, leaderSession.rideCode);
     expect(follower.session?.inviteSecret, leaderSession.inviteSecret);
     expect(follower.session?.role, RideRole.rider);
+    expect(follower.session?.flightRole, FlightRole.chaseCrew);
+    expect(follower.localCraft?.isBalloon, isFalse);
     expect(
-      SituationEventFactory.verify(
-        follower.events.single,
-        leaderSession.inviteSecret,
+      follower.events.every(
+        (event) =>
+            SituationEventFactory.verify(event, leaderSession.inviteSecret),
       ),
       isTrue,
     );
@@ -437,7 +527,7 @@ void main() {
         InMemorySessionStore(),
         const _FakeNearbyBridge(),
         clock: () => DateTime.utc(2026, 7, 16, 12),
-        idFactory: () => 'follower-id',
+        idFactory: () => 'follower-${id++}',
         random: Random(7),
         rideCodeDirectory: rideCodes,
       );

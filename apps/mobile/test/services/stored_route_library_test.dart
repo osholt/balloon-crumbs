@@ -147,6 +147,52 @@ void main() {
     expect(prepared.notes.single, contains('raw recorded track'));
   });
 
+  test(
+    'a stored balloon forecast keeps its meaning and cannot be reversed',
+    () async {
+      final recorded = InMemoryRecordedRouteStore();
+      await recorded.save(
+        ImportedRoute(
+          id: 'forecast',
+          name: 'Bath forecast',
+          description: 'Forecast-only wind drift.',
+          purpose: ImportedRoutePurpose.balloonForecast,
+          importedAt: DateTime.utc(2026, 8, 23),
+          sourceFileName: 'forecast.gpx',
+          paths: const [
+            RoutePath(
+              kind: RoutePathKind.track,
+              points: [
+                GeoPoint(latitude: 51.38, longitude: -2.36),
+                GeoPoint(latitude: 51.42, longitude: -2.20),
+              ],
+            ),
+          ],
+          waypoints: const [],
+        ),
+      );
+      final library = _library(recorded, InMemoryCompletedRideStore());
+      final candidate = (await library.list()).single;
+
+      expect(candidate.canReverse, isFalse);
+      final prepared = library.prepare(
+        StoredRouteSelection(
+          candidate: candidate,
+          variant: StoredRouteVariant.raw,
+        ),
+      );
+      expect(prepared.route.purpose, ImportedRoutePurpose.balloonForecast);
+      expect(prepared.route.description, 'Forecast-only wind drift.');
+      expect(prepared.notes.single, contains('advisory balloon forecast'));
+      expect(
+        () => library.prepare(
+          StoredRouteSelection(candidate: candidate, reversed: true),
+        ),
+        throwsFormatException,
+      );
+    },
+  );
+
   test('reversing runs the route the other way and drops its turns', () async {
     final rides = InMemoryCompletedRideStore();
     final planned = ImportedRoute(

@@ -109,7 +109,7 @@ class _RideRosterSheetState extends State<RideRosterSheet> {
                 segments: const [
                   ButtonSegment(
                     value: _RosterFilter.active,
-                    icon: Icon(Icons.motorcycle_outlined),
+                    icon: Icon(Icons.location_on_outlined),
                     label: Text('Current'),
                   ),
                   ButtonSegment(

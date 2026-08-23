@@ -101,7 +101,7 @@ class RiderSymbolPicker extends StatelessWidget {
               return Semantics(
                 button: true,
                 selected: selected,
-                label: '${style.label} motorcycle icon',
+                label: '${style.label} craft icon',
                 child: InkWell(
                   key: Key('$bikeKeyPrefix-${style.name}'),
                   borderRadius: BorderRadius.circular(12),

@@ -603,7 +603,11 @@ void main() {
         'travelled': 7.14,
         'leader trail': 10.71,
         'balloon ground track': 12.11,
+        'flight forecast': 12.11,
         'operational boundary': 8.61,
+        'original landing envelope': 8.51,
+        'live projection': 11.36,
+        'live landing envelope': 12.11,
         'route start connector': 12.11,
       };
 

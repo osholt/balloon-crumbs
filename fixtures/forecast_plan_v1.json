@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture-flight-plan",
+  "name": "Tuckers Grave forecast",
+  "createdAt": "2026-08-23T05:45:00Z",
+  "source": "Balloon Crumbs web planner",
+  "launch": {
+    "point": { "latitude": 51.2829, "longitude": -2.3677 },
+    "elevationMsl": 92,
+    "datum": "wgs84Geoid"
+  },
+  "destination": {
+    "point": { "latitude": 51.413, "longitude": -2.212 },
+    "toleranceMetres": 100
+  },
+  "intendedLandingArea": {
+    "centre": { "latitude": 51.413, "longitude": -2.212 },
+    "radiusMetres": 400,
+    "updatedAt": "2026-08-23T05:45:00Z"
+  },
+  "forecastLanding": { "latitude": 51.4127, "longitude": -2.2124 },
+  "departure": {
+    "selectedAt": "2026-08-23T06:30:00Z",
+    "matchingWindowStart": "2026-08-23T06:24:00Z",
+    "matchingWindowEnd": "2026-08-23T06:38:00Z"
+  },
+  "constraints": {
+    "altitudeCeilingMsl": 1200,
+    "maximumAscentRateMps": 3,
+    "maximumDescentRateMps": 4,
+    "minimumDurationMinutes": 10,
+    "maximumDurationMinutes": 180
+  },
+  "altitudeStages": [
+    { "fraction": 0, "plannedAt": "2026-08-23T06:30:00Z", "altitudeMsl": 92, "changeRateMps": 0 },
+    { "fraction": 0.2, "plannedAt": "2026-08-23T06:42:00Z", "altitudeMsl": 300, "changeRateMps": 0.289 },
+    { "fraction": 0.4, "plannedAt": "2026-08-23T06:54:00Z", "altitudeMsl": 600, "changeRateMps": 0.417 },
+    { "fraction": 0.6, "plannedAt": "2026-08-23T07:06:00Z", "altitudeMsl": 900, "changeRateMps": 0.417 },
+    { "fraction": 0.8, "plannedAt": "2026-08-23T07:18:00Z", "altitudeMsl": 500, "changeRateMps": -0.556 },
+    { "fraction": 1, "plannedAt": "2026-08-23T07:30:00Z", "altitudeMsl": 92, "changeRateMps": -0.567 }
+  ],
+  "plannedTrack": [
+    { "latitude": 51.2829, "longitude": -2.3677, "altitudeMsl": 92, "elapsedSeconds": 0 },
+    { "latitude": 51.3401, "longitude": -2.2932, "altitudeMsl": 700, "elapsedSeconds": 1800 },
+    { "latitude": 51.4127, "longitude": -2.2124, "altitudeMsl": 92, "elapsedSeconds": 3600 }
+  ],
+  "landingEnvelope": [
+    { "latitude": 51.39, "longitude": -2.24 },
+    { "latitude": 51.43, "longitude": -2.24 },
+    { "latitude": 51.44, "longitude": -2.19 },
+    { "latitude": 51.4, "longitude": -2.18 }
+  ],
+  "wind": {
+    "provider": "Open-Meteo",
+    "model": "UKMO seamless",
+    "requestedAt": "2026-08-23T05:40:00Z",
+    "validFrom": "2026-08-23T05:00:00Z",
+    "validTo": "2026-08-24T05:00:00Z",
+    "attribution": "Weather data by Open-Meteo",
+    "licence": "CC BY 4.0",
+    "forecastOnly": true,
+    "fieldDigest": "fnv1a32:9a7f1042"
+  },
+  "operationalBoundaries": [
+    {
+      "id": "fixture-advisory-line",
+      "label": "Briefed advisory edge",
+      "kind": "line",
+      "points": [
+        { "latitude": 51.31, "longitude": -2.33 },
+        { "latitude": 51.37, "longitude": -2.25 }
+      ],
+      "source": "Pilot briefing fixture",
+      "updatedAt": "2026-08-23T05:30:00Z",
+      "altitudeDatum": "wgs84Geoid"
+    }
+  ],
+  "result": {
+    "kind": "optimised",
+    "reachesDestination": true,
+    "missDistanceMetres": 42
+  },
+  "gpxFallback": "<gpx version=\"1.1\"><trk><trkseg><trkpt lat=\"51.2829\" lon=\"-2.3677\"/><trkpt lat=\"51.4127\" lon=\"-2.2124\"/></trkseg></trk></gpx>"
+}

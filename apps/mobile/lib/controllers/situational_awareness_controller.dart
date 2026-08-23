@@ -149,7 +149,9 @@ class SituationalAwarenessController extends ChangeNotifier {
   void updateLocalSession(RideSession session) {
     if (session.rideId != _session.rideId ||
         session.localRiderId != _session.localRiderId) {
-      throw ArgumentError('Cannot replace awareness with another ride session');
+      throw ArgumentError(
+        'Cannot replace awareness with another flight session',
+      );
     }
     _session = session;
     _eventFactory = SituationEventFactory(
@@ -274,7 +276,7 @@ class SituationalAwarenessController extends ChangeNotifier {
     if (_disposed) return;
     if (event.rideId != _session.rideId ||
         !_supportedSituationalEventTypes.contains(event.type)) {
-      throw const FormatException('Event is not valid for this ride.');
+      throw const FormatException('Event is not valid for this flight.');
     }
     if (!SituationEventFactory.verify(event, _session.inviteSecret)) {
       throw const FormatException('Event signature is invalid.');
@@ -420,6 +422,9 @@ class SituationalAwarenessController extends ChangeNotifier {
       case RideEventType.windContextNoted:
       case RideEventType.operationalBoundaryUpserted:
       case RideEventType.operationalBoundaryRemoved:
+      case RideEventType.chaseGuidanceTargetSelected:
+      case RideEventType.pilotHandoverOffered:
+      case RideEventType.pilotHandoverAccepted:
         break;
     }
     if (!replaying) {

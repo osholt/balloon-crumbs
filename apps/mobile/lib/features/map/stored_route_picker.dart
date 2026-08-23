@@ -329,7 +329,7 @@ class _StoredRouteOptionsSheetState extends State<StoredRouteOptionsSheet> {
               Text(
                 _variant == StoredRouteVariant.tidied
                     ? 'Tidied: a recording, not a planned route. Stops and GPS '
-                          'wander are removed. Every road the bike actually '
+                          'wander are removed. Every road the vehicle actually '
                           'took is kept, including any wrong turns and car '
                           'park loops.'
                     : 'Raw track: every fix exactly as recorded, including '
@@ -337,26 +337,30 @@ class _StoredRouteOptionsSheetState extends State<StoredRouteOptionsSheet> {
                 style: const TextStyle(color: Color(0xFF98A3B1), height: 1.4),
               ),
             ] else
-              const Text(
-                'This is the route that flight was planned with, so it is used '
-                'exactly as it was planned.',
-                style: TextStyle(color: Color(0xFF98A3B1), height: 1.4),
+              Text(
+                candidate.geometry.isBalloonForecast
+                    ? 'This is an advisory, time-specific wind-drift forecast. '
+                          'It cannot be reversed or followed like a road route.'
+                    : 'This is the route that flight was planned with, so it '
+                          'is used exactly as it was planned.',
+                style: const TextStyle(color: Color(0xFF98A3B1), height: 1.4),
               ),
             const SizedBox(height: 6),
-            SwitchListTile(
-              key: const Key('stored-route-reverse'),
-              contentPadding: EdgeInsets.zero,
-              value: _reversed,
-              onChanged: (value) => setState(() => _reversed = value),
-              title: const Text('Use it in reverse'),
-              subtitle: Text(
-                _reversed
-                    ? 'Runs from the original finish to the original start. '
-                          'Turn instructions from the original direction are '
-                          'dropped.'
-                    : 'Runs in the direction it was ridden.',
+            if (candidate.canReverse)
+              SwitchListTile(
+                key: const Key('stored-route-reverse'),
+                contentPadding: EdgeInsets.zero,
+                value: _reversed,
+                onChanged: (value) => setState(() => _reversed = value),
+                title: const Text('Use it in reverse'),
+                subtitle: Text(
+                  _reversed
+                      ? 'Runs from the original finish to the original start. '
+                            'Turn instructions from the original direction are '
+                            'dropped.'
+                      : 'Runs in the direction it was travelled.',
+                ),
               ),
-            ),
             const SizedBox(height: 12),
             FilledButton.icon(
               key: const Key('use-stored-route'),
@@ -367,8 +371,16 @@ class _StoredRouteOptionsSheetState extends State<StoredRouteOptionsSheet> {
                   reversed: _reversed,
                 ),
               ),
-              icon: const Icon(Icons.route_outlined),
-              label: const Text('Use this route'),
+              icon: Icon(
+                candidate.geometry.isBalloonForecast
+                    ? Icons.air_outlined
+                    : Icons.route_outlined,
+              ),
+              label: Text(
+                candidate.geometry.isBalloonForecast
+                    ? 'Use forecast plan'
+                    : 'Use this route',
+              ),
             ),
           ],
         ),

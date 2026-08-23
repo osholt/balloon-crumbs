@@ -20,9 +20,26 @@ enum RiderTrailKind {
   /// underneath a road route or be mistaken for a chase vehicle's path.
   balloonGroundTrack,
 
+  /// The pilot-published future aircraft path. Unlike the ground track this is
+  /// forecast geometry, so it is dashed; altitude samples still colour it.
+  forecastTrack,
+
   /// Pilot-authored advisory geometry. It is shared with the crew but is not a
   /// travelled trail and therefore never receives direction arrows.
   operationalBoundary,
+
+  /// The immutable set of feasible endpoints retained from the imported web
+  /// planner forecast. It is evidence from planning time, not pilot intent and
+  /// not a claim that any point inside it is suitable for landing.
+  originalLandingEnvelope,
+
+  /// Recalculated from the latest usable balloon fix and a fresh forecast wind
+  /// field. It is advisory future geometry, never measured track history.
+  liveProjectionTrack,
+
+  /// Feasible forecast endpoints recalculated from the latest usable balloon
+  /// state. Separate from both pilot intent and the original plan envelope.
+  liveLandingEnvelope,
 
   /// The road route from where the rider is to the start of the planned route
   /// (#133). The one kind that is not recorded history: it is where the routing

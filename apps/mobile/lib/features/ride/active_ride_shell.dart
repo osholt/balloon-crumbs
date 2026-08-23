@@ -31,10 +31,12 @@ import '../../data/secure_observer_grant_store.dart';
 import '../../domain/event_store.dart';
 import '../../domain/completed_ride_store.dart';
 import '../../domain/flight_replay.dart';
+import '../../domain/flight_role.dart';
 import '../../domain/geo_point.dart' as awareness_geo;
 import '../../domain/hazard.dart';
 import '../../domain/imported_route.dart' as route_domain;
 import '../../domain/landing_zone.dart';
+import '../../domain/live_route_state.dart';
 import '../../domain/operational_boundary.dart';
 import '../../domain/map_style_mode.dart';
 import '../../domain/quick_message.dart';
@@ -56,7 +58,10 @@ import '../../relay/relay_engine.dart';
 import '../../relay/sqlite_relay_queue.dart';
 import '../../services/carplay_bridge.dart';
 import '../../services/chase_guidance_target.dart';
+import '../../services/craft_roster.dart';
+import '../../services/craft_track_reducer.dart';
 import '../../services/fiesta_flight_loader.dart';
+import '../../services/flight_plan_summary.dart';
 import '../../services/geo_calculations.dart';
 import '../../services/spoken_audio_mode.dart';
 import '../../services/spoken_guidance_schedule.dart';
@@ -69,6 +74,7 @@ import '../../services/fixed_speed_camera_catalogue.dart';
 import '../../services/fixed_speed_camera_provider.dart';
 import '../../services/gpx_import_source.dart';
 import '../../services/measurement_formatter.dart';
+import '../../services/live_flight_projection.dart';
 import '../../services/native_push_token_source.dart';
 import '../../services/open_meteo_wind.dart';
 import '../../services/operational_boundary_monitor.dart';
@@ -110,6 +116,27 @@ import 'ended_ride_screen.dart';
 import 'observer_access_sheet.dart';
 import 'ride_dashboard.dart';
 import 'ride_roster_sheet.dart';
+
+const _driverTargetChangeMaximumSpeedMetersPerSecond = 0.75;
+const _driverTargetChangeMaximumFixAge = Duration(seconds: 10);
+
+@visibleForTesting
+bool canChangeChaseGuidanceTarget({
+  required FlightRole role,
+  required MapNavigationPosition? navigation,
+  required DateTime now,
+}) {
+  if (role == FlightRole.chaseCrew) return true;
+  if (role != FlightRole.chaseDriver || navigation == null) return false;
+  final age = now.difference(navigation.recordedAt);
+  final speed = navigation.speedMetersPerSecond;
+  return !age.isNegative &&
+      age <= _driverTargetChangeMaximumFixAge &&
+      speed != null &&
+      speed.isFinite &&
+      speed >= 0 &&
+      speed <= _driverTargetChangeMaximumSpeedMetersPerSecond;
+}
 
 /// Whether a newly calculated route should wait before replacing the current
 /// junction instruction.
@@ -340,6 +367,32 @@ RouteStore? activeRideMapStoreWhenReady({
   return isSimulation ? simulationRouteStore : rideRouteStore;
 }
 
+class _CraftMapLocation {
+  const _CraftMapLocation({
+    required this.id,
+    required this.displayName,
+    required this.sourceDeviceIds,
+    required this.freshnessDeviceId,
+    required this.isBalloon,
+    required this.motorcycleStyle,
+    required this.riderSymbol,
+    required this.riderColor,
+    required this.altitudeMeters,
+    required this.point,
+  });
+
+  final String id;
+  final String displayName;
+  final List<String> sourceDeviceIds;
+  final String freshnessDeviceId;
+  final bool isBalloon;
+  final CraftIconStyle motorcycleStyle;
+  final RiderSymbol riderSymbol;
+  final RiderColor riderColor;
+  final double? altitudeMeters;
+  final route_domain.GeoPoint point;
+}
+
 /// What the ride map should present of the quick messages in the journal, and
 /// the most urgent one per sender so their marker can say what they raised.
 ///
@@ -423,12 +476,18 @@ presentableQuickMessageAlerts({
 /// discover, while the moving map keeps only its large riding-time controls.
 class _RideActionsPanel extends StatelessWidget {
   const _RideActionsPanel({
+    required this.flightRole,
     required this.canChangeRoute,
     required this.onAlertsAndReports,
     required this.onShareSummary,
+    required this.canOfferPilotHandover,
+    required this.onOfferPilotHandover,
+    required this.pendingPilotHandoverFrom,
+    required this.onAcceptPilotHandover,
     required this.onOpenRoster,
     required this.onShareRoster,
     required this.onChangeRoute,
+    required this.activeRouteIsForecast,
     required this.canChangeLandingZone,
     required this.landingZoneLabel,
     required this.onChangeLandingZone,
@@ -459,12 +518,18 @@ class _RideActionsPanel extends StatelessWidget {
     required this.coordinationMode,
   });
 
+  final FlightRole flightRole;
   final bool canChangeRoute;
   final VoidCallback onAlertsAndReports;
   final VoidCallback onShareSummary;
+  final bool canOfferPilotHandover;
+  final VoidCallback onOfferPilotHandover;
+  final String? pendingPilotHandoverFrom;
+  final VoidCallback onAcceptPilotHandover;
   final VoidCallback onOpenRoster;
   final VoidCallback onShareRoster;
   final VoidCallback onChangeRoute;
+  final bool activeRouteIsForecast;
   final bool canChangeLandingZone;
   final String? landingZoneLabel;
   final VoidCallback onChangeLandingZone;
@@ -504,30 +569,44 @@ class _RideActionsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = switch (flightRole) {
+      FlightRole.pilot => 'Pilot controls',
+      FlightRole.balloonCrew => 'Airborne crew controls',
+      FlightRole.chaseDriver => 'Driver controls',
+      FlightRole.chaseCrew => 'Chase controls',
+      FlightRole.observer => 'Observer controls',
+    };
+    final detail = switch (flightRole) {
+      FlightRole.pilot =>
+        'Flight plan, landing intent, boundaries and crew coordination.',
+      FlightRole.balloonCrew =>
+        'Shared flight information and crew coordination. Pilot decisions are read-only.',
+      FlightRole.chaseDriver =>
+        'Road navigation and essential flight controls for this vehicle.',
+      FlightRole.chaseCrew =>
+        'Chase target, shared flight information and crew coordination.',
+      FlightRole.observer =>
+        'Read-only flight information and personal settings.',
+    };
     return Padding(
       padding: const EdgeInsets.only(top: 22),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Flight actions',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          Text(title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
-          const Text(
-            'Route, crew, sharing and flight controls are all on this page.',
-            style: TextStyle(color: Color(0xFF98A3B1)),
-          ),
+          Text(detail, style: const TextStyle(color: Color(0xFF98A3B1))),
           const SizedBox(height: 8),
-          ListTile(
-            key: const Key('ride-actions-alerts'),
-            leading: const Icon(Icons.warning_amber_outlined),
-            title: const Text('Alerts and reports'),
-            subtitle: const Text('Road alerts and traffic alternatives'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: onAlertsAndReports,
-          ),
+          if (flightRole.isChasing)
+            ListTile(
+              key: const Key('ride-actions-alerts'),
+              leading: const Icon(Icons.warning_amber_outlined),
+              title: const Text('Road alerts and reports'),
+              subtitle: const Text('Road hazards and traffic alternatives'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: onAlertsAndReports,
+            ),
           ListTile(
             key: const Key('ride-actions-share-summary'),
             leading: const Icon(Icons.summarize_outlined),
@@ -535,8 +614,28 @@ class _RideActionsPanel extends StatelessWidget {
             subtitle: const Text('Current flight details and recorded route'),
             onTap: onShareSummary,
           ),
+          if (canOfferPilotHandover)
+            ListTile(
+              key: const Key('flight-offer-pilot-handover'),
+              leading: const Icon(Icons.swap_horiz_rounded),
+              title: const Text('Transfer pilot role'),
+              subtitle: const Text(
+                'Offer authority to an active crew member in the balloon',
+              ),
+              onTap: onOfferPilotHandover,
+            ),
+          if (pendingPilotHandoverFrom != null)
+            ListTile(
+              key: const Key('flight-accept-pilot-handover'),
+              leading: const Icon(Icons.how_to_reg_outlined),
+              title: const Text('Accept pilot handover'),
+              subtitle: Text(
+                '$pendingPilotHandoverFrom offered you flight authority. The transfer happens only after you accept.',
+              ),
+              onTap: onAcceptPilotHandover,
+            ),
           const Divider(height: 20),
-          if (maneuverCount > 0)
+          if (flightRole.isChasing && maneuverCount > 0)
             ListTile(
               key: const Key('ride-menu-maneuvers'),
               leading: const Icon(Icons.list_alt),
@@ -558,9 +657,13 @@ class _RideActionsPanel extends StatelessWidget {
             ListTile(
               key: const Key('ride-menu-change-route'),
               leading: const Icon(Icons.edit_road_outlined),
-              title: const Text('Change route'),
-              subtitle: const Text(
-                'Plan a destination, import a GPX file, or load the demo route',
+              title: Text(
+                activeRouteIsForecast ? 'Change flight plan' : 'Change route',
+              ),
+              subtitle: Text(
+                activeRouteIsForecast
+                    ? 'Replace the advisory forecast, or plan chase guidance'
+                    : 'Plan a destination, import a GPX file, or load a forecast plan',
               ),
               onTap: onChangeRoute,
             ),
@@ -731,6 +834,7 @@ class _PreStartRidePanel extends StatelessWidget {
     required this.isLeader,
     required this.busy,
     required this.routeName,
+    required this.routeIsForecast,
     required this.onStartRide,
     required this.onChooseRoute,
     this.onJoinGroup,
@@ -742,6 +846,7 @@ class _PreStartRidePanel extends StatelessWidget {
   final bool isLeader;
   final bool busy;
   final String? routeName;
+  final bool routeIsForecast;
   final VoidCallback onStartRide;
   final VoidCallback onChooseRoute;
   final VoidCallback? onJoinGroup;
@@ -773,7 +878,7 @@ class _PreStartRidePanel extends StatelessWidget {
                       Text(
                         coordinationMode == RideCoordinationMode.solo
                             ? 'Ready for solo flight'
-                            : 'Waiting to start',
+                            : 'Waiting for launch',
                         style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                       Text(
@@ -790,7 +895,7 @@ class _PreStartRidePanel extends StatelessWidget {
                 ),
                 if (!isLeader)
                   const Text(
-                    'LEADER STARTS',
+                    'COORDINATOR STARTS',
                     style: TextStyle(
                       color: Color(0xFFFFC857),
                       fontWeight: FontWeight.w800,
@@ -842,8 +947,10 @@ class _PreStartRidePanel extends StatelessWidget {
                 Expanded(
                   child: Text(
                     routeName == null
-                        ? 'No route selected'
-                        : 'Route: $routeName',
+                        ? 'No flight plan or chase route selected'
+                        : routeIsForecast
+                        ? 'Forecast plan: $routeName'
+                        : 'Chase route: $routeName',
                     maxLines: 2,
                     style: const TextStyle(
                       color: Color(0xFFD4DCE6),
@@ -855,7 +962,7 @@ class _PreStartRidePanel extends StatelessWidget {
                   TextButton(
                     key: const Key('pre-start-choose-route'),
                     onPressed: busy ? null : onChooseRoute,
-                    child: Text(routeName == null ? 'Choose route' : 'Change'),
+                    child: Text(routeName == null ? 'Choose plan' : 'Change'),
                   ),
               ],
             ),
@@ -1196,12 +1303,19 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   _OperationalBoundaryDraft? _operationalBoundaryDraft;
   double _landingRadiusMeters = 500;
   ChaseGuidanceTarget? _chaseGuidanceTarget;
+  String? _observedLandingGuidanceRevision;
   bool _chaseGuidanceRouting = false;
   DateTime? _lastChaseGuidanceRouteAt;
   awareness_geo.GeoPoint? _lastChaseGuidanceTarget;
   int _chaseGuidanceRouteSequence = 0;
   static const _chaseGuidanceResolver = ChaseGuidanceTargetResolver();
   static const _chaseGuidanceReroutePolicy = ChaseGuidanceReroutePolicy();
+  static const _liveFlightProjectionEngine = LiveFlightProjectionEngine();
+  LiveFlightProjectionAssessment _liveFlightProjection =
+      const LiveFlightProjectionAssessment(
+        LiveFlightProjectionStatus.noStructuredPlan,
+      );
+  String? _liveFlightProjectionFingerprint;
   String? _recordedWindContextFingerprint;
   bool _simulationRerouteInFlight = false;
   Duration? _lastSimulationRerouteElapsed;
@@ -1221,7 +1335,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   String? _trailLifecycleFingerprint;
   String? _appliedAuthoritativeRouteRevision;
   String? _simulationRouteFingerprint;
-  route_domain.ImportedRoute? _activeRoute;
+  LiveRouteState _liveRoutes = const LiveRouteState();
+  route_domain.ImportedRoute? _simulationChaseRoute;
   NavigationGuidance? _latestNavigationGuidance;
   TrafficRerouteSuppression? _trafficRerouteSuppression;
   String? _lastTrafficOfferFingerprint;
@@ -1255,6 +1370,27 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   bool get _isSimulation => widget.rideController.session?.isSimulation == true;
 
+  /// The route this device actively follows. The shared aircraft forecast and
+  /// a chase vehicle's road route are deliberately separate sources of truth.
+  route_domain.ImportedRoute? get _activeRoute {
+    if (_isSimulation) return _simulationChaseRoute;
+    final role = widget.rideController.session?.flightRole;
+    return role == null ? null : _liveRoutes.activeFor(role);
+  }
+
+  set _activeRoute(route_domain.ImportedRoute? route) {
+    if (_isSimulation) {
+      _simulationChaseRoute = route;
+      return;
+    }
+    final role = widget.rideController.session?.flightRole;
+    if (role?.isChasing == true) {
+      _liveRoutes = _liveRoutes.withVehicleRoadRoute(route);
+    } else {
+      _liveRoutes = _liveRoutes.withSharedFlightPlan(route);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1282,7 +1418,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       wakeLock: widget.screenWakeLock,
       reassertInterval: widget.screenWakeReassertInterval,
       onError: (error, _) {
-        if (kDebugMode) debugPrint('Could not enforce ride wake lock: $error');
+        if (kDebugMode) {
+          debugPrint('Could not enforce flight wake lock: $error');
+        }
       },
     )..start();
     final carPlayRouting = RoutingConfiguration.fromEnvironment();
@@ -1311,25 +1449,21 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     widget.sharedRoutes.addListener(_onSharedRoutesChanged);
     _capturePlannerLinkError();
     if (widget.sharedRoutes.pending case final file?) {
-      if (widget.rideController.isLocalRideLeader) {
+      if (widget.rideController.hasFlightAuthority) {
         _selectedIndex = 0;
         _changeRouteRequestToken = Object();
         _pendingSharedGpxFile = file;
       } else {
-        _warnings.add(
-          'Only the pilot or coordinator can replace the crew route.',
-        );
+        _warnings.add('Only the pilot can replace the shared flight forecast.');
       }
       _clearSharedRoutePending();
     } else if (widget.sharedRoutes.pendingInAppRoute case final route?) {
-      if (widget.rideController.isLocalRideLeader) {
+      if (widget.rideController.hasFlightAuthority) {
         _selectedIndex = 0;
         _changeRouteRequestToken = Object();
         _pendingInAppRoute = route;
       } else {
-        _warnings.add(
-          'Only the pilot or coordinator can replace the crew route.',
-        );
+        _warnings.add('Only the pilot can replace the shared flight forecast.');
       }
       _clearSharedRoutePending();
     }
@@ -1361,10 +1495,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       if (warningAdded) setState(() {});
       return;
     }
-    if (!widget.rideController.isLocalRideLeader) {
-      _warnings.add(
-        'Only the pilot or coordinator can replace the crew route.',
-      );
+    if (!widget.rideController.hasFlightAuthority) {
+      _warnings.add('Only the pilot can replace the shared flight forecast.');
       _clearSharedRoutePending();
       setState(() {});
       return;
@@ -1387,7 +1519,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final code = widget.sharedRoutes.plannerLinkCode;
     return _warnings.add(
       'Shared route link: $message'
-      '${code == null ? '' : ' You can still enter code $code from Change route → Load a planned route.'}',
+      '${code == null ? '' : ' You can still enter code $code from Change route → Load a forecast flight plan.'}',
     );
   }
 
@@ -1406,8 +1538,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     var publishStoredLeaderRoute = false;
     if (_isSimulation) {
       try {
-        // The chase crew's road route is the group route, because it is the
-        // one anybody drives. The balloon's air track is not a route at all.
+        // Ride Lab currently replays one local chase road route alongside the
+        // balloon track. Production keeps those route purposes separate.
         const loader = BundledFiestaFlightLoader();
         route = await loader.loadChaseRoute();
         _balloonFlight = await loader.load();
@@ -1440,24 +1572,39 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           _rideRouteStore = await JsonFileRouteStore.openForRide(
             session.rideId,
           ).timeout(_localRouteRestoreTimeout);
-          route = await _rideRouteStore!.loadActiveRoute().timeout(
+          final storedRoute = await _rideRouteStore!.loadActiveRoute().timeout(
             _localRouteRestoreTimeout,
           );
           final authoritative = widget.rideController.authoritativeRouteState;
           _appliedAuthoritativeRouteRevision = authoritative.revisionId;
-          if (authoritative.hasDecision) {
-            route = authoritative.route;
-            if (route == null) {
-              await _rideRouteStore!.clearActiveRoute();
-            } else {
-              await _rideRouteStore!.saveActiveRoute(route);
-            }
-          } else if (session.role != RideRole.lead) {
-            route = null;
-            await _rideRouteStore!.clearActiveRoute();
+          if (session.flightRole.isChasing) {
+            // This store belongs to this device, so on a chaser it contains
+            // road guidance. The relay's authoritative route is the shared
+            // aircraft forecast and must never replace it.
+            _liveRoutes = LiveRouteState(
+              sharedFlightPlan: authoritative.hasDecision
+                  ? authoritative.route
+                  : null,
+              vehicleRoadRoute: storedRoute,
+            );
           } else {
-            publishStoredLeaderRoute = route != null;
+            final sharedPlan = authoritative.hasDecision
+                ? authoritative.route
+                : storedRoute;
+            _liveRoutes = LiveRouteState(sharedFlightPlan: sharedPlan);
+            if (authoritative.hasDecision) {
+              if (sharedPlan == null) {
+                await _rideRouteStore!.clearActiveRoute();
+              } else {
+                await _rideRouteStore!.saveActiveRoute(sharedPlan);
+              }
+            } else {
+              publishStoredLeaderRoute =
+                  widget.rideController.hasFlightAuthority &&
+                  sharedPlan != null;
+            }
           }
+          route = _activeRoute;
         }
       } on Object catch (error) {
         // Never fall back to the legacy app-wide route file. A failed
@@ -1467,11 +1614,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _warnings.add('Route storage could not be opened: $error');
         final authoritative = widget.rideController.authoritativeRouteState;
         _appliedAuthoritativeRouteRevision = authoritative.revisionId;
-        if (authoritative.hasDecision) route = authoritative.route;
+        if (authoritative.hasDecision) {
+          _liveRoutes = _liveRoutes.withSharedFlightPlan(authoritative.route);
+        }
+        route = _activeRoute;
       }
     }
 
-    _activeRoute = route;
+    if (_isSimulation) _activeRoute = route;
     if (!mounted) return;
 
     // The map depends only on its ride-scoped route store. It must not leave a
@@ -1489,9 +1639,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       _warnings.add('Traffic preferences could not be restored: $error');
     }
     try {
-      await _restoreChaseGuidanceTarget();
+      await _initializeChaseGuidanceTarget();
     } on Object catch (error) {
-      _warnings.add('Chase guidance preference could not be restored: $error');
+      _warnings.add('Chase vehicle guidance could not be restored: $error');
     }
     try {
       await _replaceAwarenessController(route);
@@ -1511,7 +1661,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _appliedAuthoritativeRouteRevision =
             widget.rideController.authoritativeRouteState.revisionId;
       } on Object catch (error) {
-        _warnings.add('The stored group route could not be published: $error');
+        _warnings.add(
+          'The stored flight forecast could not be published: $error',
+        );
       }
     }
     if (!mounted) return;
@@ -1519,7 +1671,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (widget.enableNativeServices && !_isSimulation) {
       final session = widget.rideController.session;
       final groupRide = widget.rideController.coordinationMode.isGroup;
-      if (groupRide && session?.role == RideRole.lead) {
+      if (groupRide && widget.rideController.hasFlightAuthority) {
         try {
           await widget.rideController.publishRideCode();
         } on RideCodeDirectoryException catch (error) {
@@ -1530,6 +1682,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         widget.rideController.refreshMembershipFreshness();
         final awareness = _awarenessController;
         if (awareness != null) unawaited(awareness.refreshStaleness());
+        _refreshLiveFlightProjection();
       });
       _externalHazardTimer = Timer.periodic(const Duration(minutes: 5), (_) {
         final awareness = _awarenessController;
@@ -1738,23 +1891,24 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       'traffic-reroute-suppression:'
       '${widget.rideController.session?.rideId ?? 'none'}';
 
-  String get _chaseGuidancePreferenceKey =>
-      'chase-guidance-target:'
-      '${widget.rideController.session?.rideId ?? 'none'}';
-
   bool get _isChaserPerspective =>
-      widget.rideController.session?.role != RideRole.lead;
+      widget.rideController.session?.flightRole.isChasing == true;
 
-  Future<void> _restoreChaseGuidanceTarget() async {
+  Future<void> _initializeChaseGuidanceTarget() async {
     if (!_isChaserPerspective) return;
-    final preferences = await SharedPreferences.getInstance();
-    final stored = preferences.getString(_chaseGuidancePreferenceKey);
-    _chaseGuidanceTarget = ChaseGuidanceTarget.values
-        .where((target) => target.name == stored)
-        .firstOrNull;
-    _chaseGuidanceTarget ??= widget.rideController.landingZone == null
-        ? ChaseGuidanceTarget.balloon
-        : ChaseGuidanceTarget.landingArea;
+    final shared = widget.rideController.localChaseGuidanceSelection;
+    final initial =
+        shared?.target ??
+        (widget.rideController.landingZone == null
+            ? ChaseGuidanceTarget.balloon
+            : ChaseGuidanceTarget.landingArea);
+    _chaseGuidanceTarget = initial;
+    _observedLandingGuidanceRevision = _landingGuidanceRevisionFingerprint(
+      widget.rideController.landingZone,
+    );
+    if (shared == null) {
+      await widget.rideController.setLocalChaseGuidanceTarget(initial);
+    }
   }
 
   /// Publishes a rider's own enforcement sighting to the group.
@@ -1771,9 +1925,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   List<HazardReport> get _trafficRerouteHazards {
-    if (!widget.rideController.isLocalRideLeader ||
+    if (widget.rideController.localFlightRole != FlightRole.chaseDriver ||
         !widget.rideController.rideStarted ||
-        _activeRoute == null) {
+        _activeRoute == null ||
+        _activeRoute!.isBalloonForecast) {
       return const [];
     }
     final now = DateTime.now();
@@ -1860,24 +2015,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           if (preview.trafficDelaySaved > Duration.zero)
             'Estimated live-traffic delay avoided: '
                 '${_trafficDurationLabel(preview.trafficDelaySaved)}.',
-          'The current group route remains authoritative until you confirm.',
+          'This vehicle keeps its current road route until you confirm.',
         ],
       );
       if (action != RouteConfirmationAction.confirm || !mounted) return;
-      final previousRevision =
-          widget.rideController.authoritativeRouteState.revisionNumber;
-      await _handleRouteChanged(preview.route);
-      final published = widget.rideController.authoritativeRouteState;
-      if (published.revisionNumber <= previousRevision ||
-          published.route?.id != preview.route.id) {
-        _activeRoute = route;
-        await _replaceAwarenessController(route);
-        await _rideRouteStore?.saveActiveRoute(route);
-        throw const FormatException(
-          'The traffic alternative could not be published. '
-          'The current route has been restored.',
-        );
-      }
+      _liveRoutes = _liveRoutes.withVehicleRoadRoute(preview.route);
+      await _rideRouteStore?.saveActiveRoute(preview.route);
+      await _replaceAwarenessController(preview.route);
       await _suppressTrafficIncidents(hazards);
       if (mounted) {
         setState(() {
@@ -1924,7 +2068,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (session == null) return;
 
     final routeSegments =
-        route?.paths
+        (route?.isBalloonForecast == true ? null : route)?.paths
             .where((path) => path.points.length >= 2)
             .map(
               (path) => path.points
@@ -1950,7 +2094,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // adapter itself stays in the repository, where a closed investigation
     // belongs, and is exercised by its own test.
     final externalProviders = <ExternalHazardProvider>[
-      if (session.role == RideRole.lead && !_isSimulation)
+      if (session.flightRole == FlightRole.chaseDriver && !_isSimulation)
         RelayTrafficHazardProvider(
           configuration: InternetRelayConfiguration.fromEnvironment(),
         ),
@@ -1969,7 +2113,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       // same event once each. The ids are derived from the OpenStreetMap node
       // so they merge into one hazard either way, but there is no reason to pay
       // for it six times over.
-      if (session.role == RideRole.lead)
+      if (session.flightRole == FlightRole.chaseDriver)
         FixedSpeedCameraProvider(readCatalogue: _loadFixedSpeedCameras),
     ];
     final controller = SituationalAwarenessController(
@@ -2006,7 +2150,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     }
     _pushRiderTrails();
     controller.addListener(_onAwarenessChanged);
-    if (session.role == RideRole.lead &&
+    if (session.flightRole == FlightRole.chaseDriver &&
         !_isSimulation &&
         widget.enableNativeServices) {
       unawaited(controller.refreshExternalHazards());
@@ -2021,8 +2165,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   Future<void> _handleRouteChanged(route_domain.ImportedRoute? route) async {
-    if (!_isSimulation && !widget.rideController.isLocalRideLeader) {
-      _warnings.add('A chaser cannot replace the coordinator’s crew route.');
+    if (!_isSimulation && !widget.rideController.hasFlightAuthority) {
+      _warnings.add('Only the pilot can replace the shared flight forecast.');
       await _applyAuthoritativeRouteDecision();
       if (mounted) setState(() {});
       return;
@@ -2039,6 +2183,28 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         await widget.rideController.clearRoute();
       } else {
         await widget.rideController.publishRoute(route);
+        final plan = FlightPlanSummary.fromRoute(route);
+        final structuredPlan = route.forecastPlan;
+        final intendedLanding = plan?.intendedLanding;
+        if (intendedLanding != null) {
+          final plannedArea = structuredPlan?.intendedLandingArea;
+          await widget.rideController.setLandingZone(
+            LandingZoneTarget(
+              center: awareness_geo.GeoPoint(
+                latitude: intendedLanding.latitude,
+                longitude: intendedLanding.longitude,
+              ),
+              radiusMeters: plannedArea?.radiusMeters ?? _landingRadiusMeters,
+              label: 'Planner intended landing area',
+              updatedAt: plannedArea?.updatedAt ?? DateTime.now(),
+            ),
+          );
+        }
+        for (final boundary
+            in structuredPlan?.operationalBoundaries ??
+                const <OperationalBoundary>[]) {
+          await widget.rideController.upsertOperationalBoundary(boundary);
+        }
       }
       _appliedAuthoritativeRouteRevision =
           widget.rideController.authoritativeRouteState.revisionId;
@@ -2064,16 +2230,19 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     }
     _appliedAuthoritativeRouteRevision = state.revisionId;
     final route = state.route;
-    final store = _rideRouteStore;
-    if (store != null) {
-      if (route == null) {
-        await store.clearActiveRoute();
-      } else {
-        await store.saveActiveRoute(route);
+    _liveRoutes = _liveRoutes.withSharedFlightPlan(route);
+    if (!_isChaserPerspective) {
+      final store = _rideRouteStore;
+      if (store != null) {
+        if (route == null) {
+          await store.clearActiveRoute();
+        } else {
+          await store.saveActiveRoute(route);
+        }
       }
+      await _replaceAwarenessController(route);
     }
-    _activeRoute = route;
-    await _replaceAwarenessController(route);
+    _pushRiderTrails();
     if (mounted) setState(() {});
     if (_isChaserPerspective && _chaseGuidanceTarget != null) {
       unawaited(_refreshChaseGuidanceIfNeeded(force: true));
@@ -2290,6 +2459,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return;
     }
     _updateMapOverlays();
+    _refreshWindForFlightContext();
     unawaited(_refreshChaseGuidanceIfNeeded());
     _refreshTrafficOfferState();
     _schedulePublish();
@@ -2317,6 +2487,43 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     });
   }
 
+  List<_CraftMapLocation> _productionCraftMapLocations(
+    CraftRoster roster, {
+    required String localRiderId,
+  }) {
+    final locations = <_CraftMapLocation>[];
+    for (final craft in roster.crafts) {
+      if (craft.deviceIds.contains(localRiderId)) continue;
+      final sample = craft.fix.sample;
+      final reporterId = craft.fix.deviceId;
+      if (sample == null || reporterId == null) continue;
+      final reporter = widget.rideController.participantFor(reporterId);
+      locations.add(
+        _CraftMapLocation(
+          id: craft.id,
+          displayName: craft.craft.label,
+          sourceDeviceIds: craft.deviceIds,
+          freshnessDeviceId: reporterId,
+          isBalloon: craft.isBalloon,
+          motorcycleStyle: craft.isBalloon
+              ? CraftIconStyle.balloon
+              : reporter?.motorcycleStyle ?? craftIconStyleDefault,
+          riderSymbol: craft.isBalloon
+              ? riderSymbolDefault
+              : reporter?.riderSymbol ?? riderSymbolDefault,
+          riderColor: reporter?.riderColor ?? riderColorDefault,
+          altitudeMeters: sample.altitudeMeters,
+          point: route_domain.GeoPoint(
+            latitude: sample.position.latitude,
+            longitude: sample.position.longitude,
+            recordedAt: sample.recordedAt,
+          ),
+        ),
+      );
+    }
+    return List.unmodifiable(locations);
+  }
+
   void _updateMapOverlays({
     bool updateDerivedState = true,
     bool updateOverlayMarkers = true,
@@ -2324,14 +2531,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }) {
     final awareness = _awarenessController;
     if (awareness == null) return;
-    final balloonDeviceIds = _isSimulation
-        ? const <String>{}
-        : (widget.rideController
-                  .resolveCraftRoster()
-                  .balloon
-                  ?.deviceIds
-                  .toSet() ??
-              const <String>{});
+    final craftRoster = _isSimulation
+        ? null
+        : widget.rideController.resolveCraftRoster();
     // One reconciled model for both ride phases and both transports, so nobody
     // disappears at the `rideStarted` transition, a late joiner appears at once,
     // and the count can never disagree with the drawn markers (#132).
@@ -2446,7 +2648,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               altitudeRecordedAt: localMapSample?.recordedAt,
             );
       _mapPosition.value = mapPoint;
+      final role = widget.rideController.session?.flightRole;
+      final balloonAltitude = role?.isAboardBalloon == true
+          ? localMapSample?.altitudeMeters
+          : _latestBalloonFix()?.altitudeMeters;
+      _windForecastController?.updateBalloonAltitude(balloonAltitude);
     }
+    _refreshLiveFlightProjection();
 
     // A simulation can finish between throttled overlay frames. Completion
     // needs to inspect the final GPS fixes even when no later overlay frame is
@@ -2481,36 +2689,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       for (final judgement in hazardJudgements)
         if (judgement.isVisible) _hazardOverlayMarker(judgement.report, now),
       ...(simulatedRiders == null
-              ? visibleRiderLocations
-                    .where(
-                      (location) => location.riderId != localLocation?.riderId,
-                    )
-                    .map(
-                      (location) => (
-                        riderId: location.riderId,
-                        displayName: location.displayName,
-                        role: location.role,
-                        motorcycleStyle:
-                            balloonDeviceIds.contains(location.riderId)
-                            ? CraftIconStyle.balloon
-                            : location.motorcycleStyle,
-                        riderSymbol: location.riderSymbol,
-                        riderColor: location.riderColor,
-                        altitudeMeters: location.sample.altitudeMeters,
-                        point: route_domain.GeoPoint(
-                          latitude: location.sample.position.latitude,
-                          longitude: location.sample.position.longitude,
-                          recordedAt: location.sample.recordedAt,
-                        ),
-                      ),
-                    )
+              ? _productionCraftMapLocations(
+                  craftRoster!,
+                  localRiderId:
+                      widget.rideController.session?.localRiderId ?? '',
+                )
               : simulatedRiders
                     .where((rider) => !rider.isLocal)
                     .map(
-                      (rider) => (
-                        riderId: rider.id,
+                      (rider) => _CraftMapLocation(
+                        id: rider.id,
                         displayName: rider.displayName,
-                        role: rider.role,
+                        sourceDeviceIds: [rider.id],
+                        freshnessDeviceId: rider.id,
+                        isBalloon: rider.role == RideRole.lead,
                         motorcycleStyle: rider.role == RideRole.lead
                             ? CraftIconStyle.balloon
                             : rider.motorcycleStyle,
@@ -2524,36 +2716,34 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                       ),
                     ))
           .map((location) {
-            final isLead = location.role == RideRole.lead;
-            final isBalloonCraft = _isSimulation
-                ? isLead
-                : balloonDeviceIds.contains(location.riderId);
+            final isBalloonCraft = location.isBalloon;
             // A position past its freshness threshold is demoted explicitly in
             // the label. The identity fill remains stable across surfaces.
             final freshness =
-                freshnessByRider[location.riderId]?.freshness ??
+                freshnessByRider[location.freshnessDeviceId]?.freshness ??
                 PresenceFreshness.live;
             final ageSuffix = switch (freshness) {
               PresenceFreshness.live => null,
               PresenceFreshness.none => PresenceFreshness.none.label,
               _ =>
-                freshnessByRider[location.riderId]?.freshnessLabel ??
+                freshnessByRider[location.freshnessDeviceId]?.freshnessLabel ??
                     freshness.label,
             };
             // Issue #151's map companion, kept deliberately minimal: the rider
             // who raised something already has a marker, so it says what they
             // raised rather than inventing a second symbol beside it.
-            final raised = quickMessagesBySender[location.riderId];
+            final raised = location.sourceDeviceIds
+                .map((deviceId) => quickMessagesBySender[deviceId])
+                .whereType<ReceivedQuickMessage>()
+                .firstOrNull;
             final roleSuffix = raised != null
                 ? raised.label
                 : isBalloonCraft
                 ? 'Balloon'
-                : isLead
-                ? 'Lead'
-                : null;
+                : 'Chase vehicle';
             final label = [
               location.displayName,
-              ?roleSuffix,
+              roleSuffix,
               if (isBalloonCraft && location.altitudeMeters != null)
                 '${location.altitudeMeters!.round()} m',
               ?ageSuffix,
@@ -2563,7 +2753,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             // rider look like different people across surfaces (#250).
             final baseColor = location.riderColor.color;
             return MapOverlayMarker(
-              id: 'rider-${location.riderId}',
+              id: 'craft-${location.id}',
               point: location.point,
               label: label,
               motorcycleStyle: location.motorcycleStyle,
@@ -2632,7 +2822,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final bridge = _carPlayBridge;
     if (bridge == null) return;
     final session = widget.rideController.session;
-    final navigationRoute = _activeRoute;
+    final navigationRoute = _activeRoute?.isBalloonForecast == true
+        ? null
+        : _activeRoute;
     final routeProgress = _carPlayRouteProgressTracker.update(
       navigationRoute,
       _mapPosition.value,
@@ -2822,7 +3014,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // A real ride remains leader-owned. Ride Lab drives the entire virtual
     // group locally, so completion must work from its leader, follower and TEC
     // perspectives alike.
-    if (session == null || (!_isSimulation && session.role != RideRole.lead)) {
+    if (session == null ||
+        (!_isSimulation && !widget.rideController.hasFlightAuthority)) {
       return;
     }
     final route = _activeRoute;
@@ -2886,7 +3079,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       }
     } catch (error, stackTrace) {
       if (kDebugMode) {
-        debugPrint('Could not end the completed ride: $error\n$stackTrace');
+        debugPrint('Could not end the completed flight: $error\n$stackTrace');
       }
     } finally {
       _autoEndingRide = false;
@@ -2905,7 +3098,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   static route_domain.GeoPoint? _routeDestination(
     route_domain.ImportedRoute? route,
   ) {
-    if (route == null) return null;
+    if (route == null || route.isBalloonForecast) return null;
     for (final path in route.paths.reversed) {
       if (path.points.isNotEmpty) return path.points.last;
     }
@@ -2945,53 +3138,51 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// controller's leader history, which is rebuilt from the durable journal on
   /// restart, so it survives an app restart mid-ride as far as the journal
   /// allows.
-  void _updateRiderTrails(SituationalAwarenessController awareness) {
+  void _updateRiderTrails(SituationalAwarenessController _) {
     if (!widget.rideController.rideStarted) {
       _trailRecorder.clear();
       _publishRiderTrails(const []);
       return;
     }
-    final balloonDeviceIds =
-        widget.rideController.resolveCraftRoster().balloon?.deviceIds.toSet() ??
-        const <String>{};
+    final tracks = const CraftTrackReducer().fromEvents(
+      widget.rideController.events,
+    );
+    final roster = widget.rideController.resolveCraftRoster();
     _publishRiderTrails(
-      _trailRecorder.update([
-        for (final location in awareness.riderLocations)
-          RiderTrailUpdate(
-            riderId: location.riderId,
-            displayName: location.displayName,
-            position: route_domain.GeoPoint(
-              latitude: location.sample.position.latitude,
-              longitude: location.sample.position.longitude,
-              elevationMeters: location.sample.altitudeMeters,
-              altitudeSource: location.sample.altitudeSource,
-              altitudeDatum: location.sample.altitudeDatum,
-              altitudeAccuracyMeters: location.sample.altitudeAccuracyMeters,
-              recordedAt: location.sample.recordedAt,
-            ),
-            isLeader: location.role == RideRole.lead,
-            isBalloon: balloonDeviceIds.contains(location.riderId),
-            isEligible:
-                widget.rideController
-                    .participantFor(location.riderId)
-                    ?.isEligibleForLivePosition ==
-                true,
-            journalTrail: location.role == RideRole.lead
-                ? [
-                    for (final sample in awareness.leaderLocationSamples)
-                      route_domain.GeoPoint(
-                        latitude: sample.position.latitude,
-                        longitude: sample.position.longitude,
-                        elevationMeters: sample.altitudeMeters,
-                        altitudeSource: sample.altitudeSource,
-                        altitudeDatum: sample.altitudeDatum,
-                        altitudeAccuracyMeters: sample.altitudeAccuracyMeters,
-                        recordedAt: sample.recordedAt,
-                      ),
-                  ]
-                : null,
+      [
+        for (final track in tracks)
+          RiderTrail(
+            riderId: track.craftId,
+            displayName: track.label,
+            kind: track.isBalloon
+                ? RiderTrailKind.balloonGroundTrack
+                : RiderTrailKind.rider,
+            points: _trailRecorder.boundedTrail([
+              for (final sample in track.samples)
+                route_domain.GeoPoint(
+                  latitude: sample.position.latitude,
+                  longitude: sample.position.longitude,
+                  elevationMeters: sample.altitudeMeters,
+                  altitudeSource: sample.altitudeSource,
+                  altitudeDatum: sample.altitudeDatum,
+                  altitudeAccuracyMeters: sample.altitudeAccuracyMeters,
+                  recordedAt: sample.recordedAt,
+                ),
+            ]),
           ),
-      ]),
+      ],
+      colors: {
+        for (final track in tracks)
+          if (!track.isBalloon)
+            track.craftId:
+                widget.rideController
+                    .participantFor(
+                      roster.byId(track.craftId)?.fix.deviceId ?? '',
+                    )
+                    ?.riderColor
+                    .color ??
+                riderColorDefault.color,
+      },
     );
   }
 
@@ -3020,7 +3211,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       ),
   ];
 
-  void _publishRiderTrails(List<RiderTrail> trails) {
+  void _publishRiderTrails(
+    List<RiderTrail> trails, {
+    Map<String, Color> colors = const {},
+  }) {
     _recordedTrailTraces = List.unmodifiable([
       for (final trail in trails.where((trail) => trail.isRenderable))
         for (final (index, points)
@@ -3034,12 +3228,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 : 'trail-${trail.riderId}-$index',
             points: points,
             label: switch (trail.kind) {
-              RiderTrailKind.leader => '${trail.displayName} leader trail',
+              RiderTrailKind.leader => '${trail.displayName} pilot trail',
               RiderTrailKind.balloonGroundTrack =>
                 '${trail.displayName} balloon ground track',
+              RiderTrailKind.forecastTrack =>
+                '${trail.displayName} flight forecast',
               RiderTrailKind.rider => '${trail.displayName} trail',
               RiderTrailKind.operationalBoundary =>
                 '${trail.displayName} operational boundary',
+              RiderTrailKind.originalLandingEnvelope =>
+                '${trail.displayName} original landing envelope',
+              RiderTrailKind.liveProjectionTrack =>
+                '${trail.displayName} live flight projection',
+              RiderTrailKind.liveLandingEnvelope =>
+                '${trail.displayName} live possible landing envelope',
               // RiderTrailRecorder only records where riders have been, so it
               // never produces a route-start connector; the map composes that
               // one itself.
@@ -3047,6 +3249,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 '${trail.displayName} route to start',
             },
             kind: trail.kind,
+            color: colors[trail.riderId],
           ),
     ]);
     _pushRiderTrails();
@@ -3059,13 +3262,96 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   void _pushRiderTrails() {
     _riderTrails.value = List.unmodifiable([
       for (final trace in _recordedTrailTraces) _simplifiedForDisplay(trace),
+      ..._sharedForecastTraces,
+      ..._originalLandingEnvelopeTraces,
+      ..._liveProjectionTraces,
       ..._operationalBoundaryTraces,
     ]);
   }
 
+  List<MapOverlayTrace> get _sharedForecastTraces {
+    final plan = _liveRoutes.sharedFlightPlan;
+    final role = widget.rideController.session?.flightRole;
+    if (_isSimulation ||
+        !_isChaserPerspective ||
+        role == FlightRole.chaseDriver ||
+        plan == null) {
+      return const [];
+    }
+    return [
+      for (final (index, path) in plan.paths.indexed)
+        if (path.points.length >= 2)
+          MapOverlayTrace(
+            id: 'shared-flight-forecast-$index',
+            points: _trailSimplifier.simplify(path.points),
+            label: path.name ?? '${plan.name} shared flight forecast',
+            kind: RiderTrailKind.forecastTrack,
+          ),
+    ];
+  }
+
+  List<MapOverlayTrace> get _originalLandingEnvelopeTraces {
+    final role = widget.rideController.session?.flightRole;
+    final plan = _liveRoutes.sharedFlightPlan?.forecastPlan;
+    final envelope = plan?.landingEnvelope ?? const [];
+    if (_isSimulation ||
+        role == FlightRole.chaseDriver ||
+        envelope.length < 3) {
+      return const [];
+    }
+    final points = <route_domain.GeoPoint>[
+      for (final point in envelope)
+        route_domain.GeoPoint(
+          latitude: point.latitude,
+          longitude: point.longitude,
+        ),
+      route_domain.GeoPoint(
+        latitude: envelope.first.latitude,
+        longitude: envelope.first.longitude,
+      ),
+    ];
+    return [
+      MapOverlayTrace(
+        id: 'original-landing-envelope-${plan!.id}',
+        points: _trailSimplifier.simplify(points),
+        label:
+            'Original landing envelope · forecast wind valid to '
+            '${plan.wind.validTo.toLocal()}',
+        kind: RiderTrailKind.originalLandingEnvelope,
+      ),
+    ];
+  }
+
+  List<MapOverlayTrace> get _liveProjectionTraces {
+    final role = widget.rideController.session?.flightRole;
+    final projection = _liveFlightProjection.projection;
+    if (role == FlightRole.chaseDriver || projection == null) return const [];
+    final validAt = projection.windValidAt.toLocal();
+    return [
+      if (projection.track.length >= 2)
+        MapOverlayTrace(
+          id: 'live-flight-projection',
+          points: _balloonTrailSimplifier.simplify(projection.track),
+          label:
+              'Live projection · ${projection.windSource} · wind valid $validAt',
+          kind: RiderTrailKind.liveProjectionTrack,
+        ),
+      if (projection.landingEnvelope.length >= 4)
+        MapOverlayTrace(
+          id: 'live-possible-landing-envelope',
+          points: _trailSimplifier.simplify(projection.landingEnvelope),
+          label:
+              'Live possible-landing envelope · forecast wind valid $validAt · suitability unverified',
+          kind: RiderTrailKind.liveLandingEnvelope,
+        ),
+    ];
+  }
+
   MapOverlayTrace _simplifiedForDisplay(MapOverlayTrace trace) {
     final simplified =
-        (trace.kind == RiderTrailKind.balloonGroundTrack
+        (trace.kind == RiderTrailKind.balloonGroundTrack ||
+                    trace.kind == RiderTrailKind.forecastTrack ||
+                    trace.kind == RiderTrailKind.liveProjectionTrack
                 ? _balloonTrailSimplifier
                 : _trailSimplifier)
             .simplify(trace.points);
@@ -3144,6 +3430,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   void _onWindForecastChanged() {
+    _refreshLiveFlightProjection();
     final field = _windForecastController?.field;
     if (field == null ||
         !widget.rideController.isLocalRideLeader ||
@@ -3234,6 +3521,18 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   };
 
   void _onRideControllerChanged() {
+    final sharedTarget = _isChaserPerspective
+        ? widget.rideController.localChaseGuidanceSelection?.target
+        : null;
+    final chaseTargetChanged =
+        sharedTarget != null && sharedTarget != _chaseGuidanceTarget;
+    if (sharedTarget != null) _chaseGuidanceTarget = sharedTarget;
+    final landingRevision = _landingGuidanceRevisionFingerprint(
+      widget.rideController.landingZone,
+    );
+    final landingTargetChanged =
+        landingRevision != _observedLandingGuidanceRevision;
+    _observedLandingGuidanceRevision = landingRevision;
     _syncSharedLandingZone();
     _syncOperationalBoundaries();
     if (_isChaserPerspective && _chaseGuidanceTarget == null) {
@@ -3265,13 +3564,27 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         unawaited(_pushNotificationController?.refreshRegistration());
       }
       _publishObserverSnapshot();
-      unawaited(_refreshChaseGuidanceIfNeeded());
+      unawaited(
+        _refreshChaseGuidanceIfNeeded(
+          force:
+              chaseTargetChanged ||
+              (landingTargetChanged &&
+                  _chaseGuidanceTarget == ChaseGuidanceTarget.landingArea),
+        ),
+      );
     }
     if (widget.rideController.rideEnded && !_rideEndHandled) {
       unawaited(_handleRideEnded());
     }
     _schedulePublish();
   }
+
+  static String? _landingGuidanceRevisionFingerprint(
+    LandingZoneTarget? target,
+  ) => target == null
+      ? null
+      : '${target.center.latitude}:${target.center.longitude}:'
+            '${target.radiusMeters}:${target.updatedAt.toUtc().toIso8601String()}';
 
   void _syncSharedLandingZone() {
     final target = widget.rideController.landingZone;
@@ -3368,7 +3681,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       await locationController.resumeIfAuthorized();
     } on Object catch (error, stackTrace) {
       if (kDebugMode) {
-        debugPrint('Could not start GPS before the ride: $error\n$stackTrace');
+        debugPrint(
+          'Could not start GPS before the flight: $error\n$stackTrace',
+        );
       }
     }
   }
@@ -3509,20 +3824,26 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // the journal feeds trails, summaries and GPX recording.
     _updateMapOverlays(updateDerivedState: false, updateOverlayMarkers: false);
     _checkOperationalBoundaries();
-    final point = _mapPosition.value;
-    final wind = _windForecastController;
-    if (point != null && wind != null) {
-      unawaited(
-        wind.refresh(
-          awareness_geo.GeoPoint(
-            latitude: point.latitude,
-            longitude: point.longitude,
-          ),
-        ),
-      );
-    }
+    _refreshWindForFlightContext();
     unawaited(_refreshChaseGuidanceIfNeeded());
     if (warningChanged) setState(() {});
+  }
+
+  void _refreshWindForFlightContext() {
+    final wind = _windForecastController;
+    final role = widget.rideController.session?.flightRole;
+    if (wind == null || role == FlightRole.chaseDriver) return;
+    final balloon = _latestBalloonFix();
+    final local = _mapPosition.value;
+    final center =
+        balloon?.position ??
+        (local == null
+            ? null
+            : awareness_geo.GeoPoint(
+                latitude: local.latitude,
+                longitude: local.longitude,
+              ));
+    if (center != null) unawaited(wind.refresh(center));
   }
 
   void _checkOperationalBoundaries() {
@@ -3675,9 +3996,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 // record in the ride roster instead (#144).
                 participants: widget.rideController.liveParticipants,
                 coordinationMode: widget.rideController.coordinationMode,
-                isLeader: session.role == RideRole.lead,
+                isLeader: widget.rideController.hasFlightAuthority,
                 busy: widget.rideController.busy || _loading,
                 routeName: _activeRoute?.name,
+                routeIsForecast: _activeRoute?.isBalloonForecast == true,
                 onStartRide: _confirmStartRide,
                 onChooseRoute: _requestRouteChange,
                 onJoinGroup: widget.onJoinGroupRequested == null
@@ -3704,6 +4026,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         // the map viewport until the rider deliberately leaves the map tab.
         final hideWhileMoving =
             widget.rideController.rideStarted &&
+            session.flightRole == FlightRole.chaseDriver &&
             _selectedIndex == 0 &&
             _activeRoute != null &&
             navigationPosition != null;
@@ -3829,9 +4152,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final session = widget.rideController.session;
-    final isBalloonView = _isSimulation
-        ? session?.role == RideRole.lead
-        : widget.rideController.localCraft?.isBalloon == true;
+    final flightRole = session?.flightRole;
+    final isBalloonView = session?.flightRole.isAboardBalloon == true;
+    final isDriverView = flightRole == FlightRole.chaseDriver;
     final landingZoneUpdates = _isSimulation
         ? _simulationLandingZone
         : _sharedLandingZone;
@@ -3852,12 +4175,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       onMapTap: _selectingLandingZone || boundaryDraft != null
           ? _handleFlightSetupMapTap
           : null,
-      windForecastController: _windForecastController,
+      windForecastController: isDriverView ? null : _windForecastController,
       groupRiderCount: widget.rideController.liveParticipants.length,
       onOpenRoster: _openRoster,
       // Deliberately not `onOpenRideMenu`. The control that reaches the other
       // tabs is rendered by this shell instead — see _openRideMenu and #404.
-      enforcementAlert: isBalloonView ? null : _enforcementAlert,
+      enforcementAlert: isDriverView ? _enforcementAlert : null,
       rideCompletionSuggestion: _rideCompletionSuggestion,
       onEndRideForEveryone: _endRideFromCompletionSuggestion,
       onDismissRideCompletion: _dismissRideCompletionSuggestion,
@@ -3872,9 +4195,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       initialRouteStartConnector: _routeStartConnector,
       onRouteStartConnectorChanged: (connector) =>
           _routeStartConnector = connector,
-      onReportHazard: isBalloonView || _awarenessController == null
-          ? null
-          : _reportHazardFromMap,
+      onReportHazard: isDriverView && _awarenessController != null
+          ? _reportHazardFromMap
+          : null,
       emergencyContacts: _emergencyContacts,
       onEmergencyAlert: _sendEmergencyMapAlert,
       onEmergencyIssue: _sendEmergencyMapIssue,
@@ -3884,10 +4207,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       rideStarted: widget.rideController.rideStarted,
       onLeaveRide: _confirmLeaveRideFromMap,
       onRouteCommitted: _onRouteChanged,
-      onNavigationGuidanceChanged: isBalloonView
-          ? null
-          : _onNavigationGuidanceChanged,
-      onNavigationViewportChanged: isBalloonView
+      onNavigationGuidanceChanged: isDriverView
+          ? _onNavigationGuidanceChanged
+          : null,
+      onNavigationViewportChanged: !isDriverView
           ? null
           : (viewport) {
               final bridge = _carPlayBridge;
@@ -3920,14 +4243,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           ? () async => _mapPosition.value
           : _acquireCurrentPosition,
       routeStore: routeStore,
-      canEditRoute:
-          !isBalloonView &&
-          (_isSimulation || widget.rideController.isLocalRideLeader),
+      canEditRoute: _isSimulation || widget.rideController.hasFlightAuthority,
       distanceUnit: widget.distanceUnits.value,
-      speedLimitDisplay: isBalloonView ? null : widget.speedLimitDisplay,
+      speedLimitDisplay: isDriverView ? widget.speedLimitDisplay : null,
       chaseVehicle: widget.chaseVehicle?.vehicle ?? ChaseVehicle.unspecified,
       showRouteProgress:
-          !isBalloonView && (widget.routeProgressDisplay?.enabled ?? true),
+          isDriverView && (widget.routeProgressDisplay?.enabled ?? true),
       darkMapStyle: widget.mapStyleMode.resolveDark(
         MediaQuery.platformBrightnessOf(context),
       ),
@@ -3945,6 +4266,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       perspective: isBalloonView
           ? RideMapPerspective.balloon
           : RideMapPerspective.chase,
+      showForecastContext:
+          flightRole == FlightRole.pilot ||
+          flightRole == FlightRole.balloonCrew ||
+          flightRole == FlightRole.chaseCrew,
     );
     if (!_selectingLandingZone && boundaryDraft == null) return map;
     return Stack(
@@ -4129,6 +4454,40 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     return candidates.first.sample;
   }
 
+  void _refreshLiveFlightProjection() {
+    final role = widget.rideController.session?.flightRole;
+    final showsProjection =
+        role == FlightRole.pilot ||
+        role == FlightRole.balloonCrew ||
+        role == FlightRole.chaseCrew;
+    final plan = showsProjection
+        ? _liveRoutes.sharedFlightPlan?.forecastPlan
+        : null;
+    final fix = showsProjection ? _latestBalloonFix() : null;
+    final field = showsProjection ? _windForecastController?.field : null;
+    final now = DateTime.now();
+    final fingerprint = [
+      role?.name ?? 'none',
+      plan?.id ?? 'none',
+      fix?.recordedAt.toUtc().toIso8601String() ?? 'none',
+      fix?.altitudeMeters?.toStringAsFixed(1) ?? 'none',
+      field?.fetchedAt.toUtc().toIso8601String() ?? 'none',
+      field?.validAt.toUtc().toIso8601String() ?? 'none',
+      now.millisecondsSinceEpoch ~/ const Duration(seconds: 15).inMilliseconds,
+    ].join(':');
+    if (fingerprint == _liveFlightProjectionFingerprint) return;
+    _liveFlightProjectionFingerprint = fingerprint;
+    _liveFlightProjection = _liveFlightProjectionEngine.evaluate(
+      plan: plan,
+      balloonFix: fix,
+      wind: field,
+      now: now,
+      allowReferenceWind: _isSimulation,
+    );
+    _pushRiderTrails();
+    if (mounted) setState(() {});
+  }
+
   ChaseGuidanceDestination? _currentChaseGuidanceDestination({
     ChaseGuidanceTarget? target,
   }) {
@@ -4143,6 +4502,24 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   Future<void> _chooseChaseGuidanceTarget() async {
+    final role = widget.rideController.session?.flightRole;
+    if (role == null ||
+        !canChangeChaseGuidanceTarget(
+          role: role,
+          navigation: _mapNavigationPosition.value,
+          now: DateTime.now(),
+        )) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Stop the chase vehicle before changing its guidance target.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     final landing = _currentChaseGuidanceDestination(
       target: ChaseGuidanceTarget.landingArea,
     );
@@ -4159,7 +4536,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           const ListTile(
             title: Text('Directions for this chase vehicle'),
             subtitle: Text(
-              'This changes only this device. The route ends on a road near the target; it never directs a vehicle off-road.',
+              'Driver and crew in this vehicle share this choice. The route ends on a road near the target; it never directs a vehicle off-road.',
             ),
           ),
           ListTile(
@@ -4201,9 +4578,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       ),
     );
     if (selected == null || !mounted) return;
+    final saved = await widget.rideController.setLocalChaseGuidanceTarget(
+      selected,
+    );
+    if (!saved || !mounted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('The shared chase target could not be updated.'),
+          ),
+        );
+      }
+      return;
+    }
     setState(() => _chaseGuidanceTarget = selected);
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_chaseGuidancePreferenceKey, selected.name);
     await _refreshChaseGuidanceIfNeeded(force: true);
   }
 
@@ -4273,7 +4661,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         id: 'personal-chase-${_chaseGuidanceRouteSequence++}',
         name: selected.label,
         description:
-            'Device-local road guidance. The road endpoint is '
+            'Road guidance for this chase vehicle. The road endpoint is '
             '${MeasurementFormatter(widget.distanceUnits.value).distance(separation)} '
             'from ${selected == ChaseGuidanceTarget.balloon ? 'the latest balloon fix' : 'the centre of the intended area'}. Access and stopping suitability remain unverified.',
         importedAt: now,
@@ -4302,9 +4690,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         maneuvers: result.maneuvers,
         plannedDuration: result.duration,
       );
-      _activeRoute = route;
+      _liveRoutes = _liveRoutes.withVehicleRoadRoute(route);
       _lastChaseGuidanceRouteAt = now;
       _lastChaseGuidanceTarget = destination.point;
+      await _rideRouteStore?.saveActiveRoute(route);
       await _replaceAwarenessController(route);
       if (mounted) setState(() {});
     } on Object catch (error) {
@@ -4354,7 +4743,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         distanceMeters: previous.distanceMeters,
         armed: false,
         clearedBy: _dismissedEnforcementAlertId == previous.hazard.id
-            ? 'rider tap'
+            ? 'crew tap'
             : 'no longer detected',
       );
     }
@@ -4585,6 +4974,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       locationReady: locationReady,
       isGroup: controller.coordinationMode.isGroup,
       routeName: _activeRoute?.name,
+      routeIsBalloonForecast: _activeRoute?.isBalloonForecast == true,
     );
   }
 
@@ -4612,14 +5002,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               !locationController.status.canSample)) {
         final added = _warnings.add(
           'Open Balloon Crumbs on the iPhone and allow location access before '
-          'starting the ride from CarPlay.',
+          'starting the flight from CarPlay.',
         );
         _updateMapOverlays(updateDerivedState: false);
         if (added && mounted) setState(() {});
         return;
       }
 
-      _diagnostics?.recordNote('start ride accepted from CarPlay');
+      _diagnostics?.recordNote('start flight accepted from CarPlay');
       if (await _commitRideStart(source: 'CarPlay')) {
         await _resumeLocationForActiveRide();
       }
@@ -4640,11 +5030,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return true;
     } on Object catch (error, stackTrace) {
       _diagnostics?.recordNote(
-        'start ride failed from $source: ${error.runtimeType}: $error',
+        'start flight failed from $source: ${error.runtimeType}: $error',
       );
       if (kDebugMode) {
         debugPrint(
-          'Could not start the ride from $source: $error\n$stackTrace',
+          'Could not start the flight from $source: $error\n$stackTrace',
         );
       }
       final message = source == 'CarPlay'
@@ -4695,7 +5085,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final contacts = <String, MapEmergencyContact>{};
     final sharedNumbers = widget.rideController.receivedRiderContacts;
     final session = widget.rideController.session;
-    if (session != null && session.role == RideRole.lead) {
+    if (session != null && session.flightRole == FlightRole.pilot) {
       contacts[session.localRiderId] = MapEmergencyContact(
         riderId: session.localRiderId,
         displayName: session.displayName,
@@ -4859,7 +5249,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final recipients = _ownContactRecipients;
     if (recipients.isEmpty) {
       _showRideSnackBar(
-        'Nobody is holding the leader role yet, so there '
+        'Nobody is coordinating the flight yet, so there '
         'is nobody to give your number to. Nothing has been shared.',
       );
       return;
@@ -4929,7 +5319,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   String? get _currentLeaderRiderId {
     final session = widget.rideController.session;
-    if (session?.role == RideRole.lead) return session!.localRiderId;
+    if (session?.flightRole == FlightRole.pilot) {
+      return session!.localRiderId;
+    }
     for (final rider in _awarenessController?.riderLocations ?? const []) {
       if (rider.role == RideRole.lead) return rider.riderId;
     }
@@ -4953,7 +5345,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // the gate; no entry at all means the tap never reached Dart.
     final controller = widget.rideController;
     _diagnostics?.recordNote(
-      'start ride tapped on the phone: '
+      'start flight tapped on the phone: '
       'role=${controller.session?.role.name ?? 'none'} '
       'started=${controller.rideStarted} '
       'busy=${controller.busy} '
@@ -4961,15 +5353,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
     if (_rideStartFlowInProgress) {
       _diagnostics?.recordNote(
-        'start ride refused before the dialog: another start flow is active',
+        'start flight refused before the dialog: another start flow is active',
       );
       return;
     }
     _rideStartFlowInProgress = true;
     try {
-      if (controller.session?.role != RideRole.lead || controller.rideStarted) {
+      if (!controller.hasFlightAuthority || controller.rideStarted) {
         _diagnostics?.recordNote(
-          'start ride refused before the dialog: not the leader, or already '
+          'start flight refused before the dialog: no pilot authority, or already '
           'started',
         );
         return;
@@ -4981,12 +5373,17 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           title: const Text('Start this flight?'),
           content: Text(
             route == null
-                ? 'No route is selected. You can choose one now, or start '
-                      'without navigation. Live location sharing and flight '
+                ? 'No forecast plan or chase route is selected. You can '
+                      'choose one now, or start without one. Live location '
+                      'sharing and flight '
                       'recording begin only after you start.'
-                : 'Route: ${route.name}\n\nLive location sharing, route '
-                      'progress, off-course alerts and flight recording will '
-                      'begin for the group.',
+                : route.isBalloonForecast
+                ? 'Forecast plan: ${route.name}\n\nThis is an advisory '
+                      'wind-drift forecast, not a route the balloon can '
+                      'follow. Live location sharing and flight recording '
+                      'will begin for the group.'
+                : 'Chase route: ${route.name}\n\nLive location sharing, road '
+                      'guidance and flight recording will begin for the group.',
           ),
           actions: [
             TextButton(
@@ -4999,7 +5396,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 key: const Key('start-without-route-button'),
                 onPressed: () =>
                     Navigator.pop(dialogContext, _StartRideDecision.start),
-                child: const Text('Start without route'),
+                child: const Text('Start without a plan'),
               ),
               FilledButton.icon(
                 key: const Key('choose-route-before-start-button'),
@@ -5008,7 +5405,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                   _StartRideDecision.chooseRoute,
                 ),
                 icon: const Icon(Icons.route_outlined),
-                label: const Text('Choose route'),
+                label: const Text('Choose plan'),
               ),
             ] else
               FilledButton.icon(
@@ -5022,7 +5419,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         ),
       );
       _diagnostics?.recordNote(
-        'start ride decision: ${decision?.name ?? 'dismissed'}',
+        'start flight decision: ${decision?.name ?? 'dismissed'}',
       );
       if (decision == _StartRideDecision.chooseRoute) {
         _requestRouteChange();
@@ -5090,32 +5487,156 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
   }
 
+  List<RideParticipant> get _pilotHandoverTargets {
+    final balloonDeviceIds =
+        widget.rideController.resolveCraftRoster().balloon?.deviceIds.toSet() ??
+        const <String>{};
+    return widget.rideController.liveParticipants
+        .where(
+          (participant) =>
+              !participant.isLocal &&
+              participant.flightRole == FlightRole.balloonCrew &&
+              balloonDeviceIds.contains(participant.riderId),
+        )
+        .toList(growable: false);
+  }
+
+  String? get _pendingPilotHandoverFrom {
+    final offer = widget.rideController.pendingLocalPilotHandover;
+    if (offer == null) return null;
+    return widget.rideController
+            .participantFor(offer.fromDeviceId)
+            ?.displayName ??
+        'The current pilot';
+  }
+
+  Future<void> _offerPilotHandover() async {
+    final targets = _pilotHandoverTargets;
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No active balloon crew member is available for pilot handover.',
+          ),
+        ),
+      );
+      return;
+    }
+    final target = await showModalBottomSheet<RideParticipant>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ListTile(
+            title: Text('Transfer pilot role'),
+            subtitle: Text(
+              'Choose someone in the balloon. They become pilot only after accepting the ten-minute offer; you remain pilot until then.',
+            ),
+          ),
+          for (final participant in targets)
+            ListTile(
+              key: Key('pilot-handover-target-${participant.riderId}'),
+              leading: const Icon(Icons.person_outline),
+              title: Text(participant.displayName),
+              subtitle: Text(participant.stateLabel),
+              onTap: () => Navigator.pop(sheetContext, participant),
+            ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+    if (target == null || !mounted) return;
+    await widget.rideController.offerPilotHandover(target.riderId);
+    if (!mounted) return;
+    final error = widget.rideController.errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error ??
+              'Pilot handover offered to ${target.displayName}. You retain authority until they accept.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _acceptPilotHandover() async {
+    final offer = widget.rideController.pendingLocalPilotHandover;
+    if (offer == null) return;
+    final pilot = widget.rideController.participantFor(offer.fromDeviceId);
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Accept pilot authority?'),
+        content: Text(
+          '${pilot?.displayName ?? 'The current pilot'} will become balloon crew and this device will gain authority to update landing intent and end the flight.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            key: const Key('confirm-pilot-handover'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Accept handover'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    await widget.rideController.acceptPilotHandover();
+    if (!mounted) return;
+    final error = widget.rideController.errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error ?? 'Pilot handover accepted. You are now pilot.'),
+      ),
+    );
+  }
+
   Widget _buildRideActions() => _RideActionsPanel(
+    flightRole:
+        widget.rideController.session?.flightRole ?? FlightRole.observer,
     coordinationMode: widget.rideController.coordinationMode,
-    canChangeRoute: _isSimulation || widget.rideController.isLocalRideLeader,
+    canChangeRoute: _isSimulation || widget.rideController.hasFlightAuthority,
     onAlertsAndReports: _openAlertsAndReports,
     onShareSummary: _shareCurrentRideSummary,
+    canOfferPilotHandover:
+        widget.rideController.hasFlightAuthority &&
+        _pilotHandoverTargets.isNotEmpty,
+    onOfferPilotHandover: () => unawaited(_offerPilotHandover()),
+    pendingPilotHandoverFrom: _pendingPilotHandoverFrom,
+    onAcceptPilotHandover: () => unawaited(_acceptPilotHandover()),
     onOpenRoster: _openRoster,
     onShareRoster: _shareRoster,
     onChangeRoute: _requestRouteChange,
+    activeRouteIsForecast: _activeRoute?.isBalloonForecast == true,
     canChangeLandingZone:
-        !_isSimulation && widget.rideController.isLocalRideLeader,
+        !_isSimulation && widget.rideController.hasFlightAuthority,
     landingZoneLabel: widget.rideController.landingZone?.label,
     onChangeLandingZone: () => unawaited(_chooseLandingZoneOnMap()),
     boundaryCount: widget.rideController.operationalBoundaries.length,
     canEditBoundaries:
-        !_isSimulation && widget.rideController.isLocalRideLeader,
+        !_isSimulation && widget.rideController.hasFlightAuthority,
     onOperationalBoundaries: () => unawaited(_openOperationalBoundaries()),
     canChooseChaseGuidance:
         !_isSimulation &&
         _isChaserPerspective &&
         widget.rideController.rideStarted &&
-        !widget.rideController.rideEnded,
+        !widget.rideController.rideEnded &&
+        canChangeChaseGuidanceTarget(
+          role:
+              widget.rideController.session?.flightRole ?? FlightRole.observer,
+          navigation: _mapNavigationPosition.value,
+          now: DateTime.now(),
+        ),
     chaseGuidanceLabel: _chaseGuidanceRouting
         ? 'Calculating a road rendezvous…'
         : _chaseGuidanceTarget == null
         ? null
-        : '${_chaseGuidanceTarget!.label} · only on this device',
+        : '${_chaseGuidanceTarget!.label} · shared in this vehicle',
     onChooseChaseGuidance: () => unawaited(_chooseChaseGuidanceTarget()),
     maneuverCount: const NavigationGuidancePlanner()
         .instructions(_activeRoute)
@@ -5134,13 +5655,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     ownPhoneNumberShared: widget.rideController.hasSharedOwnContactNumber,
     ownPhoneNumberRecipientLabel: _ownContactRecipients.toRideGroup
         ? 'this flight'
-        : 'the coordinator',
+        : 'the pilot',
     onShareOwnPhoneNumber: () => unawaited(_shareOwnPhoneNumber()),
     ridePaused: widget.rideController.ridePaused,
     canToggleRidePause:
         !_isSimulation &&
         widget.rideController.rideStarted &&
-        widget.rideController.session?.role == RideRole.lead,
+        widget.rideController.hasFlightAuthority,
     onToggleRidePause: _toggleRidePause,
     onLeaveOrEndRide: _confirmLeaveRideFromMap,
   );
@@ -5935,19 +6456,46 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     await widget.rideController.restartSimulationRide(riderCount: riderCount);
   }
 
-  Widget _buildDetails() => RideDashboard(
-    controller: widget.rideController,
-    distanceUnits: widget.distanceUnits,
-    rideActions: _buildRideActions(),
-    onOpenRoster: _openRoster,
-    relayController: _relayController,
-    internetRelayController: _internetRelayController,
-    onSendQuickMessage: _sendLocalQuickMessage,
-    localObserverAssistanceActive:
-        _observerAccessController?.localAssistance != null,
-    serviceWarning: _warnings.isEmpty ? null : _warnings.join('\n'),
-    connectivity: _connectivitySummary,
-  );
+  Widget _buildDetails() {
+    final role =
+        widget.rideController.session?.flightRole ?? FlightRole.observer;
+    final canChangeChaseTarget = canChangeChaseGuidanceTarget(
+      role: role,
+      navigation: _mapNavigationPosition.value,
+      now: DateTime.now(),
+    );
+    return RideDashboard(
+      controller: widget.rideController,
+      distanceUnits: widget.distanceUnits,
+      rideActions: _buildRideActions(),
+      onOpenRoster: _openRoster,
+      relayController: _relayController,
+      internetRelayController: _internetRelayController,
+      onSendQuickMessage: _sendLocalQuickMessage,
+      localObserverAssistanceActive:
+          _observerAccessController?.localAssistance != null,
+      serviceWarning: _warnings.isEmpty ? null : _warnings.join('\n'),
+      connectivity: _connectivitySummary,
+      sharedFlightPlan: _liveRoutes.sharedFlightPlan,
+      vehicleRoadRoute: _liveRoutes.vehicleRoadRoute,
+      navigationPosition: _mapNavigationPosition,
+      windForecast: _windForecastController,
+      liveFlightProjection: _liveFlightProjection,
+      chaseGuidanceLabel: _chaseGuidanceRouting
+          ? 'Calculating a road rendezvous…'
+          : role == FlightRole.chaseDriver && !canChangeChaseTarget
+          ? [
+              if (_chaseGuidanceTarget != null) _chaseGuidanceTarget!.label,
+              'stop to change target',
+            ].join(' · ')
+          : _chaseGuidanceTarget?.label,
+      onUpdateFlightPlan: _requestRouteChange,
+      onUpdateLandingArea: () => unawaited(_chooseLandingZoneOnMap()),
+      onChooseChaseGuidance: canChangeChaseTarget
+          ? () => unawaited(_chooseChaseGuidanceTarget())
+          : null,
+    );
+  }
 
   Widget _buildSettings() => SafeArea(
     child: UnitSettingsSheet(
@@ -6075,7 +6623,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         controller.rideStarted ||
         controller.busy ||
         controller.coordinationMode != RideCoordinationMode.solo ||
-        controller.session?.role != RideRole.lead) {
+        !controller.hasFlightAuthority) {
       return;
     }
     await _leaveRide();

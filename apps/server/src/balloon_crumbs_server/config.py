@@ -93,6 +93,10 @@ class Settings(BaseSettings):
             # nobody shares one carries no numbers at all. Named so a client can
             # report the limitation instead of appearing to have shared.
             "rider-contact-sharing-v1",
+            # Explicit two-party balloon pilot transfer. Older relays reject
+            # the additive event names, so this is negotiated rather than
+            # letting a client appear to complete a local-only handover.
+            "pilot-handover-v1",
             # The leader un-ending a ride that ended by mistake. Named so a
             # client facing an older relay hides the action rather than putting
             # its leader back on the map while every other rider still sees a

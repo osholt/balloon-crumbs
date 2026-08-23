@@ -518,7 +518,19 @@ def create_app(
         except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as error:
             raise RelayServiceError(400, "Malformed plan request") from error
 
-        result = service.create_plan(session, name=parsed.name, gpx=parsed.gpx)
+        result = service.create_plan(
+            session,
+            name=parsed.name,
+            gpx=parsed.gpx,
+            forecast_plan=(
+                parsed.forecastPlan.model_dump(mode="json")
+                if parsed.forecastPlan is not None
+                else None
+            ),
+            forecast_plan_point_count=(
+                parsed.forecastPlan.geometry_point_count() if parsed.forecastPlan is not None else 0
+            ),
+        )
         plan_requests.labels(outcome="created").inc()
         return JSONResponse(content=CreatePlanResponse.model_validate(result).model_dump())
 

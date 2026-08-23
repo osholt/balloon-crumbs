@@ -1,11 +1,21 @@
 import 'dart:convert';
 
 import 'altitude.dart';
+import 'forecast_plan.dart';
 import 'route_preferences.dart';
 
 export 'route_preferences.dart';
 
 enum RoutePathKind { track, route }
+
+/// What an imported line represents, when its source states that explicitly.
+///
+/// Most GPX files do not carry enough semantics to distinguish a recorded road
+/// track from any other line, so [unspecified] preserves the existing import
+/// and optional road-matching flow. The web planner does state that its output
+/// is a forecast balloon flight; retaining that distinction prevents it from
+/// being offered as turn-by-turn road navigation.
+enum ImportedRoutePurpose { unspecified, balloonForecast }
 
 class GeoPoint {
   const GeoPoint({
@@ -336,8 +346,10 @@ class ImportedRoute {
     this.shapingPoints = const [],
     this.maneuvers = const [],
     this.description,
+    this.purpose = ImportedRoutePurpose.unspecified,
     this.preferences,
     this.plannedDuration,
+    this.forecastPlan,
   });
 
   static const schemaVersion = 1;
@@ -345,6 +357,7 @@ class ImportedRoute {
   final String id;
   final String name;
   final String? description;
+  final ImportedRoutePurpose purpose;
   final DateTime importedAt;
   final String sourceFileName;
   final List<RoutePath> paths;
@@ -359,6 +372,10 @@ class ImportedRoute {
   /// first moving GPS fix and after an app restart (#413).
   final Duration? plannedDuration;
 
+  /// Structured planner evidence retained beside the renderable route.
+  /// Null for ordinary GPX and for plans created by older planner builds.
+  final ForecastPlanDocument? forecastPlan;
+
   /// The route character this route was planned for, when it was planned rather
   /// than recorded or imported from a tool that records none.
   ///
@@ -368,6 +385,8 @@ class ImportedRoute {
   /// existed; it is not the same as a route deliberately planned with the
   /// defaults.
   final RoutePreferences? preferences;
+
+  bool get isBalloonForecast => purpose == ImportedRoutePurpose.balloonForecast;
 
   Iterable<GeoPoint> get allPoints sync* {
     for (final path in paths) {
@@ -386,6 +405,7 @@ class ImportedRoute {
         id: id,
         name: name,
         description: description,
+        purpose: purpose,
         importedAt: importedAt,
         sourceFileName: sourceFileName,
         paths: paths,
@@ -394,6 +414,7 @@ class ImportedRoute {
         maneuvers: maneuvers,
         preferences: preferences,
         plannedDuration: plannedDuration,
+        forecastPlan: forecastPlan,
       );
 
   Map<String, Object?> toJson() => {
@@ -401,6 +422,7 @@ class ImportedRoute {
     'id': id,
     'name': name,
     if (description != null) 'description': description,
+    if (purpose != ImportedRoutePurpose.unspecified) 'purpose': purpose.name,
     'importedAt': importedAt.toUtc().toIso8601String(),
     'sourceFileName': sourceFileName,
     'paths': paths.map((path) => path.toJson()).toList(),
@@ -413,6 +435,7 @@ class ImportedRoute {
       'preferences': routePreferences.toJson(),
     if (plannedDuration case final duration?)
       'plannedDurationSeconds': duration.inSeconds,
+    if (forecastPlan case final plan?) 'forecastPlan': plan.toJson(),
   };
 
   String toJsonString() => jsonEncode(toJson());
@@ -473,12 +496,18 @@ class ImportedRoute {
       throw const FormatException('A route must contain geometry.');
     }
     final rawPreferences = json['preferences'];
+    final rawForecastPlan = json['forecastPlan'];
     final sourceFileName = _requiredString(json, 'sourceFileName');
     final description = _optionalString(json['description']);
     return ImportedRoute(
       id: _requiredString(json, 'id'),
       name: _requiredString(json, 'name'),
       description: description,
+      purpose: _enumByName(
+        ImportedRoutePurpose.values,
+        json['purpose'],
+        ImportedRoutePurpose.unspecified,
+      ),
       importedAt: DateTime.parse(_requiredString(json, 'importedAt')).toUtc(),
       sourceFileName: sourceFileName,
       paths: paths,
@@ -494,6 +523,11 @@ class ImportedRoute {
             sourceFileName: sourceFileName,
             description: description,
           ),
+      forecastPlan: rawForecastPlan is Map
+          ? ForecastPlanDocument.fromJson(
+              Map<String, Object?>.from(rawForecastPlan),
+            )
+          : null,
     );
   }
 

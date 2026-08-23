@@ -83,7 +83,7 @@ class CompletedRide {
     final version = json['schemaVersion'];
     if (version != 1 && version != schemaVersion) {
       throw FormatException(
-        'Unsupported completed ride schema: ${json['schemaVersion']}',
+        'Unsupported completed flight schema: ${json['schemaVersion']}',
       );
     }
     return CompletedRide(

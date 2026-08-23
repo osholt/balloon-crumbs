@@ -163,7 +163,7 @@ class _EmergencyInfoSheetState extends State<EmergencyInfoSheet> {
           title: const Text('Share automatically with the coordinator'),
           subtitle: const Text(
             'If you send an emergency-stop alert, this info goes straight '
-            'to whoever is currently the leader - useful if you can\'t take '
+            'to whoever is coordinating the flight - useful if you can\'t take '
             'a further step yourself. You can also share it with the whole '
             'group at any time from the Flight page.',
           ),

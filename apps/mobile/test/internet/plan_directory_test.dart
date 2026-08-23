@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -64,6 +65,62 @@ void main() {
       expect(plan.name, isNull);
       directory.close();
     });
+
+    test('decodes a structured plan before exposing its geometry', () async {
+      final forecastPlan = jsonDecode(
+        File('../../fixtures/forecast_plan_v1.json').readAsStringSync(),
+      );
+      final directory = directoryFor((request) async {
+        return http.Response(
+          jsonEncode({
+            'code': 'ABC12345',
+            'name': 'Tuckers Grave forecast',
+            'gpx': forecastPlan['gpxFallback'],
+            'forecastPlan': forecastPlan,
+            'createdAt': '2026-08-23T05:45:00Z',
+            'expiresAt': '2026-09-23T05:45:00Z',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final plan = await directory.fetch('ABC12345');
+
+      expect(plan.forecastPlan?.altitudeStages, hasLength(6));
+      expect(plan.forecastPlan?.wind.provider, 'Open-Meteo');
+      directory.close();
+    });
+
+    test(
+      'rejects an unknown structured schema without using GPX partially',
+      () async {
+        final forecastPlan = Map<String, Object?>.from(
+          jsonDecode(
+                File('../../fixtures/forecast_plan_v1.json').readAsStringSync(),
+              )
+              as Map,
+        )..['schemaVersion'] = 2;
+        final directory = directoryFor(
+          (request) async => http.Response(
+            jsonEncode({
+              'code': 'ABC12345',
+              'name': 'Future plan',
+              'gpx': forecastPlan['gpxFallback'],
+              'forecastPlan': forecastPlan,
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          ),
+        );
+
+        await expectLater(
+          directory.fetch('ABC12345'),
+          throwsA(isA<PlanDirectoryException>()),
+        );
+        directory.close();
+      },
+    );
 
     test('a 404 raises a clear not-found error', () async {
       final directory = directoryFor(

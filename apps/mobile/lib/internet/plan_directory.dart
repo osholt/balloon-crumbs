@@ -4,16 +4,18 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../domain/forecast_plan.dart';
 import 'internet_relay_client.dart';
 
 /// A fetched pre-ride route plan. Unrelated to a live ride: fetching one
 /// never claims a ride or touches the ride/join-code tables, and the caller
 /// still runs its own unchanged create-ride flow with the returned GPX.
 class FetchedPlan {
-  const FetchedPlan({required this.name, required this.gpx});
+  const FetchedPlan({required this.name, required this.gpx, this.forecastPlan});
 
   final String? name;
   final String gpx;
+  final ForecastPlanDocument? forecastPlan;
 }
 
 class PlanDirectoryException implements Exception {
@@ -90,13 +92,33 @@ class HttpPlanDirectory implements PlanDirectory {
       final json = Map<String, Object?>.from(value);
       final gpx = json['gpx'];
       final name = json['name'];
+      final rawForecastPlan = json['forecastPlan'];
       if (gpx is! String || gpx.isEmpty) {
         throw const FormatException('Response gpx field is invalid.');
       }
       if (name != null && name is! String) {
         throw const FormatException('Response name field is invalid.');
       }
-      return FetchedPlan(name: name as String?, gpx: gpx);
+      if (rawForecastPlan != null && rawForecastPlan is! Map) {
+        throw const FormatException(
+          'Response structured plan field is invalid.',
+        );
+      }
+      final forecastPlan = rawForecastPlan is Map
+          ? ForecastPlanDocument.fromJson(
+              Map<String, Object?>.from(rawForecastPlan),
+            )
+          : null;
+      if (forecastPlan != null && forecastPlan.gpxFallback != gpx) {
+        throw const FormatException(
+          'Structured plan does not match its GPX fallback.',
+        );
+      }
+      return FetchedPlan(
+        name: name as String?,
+        gpx: gpx,
+        forecastPlan: forecastPlan,
+      );
     } on FormatException {
       throw const PlanDirectoryException(
         'Plan service returned an invalid response.',

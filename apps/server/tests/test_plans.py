@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,10 +18,106 @@ GPX_TWO_POINTS = """<?xml version="1.0" encoding="UTF-8"?>
 </trkseg></trk></gpx>"""
 
 
-def _create(client, *, name: str | None = "Sunday loop", gpx: str = GPX_TWO_POINTS):
-    body: dict[str, str] = {"gpx": gpx}
+def _forecast_plan(gpx: str = GPX_TWO_POINTS) -> dict[str, Any]:
+    return {
+        "schemaVersion": 1,
+        "id": "plan-2026-08-23",
+        "name": "Sunday flight",
+        "createdAt": "2026-08-23T06:00:00Z",
+        "source": "Balloon Crumbs web planner",
+        "launch": {
+            "point": {"latitude": 51.5, "longitude": -2.6},
+            "elevationMsl": 80,
+            "datum": "wgs84Geoid",
+        },
+        "destination": {
+            "point": {"latitude": 51.6, "longitude": -2.4},
+            "toleranceMetres": 100,
+        },
+        "intendedLandingArea": {
+            "centre": {"latitude": 51.6, "longitude": -2.4},
+            "radiusMetres": 400,
+            "updatedAt": "2026-08-23T06:00:00Z",
+        },
+        "forecastLanding": {"latitude": 51.599, "longitude": -2.401},
+        "departure": {
+            "selectedAt": "2026-08-23T07:00:00Z",
+            "matchingWindowStart": "2026-08-23T06:55:00Z",
+            "matchingWindowEnd": "2026-08-23T07:05:00Z",
+        },
+        "constraints": {
+            "altitudeCeilingMsl": 1200,
+            "maximumAscentRateMps": 3,
+            "maximumDescentRateMps": 4,
+            "minimumDurationMinutes": 10,
+            "maximumDurationMinutes": 180,
+        },
+        "altitudeStages": [
+            {
+                "fraction": 0,
+                "plannedAt": "2026-08-23T07:00:00Z",
+                "altitudeMsl": 80,
+                "changeRateMps": 0,
+            },
+            {
+                "fraction": 1,
+                "plannedAt": "2026-08-23T08:00:00Z",
+                "altitudeMsl": 80,
+                "changeRateMps": -1,
+            },
+        ],
+        "plannedTrack": [
+            {
+                "latitude": 51.5,
+                "longitude": -2.6,
+                "altitudeMsl": 80,
+                "elapsedSeconds": 0,
+            },
+            {
+                "latitude": 51.599,
+                "longitude": -2.401,
+                "altitudeMsl": 80,
+                "elapsedSeconds": 3600,
+            },
+        ],
+        "landingEnvelope": [
+            {"latitude": 51.59, "longitude": -2.41},
+            {"latitude": 51.61, "longitude": -2.41},
+            {"latitude": 51.60, "longitude": -2.39},
+        ],
+        "wind": {
+            "provider": "Open-Meteo",
+            "model": "UKMO seamless",
+            "requestedAt": "2026-08-23T06:00:00Z",
+            "validFrom": "2026-08-23T06:00:00Z",
+            "validTo": "2026-08-24T06:00:00Z",
+            "attribution": "Open-Meteo",
+            "licence": "CC BY 4.0",
+            "forecastOnly": True,
+            "fieldDigest": "sha256:test",
+        },
+        "operationalBoundaries": [],
+        "result": {
+            "kind": "optimised",
+            "reachesDestination": True,
+            "missDistanceMetres": 42,
+        },
+        "gpxFallback": gpx,
+    }
+
+
+def _create(
+    client,
+    *,
+    name: str | None = "Sunday loop",
+    gpx: str = GPX_TWO_POINTS,
+    forecast_plan: dict[str, Any] | None = None,
+):
+    body: dict[str, Any] = {"gpx": gpx}
     if name is not None:
         body["name"] = name
+    if forecast_plan is not None:
+        body["forecastPlan"] = forecast_plan
     return client.post("/api/v1/plans", json=body)
 
 
@@ -94,6 +191,31 @@ def test_plan_without_a_name_round_trips(client) -> None:
     assert fetched.json()["name"] is None
 
 
+def test_structured_forecast_plan_round_trips_with_gpx_fallback(client) -> None:
+    forecast_plan = _forecast_plan()
+    forecast_plan["futureAdditiveField"] = "ignored"
+    created = _create(client, forecast_plan=forecast_plan)
+    assert created.status_code == 200
+
+    fetched = client.get(f"/api/v1/plans/{created.json()['code']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["gpx"] == GPX_TWO_POINTS
+    assert fetched.json()["forecastPlan"]["schemaVersion"] == 1
+    assert fetched.json()["forecastPlan"]["constraints"]["altitudeCeilingMsl"] == 1200
+    assert "futureAdditiveField" not in fetched.json()["forecastPlan"]
+
+
+def test_structured_plan_rejects_unknown_schema_and_mismatched_fallback(client) -> None:
+    future = _forecast_plan()
+    future["schemaVersion"] = 2
+    assert _create(client, forecast_plan=future).status_code == 400
+
+    mismatched = _forecast_plan("<gpx>different</gpx>")
+    response = _create(client, forecast_plan=mismatched)
+    assert response.status_code == 400
+    assert "fallback" in response.json()["error"].lower()
+
+
 def test_unknown_plan_code_is_not_found(client) -> None:
     assert client.get("/api/v1/plans/ZZZZZZZZ").status_code == 404
 
@@ -113,13 +235,14 @@ def test_create_rejects_overlong_name(client) -> None:
 
 
 def test_plan_gpx_is_encrypted_at_rest(client) -> None:
-    created = _create(client)
+    created = _create(client, forecast_plan=_forecast_plan())
     factory = client.app.state.session_factory
     with factory() as session:
         stored = session.get(RidePlan, created.json()["code"])
         assert stored is not None
         assert b"51.5" not in stored.gpx_ciphertext
         assert b"Loop" not in stored.gpx_ciphertext
+        assert b"altitudeCeilingMsl" not in stored.gpx_ciphertext
 
 
 def test_expired_plan_is_not_found_and_purge_removes_it(client) -> None:

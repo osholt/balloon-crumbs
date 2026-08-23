@@ -74,6 +74,10 @@ class RouteLineStyle {
 /// | route ahead   | #3DDC84 |      4.11  |        9.54  |    10.27  |
 /// | travelled     | #FF7A1A |      2.81  |        6.52  |     7.02  |
 /// | leader trail  | #D3B8FF |      4.22  |        9.78  |    10.53  |
+/// | flight forecast | #00E5FF |    4.77  |       11.06  |    11.91  |
+/// | original envelope | #C69CFF |  3.36  |        7.78  |     8.38  |
+/// | live projection | #64D8FF |      4.48  |       10.38  |    11.18  |
+/// | live envelope | #FFC857 |        4.77  |       11.06  |    11.91  |
 /// | connector     | #00E5FF |      4.77  |       11.06  |    11.91  |
 /// | boundary      | #FF8FA3 |      3.39  |        7.87  |     8.47  |
 ///
@@ -165,6 +169,15 @@ class RouteTrailStyle {
     casingWidthPixels: 11,
   );
 
+  /// Pilot-published predicted flight geometry. The dash is the non-colour cue
+  /// that it is a forecast rather than the aircraft's observed ground track.
+  static const forecastTrack = RouteLineStyle(
+    color: Color(0xFF00E5FF),
+    widthPixels: 5.5,
+    casingWidthPixels: 9.5,
+    dashPixels: [14, 8],
+  );
+
   /// Advisory operational geometry. Magenta and a short dash keep it distinct
   /// from road guidance and all recorded tracks.
   static const operationalBoundary = RouteLineStyle(
@@ -172,6 +185,34 @@ class RouteTrailStyle {
     widthPixels: 4,
     casingWidthPixels: 8,
     dashPixels: [10, 7],
+  );
+
+  /// Feasible landing endpoints retained from the original planner run.
+  /// Purple and a longer dash distinguish historical forecast evidence from
+  /// the pilot's current green intent and the pink advisory boundaries.
+  static const originalLandingEnvelope = RouteLineStyle(
+    color: Color(0xFFC69CFF),
+    widthPixels: 3.5,
+    casingWidthPixels: 7.5,
+    dashPixels: [18, 10],
+  );
+
+  /// A current forecast line. The short dotted pattern makes it visibly less
+  /// certain than the original dashed plan and the solid measured track.
+  static const liveProjectionTrack = RouteLineStyle(
+    color: Color(0xFF64D8FF),
+    widthPixels: 4.25,
+    casingWidthPixels: 8.25,
+    dashPixels: [3, 7],
+  );
+
+  /// Current forecast endpoints. Amber distinguishes it from the immutable
+  /// purple planner envelope and the pilot's green intended area.
+  static const liveLandingEnvelope = RouteLineStyle(
+    color: Color(0xFFFFC857),
+    widthPixels: 2.75,
+    casingWidthPixels: 6.75,
+    dashPixels: [4, 9],
   );
 
   /// The road route to the start of the planned route (#133), which claimed this
@@ -201,7 +242,11 @@ class RouteTrailStyle {
     RiderTrailKind.rider => travelled,
     RiderTrailKind.leader => leaderTrail,
     RiderTrailKind.balloonGroundTrack => balloonGroundTrack,
+    RiderTrailKind.forecastTrack => forecastTrack,
     RiderTrailKind.operationalBoundary => operationalBoundary,
+    RiderTrailKind.originalLandingEnvelope => originalLandingEnvelope,
+    RiderTrailKind.liveProjectionTrack => liveProjectionTrack,
+    RiderTrailKind.liveLandingEnvelope => liveLandingEnvelope,
     RiderTrailKind.routeStartConnector => routeStartConnectorLine,
   };
 
@@ -257,7 +302,11 @@ class RouteTrailStyle {
     'travelled': travelled,
     'leader trail': leaderTrail,
     'balloon ground track': balloonGroundTrack,
+    'flight forecast': forecastTrack,
     'operational boundary': operationalBoundary,
+    'original landing envelope': originalLandingEnvelope,
+    'live projection': liveProjectionTrack,
+    'live landing envelope': liveLandingEnvelope,
     'route start connector': routeStartConnectorLine,
   };
 

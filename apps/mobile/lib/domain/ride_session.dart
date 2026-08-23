@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../features/map/craft_icon.dart';
+import 'flight_role.dart';
 import 'ride_coordination_mode.dart';
 import 'ride_role.dart';
 import 'rider_color.dart';
@@ -20,6 +21,9 @@ class RideSession {
     required this.displayName,
     required this.role,
     required this.joinedAt,
+    FlightRole? flightRole,
+    this.localCraftId,
+    this.requiresFlightAssignment = false,
     this.isSimulation = false,
     this.simulationRiderCount = defaultSimulationRiderCount,
     this.motorcycleStyle = craftIconStyleDefault,
@@ -27,7 +31,10 @@ class RideSession {
     this.riderColor = riderColorDefault,
     this.coordinationMode = RideCoordinationMode.keepTogether,
     this.rideName,
-  }) : assert(
+  }) : flightRole =
+           flightRole ??
+           (role == RideRole.lead ? FlightRole.pilot : FlightRole.chaseCrew),
+       assert(
          !isSimulation ||
              (simulationRiderCount >= minimumSimulationRiderCount &&
                  simulationRiderCount <= maximumSimulationRiderCount),
@@ -46,6 +53,20 @@ class RideSession {
   final String localRiderId;
   final String displayName;
   final RideRole role;
+
+  /// The person's balloon-specific job. [role] remains only for mixed-version
+  /// relay compatibility and must not drive the live experience or authority.
+  final FlightRole flightRole;
+
+  /// The stable craft this device is aboard. The journal attachment is the
+  /// shared source of truth; retaining the id here lets a restored device reach
+  /// the correct assignment/recovery flow before relay replay completes.
+  final String? localCraftId;
+
+  /// True only for a session written by a build that did not persist a flight
+  /// role. Such a session is least-privileged until the assignment repair flow
+  /// has run; it must never inherit pilot authority merely from `lead`.
+  final bool requiresFlightAssignment;
   final DateTime joinedAt;
   final bool isSimulation;
   final int simulationRiderCount;
@@ -60,6 +81,9 @@ class RideSession {
 
   RideSession copyWith({
     RideRole? role,
+    FlightRole? flightRole,
+    String? localCraftId,
+    bool? requiresFlightAssignment,
     String? rideCode,
     int? simulationRiderCount,
     RideCoordinationMode? coordinationMode,
@@ -71,6 +95,10 @@ class RideSession {
     localRiderId: localRiderId,
     displayName: displayName,
     role: role ?? this.role,
+    flightRole: flightRole ?? this.flightRole,
+    localCraftId: localCraftId ?? this.localCraftId,
+    requiresFlightAssignment:
+        requiresFlightAssignment ?? this.requiresFlightAssignment,
     joinedAt: joinedAt,
     isSimulation: isSimulation,
     simulationRiderCount: simulationRiderCount ?? this.simulationRiderCount,
@@ -89,6 +117,9 @@ class RideSession {
     'localRiderId': localRiderId,
     'displayName': displayName,
     'role': role.name,
+    'flightRole': flightRole.name,
+    if (localCraftId != null) 'localCraftId': localCraftId,
+    if (requiresFlightAssignment) 'requiresFlightAssignment': true,
     'joinedAt': joinedAt.toUtc().toIso8601String(),
     if (isSimulation) 'isSimulation': true,
     if (isSimulation) 'simulationRiderCount': simulationRiderCount,
@@ -99,25 +130,39 @@ class RideSession {
     if (rideName != null) 'rideName': rideName,
   };
 
-  factory RideSession.fromJson(Map<String, Object?> json) => RideSession(
-    rideId: json['rideId']! as String,
-    rideCode: json['rideCode']! as String,
-    inviteSecret: json['inviteSecret']! as String,
-    joinToken: _joinTokenOrFallback(json['joinToken']),
-    localRiderId: json['localRiderId']! as String,
-    displayName: json['displayName']! as String,
-    role: rideRoleFromName(json['role']),
-    joinedAt: DateTime.parse(json['joinedAt']! as String).toLocal(),
-    isSimulation: json['isSimulation'] as bool? ?? false,
-    simulationRiderCount: _simulationRiderCount(json['simulationRiderCount']),
-    motorcycleStyle: craftIconStyleFromName(json['motorcycleStyle'] as String?),
-    riderSymbol: RiderSymbol.fromStorageValue(json['riderSymbol'] as String?),
-    riderColor: riderColorFromName(json['riderColor'] as String?),
-    coordinationMode: RideCoordinationMode.fromName(
-      json['coordinationMode'] as String?,
-    ),
-    rideName: json['rideName'] as String?,
-  );
+  factory RideSession.fromJson(Map<String, Object?> json) {
+    final storedFlightRole = json['flightRole'];
+    final hasFlightRole =
+        storedFlightRole is String &&
+        FlightRole.values.any((role) => role.name == storedFlightRole);
+    return RideSession(
+      rideId: json['rideId']! as String,
+      rideCode: json['rideCode']! as String,
+      inviteSecret: json['inviteSecret']! as String,
+      joinToken: _joinTokenOrFallback(json['joinToken']),
+      localRiderId: json['localRiderId']! as String,
+      displayName: json['displayName']! as String,
+      role: rideRoleFromName(json['role']),
+      flightRole: hasFlightRole
+          ? flightRoleFromName(storedFlightRole)
+          : FlightRole.observer,
+      localCraftId: json['localCraftId'] as String?,
+      requiresFlightAssignment:
+          json['requiresFlightAssignment'] as bool? ?? !hasFlightRole,
+      joinedAt: DateTime.parse(json['joinedAt']! as String).toLocal(),
+      isSimulation: json['isSimulation'] as bool? ?? false,
+      simulationRiderCount: _simulationRiderCount(json['simulationRiderCount']),
+      motorcycleStyle: craftIconStyleFromName(
+        json['motorcycleStyle'] as String?,
+      ),
+      riderSymbol: RiderSymbol.fromStorageValue(json['riderSymbol'] as String?),
+      riderColor: riderColorFromName(json['riderColor'] as String?),
+      coordinationMode: RideCoordinationMode.fromName(
+        json['coordinationMode'] as String?,
+      ),
+      rideName: json['rideName'] as String?,
+    );
+  }
 
   static int _simulationRiderCount(Object? value) {
     if (value is! int) return defaultSimulationRiderCount;

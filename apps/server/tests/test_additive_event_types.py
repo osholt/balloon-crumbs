@@ -204,6 +204,33 @@ def test_craft_events_are_accepted_and_relayed(client, synchronize, make_event) 
             event_type="craftChaseAssigned",
             payload={"craftId": "v1", "chasing": "balloon"},
         ),
+        make_event(
+            ride_id,
+            "event-chase-target",
+            event_type="chaseGuidanceTargetSelected",
+            payload={"craftId": "v1", "target": "landingArea"},
+        ),
+        make_event(
+            ride_id,
+            "event-pilot-offer",
+            event_type="pilotHandoverOffered",
+            payload={
+                "transferId": "transfer-1",
+                "fromDeviceId": "device-a",
+                "toDeviceId": "device-b",
+                "expiresAt": "2026-08-23T12:10:00Z",
+            },
+        ),
+        make_event(
+            ride_id,
+            "event-pilot-accept",
+            event_type="pilotHandoverAccepted",
+            payload={
+                "transferId": "transfer-1",
+                "fromDeviceId": "device-a",
+                "toDeviceId": "device-b",
+            },
+        ),
     ]
 
     uploaded = synchronize(client, ride_id=ride_id, secret=SECRET, events=shared)
@@ -225,6 +252,9 @@ def test_craft_structure_outlives_a_position_report() -> None:
         "deviceAttachedToCraft",
         "craftPrimaryDeviceNominated",
         "craftChaseAssigned",
+        "chaseGuidanceTargetSelected",
+        "pilotHandoverOffered",
+        "pilotHandoverAccepted",
     ):
         assert retention(event_type) > retention("riderLocationUpdated")
 

@@ -99,6 +99,7 @@ class RouteGeometryEnricher {
         id: route.id,
         name: route.name,
         description: route.description,
+        purpose: route.purpose,
         importedAt: route.importedAt,
         sourceFileName: route.sourceFileName,
         paths: List.unmodifiable(paths),

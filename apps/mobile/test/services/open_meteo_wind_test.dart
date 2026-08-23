@@ -12,7 +12,7 @@ void main() {
     final client = MockClient((request) async {
       requestedUri = request.url;
       final entries = [
-        for (var index = 0; index < 9; index += 1)
+        for (var index = 0; index < 25; index += 1)
           {
             'latitude': 51.4 + index * 0.001,
             'longitude': -2.7 + index * 0.001,
@@ -44,7 +44,15 @@ void main() {
       requestedUri?.queryParameters['hourly'],
       allOf(contains('wind_speed_20m'), contains('wind_direction_2000m')),
     );
-    expect(field.columns, hasLength(9));
+    expect(field.columns, hasLength(25));
+    expect(
+      requestedUri?.queryParameters['latitude']?.split(','),
+      hasLength(25),
+    );
+    expect(
+      requestedUri?.queryParameters['longitude']?.split(','),
+      hasLength(25),
+    );
     expect(field.validAt, DateTime.utc(2026, 8, 21, 10));
     expect(field.origin, WindForecastOrigin.openMeteoUkmo);
     final vector = field.at(
@@ -94,8 +102,26 @@ void main() {
 
     expect(provider.fetchCount, 1);
     expect(controller.selectedAltitudeMetersMsl, 1250);
+    expect(controller.followBalloonAltitude, isFalse);
     expect(controller.enabled, isFalse);
     expect(controller.field, isNotNull);
+  });
+
+  test('follows balloon altitude until a layer is selected manually', () {
+    final controller = WindForecastController(_RecordingProvider());
+    addTearDown(controller.dispose);
+
+    controller.updateBalloonAltitude(780);
+    expect(controller.selectedAltitudeMetersMsl, 800);
+    expect(controller.followBalloonAltitude, isTrue);
+
+    controller.setSelectedAltitude(300);
+    controller.updateBalloonAltitude(1250);
+    expect(controller.selectedAltitudeMetersMsl, 300);
+
+    controller.setFollowBalloonAltitude(true);
+    controller.updateBalloonAltitude(1250);
+    expect(controller.selectedAltitudeMetersMsl, 1250);
   });
 }
 

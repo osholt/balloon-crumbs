@@ -235,7 +235,7 @@ class RelayTrafficRerouteProvider {
       id: _idFactory(),
       name: '${original.name} · traffic alternative',
       description:
-          'Leader-reviewed TomTom traffic alternative calculated '
+          'Pilot-reviewed TomTom traffic alternative calculated '
           '${now.toIso8601String()}.',
       importedAt: now,
       sourceFileName: 'tail-end-charlie-traffic-${_idFactory()}.gpx',

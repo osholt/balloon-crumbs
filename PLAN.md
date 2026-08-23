@@ -7,6 +7,12 @@ Working title: **Balloon Crumbs**
 Platforms: iOS and Android
 Initial users: UK hot-air-balloon pilots, ground crew, and chase drivers
 
+Active implementation specification:
+[role-specific live flight experience](docs/role-specific-live-flight-experience.md).
+This defines the production role/craft assignment, four distinct live views,
+planner-to-app contract, shared tracks and per-vehicle chase guidance that must
+land before the next broad live-flight UI implementation.
+
 ## Problem statement
 
 Balloon chase teams need a shared, rapidly changing picture of an aircraft that

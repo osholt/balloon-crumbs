@@ -4,6 +4,7 @@ import {
   WIND_LEVELS_METRES_MSL,
   altitudeForFlightFraction,
   buildFlightPlanGpx,
+  buildForecastPlanDocument,
   circlePolygon,
   forecastDistanceMetres,
   forecastLandingEnvelope,
@@ -1228,6 +1229,23 @@ function optionalNumber(element) {
   return value;
 }
 
+function windFieldDigest(field) {
+  const input = JSON.stringify({
+    validAt: field?.validAt,
+    requestedAt: field?.requestedAt,
+    columns: (field?.columns ?? []).map((column) => ({
+      position: column.position,
+      vectors: column.vectors,
+    })),
+  });
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
 function addAltitudeBoundary() {
   try {
     const { label, source } = boundaryLabelAndSource();
@@ -1283,10 +1301,38 @@ async function generatePlanCode() {
       forecastLanding: state.forecastLanding,
       intendedLanding: state.intendedLanding,
     });
+    const forecastTimes = (state.field.timeSlices ?? [])
+      .map((slice) => slice.validAt)
+      .filter((value) => value instanceof Date && !Number.isNaN(value.getTime()))
+      .sort((first, second) => first - second);
+    const forecastPlan = buildForecastPlanDocument({
+      id: globalThis.crypto?.randomUUID?.() ?? `plan-${Date.now()}`,
+      name,
+      createdAt: new Date(),
+      launch: state.launch,
+      launchElevationMetresMsl: Number(elements.launch_elevation.value),
+      intendedLanding: state.intendedLanding,
+      intendedLandingRadiusMetres: INTENDED_AREA_RADIUS_METRES,
+      forecastLanding: state.forecastLanding,
+      routePlan: state.routePlan,
+      landingEnvelope: state.landingEnvelope,
+      wind: {
+        provider: "Open-Meteo",
+        model: "UKMO seamless",
+        requestedAt: state.field.requestedAt,
+        validFrom: forecastTimes[0] ?? state.field.validAt,
+        validTo: forecastTimes.at(-1) ?? state.field.validAt,
+        attribution: "Weather data by Open-Meteo",
+        licence: "CC BY 4.0",
+        fieldDigest: windFieldDigest(state.field),
+      },
+      operationalBoundaries: state.operationalBoundaries,
+      gpxFallback: gpx,
+    });
     const response = await fetch("/api/v1/plans", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ name, gpx }),
+      body: JSON.stringify({ name, gpx, forecastPlan }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || `Relay returned ${response.status}.`);
