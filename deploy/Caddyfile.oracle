@@ -8,18 +8,24 @@
 		request_body {
 			max_size 12MB
 		}
-		reverse_proxy server:8080
+		reverse_proxy server:8080 {
+			header_up Host {$BALLOON_CRUMBS_DOMAIN}
+		}
 	}
 
 	handle /api/* {
 		request_body {
 			max_size 64KB
 		}
-		reverse_proxy server:8080
+		reverse_proxy server:8080 {
+			header_up Host {$BALLOON_CRUMBS_DOMAIN}
+		}
 	}
 
 	handle /health/live {
-		reverse_proxy server:8080
+		reverse_proxy server:8080 {
+			header_up Host {$BALLOON_CRUMBS_DOMAIN}
+		}
 	}
 
 	@private_health path /health/*
