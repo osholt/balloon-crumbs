@@ -4,12 +4,10 @@
 <dict>
   <key>method</key>
   <string>app-store-connect</string>
-  <!-- Automatic, because this app has no restricted entitlements. The
-       inherited file named a manual profile - "Hot Pursuit CarPlay Navigation
-       App Store", from two product names ago - which existed only because
-       CarPlay entitlements cannot be minted automatically. Nothing here needs
-       that, and a stale profile name fails the export with "No profile found"
-       rather than falling back to something sensible. -->
+  <!-- Automatic remains in place until Apple grants the requested CarPlay maps
+       entitlement and the regenerated Balloon Crumbs distribution profile is
+       installed. The release gate verifies the signed archive carries
+       com.apple.developer.carplay-maps before any CarPlay-capable upload. -->
   <key>signingStyle</key>
   <string>automatic</string>
   <key>teamID</key>

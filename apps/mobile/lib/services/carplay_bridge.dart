@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../domain/hazard.dart';
 import '../domain/imported_route.dart';
 import '../domain/distance_unit.dart';
+import '../domain/map_orientation.dart';
 import '../domain/rider_color.dart';
 import '../domain/ride_role.dart';
 import '../domain/ride_session.dart';
@@ -18,6 +19,107 @@ import 'route_progress.dart';
 import 'route_journey_progress.dart';
 
 enum CarPlaySurfaceMode { home, preRide, activeRide, endedRide }
+
+class CarPlayCraftLocation {
+  const CarPlayCraftLocation({
+    required this.id,
+    required this.label,
+    required this.detail,
+    required this.point,
+    required this.craftStyle,
+    required this.riderSymbol,
+    required this.colorArgb,
+    this.headingDegrees,
+  });
+
+  final String id;
+  final String label;
+  final String detail;
+  final GeoPoint point;
+  final CraftIconStyle craftStyle;
+  final RiderSymbol riderSymbol;
+  final int colorArgb;
+  final double? headingDegrees;
+
+  Map<String, Object?> toSnapshot() => {
+    'riderId': id,
+    'label': label,
+    'detail': detail,
+    'isLocal': false,
+    'role': detail,
+    'riderSymbol': riderSymbol.storageValue,
+    'craftStyle': craftStyle.name,
+    // Retained for one additive compatibility release. New native surfaces
+    // read craftStyle; older builds still degrade to their known key.
+    'motorcycleStyle': craftStyle.name,
+    'riderColorArgb': colorArgb,
+    'latitude': point.latitude,
+    'longitude': point.longitude,
+    'headingDegrees': headingDegrees,
+  };
+}
+
+class CarPlayMapTrace {
+  const CarPlayMapTrace({
+    required this.id,
+    required this.kind,
+    required this.label,
+    required this.points,
+    required this.colorArgb,
+    required this.width,
+    required this.casingWidth,
+    this.dash,
+  });
+
+  final String id;
+  final String kind;
+  final String label;
+  final List<GeoPoint> points;
+  final int colorArgb;
+  final double width;
+  final double casingWidth;
+  final List<double>? dash;
+
+  Map<String, Object?> toSnapshot() => {
+    'id': id,
+    'kind': kind,
+    'label': label,
+    'points': [
+      for (final point in points)
+        {
+          'latitude': point.latitude,
+          'longitude': point.longitude,
+          'altitudeMeters': point.elevationMeters,
+        },
+    ],
+    'colorArgb': colorArgb,
+    'width': width,
+    'casingWidth': casingWidth,
+    if (dash != null) 'dash': dash,
+  };
+}
+
+class CarPlayLandingArea {
+  const CarPlayLandingArea({
+    required this.label,
+    required this.center,
+    required this.radiusMeters,
+    required this.confirmed,
+  });
+
+  final String label;
+  final GeoPoint center;
+  final double radiusMeters;
+  final bool confirmed;
+
+  Map<String, Object?> toSnapshot() => {
+    'label': label,
+    'latitude': center.latitude,
+    'longitude': center.longitude,
+    'radiusMeters': radiusMeters,
+    'confirmed': confirmed,
+  };
+}
 
 /// A submitted CarPlay search result. Coordinates are carried with the label so
 /// choosing the second of several places with the same name cannot silently
@@ -73,6 +175,7 @@ class CarPlayLocalRider {
     required this.riderSymbol,
     required this.riderColor,
     this.roleLabel = 'Chaser',
+    this.detail,
   });
 
   final String riderId;
@@ -81,6 +184,7 @@ class CarPlayLocalRider {
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final String roleLabel;
+  final String? detail;
 }
 
 String _readableCarPlayError(Object error, {required String fallback}) =>
@@ -114,6 +218,7 @@ class CarPlayBridge {
     this.onDestinationSelected,
     this.onFreeRoamRequested,
     this.onStateRequested,
+    this.onMapOrientationToggleRequested,
     @visibleForTesting MethodChannel? channel,
     @visibleForTesting DateTime Function()? clock,
     @visibleForTesting
@@ -172,6 +277,9 @@ class CarPlayBridge {
   /// as an explicit read request prevents CarPlay opening with an earlier empty
   /// roster or world-sized camera.
   final Future<void> Function()? onStateRequested;
+
+  /// Persists a CarPlay-only camera choice on the phone, then republishes it.
+  final Future<void> Function()? onMapOrientationToggleRequested;
   DateTime? _lastPublishedAt;
 
   String? _publishedRideStartKey;
@@ -298,6 +406,9 @@ class CarPlayBridge {
           _publishedMapStyleJson = null;
           await publishViewport(viewport);
         }
+      case 'toggleMapOrientation':
+        _lastPublishedAt = null;
+        await onMapOrientationToggleRequested?.call();
     }
   }
 
@@ -332,6 +443,11 @@ class CarPlayBridge {
     bool localSpeedIsAgeing = false,
     RouteProgressGeometry? routeProgress,
     RouteJourneyProgress? journeyProgress,
+    List<CarPlayCraftLocation> craftLocations = const [],
+    List<CarPlayMapTrace> sharedTraces = const [],
+    CarPlayLandingArea? intendedLandingArea,
+    CarPlayLandingArea? confirmedLanding,
+    MapOrientationMode mapOrientation = MapOrientationMode.directionUp,
   }) async {
     final now = _clock();
     // A question addressed to this rider is an event, not a state refresh. It
@@ -390,6 +506,10 @@ class CarPlayBridge {
       ),
       'distanceUnit': distanceUnit?.name,
       'groupStatus': groupStatus,
+      'mapOrientation': mapOrientation.name,
+      'sharedTraces': [for (final trace in sharedTraces) trace.toSnapshot()],
+      'intendedLandingArea': intendedLandingArea?.toSnapshot(),
+      'confirmedLanding': confirmedLanding?.toSnapshot(),
       'rideStart': rideStart?.toSnapshot(),
       'speed': !speedLimitEnabled
           ? null
@@ -428,9 +548,12 @@ class CarPlayBridge {
           'label': localRider?.displayName ?? session!.displayName,
           'isLocal': true,
           'role': localRider?.roleLabel ?? session!.role.label,
+          'detail': localRider?.detail,
           'riderSymbol':
               localRider?.riderSymbol.storageValue ??
               session!.riderSymbol.storageValue,
+          'craftStyle':
+              localRider?.motorcycleStyle.name ?? session!.motorcycleStyle.name,
           'motorcycleStyle':
               localRider?.motorcycleStyle.name ?? session!.motorcycleStyle.name,
           'riderColor': localRider?.riderColor.name ?? session!.riderColor.name,
@@ -439,26 +562,30 @@ class CarPlayBridge {
           'headingDegrees': localHeadingDegrees,
         },
       'updatedAtMillis': now.millisecondsSinceEpoch,
-      'riders': [
-        for (final location in riderLocations)
-          {
-            'riderId': location.riderId,
-            'label': location.displayName,
-            'isLocal':
-                session != null && location.riderId == session.localRiderId,
-            'role': location.role.label,
-            // Project the same identity the rider chose on the phone. CarPlay
-            // used to replace the local rider with a blue "You" pill and every
-            // peer with a role-coloured initial, so the two screens described
-            // the same group with different people.
-            'riderSymbol': location.riderSymbol.storageValue,
-            'motorcycleStyle': location.motorcycleStyle.name,
-            'riderColor': location.riderColor.name,
-            'latitude': location.sample.position.latitude,
-            'longitude': location.sample.position.longitude,
-            'headingDegrees': location.sample.headingDegrees,
-          },
-      ],
+      'riders': craftLocations.isNotEmpty
+          ? [for (final location in craftLocations) location.toSnapshot()]
+          : [
+              for (final location in riderLocations)
+                {
+                  'riderId': location.riderId,
+                  'label': location.displayName,
+                  'isLocal':
+                      session != null &&
+                      location.riderId == session.localRiderId,
+                  'role': location.role.label,
+                  // Project the same identity the rider chose on the phone. CarPlay
+                  // used to replace the local rider with a blue "You" pill and every
+                  // peer with a role-coloured initial, so the two screens described
+                  // the same group with different people.
+                  'riderSymbol': location.riderSymbol.storageValue,
+                  'craftStyle': location.motorcycleStyle.name,
+                  'motorcycleStyle': location.motorcycleStyle.name,
+                  'riderColor': location.riderColor.name,
+                  'latitude': location.sample.position.latitude,
+                  'longitude': location.sample.position.longitude,
+                  'headingDegrees': location.sample.headingDegrees,
+                },
+            ],
       'alert': _topHazardMessage(activeHazards),
     };
     try {

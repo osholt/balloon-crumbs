@@ -16,11 +16,11 @@ enum CarPlayStatusTemplate {
     let routeName = (snapshot["routeName"] as? String).flatMap {
       $0.isEmpty ? nil : $0
     }
-    let rideState = snapshot["rideState"] as? String
+    let flightState = snapshot["rideState"] as? String
     items.append(
       CPListItem(
         text: routeName ?? "No route selected",
-        detailText: rideState
+        detailText: flightState
       )
     )
 
@@ -57,19 +57,30 @@ enum CarPlayStatusTemplate {
     }
 
     if let groupStatus = snapshot["groupStatus"] as? String {
-      items.append(CPListItem(text: "Group", detailText: groupStatus))
+      items.append(CPListItem(text: "Recovery crew", detailText: groupStatus))
     }
 
-    if let riders = snapshot["riders"] as? [[String: Any]] {
-      for rider in riders.prefix(4) {
-        guard let label = rider["label"] as? String else { continue }
-        let isLocal = (rider["isLocal"] as? NSNumber)?.boolValue ?? false
-        let role = rider["role"] as? String ?? ""
-        let needsAttention = (rider["needsAttention"] as? NSNumber)?.boolValue ?? false
-        var detail = role
-        if needsAttention {
-          detail = detail.isEmpty ? "Off route" : "\(detail) · Off route"
-        }
+    if let landing = snapshot["confirmedLanding"] as? [String: Any] {
+      items.append(
+        CPListItem(
+          text: "LANDED",
+          detailText: landing["label"] as? String ?? "Confirmed landing point"
+        )
+      )
+    } else if let intended = snapshot["intendedLandingArea"] as? [String: Any] {
+      items.append(
+        CPListItem(
+          text: "Intended landing area",
+          detailText: intended["label"] as? String
+        )
+      )
+    }
+
+    if let craft = snapshot["riders"] as? [[String: Any]] {
+      for item in craft.prefix(6) {
+        guard let label = item["label"] as? String else { continue }
+        let isLocal = (item["isLocal"] as? NSNumber)?.boolValue ?? false
+        let detail = (item["detail"] as? String) ?? (item["role"] as? String) ?? ""
         items.append(
           CPListItem(
             text: isLocal ? "\(label) (you)" : label,
@@ -80,7 +91,7 @@ enum CarPlayStatusTemplate {
     }
 
     if items.isEmpty {
-      items = [CPListItem(text: "Balloon Crumbs", detailText: "Waiting for ride data…")]
+      items = [CPListItem(text: "Balloon Crumbs", detailText: "Waiting for flight data…")]
     }
 
     template.updateSections([CPListSection(items: items)])

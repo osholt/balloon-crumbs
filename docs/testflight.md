@@ -58,17 +58,20 @@ and internal testers re-added by hand — build history does not follow.
 
 The inherited `ios/ExportOptions-TestFlight.plist` used **manual** signing and
 named the profile `Hot Pursuit CarPlay Navigation App Store` — a product name
-from two renames ago. Manual signing existed for one reason: CarPlay
-entitlements are restricted, and automatic signing will not mint a profile
-carrying them.
+from two renames ago. Manual signing existed because CarPlay entitlements are
+restricted, but the inherited profile was tied to an unrelated App ID and
+product name. Balloon Crumbs now requests `com.apple.developer.carplay-maps` for
+its recovery-driver surface; see
+[carplay-entitlement.md](carplay-entitlement.md).
 
-Balloon Crumbs declares no CarPlay entitlements, so that constraint is gone with
-the surfaces it belonged to (CarPlay for the chase driver is #15, still an
-evaluation). Automatic signing now applies, which means no certificate to
-export, no profile to download, no name to keep synchronised across three files,
-and nothing secret in the repository. A stale profile name is not a soft
-failure: the export dies with "No profile found", which is what that file would
-have done on its first use.
+Local development stays on automatic signing. After Apple grants the managed
+capability, Xcode can create a development profile containing it for the
+registered Balloon Crumbs App ID. CI remains explicit: import a freshly
+generated App Store distribution profile for `dev.osholt.ballooncrumbs` and let
+the workflow discover its installed name. Both release paths inspect the signed
+IPA and fail before upload when the CarPlay maps entitlement is absent. A stale
+or pre-grant profile is therefore a hard, visible failure rather than a tester
+build that silently loses CarPlay.
 
 `Release` also pinned `CODE_SIGN_IDENTITY = "Apple Development"`. A development
 certificate cannot sign an App Store archive, so the first archive would have

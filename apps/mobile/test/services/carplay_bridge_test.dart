@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
 import 'package:balloon_crumbs/domain/distance_unit.dart';
 import 'package:balloon_crumbs/domain/hazard.dart';
+import 'package:balloon_crumbs/domain/map_orientation.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart' as presence;
@@ -80,6 +81,10 @@ void main() {
       'guidanceSecondsRemaining': null,
       'distanceUnit': null,
       'groupStatus': '5 riders visible',
+      'mapOrientation': 'directionUp',
+      'sharedTraces': <Object?>[],
+      'intendedLandingArea': null,
+      'confirmedLanding': null,
       'rideStart': null,
       'speed': null,
       'basemap': null,
@@ -118,6 +123,84 @@ void main() {
     });
   });
 
+  test('publishes recovery craft, shared tracks and landing areas', () async {
+    MethodCall? received;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      received = call;
+      return null;
+    });
+    final bridge = CarPlayBridge(channel: channel);
+    addTearDown(bridge.dispose);
+
+    await bridge.publish(
+      session: null,
+      riderLocations: const [],
+      activeHazards: const [],
+      mapOrientation: MapOrientationMode.northUp,
+      craftLocations: const [
+        CarPlayCraftLocation(
+          id: 'balloon',
+          label: 'Balloon',
+          detail: 'Live now · 18 km/h NE · 420 m MSL',
+          point: GeoPoint(latitude: 51.45, longitude: -2.58),
+          craftStyle: CraftIconStyle.balloon,
+          riderSymbol: RiderSymbol.emoji('🎈'),
+          colorArgb: 0xff43d98c,
+          headingDegrees: 45,
+        ),
+      ],
+      sharedTraces: const [
+        CarPlayMapTrace(
+          id: 'balloon-track-0',
+          kind: 'balloonTrack',
+          label: 'Balloon track · 300–600 m',
+          points: [
+            GeoPoint(latitude: 51.45, longitude: -2.58, elevationMeters: 300),
+            GeoPoint(latitude: 51.46, longitude: -2.57, elevationMeters: 600),
+          ],
+          colorArgb: 0xff64e572,
+          width: 6,
+          casingWidth: 9,
+          dash: [2, 1],
+        ),
+      ],
+      intendedLandingArea: const CarPlayLandingArea(
+        label: 'Intended landing area',
+        center: GeoPoint(latitude: 51.48, longitude: -2.54),
+        radiusMeters: 250,
+        confirmed: false,
+      ),
+      confirmedLanding: const CarPlayLandingArea(
+        label: 'Confirmed landing',
+        center: GeoPoint(latitude: 51.49, longitude: -2.53),
+        radiusMeters: 35,
+        confirmed: true,
+      ),
+    );
+
+    final snapshot = received!.arguments as Map;
+    expect(snapshot['mapOrientation'], 'northUp');
+    expect(snapshot['riders'], hasLength(1));
+    expect(
+      (snapshot['riders'] as List).single,
+      containsPair('craftStyle', 'balloon'),
+    );
+    expect(
+      (snapshot['riders'] as List).single,
+      containsPair('detail', contains('Live now')),
+    );
+    expect(snapshot['sharedTraces'], hasLength(1));
+    expect(
+      ((snapshot['sharedTraces'] as List).single as Map)['points'],
+      hasLength(2),
+    );
+    expect(
+      snapshot['intendedLandingArea'],
+      containsPair('radiusMeters', 250.0),
+    );
+    expect(snapshot['confirmedLanding'], containsPair('confirmed', isTrue));
+  });
+
   test('projects the phone home map and saved rider identity', () async {
     MethodCall? received;
     messenger.setMockMethodCallHandler(channel, (call) async {
@@ -142,6 +225,7 @@ void main() {
         motorcycleStyle: CraftIconStyle.van,
         riderSymbol: RiderSymbol.emoji('🦊'),
         riderColor: RiderColor.purple,
+        detail: 'Chase vehicle · 42 km/h · live',
       ),
     );
 
@@ -154,7 +238,9 @@ void main() {
       'label': 'Oliver',
       'isLocal': true,
       'role': 'Chaser',
+      'detail': 'Chase vehicle · 42 km/h · live',
       'riderSymbol': 'emoji:🦊',
+      'craftStyle': 'van',
       'motorcycleStyle': 'van',
       'riderColor': 'purple',
       'latitude': 51.46,
@@ -602,7 +688,9 @@ void main() {
         'label': 'Oliver Holt',
         'isLocal': true,
         'role': 'Pilot',
+        'detail': null,
         'riderSymbol': 'initials',
+        'craftStyle': 'fourByFour',
         'motorcycleStyle': 'fourByFour',
         'riderColor': 'orange',
         'latitude': 51.45,
@@ -765,6 +853,25 @@ void main() {
     );
 
     expect(starts, 1);
+  });
+
+  test('relays the CarPlay map-orientation toggle to the phone', () async {
+    var toggles = 0;
+    final bridge = CarPlayBridge(
+      channel: channel,
+      onMapOrientationToggleRequested: () async {
+        toggles += 1;
+      },
+    );
+    addTearDown(bridge.dispose);
+
+    await messenger.handlePlatformMessage(
+      channel.name,
+      channel.codec.encodeMethodCall(const MethodCall('toggleMapOrientation')),
+      (_) {},
+    );
+
+    expect(toggles, 1);
   });
 
   test('relays a CarPlay-confirmed leave request to the ride owner', () async {

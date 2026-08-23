@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// #442 and #533's CarPlay layout faults, asserted where they live.
+/// CarPlay's recovery layout contracts, asserted where they live.
 ///
 /// A head unit is not reachable from a test here, so these read the Swift the
 /// same way the #439 reachability check reads Dart: what broke is *placement*,
@@ -12,24 +12,25 @@ void main() {
     'ios/Runner/CarPlaySceneDelegate.swift',
   ).readAsStringSync();
 
-  group('the speed pair stays trailing while status moves left (#533)', () {
-    test('the TEC message joins the left status column', () {
+  group('the speed pair stays trailing while recovery status stays left', () {
+    test('the recovery overview is not displaced by inherited branding', () {
+      expect(source, isNot(contains('tecBadge')));
+      expect(source, isNot(contains('CarPlayTecBadge')));
+      expect(source, isNot(contains('NO RIDE LEADER')));
       expect(
         source,
         contains(
-          'tecBadge.leadingAnchor.constraint(\n'
-          '        equalTo: groupMiniMap.leadingAnchor',
+          'groupMiniMap.leadingAnchor.constraint(\n'
+          '        equalTo: view.safeAreaLayoutGuide.leadingAnchor',
         ),
       );
       expect(
         source,
         contains(
-          'tecBadge.trailingAnchor.constraint(\n'
-          '        equalTo: groupMiniMap.trailingAnchor',
+          'routeProgressView.bottomAnchor.constraint(\n'
+          '        equalTo: groupMiniMap.topAnchor',
         ),
       );
-      expect(source, contains('tecBadge.bottomAnchor.constraint('));
-      expect(source, contains('equalTo: groupMiniMap.topAnchor'));
       expect(source, isNot(contains('equalTo: speedBadge.bottomAnchor')));
     });
 
@@ -117,7 +118,7 @@ void main() {
       expect(source, isNot(contains('clockLabel.bottomAnchor.constraint(')));
     });
 
-    test('route progress sits above TEC in the left status stack', () {
+    test('route progress sits directly above the recovery overview', () {
       expect(source, contains('routeProgressView.leadingAnchor.constraint('));
       expect(source, contains('routeProgressView.trailingAnchor.constraint('));
       expect(source, contains('routeProgressView.bottomAnchor.constraint('));
@@ -148,7 +149,7 @@ void main() {
         source,
         contains(
           'routeProgressView.bottomAnchor.constraint(\n'
-          '        equalTo: tecBadge.topAnchor',
+          '        equalTo: groupMiniMap.topAnchor',
         ),
       );
       expect(source, contains('private final class CarPlayGuidanceView'));

@@ -120,6 +120,17 @@ if [ -z "$ipa" ]; then
 fi
 echo "Built $ipa (version $BALLOON_CRUMBS_APP_VERSION build $BALLOON_CRUMBS_APP_BUILD)."
 
+entitlement_work="$(mktemp -d)"
+trap 'rm -rf "$entitlement_work"' EXIT
+unzip -q "$ipa" -d "$entitlement_work"
+app="$(find "$entitlement_work/Payload" -maxdepth 1 -type d -name '*.app' -print -quit)"
+entitlements="$(codesign -d --entitlements :- "$app" 2>/dev/null)"
+if ! grep -q 'com.apple.developer.carplay-maps' <<<"$entitlements"; then
+  echo "build-and-upload: signed IPA is missing com.apple.developer.carplay-maps." >&2
+  echo "  Wait for Apple's grant, regenerate the App Store profile, and build again." >&2
+  exit 1
+fi
+
 if [ "$upload" = false ]; then
   echo "Skipping upload as asked."
   exit 0
