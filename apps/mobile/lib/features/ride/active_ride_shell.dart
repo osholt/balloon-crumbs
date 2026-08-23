@@ -832,6 +832,8 @@ class _PreStartRidePanel extends StatelessWidget {
     required this.participants,
     required this.coordinationMode,
     required this.isLeader,
+    required this.canStartFlight,
+    required this.startBlockedReason,
     required this.busy,
     required this.routeName,
     required this.routeIsForecast,
@@ -844,6 +846,8 @@ class _PreStartRidePanel extends StatelessWidget {
   final List<RideParticipant> participants;
   final RideCoordinationMode coordinationMode;
   final bool isLeader;
+  final bool canStartFlight;
+  final String? startBlockedReason;
   final bool busy;
   final String? routeName;
   final bool routeIsForecast;
@@ -878,13 +882,13 @@ class _PreStartRidePanel extends StatelessWidget {
                       Text(
                         coordinationMode == RideCoordinationMode.solo
                             ? 'Ready for solo flight'
-                            : 'Waiting for launch',
+                            : 'Crew room ready',
                         style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                       Text(
                         coordinationMode == RideCoordinationMode.solo
                             ? 'Tracking begins when you start'
-                            : 'Flight $rideCode · Current positions only until the coordinator starts',
+                            : 'Flight $rideCode · Live crew positions before release',
                         style: const TextStyle(
                           color: Color(0xFFA9B4C2),
                           fontSize: 12,
@@ -893,10 +897,12 @@ class _PreStartRidePanel extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (!isLeader)
-                  const Text(
-                    'COORDINATOR STARTS',
-                    style: TextStyle(
+                if (!canStartFlight)
+                  Text(
+                    startBlockedReason == null
+                        ? 'CHASE CREW STARTS'
+                        : 'SERVICE UPDATE NEEDED',
+                    style: const TextStyle(
                       color: Color(0xFFFFC857),
                       fontWeight: FontWeight.w800,
                       fontSize: 11,
@@ -904,7 +910,7 @@ class _PreStartRidePanel extends StatelessWidget {
                   ),
               ],
             ),
-            if (isLeader) ...[
+            if (canStartFlight) ...[
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -924,11 +930,17 @@ class _PreStartRidePanel extends StatelessWidget {
                     child: FilledButton.icon(
                       key: const Key('start-ride-button'),
                       onPressed: busy ? null : onStartRide,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Start flight'),
+                      icon: const Icon(Icons.flight_takeoff),
+                      label: const Text('Balloon released'),
                     ),
                   ),
                 ],
+              ),
+            ] else if (startBlockedReason != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                startBlockedReason!,
+                style: const TextStyle(color: Color(0xFFFFC857), fontSize: 12),
               ),
             ],
             const SizedBox(height: 9),
@@ -1774,6 +1786,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           ),
         );
         _internetRelayController = internetRelayController;
+        internetRelayController.addListener(_onInternetRelayChanged);
         _internetReceivedEventSubscription = internetRelayController
             .receivedEvents
             .listen(
@@ -3793,6 +3806,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (changed && mounted) setState(() {});
   }
 
+  void _onInternetRelayChanged() {
+    if (mounted) setState(() {});
+  }
+
   /// One reconciled live-position model: the durable journal, the internet
   /// presence channel, the nearby presence channel and the relay's
   /// cursor-independent roster, merged newest-sample-wins.
@@ -3997,6 +4014,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 participants: widget.rideController.liveParticipants,
                 coordinationMode: widget.rideController.coordinationMode,
                 isLeader: widget.rideController.hasFlightAuthority,
+                canStartFlight: _canStartFlightFromThisDevice,
+                startBlockedReason: _crewStartBlockedReason,
                 busy: widget.rideController.busy || _loading,
                 routeName: _activeRoute?.name,
                 routeIsForecast: _activeRoute?.isBalloonForecast == true,
@@ -4958,7 +4977,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   /// Offers only the final pre-departure decision on CarPlay. Ride creation,
   /// joining and route selection remain phone setup; this projection exists
-  /// only after that work is complete and only for the local leader.
+  /// only after that work is complete and only for an authorised local role.
   CarPlayRideStart? get _carPlayRideStart {
     final controller = widget.rideController;
     final locationReady =
@@ -4967,7 +4986,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         (_locationController?.status.canSample ?? false);
     return CarPlayRideStart.project(
       hasSession: controller.session != null,
-      isLeader: controller.isLocalRideLeader,
+      canStartFlight: _canStartFlightFromThisDevice,
       rideStarted: controller.rideStarted,
       rideEnded: controller.rideEnded,
       busy: controller.busy,
@@ -4979,13 +4998,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   /// Handles the confirmed native action. The snapshot that drew the button
-  /// may be stale, so leader, lifecycle, busy and location state are checked
+  /// may be stale, so role, lifecycle, busy and location state are checked
   /// again before the durable start event is recorded.
   Future<void> _startPreparedRideFromCarPlay() async {
     if (!mounted) return;
     final controller = widget.rideController;
     if (controller.session == null ||
-        !controller.isLocalRideLeader ||
+        !_canStartFlightFromThisDevice ||
         controller.rideStarted ||
         controller.rideEnded ||
         controller.busy ||
@@ -5359,24 +5378,25 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     }
     _rideStartFlowInProgress = true;
     try {
-      if (!controller.hasFlightAuthority || controller.rideStarted) {
+      if (!_canStartFlightFromThisDevice || controller.rideStarted) {
         _diagnostics?.recordNote(
-          'start flight refused before the dialog: no pilot authority, or already '
-          'started',
+          'start flight refused before the dialog: role or relay cannot start, '
+          'or already started',
         );
+        final reason = _crewStartBlockedReason;
+        if (reason != null && mounted) _showRideSnackBar(reason);
         return;
       }
       final route = _activeRoute;
       final decision = await showDialog<_StartRideDecision>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Start this flight?'),
+          title: const Text('Balloon released?'),
           content: Text(
             route == null
-                ? 'No forecast plan or chase route is selected. You can '
-                      'choose one now, or start without one. Live location '
-                      'sharing and flight '
-                      'recording begin only after you start.'
+                ? 'Start live recovery tracking now. A forecast plan is '
+                      'optional; crew and balloon locations will continue to '
+                      'share without one.'
                 : route.isBalloonForecast
                 ? 'Forecast plan: ${route.name}\n\nThis is an advisory '
                       'wind-drift forecast, not a route the balloon can '
@@ -5393,19 +5413,19 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             ),
             if (route == null) ...[
               TextButton(
-                key: const Key('start-without-route-button'),
-                onPressed: () =>
-                    Navigator.pop(dialogContext, _StartRideDecision.start),
-                child: const Text('Start without a plan'),
-              ),
-              FilledButton.icon(
                 key: const Key('choose-route-before-start-button'),
                 onPressed: () => Navigator.pop(
                   dialogContext,
                   _StartRideDecision.chooseRoute,
                 ),
-                icon: const Icon(Icons.route_outlined),
-                label: const Text('Choose plan'),
+                child: const Text('Choose optional plan'),
+              ),
+              FilledButton.icon(
+                key: const Key('start-without-route-button'),
+                onPressed: () =>
+                    Navigator.pop(dialogContext, _StartRideDecision.start),
+                icon: const Icon(Icons.flight_takeoff),
+                label: const Text('Start tracking'),
               ),
             ] else
               FilledButton.icon(
@@ -5413,7 +5433,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 onPressed: () =>
                     Navigator.pop(dialogContext, _StartRideDecision.start),
                 icon: const Icon(Icons.play_arrow),
-                label: const Text('Start flight'),
+                label: const Text('Start tracking'),
               ),
           ],
         ),
@@ -6165,6 +6185,30 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       ) ??
       true;
 
+  bool get _relayCanCarryCrewFlightLifecycle =>
+      _internetRelayController?.supportsCapability(
+        RelayProtocolCapabilities.crewFlightLifecycle,
+      ) ??
+      true;
+
+  bool get _canStartFlightFromThisDevice {
+    final controller = widget.rideController;
+    if (!controller.canStartFlight) return false;
+    // Pilot start retains the legacy event and therefore does not depend on the
+    // additive crew-lifecycle capability.
+    return controller.hasFlightAuthority || _relayCanCarryCrewFlightLifecycle;
+  }
+
+  String? get _crewStartBlockedReason {
+    final controller = widget.rideController;
+    if (!controller.canStartFlight || controller.hasFlightAuthority) {
+      return null;
+    }
+    if (_relayCanCarryCrewFlightLifecycle) return null;
+    return 'This flight service cannot yet share a chase-crew start. Update the '
+        'service before using this device to begin live tracking.';
+  }
+
   List<RideDestination> get _rideDestinations =>
       rideDestinations(simulation: _isSimulation);
 
@@ -6650,6 +6694,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _simulationLandingZone.dispose();
     _sharedLandingZone.dispose();
     _preStartPresenceController?.removeListener(_onPreStartPresenceChanged);
+    _internetRelayController?.removeListener(_onInternetRelayChanged);
     unawaited(_spokenGuidance?.stop());
     _awarenessController?.removeListener(_onAwarenessChanged);
     if (_awarenessController case final awareness?) {

@@ -152,6 +152,7 @@ class CraftRosterReducer {
         case RideEventType.riderLeft:
         case RideEventType.roleChanged:
         case RideEventType.rideStarted:
+        case RideEventType.flightStartedByCrew:
         case RideEventType.statusMessage:
         case RideEventType.hazardReported:
         case RideEventType.hazardCleared:

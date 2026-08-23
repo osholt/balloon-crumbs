@@ -247,6 +247,9 @@ void main() {
     await eventStore.append(
       _event(id: 'route', type: RideEventType.routeCleared),
     );
+    await eventStore.append(
+      _event(id: 'crew-start', type: RideEventType.flightStartedByCrew),
+    );
     final api = _CompatibilityApi(
       compatibility: _compatibility(
         RelayCompatibilityDisposition.legacyCompatible,
@@ -274,6 +277,12 @@ void main() {
         _session.rideId,
       )).map((event) => event.id),
       containsAll(['departure', 'route']),
+    );
+    expect(
+      (await eventStore.pendingEvents(
+        _session.rideId,
+      )).map((event) => event.id),
+      contains('crew-start'),
     );
     await worker.close();
   });

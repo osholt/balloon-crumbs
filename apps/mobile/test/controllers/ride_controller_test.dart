@@ -366,6 +366,60 @@ void main() {
     );
   });
 
+  test('chase crew can start live tracking at balloon release', () async {
+    await controller.createRide('Oliver');
+    final chaseCrew = await joinedController(FlightRole.chaseCrew);
+
+    await chaseCrew.startRide();
+
+    expect(chaseCrew.errorMessage, isNull);
+    expect(chaseCrew.rideStarted, isTrue);
+    final start = chaseCrew.events.singleWhere(
+      (event) => event.type == RideEventType.flightStartedByCrew,
+    );
+    expect(start.payload, {
+      'crewRiderId': chaseCrew.session!.localRiderId,
+      'crewDisplayName': 'Alex',
+      'flightRole': 'chaseCrew',
+    });
+
+    for (final event in chaseCrew.events) {
+      controller.ingestStoredEvent(event);
+    }
+    expect(controller.rideStarted, isTrue);
+    expect(controller.rideStartedAt, start.createdAt);
+  });
+
+  test('balloon device cannot forge a chase role to start tracking', () async {
+    await controller.createRide('Oliver');
+    final balloonCrew = await joinedController(FlightRole.balloonCrew);
+    final session = balloonCrew.session!;
+    final forgedRole = _signedEvent(
+      session: session,
+      id: 'forged-chase-role',
+      type: RideEventType.roleChanged,
+      createdAt: DateTime.utc(2026, 7, 16, 12, 2),
+      payload: const {'role': 'rider', 'flightRole': 'chaseCrew'},
+    );
+    final forged = _signedEvent(
+      session: session,
+      id: 'forged-crew-start',
+      type: RideEventType.flightStartedByCrew,
+      createdAt: DateTime.utc(2026, 7, 16, 12, 3),
+      payload: {
+        'crewRiderId': session.localRiderId,
+        'crewDisplayName': session.displayName,
+        'flightRole': FlightRole.chaseCrew.name,
+      },
+    );
+
+    balloonCrew
+      ..ingestStoredEvent(forgedRole)
+      ..ingestStoredEvent(forged);
+
+    expect(balloonCrew.rideStarted, isFalse);
+  });
+
   test(
     'offline leader handover and duplicate starts converge deterministically',
     () async {

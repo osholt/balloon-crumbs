@@ -1,11 +1,18 @@
 # Role-specific live flight experience
 
-Status: **Accepted — implementation in progress**
+Status: **Implemented technical foundation — product priority superseded**
 
 Date: 23 August 2026
 
 Scope: iOS and Android live-flight experience, its shared domain state, and the
 contract used to bring web-planner forecasts into a running flight.
+
+The launch-to-recovery field observation documented in
+[field operations and recovery coordination](field-operations-recovery-plan.md)
+supersedes this document where priorities conflict. Roles, crafts, shared tracks
+and route-state separation remain required architecture. Planning and pilot
+interaction are no longer the core workflow; crew assembly, recovery mapping,
+CarPlay, crew-led release and landing confirmation are.
 
 ## Executive summary
 

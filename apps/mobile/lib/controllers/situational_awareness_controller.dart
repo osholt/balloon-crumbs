@@ -403,6 +403,7 @@ class SituationalAwarenessController extends ChangeNotifier {
       case RideEventType.riderLeft:
       case RideEventType.roleChanged:
       case RideEventType.rideStarted:
+      case RideEventType.flightStartedByCrew:
       case RideEventType.statusMessage:
       case RideEventType.ridePaused:
       case RideEventType.rideResumed:

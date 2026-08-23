@@ -100,6 +100,14 @@ enum RideEventType {
   /// The named recipient accepts a still-valid handover offer. Reducers apply
   /// the demotion and promotion atomically from this one shared journal fact.
   pilotHandoverAccepted,
+
+  /// A chase driver or chase-crew device records balloon release and begins
+  /// live recovery tracking.
+  ///
+  /// Additive rather than changing [rideStarted]: current pilot devices retain
+  /// the legacy event for mixed-build flights, while a relay can negotiate this
+  /// new ground-crew authority explicitly.
+  flightStartedByCrew,
 }
 
 enum EventPriority { routine, important, critical }

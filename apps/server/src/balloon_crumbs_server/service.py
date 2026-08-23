@@ -88,6 +88,9 @@ EVENT_TYPES = {
     # after all. Deliberately not "rideResumed", which is the other half of
     # "ridePaused"; conflating them would make a pause look like a resurrection.
     "rideReopened",
+    # Field-operations lifecycle. Clients validate the signed author's explicit
+    # chase role; the relay remains payload-opaque and only bounds/carries it.
+    "flightStartedByCrew",
 }
 PRIORITIES = {"routine", "important", "critical"}
 EVENT_FIELDS = {
@@ -1043,6 +1046,7 @@ class RelayService:
             "deviceAttachedToCraft": timedelta(hours=72),
             "craftPrimaryDeviceNominated": timedelta(hours=72),
             "craftChaseAssigned": timedelta(hours=72),
+            "flightStartedByCrew": timedelta(hours=72),
             "landingAreaNoted": timedelta(hours=72),
             "windContextNoted": timedelta(hours=72),
             "operationalBoundaryUpserted": timedelta(hours=72),

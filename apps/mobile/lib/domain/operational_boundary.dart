@@ -170,6 +170,7 @@ class OperationalBoundaryReducer {
           if (id is String) boundaries.remove(id);
         case RideEventType.riderLeft:
         case RideEventType.rideStarted:
+        case RideEventType.flightStartedByCrew:
         case RideEventType.statusMessage:
         case RideEventType.riderLocationUpdated:
         case RideEventType.hazardReported:

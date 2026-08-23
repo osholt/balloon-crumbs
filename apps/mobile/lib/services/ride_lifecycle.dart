@@ -1,4 +1,5 @@
 import '../domain/ride_event.dart';
+import '../domain/flight_role.dart';
 import '../domain/ride_role.dart';
 import 'ride_event_authenticator.dart';
 
@@ -17,8 +18,9 @@ class RideLifecycle {
 ///
 /// Events are ordered by timestamp and then ID so every device chooses the
 /// same start after offline delivery, retries, or duplicate start taps. A
-/// start is accepted only from a rider whose latest signed role at that point
-/// is lead, and the event must identify its author as that leader.
+/// legacy pilot start is accepted only from a rider whose latest signed role at
+/// that point is lead. The additive ground-crew start is accepted only when the
+/// same journal already identifies its author as chase driver or chase crew.
 class RideLifecycleReducer {
   const RideLifecycleReducer._();
 
@@ -37,6 +39,9 @@ class RideLifecycleReducer {
             .toList(growable: false)
           ..sort(compareEvents);
     final roles = <String, RideRole>{};
+    final flightRoles = <String, FlightRole>{};
+    final vehicleCraftIds = <String>{};
+    final craftByDevice = <String, String>{};
 
     for (final event in ordered) {
       switch (event.type) {
@@ -45,11 +50,35 @@ class RideLifecycleReducer {
         case RideEventType.roleChanged:
           final role = _roleFromPayload(event.payload['role']);
           if (role != null) roles[event.deviceId] = role;
+          final flightRole = _flightRoleFromPayload(
+            event.payload['flightRole'],
+          );
+          if (flightRole != null) flightRoles[event.deviceId] = flightRole;
           break;
         case RideEventType.rideStarted:
           if (roles[event.deviceId] == RideRole.lead &&
               event.payload['leaderRiderId'] == event.deviceId) {
             return RideLifecycle(startEvent: event);
+          }
+        case RideEventType.flightStartedByCrew:
+          final recordedRole = flightRoles[event.deviceId];
+          if (recordedRole != null &&
+              recordedRole.isChasing &&
+              vehicleCraftIds.contains(craftByDevice[event.deviceId]) &&
+              event.payload['crewRiderId'] == event.deviceId &&
+              event.payload['flightRole'] == recordedRole.name) {
+            return RideLifecycle(startEvent: event);
+          }
+        case RideEventType.craftRegistered:
+          final craftId = event.payload['craftId'];
+          if (craftId is String && event.payload['kind'] == 'vehicle') {
+            vehicleCraftIds.add(craftId);
+          }
+        case RideEventType.deviceAttachedToCraft:
+          final deviceId = event.payload['deviceId'];
+          final craftId = event.payload['craftId'];
+          if (deviceId is String && craftId is String) {
+            craftByDevice[deviceId] = craftId;
           }
         case RideEventType.riderLeft:
         case RideEventType.statusMessage:
@@ -66,8 +95,6 @@ class RideLifecycleReducer {
         case RideEventType.iceInfoShared:
         case RideEventType.iceInfoViewed:
         case RideEventType.riderContactShared:
-        case RideEventType.craftRegistered:
-        case RideEventType.deviceAttachedToCraft:
         case RideEventType.craftPrimaryDeviceNominated:
         case RideEventType.craftChaseAssigned:
         case RideEventType.landingAreaNoted:
@@ -92,6 +119,15 @@ class RideLifecycleReducer {
     if (value is! String) return null;
     try {
       return RideRole.values.byName(value);
+    } on ArgumentError {
+      return null;
+    }
+  }
+
+  static FlightRole? _flightRoleFromPayload(Object? value) {
+    if (value is! String) return null;
+    try {
+      return FlightRole.values.byName(value);
     } on ArgumentError {
       return null;
     }

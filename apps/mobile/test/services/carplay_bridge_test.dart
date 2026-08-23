@@ -191,10 +191,10 @@ void main() {
     });
   });
 
-  test('offers prepared-ride start only to an eligible leader', () {
+  test('offers prepared-flight start only to an eligible operational role', () {
     CarPlayRideStart? project({
       bool hasSession = true,
-      bool isLeader = true,
+      bool canStartFlight = true,
       bool rideStarted = false,
       bool rideEnded = false,
       bool busy = false,
@@ -202,7 +202,7 @@ void main() {
       bool isGroup = false,
     }) => CarPlayRideStart.project(
       hasSession: hasSession,
-      isLeader: isLeader,
+      canStartFlight: canStartFlight,
       rideStarted: rideStarted,
       rideEnded: rideEnded,
       busy: busy,
@@ -211,7 +211,7 @@ void main() {
     );
 
     expect(project(hasSession: false), isNull);
-    expect(project(isLeader: false), isNull);
+    expect(project(canStartFlight: false), isNull);
     expect(project(rideStarted: true), isNull);
     expect(project(rideEnded: true), isNull);
 
@@ -231,7 +231,7 @@ void main() {
 
     final forecast = CarPlayRideStart.project(
       hasSession: true,
-      isLeader: true,
+      canStartFlight: true,
       rideStarted: false,
       rideEnded: false,
       busy: false,
