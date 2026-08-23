@@ -177,6 +177,83 @@ class JoinCodeResponse(BaseModel):
     resolveToken: str
 
 
+class CrewRoomOperation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rideId: str = Field(min_length=1, max_length=128)
+    rideCode: str = Field(pattern=r"^\d{6}$")
+    inviteSecret: str = Field(min_length=16, max_length=512)
+    resolveToken: str = Field(min_length=16, max_length=128)
+
+
+class CreateCrewRoomRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alias: str = Field(min_length=5, max_length=12)
+    deviceId: str = Field(min_length=1, max_length=128)
+    displayName: str = Field(min_length=1, max_length=80)
+    operation: CrewRoomOperation
+
+
+class CrewRoomAuthRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alias: str = Field(min_length=5, max_length=12)
+    deviceId: str = Field(min_length=1, max_length=128)
+    deviceCredential: str = Field(min_length=48, max_length=48)
+
+
+class JoinCrewRoomRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alias: str = Field(min_length=5, max_length=12)
+    inviteToken: str = Field(min_length=48, max_length=48)
+    deviceId: str = Field(min_length=1, max_length=128)
+    displayName: str = Field(min_length=1, max_length=80)
+
+
+class StartCrewRoomOperationRequest(CrewRoomAuthRequest):
+    operation: CrewRoomOperation
+
+
+class RenameCrewRoomRequest(CrewRoomAuthRequest):
+    newAlias: str = Field(min_length=5, max_length=12)
+
+
+class CrewRoomTargetDeviceRequest(CrewRoomAuthRequest):
+    targetDeviceId: str = Field(min_length=1, max_length=128)
+
+
+class CrewRoomDeviceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deviceId: str
+    displayName: str
+    owner: bool
+    revoked: bool
+    lastSeenAt: datetime
+
+
+class CrewRoomDeviceListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alias: str
+    devices: list[CrewRoomDeviceResponse]
+
+
+class CrewRoomResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    roomId: str
+    alias: str
+    deviceCredential: str
+    inviteToken: str | None = None
+    operationGeneration: int = Field(ge=1)
+    operation: CrewRoomOperation | None
+    operationExpiresAt: datetime
+    owner: bool
+
+
 class CompatibilityResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -3,6 +3,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../domain/ride_join_payload.dart';
 import '../../domain/ride_session.dart';
+import '../../domain/crew_room.dart';
 
 /// Shows the ride's invitation as a QR code, generated on this phone.
 ///
@@ -20,18 +21,26 @@ import '../../domain/ride_session.dart';
 /// away - not left open on a phone on a café table. A dismissible sheet expresses
 /// that; a tab would not.
 class RideInvitationQrSheet extends StatelessWidget {
-  const RideInvitationQrSheet({super.key, required this.session});
+  const RideInvitationQrSheet({
+    super.key,
+    required this.session,
+    this.crewRoom,
+  });
 
   final RideSession session;
+  final CrewRoomMembership? crewRoom;
 
-  static Future<void> show(BuildContext context, RideSession session) =>
-      showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        useSafeArea: true,
-        isScrollControlled: true,
-        builder: (_) => RideInvitationQrSheet(session: session),
-      );
+  static Future<void> show(
+    BuildContext context,
+    RideSession session, {
+    CrewRoomMembership? crewRoom,
+  }) => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    useSafeArea: true,
+    isScrollControlled: true,
+    builder: (_) => RideInvitationQrSheet(session: session, crewRoom: crewRoom),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +49,9 @@ class RideInvitationQrSheet extends StatelessWidget {
       rideCode: session.rideCode,
       inviteSecret: session.inviteSecret,
       joinToken: session.joinToken,
+      crewRoomId: crewRoom?.inviteToken == null ? null : crewRoom!.roomId,
+      crewRoomAlias: crewRoom?.inviteToken == null ? null : crewRoom!.alias,
+      crewRoomInviteToken: crewRoom?.inviteToken,
     );
 
     return SingleChildScrollView(
@@ -52,9 +64,10 @@ class RideInvitationQrSheet extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
-          const Text(
-            'This works with no signal. Everything needed to join is in the '
-            'code itself, so nobody has to be online to scan it.',
+          Text(
+            crewRoom?.inviteToken == null
+                ? 'This works with no signal. Everything needed to join is in the code itself, so nobody has to be online to scan it.'
+                : 'This works with no signal for this flight. When connected, it also saves returning access to crew room ${crewRoom!.alias}.',
             style: TextStyle(color: Color(0xFFABB5C1), height: 1.45),
           ),
           const SizedBox(height: 20),
@@ -81,7 +94,9 @@ class RideInvitationQrSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'Flight ${session.rideCode}',
+            crewRoom == null
+                ? 'Flight ${session.rideCode}'
+                : '${crewRoom!.alias} · flight ${session.rideCode}',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium,
           ),

@@ -43,12 +43,18 @@ from .push import PushDispatcher, register_push, registration_json, revoke_push
 from .rate_limit import SlidingWindowRateLimiter
 from .schemas import (
     CompatibilityResponse,
+    CreateCrewRoomRequest,
     CreateObserverGrantRequest,
     CreateObserverGrantResponse,
     CreatePlanRequest,
     CreatePlanResponse,
+    CrewRoomAuthRequest,
+    CrewRoomDeviceListResponse,
+    CrewRoomResponse,
+    CrewRoomTargetDeviceRequest,
     GetPlanResponse,
     JoinCodeResponse,
+    JoinCrewRoomRequest,
     ObserverGrantResponse,
     ObserverSnapshotResponse,
     PresenceSyncRequest,
@@ -57,6 +63,8 @@ from .schemas import (
     PushRegistrationRequest,
     PushRegistrationResponse,
     RegisterJoinCodeRequest,
+    RenameCrewRoomRequest,
+    StartCrewRoomOperationRequest,
     SyncRequest,
     TrafficRerouteRequest,
 )
@@ -104,6 +112,10 @@ def create_app(
         maximum_requests=settings.join_code_global_rate_limit_requests,
         window_seconds=settings.join_code_lookup_rate_limit_window_seconds,
         maximum_keys=1,
+    )
+    crew_room_limiter = SlidingWindowRateLimiter(
+        maximum_requests=settings.crew_room_rate_limit_requests,
+        window_seconds=settings.crew_room_rate_limit_window_seconds,
     )
     plan_create_limiter = SlidingWindowRateLimiter(
         maximum_requests=settings.plan_create_rate_limit_requests,
@@ -478,6 +490,183 @@ def create_app(
         )
         join_code_requests.labels(outcome="resolved").inc()
         return JSONResponse(content=JoinCodeResponse.model_validate(result).model_dump())
+
+    def _crew_room_rate_limit(request: Request) -> Response | None:
+        client_ip = request.client.host if request.client is not None else "unknown"
+        retry_after = crew_room_limiter.check(f"crew-room-ip:{client_ip}")
+        if retry_after is None:
+            return None
+        return JSONResponse(
+            status_code=429,
+            headers={"retry-after": str(min(retry_after, 300))},
+            content={"error": "Crew room request rate limit exceeded"},
+        )
+
+    def _ride_bearer_for_room(request: Request) -> str:
+        authorization = request.headers.get("authorization", "")
+        if not authorization.startswith("Bearer "):
+            raise RelayServiceError(401, "Ride credential required")
+        token = authorization[7:]
+        if not RIDE_API_TOKEN.fullmatch(token):
+            raise RelayServiceError(401, "Ride credential rejected")
+        return token
+
+    @app.post("/api/v1/crew-rooms/create", include_in_schema=False)
+    def create_crew_room(
+        payload: CreateCrewRoomRequest,
+        request: Request,
+        session: Session = Depends(database_session),
+    ) -> Response:
+        if limited := _crew_room_rate_limit(request):
+            return limited
+        result = service.create_crew_room(
+            session,
+            alias=payload.alias,
+            device_id=payload.deviceId,
+            display_name=payload.displayName,
+            operation=payload.operation.model_dump(),
+            bearer_token=_ride_bearer_for_room(request),
+        )
+        return JSONResponse(
+            status_code=201,
+            content=CrewRoomResponse.model_validate(result).model_dump(mode="json"),
+        )
+
+    @app.post("/api/v1/crew-rooms/open", include_in_schema=False)
+    def open_crew_room(
+        payload: CrewRoomAuthRequest,
+        request: Request,
+        session: Session = Depends(database_session),
+    ) -> Response:
+        if limited := _crew_room_rate_limit(request):
+            return limited
+        result = service.open_crew_room(
+            session,
+            alias=payload.alias,
+            device_id=payload.deviceId,
+            device_credential=payload.deviceCredential,
+        )
+        return JSONResponse(content=CrewRoomResponse.model_validate(result).model_dump(mode="json"))
+
+    @app.post("/api/v1/crew-rooms/join", include_in_schema=False)
+    def join_crew_room(
+        payload: JoinCrewRoomRequest,
+        request: Request,
+        session: Session = Depends(database_session),
+    ) -> Response:
+        if limited := _crew_room_rate_limit(request):
+            return limited
+        result = service.join_crew_room(
+            session,
+            alias=payload.alias,
+            invite_token=payload.inviteToken,
+            device_id=payload.deviceId,
+            display_name=payload.displayName,
+        )
+        return JSONResponse(content=CrewRoomResponse.model_validate(result).model_dump(mode="json"))
+
+    @app.post("/api/v1/crew-rooms/start-operation", include_in_schema=False)
+    def start_crew_room_operation(
+        payload: StartCrewRoomOperationRequest,
+        request: Request,
+        session: Session = Depends(database_session),
+    ) -> Response:
+        if limited := _crew_room_rate_limit(request):
+            return limited
+        result = service.start_crew_room_operation(
+            session,
+            alias=payload.alias,
+            device_id=payload.deviceId,
+            device_credential=payload.deviceCredential,
+            operation=payload.operation.model_dump(),
+            bearer_token=_ride_bearer_for_room(request),
+        )
+        return JSONResponse(content=CrewRoomResponse.model_validate(result).model_dump(mode="json"))
+
+    @app.post("/api/v1/crew-rooms/devices", include_in_schema=False)
+    def list_crew_room_devices(
+        payload: CrewRoomAuthRequest,
+        request: Request,
+        session: Session = Depends(database_session),
+    ) -> Response:
+        if limited := _crew_room_rate_limit(request):
+            return limited
+        result = service.list_crew_room_devices(
+            session,
+            alias=payload.alias,
+            device_id=payload.deviceId,
+            device_credential=payload.deviceCredential,
+        )
+        return JSONResponse(
+            content=CrewRoomDeviceListResponse.model_validate(result).model_dump(mode="json")
+        )
+
+    @app.post("/api/v1/crew-rooms/rename", include_in_schema=False)
+    def rename_crew_room(
+        payload: RenameCrewRoomRequest,
+        request: Request,
+        session: Session = Depends(database_session),
+    ) -> Response:
+        if limited := _crew_room_rate_limit(request):
+            return limited
+        result = service.rename_crew_room(
+            session,
+            alias=payload.alias,
+            new_alias=payload.newAlias,
+            device_id=payload.deviceId,
+            device_credential=payload.deviceCredential,
+        )
+        return JSONResponse(content=result)
+
+    @app.post("/api/v1/crew-rooms/transfer", include_in_schema=False)
+    def transfer_crew_room(
+        payload: CrewRoomTargetDeviceRequest,
+        request: Request,
+        session: Session = Depends(database_session),
+    ) -> Response:
+        if limited := _crew_room_rate_limit(request):
+            return limited
+        service.transfer_crew_room(
+            session,
+            alias=payload.alias,
+            device_id=payload.deviceId,
+            device_credential=payload.deviceCredential,
+            target_device_id=payload.targetDeviceId,
+        )
+        return Response(status_code=204)
+
+    @app.post("/api/v1/crew-rooms/revoke-device", include_in_schema=False)
+    def revoke_crew_room_device(
+        payload: CrewRoomTargetDeviceRequest,
+        request: Request,
+        session: Session = Depends(database_session),
+    ) -> Response:
+        if limited := _crew_room_rate_limit(request):
+            return limited
+        service.revoke_crew_room_device(
+            session,
+            alias=payload.alias,
+            device_id=payload.deviceId,
+            device_credential=payload.deviceCredential,
+            target_device_id=payload.targetDeviceId,
+        )
+        return Response(status_code=204)
+
+    @app.post("/api/v1/crew-rooms/delete", include_in_schema=False)
+    def delete_crew_room(
+        payload: CrewRoomAuthRequest,
+        request: Request,
+        session: Session = Depends(database_session),
+    ) -> Response:
+        if limited := _crew_room_rate_limit(request):
+            return limited
+        service.delete_crew_room(
+            session,
+            alias=payload.alias,
+            device_id=payload.deviceId,
+            device_credential=payload.deviceCredential,
+        )
+        return Response(status_code=204)
 
     def _plan_rate_limit_response(retry_after: int) -> Response:
         return JSONResponse(

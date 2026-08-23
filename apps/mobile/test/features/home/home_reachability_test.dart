@@ -170,6 +170,22 @@ void main() {
     expect(rideController.session?.riderColor, RiderColor.cyan);
   });
 
+  testWidgets('group setup explains the reusable crew room alias', (
+    tester,
+  ) async {
+    await pumpHome(tester);
+
+    await tester.tap(find.text('Create flight'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('crew-room-alias-field')), findsOneWidget);
+    expect(find.text('Reusable crew room (optional)'), findsOneWidget);
+    expect(
+      find.textContaining('private device access cannot be guessed'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a past ride is reachable by words alone', (tester) async {
     // Moved one tap in by #426, which removed the full-screen start panel these
     // rows used to sit on. The #306 rule is what matters and it still holds: the

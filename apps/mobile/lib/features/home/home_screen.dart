@@ -23,6 +23,7 @@ import '../../domain/geo_point.dart' as awareness_geo;
 import '../../domain/landing_zone.dart';
 import '../../domain/map_style_mode.dart';
 import '../../domain/flight_role.dart';
+import '../../domain/crew_room.dart';
 import '../../services/road_routing.dart';
 import 'home_destination_search.dart';
 import 'home_map_backdrop.dart';
@@ -598,6 +599,32 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           shrinkWrap: true,
           children: [
+            if (widget.controller.crewRooms.isNotEmpty) ...[
+              const ListTile(
+                leading: Icon(Icons.groups_3_outlined),
+                title: Text('Your crew rooms'),
+                subtitle: Text(
+                  'A room name returns to a fresh private flight; it is not a password.',
+                ),
+              ),
+              for (final room in widget.controller.crewRooms)
+                ListTile(
+                  key: Key('crew-room-${room.alias}'),
+                  leading: const Icon(Icons.tag),
+                  title: Text(room.alias),
+                  subtitle: Text(
+                    room.owner
+                        ? 'You manage this room · flight ${room.operationGeneration}'
+                        : 'Returning crew access · flight ${room.operationGeneration}',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_openCrewRoomActions(room));
+                  },
+                ),
+              const Divider(height: 8),
+            ],
             ListTile(
               key: const Key('open-flight-planner'),
               leading: const Icon(Icons.air_outlined),
@@ -669,6 +696,323 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openCrewRoomActions(CrewRoomMembership room) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF171D25),
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.groups_3_outlined),
+              title: Text(room.alias),
+              subtitle: const Text(
+                'The alias identifies the crew. Access stays on this device.',
+              ),
+            ),
+            ListTile(
+              key: const Key('open-crew-room-operation'),
+              leading: const Icon(Icons.login),
+              title: const Text('Open current flight'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                unawaited(_openCurrentCrewRoomFlight(room));
+              },
+            ),
+            if (room.owner)
+              ListTile(
+                key: const Key('start-new-crew-room-operation'),
+                leading: const Icon(Icons.add_circle_outline),
+                title: const Text('Start a fresh flight'),
+                subtitle: const Text(
+                  'Keeps the room name but creates a new private journal and invite.',
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_startFreshCrewRoomFlight(room));
+                },
+              ),
+            if (room.owner)
+              ListTile(
+                key: const Key('manage-crew-room'),
+                leading: const Icon(Icons.manage_accounts_outlined),
+                title: const Text('Manage room access'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_manageCrewRoom(room));
+                },
+              ),
+            ListTile(
+              key: const Key('forget-crew-room'),
+              leading: const Icon(Icons.delete_outline),
+              title: Text(
+                room.owner ? 'Delete or forget room' : 'Forget this room',
+              ),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                unawaited(
+                  room.owner
+                      ? _confirmDeleteCrewRoom(room)
+                      : widget.controller.forgetCrewRoom(room),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCurrentCrewRoomFlight(CrewRoomMembership room) async {
+    await widget.controller.openCrewRoom(room);
+    _showCrewRoomErrorIfAny();
+  }
+
+  Future<void> _startFreshCrewRoomFlight(CrewRoomMembership room) async {
+    final profile = widget.riderProfile;
+    await widget.controller.startNewCrewRoomOperation(
+      room,
+      displayName: profile.displayName,
+      motorcycleStyle: profile.motorcycleStyle,
+      riderSymbol: profile.riderSymbol,
+      riderColor: profile.riderColor,
+    );
+    _showCrewRoomErrorIfAny();
+  }
+
+  void _showCrewRoomErrorIfAny() {
+    if (!mounted) return;
+    final message = widget.controller.errorMessage;
+    if (message != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _manageCrewRoom(CrewRoomMembership room) async {
+    List<CrewRoomDevice> devices;
+    try {
+      devices = await widget.controller.crewRoomDevices(room);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load crew room access.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF171D25),
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(bottom: 20),
+          children: [
+            ListTile(
+              title: Text('Manage ${room.alias}'),
+              subtitle: const Text(
+                'A revoked device cannot open later flights. Current flight data follows its own retention window.',
+              ),
+              trailing: IconButton(
+                key: const Key('rename-crew-room'),
+                tooltip: 'Rename room',
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_renameCrewRoom(room));
+                },
+                icon: const Icon(Icons.edit_outlined),
+              ),
+            ),
+            for (final device in devices)
+              ListTile(
+                leading: Icon(
+                  device.owner
+                      ? Icons.admin_panel_settings
+                      : Icons.phone_android,
+                ),
+                title: Text(device.displayName),
+                subtitle: Text(
+                  device.revoked
+                      ? 'Revoked'
+                      : device.owner
+                      ? 'Room owner'
+                      : 'Returning device · last seen ${device.lastSeenAt}',
+                ),
+                trailing: device.deviceId == room.deviceId || device.revoked
+                    ? null
+                    : PopupMenuButton<String>(
+                        onSelected: (action) {
+                          Navigator.of(sheetContext).pop();
+                          if (action == 'transfer') {
+                            unawaited(_confirmTransferCrewRoom(room, device));
+                          } else {
+                            unawaited(
+                              _confirmRevokeCrewRoomDevice(room, device),
+                            );
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'transfer',
+                            child: Text('Transfer ownership'),
+                          ),
+                          PopupMenuItem(
+                            value: 'revoke',
+                            child: Text('Revoke device'),
+                          ),
+                        ],
+                      ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _renameCrewRoom(CrewRoomMembership room) async {
+    final text = TextEditingController(text: room.alias);
+    final alias = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Rename crew room'),
+        content: TextField(
+          key: const Key('rename-crew-room-field'),
+          controller: text,
+          textCapitalization: TextCapitalization.characters,
+          maxLength: 12,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp('[A-Za-z0-9]')),
+            LengthLimitingTextInputFormatter(12),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, text.text),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+    text.dispose();
+    if (alias == null) return;
+    await widget.controller.renameCrewRoom(room, alias);
+    _showCrewRoomErrorIfAny();
+  }
+
+  Future<void> _confirmTransferCrewRoom(
+    CrewRoomMembership room,
+    CrewRoomDevice device,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Make ${device.displayName} the owner?'),
+        content: Text(
+          '${device.displayName} will be able to rename or delete ${room.alias}, '
+          'start fresh flights and manage returning devices. You will keep crew '
+          'access but will no longer manage the room.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Transfer ownership'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.controller.transferCrewRoom(room, device.deviceId);
+    if (!mounted) return;
+    if (widget.controller.errorMessage != null) {
+      _showCrewRoomErrorIfAny();
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${device.displayName} now manages ${room.alias}.'),
+      ),
+    );
+  }
+
+  Future<void> _confirmRevokeCrewRoomDevice(
+    CrewRoomMembership room,
+    CrewRoomDevice device,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Revoke ${device.displayName}?'),
+        content: Text(
+          '${device.displayName} will not be able to open later ${room.alias} '
+          'flights. This does not erase a still-retained current flight from '
+          'their device.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Revoke device'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.controller.revokeCrewRoomDevice(room, device.deviceId);
+    if (!mounted) return;
+    if (widget.controller.errorMessage != null) {
+      _showCrewRoomErrorIfAny();
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${device.displayName} cannot open later flights.'),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteCrewRoom(CrewRoomMembership room) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete ${room.alias}?'),
+        content: const Text(
+          'This revokes returning access for every device. It does not erase a still-retained current flight from those devices.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete room'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.controller.deleteCrewRoom(room);
+    _showCrewRoomErrorIfAny();
   }
 
   Future<void> _openFlightPlanner() async {
@@ -1071,6 +1415,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
     text: widget.creating ? null : widget.rideCodePreference.savedCode,
   );
   final _rideNameController = TextEditingController();
+  final _crewRoomAliasController = TextEditingController();
   final _planCodeController = TextEditingController();
   final _vehicleLabelController = TextEditingController(text: 'Land Rover');
   final _codeFocusNode = FocusNode();
@@ -1107,6 +1452,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
     _nameController.dispose();
     _codeController.dispose();
     _rideNameController.dispose();
+    _crewRoomAliasController.dispose();
     _planCodeController.dispose();
     _vehicleLabelController.dispose();
     super.dispose();
@@ -1198,6 +1544,27 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (_selectedCoordinationMode.isGroup) ...[
+                  TextField(
+                    key: const Key('crew-room-alias-field'),
+                    controller: _crewRoomAliasController,
+                    maxLength: 12,
+                    textCapitalization: TextCapitalization.characters,
+                    autocorrect: false,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp('[A-Za-z0-9]')),
+                      LengthLimitingTextInputFormatter(12),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Reusable crew room (optional)',
+                      hintText: 'e.g. TUCKER',
+                      helperText:
+                          '5–12 letters or numbers. The name can be reused; private device access cannot be guessed from it.',
+                      counterText: '',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 TextField(
                   key: const Key('planned-route-code-field'),
                   controller: _planCodeController,
@@ -1487,6 +1854,9 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
         riderColor: widget.riderProfile.riderColor,
         coordinationMode: _selectedCoordinationMode,
         rideName: _rideNameController.text,
+        crewRoomAlias: _selectedCoordinationMode.isGroup
+            ? _crewRoomAliasController.text
+            : null,
       );
       if (widget.controller.hasActiveRide) {
         final target = widget.initialLandingZone;

@@ -1142,8 +1142,11 @@ class _RideCodeCard extends StatelessWidget {
                       // with no bars they do nothing at all (#279).
                       TextButton.icon(
                         key: const Key('show-invitation-qr'),
-                        onPressed: () =>
-                            RideInvitationQrSheet.show(context, session),
+                        onPressed: () => RideInvitationQrSheet.show(
+                          context,
+                          session,
+                          crewRoom: controller.currentCrewRoom,
+                        ),
                         icon: const Icon(Icons.qr_code_2),
                         label: const Text('Show QR'),
                       ),

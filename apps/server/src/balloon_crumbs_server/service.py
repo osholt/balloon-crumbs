@@ -18,6 +18,8 @@ from .crypto import CursorCodec, DataCipher, base64url, sha256, token_hash
 from .gpx import GpxValidationError, validate_gpx
 from .membership import MembershipEvent, project_membership_events
 from .models import (
+    CrewRoom,
+    CrewRoomDevice,
     IdempotencyReplay,
     ObserverGrant,
     PreStartPosition,
@@ -36,6 +38,9 @@ SIGNATURE = re.compile(r"^[0-9a-f]{64}$")
 PLAN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 PLAN_CODE_LENGTH = 8
 PLAN_CODE = re.compile(f"^[{PLAN_CODE_ALPHABET}]{{{PLAN_CODE_LENGTH}}}$")
+CREW_ROOM_ALIAS = re.compile(r"^[A-Z0-9]{5,12}$")
+CREW_ROOM_DEVICE_CREDENTIAL = re.compile(r"^crd1_[A-Za-z0-9_-]{43}$")
+CREW_ROOM_INVITE_TOKEN = re.compile(r"^cri1_[A-Za-z0-9_-]{43}$")
 EVENT_TYPES = {
     "rideCreated",
     "riderJoined",
@@ -567,6 +572,363 @@ class RelayService:
                 "resolveToken": stored_resolve_token,
             }
 
+    def create_crew_room(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        device_id: str,
+        display_name: str,
+        operation: dict[str, str],
+        bearer_token: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Create a named room without making its alias an access credential."""
+
+        now = now or datetime.now(UTC)
+        normalised_alias = self._normalise_crew_room_alias(alias)
+        profile = self._validate_crew_room_profile(device_id, display_name)
+        clean_operation = self._validate_crew_room_operation(operation, bearer_token)
+        room_id = "room_" + base64url(secrets.token_bytes(18))
+        alias_digest = self._crew_room_alias_digest(normalised_alias)
+        device_digest = self._crew_room_device_digest(room_id, profile["deviceId"])
+        device_credential = "crd1_" + base64url(secrets.token_bytes(32))
+        invite_token = "cri1_" + base64url(secrets.token_bytes(32))
+        with session.begin():
+            if (
+                session.scalar(select(CrewRoom.id).where(CrewRoom.alias_digest == alias_digest))
+                is not None
+            ):
+                raise RelayServiceError(409, "Crew room alias is already in use")
+            room = CrewRoom(
+                id=room_id,
+                alias_digest=alias_digest,
+                alias_ciphertext=self._cipher.encrypt_json(
+                    {"alias": normalised_alias},
+                    associated_data=self._crew_room_aad(room_id, "alias"),
+                ),
+                owner_device_digest=device_digest,
+                invite_token_hash=token_hash(invite_token),
+                operation_ciphertext=self._cipher.encrypt_json(
+                    clean_operation,
+                    associated_data=self._crew_room_aad(room_id, "operation"),
+                ),
+                operation_generation=1,
+                operation_expires_at=now + timedelta(hours=self._settings.ride_retention_hours),
+                created_at=now,
+                updated_at=now,
+            )
+            room.devices.append(
+                CrewRoomDevice(
+                    device_digest=device_digest,
+                    credential_hash=token_hash(device_credential),
+                    profile_ciphertext=self._cipher.encrypt_json(
+                        profile,
+                        associated_data=self._crew_room_device_aad(room_id, device_digest),
+                    ),
+                    created_at=now,
+                    last_seen_at=now,
+                )
+            )
+            session.add(room)
+        return {
+            "roomId": room_id,
+            "alias": normalised_alias,
+            "deviceCredential": device_credential,
+            "inviteToken": invite_token,
+            "operationGeneration": 1,
+            "operation": clean_operation,
+            "operationExpiresAt": room.operation_expires_at,
+            "owner": True,
+        }
+
+    def open_crew_room(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        device_id: str,
+        device_credential: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        now = now or datetime.now(UTC)
+        normalised_alias = self._normalise_crew_room_alias(alias)
+        with session.begin():
+            room, device = self._authorise_crew_room_device(
+                session,
+                alias=normalised_alias,
+                device_id=device_id,
+                credential=device_credential,
+            )
+            device.last_seen_at = now
+            return self._crew_room_response(
+                room,
+                device_credential=device_credential,
+                invite_token=None,
+                device_digest=device.device_digest,
+                now=now,
+            )
+
+    def join_crew_room(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        invite_token: str,
+        device_id: str,
+        display_name: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        now = now or datetime.now(UTC)
+        normalised_alias = self._normalise_crew_room_alias(alias)
+        if not CREW_ROOM_INVITE_TOKEN.fullmatch(invite_token):
+            raise RelayServiceError(404, "Crew room invitation is not active")
+        profile = self._validate_crew_room_profile(device_id, display_name)
+        alias_digest = self._crew_room_alias_digest(normalised_alias)
+        device_credential = "crd1_" + base64url(secrets.token_bytes(32))
+        with session.begin():
+            room = session.scalar(select(CrewRoom).where(CrewRoom.alias_digest == alias_digest))
+            if room is None or not hmac.compare_digest(
+                room.invite_token_hash, token_hash(invite_token)
+            ):
+                raise RelayServiceError(404, "Crew room invitation is not active")
+            device_digest = self._crew_room_device_digest(room.id, profile["deviceId"])
+            device = session.scalar(
+                select(CrewRoomDevice).where(
+                    CrewRoomDevice.room_id == room.id,
+                    CrewRoomDevice.device_digest == device_digest,
+                )
+            )
+            encrypted_profile = self._cipher.encrypt_json(
+                profile,
+                associated_data=self._crew_room_device_aad(room.id, device_digest),
+            )
+            if device is None:
+                device = CrewRoomDevice(
+                    room_id=room.id,
+                    device_digest=device_digest,
+                    credential_hash=token_hash(device_credential),
+                    profile_ciphertext=encrypted_profile,
+                    created_at=now,
+                    last_seen_at=now,
+                )
+                session.add(device)
+            else:
+                device.credential_hash = token_hash(device_credential)
+                device.profile_ciphertext = encrypted_profile
+                device.last_seen_at = now
+                device.revoked_at = None
+            room.updated_at = now
+            return self._crew_room_response(
+                room,
+                device_credential=device_credential,
+                invite_token=None,
+                device_digest=device_digest,
+                now=now,
+            )
+
+    def start_crew_room_operation(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        device_id: str,
+        device_credential: str,
+        operation: dict[str, str],
+        bearer_token: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        now = now or datetime.now(UTC)
+        normalised_alias = self._normalise_crew_room_alias(alias)
+        clean_operation = self._validate_crew_room_operation(operation, bearer_token)
+        invite_token = "cri1_" + base64url(secrets.token_bytes(32))
+        with session.begin():
+            room, device = self._authorise_crew_room_device(
+                session,
+                alias=normalised_alias,
+                device_id=device_id,
+                credential=device_credential,
+                owner_required=True,
+            )
+            room.operation_ciphertext = self._cipher.encrypt_json(
+                clean_operation,
+                associated_data=self._crew_room_aad(room.id, "operation"),
+            )
+            room.operation_generation += 1
+            room.operation_expires_at = now + timedelta(hours=self._settings.ride_retention_hours)
+            room.invite_token_hash = token_hash(invite_token)
+            room.updated_at = now
+            device.last_seen_at = now
+            return self._crew_room_response(
+                room,
+                device_credential=device_credential,
+                invite_token=invite_token,
+                device_digest=device.device_digest,
+                now=now,
+            )
+
+    def list_crew_room_devices(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        device_id: str,
+        device_credential: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        now = now or datetime.now(UTC)
+        normalised_alias = self._normalise_crew_room_alias(alias)
+        with session.begin():
+            room, requesting_device = self._authorise_crew_room_device(
+                session,
+                alias=normalised_alias,
+                device_id=device_id,
+                credential=device_credential,
+                owner_required=True,
+            )
+            requesting_device.last_seen_at = now
+            devices = []
+            for device in sorted(room.devices, key=lambda item: item.created_at):
+                profile = self._decrypt_crew_room_profile(device)
+                devices.append(
+                    {
+                        **profile,
+                        "owner": hmac.compare_digest(
+                            room.owner_device_digest, device.device_digest
+                        ),
+                        "revoked": device.revoked_at is not None,
+                        "lastSeenAt": self._as_utc(device.last_seen_at),
+                    }
+                )
+            return {"alias": normalised_alias, "devices": devices}
+
+    def rename_crew_room(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        new_alias: str,
+        device_id: str,
+        device_credential: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        now = now or datetime.now(UTC)
+        normalised_alias = self._normalise_crew_room_alias(alias)
+        normalised_new_alias = self._normalise_crew_room_alias(new_alias)
+        new_digest = self._crew_room_alias_digest(normalised_new_alias)
+        with session.begin():
+            room, device = self._authorise_crew_room_device(
+                session,
+                alias=normalised_alias,
+                device_id=device_id,
+                credential=device_credential,
+                owner_required=True,
+            )
+            conflict = session.scalar(
+                select(CrewRoom.id).where(
+                    CrewRoom.alias_digest == new_digest, CrewRoom.id != room.id
+                )
+            )
+            if conflict is not None:
+                raise RelayServiceError(409, "Crew room alias is already in use")
+            room.alias_digest = new_digest
+            room.alias_ciphertext = self._cipher.encrypt_json(
+                {"alias": normalised_new_alias},
+                associated_data=self._crew_room_aad(room.id, "alias"),
+            )
+            room.updated_at = now
+            device.last_seen_at = now
+            return {"roomId": room.id, "alias": normalised_new_alias}
+
+    def transfer_crew_room(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        device_id: str,
+        device_credential: str,
+        target_device_id: str,
+        now: datetime | None = None,
+    ) -> None:
+        now = now or datetime.now(UTC)
+        normalised_alias = self._normalise_crew_room_alias(alias)
+        with session.begin():
+            room, device = self._authorise_crew_room_device(
+                session,
+                alias=normalised_alias,
+                device_id=device_id,
+                credential=device_credential,
+                owner_required=True,
+            )
+            target_digest = self._crew_room_device_digest(room.id, target_device_id)
+            target = session.scalar(
+                select(CrewRoomDevice).where(
+                    CrewRoomDevice.room_id == room.id,
+                    CrewRoomDevice.device_digest == target_digest,
+                    CrewRoomDevice.revoked_at.is_(None),
+                )
+            )
+            if target is None:
+                raise RelayServiceError(404, "Crew room device is not active")
+            room.owner_device_digest = target_digest
+            room.updated_at = now
+            device.last_seen_at = now
+
+    def revoke_crew_room_device(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        device_id: str,
+        device_credential: str,
+        target_device_id: str,
+        now: datetime | None = None,
+    ) -> None:
+        now = now or datetime.now(UTC)
+        normalised_alias = self._normalise_crew_room_alias(alias)
+        with session.begin():
+            room, device = self._authorise_crew_room_device(
+                session,
+                alias=normalised_alias,
+                device_id=device_id,
+                credential=device_credential,
+                owner_required=True,
+            )
+            target_digest = self._crew_room_device_digest(room.id, target_device_id)
+            if hmac.compare_digest(target_digest, room.owner_device_digest):
+                raise RelayServiceError(409, "Transfer the crew room before revoking its owner")
+            target = session.scalar(
+                select(CrewRoomDevice).where(
+                    CrewRoomDevice.room_id == room.id,
+                    CrewRoomDevice.device_digest == target_digest,
+                    CrewRoomDevice.revoked_at.is_(None),
+                )
+            )
+            if target is None:
+                raise RelayServiceError(404, "Crew room device is not active")
+            target.revoked_at = now
+            room.updated_at = now
+            device.last_seen_at = now
+
+    def delete_crew_room(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        device_id: str,
+        device_credential: str,
+    ) -> None:
+        normalised_alias = self._normalise_crew_room_alias(alias)
+        with session.begin():
+            room, _ = self._authorise_crew_room_device(
+                session,
+                alias=normalised_alias,
+                device_id=device_id,
+                credential=device_credential,
+                owner_required=True,
+            )
+            session.delete(room)
+
     def create_plan(
         self,
         session: Session,
@@ -705,6 +1067,156 @@ class RelayService:
     @staticmethod
     def _join_code_aad(ride_code: str) -> bytes:
         return f"join-code:{ride_code}".encode()
+
+    @staticmethod
+    def _normalise_crew_room_alias(alias: str) -> str:
+        normalised = alias.strip().upper()
+        if not CREW_ROOM_ALIAS.fullmatch(normalised):
+            raise RelayServiceError(400, "Crew room alias must be 5-12 letters or numbers")
+        return normalised
+
+    @staticmethod
+    def _validate_crew_room_profile(device_id: str, display_name: str) -> dict[str, str]:
+        clean_name = display_name.strip()
+        if not IDENTIFIER.fullmatch(device_id):
+            raise RelayServiceError(400, "Crew room device identity is invalid")
+        if not 1 <= len(clean_name) <= 80:
+            raise RelayServiceError(400, "Crew room device name is invalid")
+        return {"deviceId": device_id, "displayName": clean_name}
+
+    def _validate_crew_room_operation(
+        self,
+        operation: dict[str, str],
+        bearer_token: str,
+    ) -> dict[str, str]:
+        expected_fields = {"rideId", "rideCode", "inviteSecret", "resolveToken"}
+        if set(operation) != expected_fields or not all(
+            isinstance(operation.get(field), str) for field in expected_fields
+        ):
+            raise RelayServiceError(400, "Crew room operation is invalid")
+        clean = {field: operation[field] for field in expected_fields}
+        self._validate_join_code(clean["rideCode"])
+        self._validate_join_credential(clean["rideId"], clean["inviteSecret"], bearer_token)
+        if not 16 <= len(clean["resolveToken"]) <= 128:
+            raise RelayServiceError(400, "Invalid ride credential")
+        return clean
+
+    def _crew_room_alias_digest(self, alias: str) -> bytes:
+        return self._cipher.blind_index(alias, namespace="crew-room-alias-v1")
+
+    def _crew_room_device_digest(self, room_id: str, device_id: str) -> bytes:
+        if not IDENTIFIER.fullmatch(device_id):
+            raise RelayServiceError(400, "Crew room device identity is invalid")
+        return self._cipher.blind_index(
+            device_id,
+            namespace=f"crew-room-device-v1:{room_id}",
+        )
+
+    @staticmethod
+    def _crew_room_aad(room_id: str, value: str) -> bytes:
+        return f"crew-room:{room_id}:{value}".encode()
+
+    @staticmethod
+    def _crew_room_device_aad(room_id: str, device_digest: bytes) -> bytes:
+        return f"crew-room:{room_id}:device:{device_digest.hex()}".encode()
+
+    def _authorise_crew_room_device(
+        self,
+        session: Session,
+        *,
+        alias: str,
+        device_id: str,
+        credential: str,
+        owner_required: bool = False,
+    ) -> tuple[CrewRoom, CrewRoomDevice]:
+        if not CREW_ROOM_DEVICE_CREDENTIAL.fullmatch(credential):
+            raise RelayServiceError(404, "Crew room is not available")
+        room = session.scalar(
+            select(CrewRoom).where(CrewRoom.alias_digest == self._crew_room_alias_digest(alias))
+        )
+        if room is None:
+            raise RelayServiceError(404, "Crew room is not available")
+        device_digest = self._crew_room_device_digest(room.id, device_id)
+        device = session.scalar(
+            select(CrewRoomDevice).where(
+                CrewRoomDevice.room_id == room.id,
+                CrewRoomDevice.device_digest == device_digest,
+            )
+        )
+        if (
+            device is None
+            or device.revoked_at is not None
+            or not hmac.compare_digest(device.credential_hash, token_hash(credential))
+            or (owner_required and not hmac.compare_digest(room.owner_device_digest, device_digest))
+        ):
+            raise RelayServiceError(404, "Crew room is not available")
+        return room, device
+
+    def _decrypt_crew_room_operation(self, room: CrewRoom) -> dict[str, str]:
+        try:
+            value = self._cipher.decrypt_json(
+                room.operation_ciphertext,
+                associated_data=self._crew_room_aad(room.id, "operation"),
+            )
+        except ValueError as error:
+            raise RelayServiceError(500, "Crew room record is invalid") from error
+        if not isinstance(value, dict) or set(value) != {
+            "rideId",
+            "rideCode",
+            "inviteSecret",
+            "resolveToken",
+        }:
+            raise RelayServiceError(500, "Crew room record is invalid")
+        if not all(isinstance(item, str) for item in value.values()):
+            raise RelayServiceError(500, "Crew room record is invalid")
+        return {key: value[key] for key in value}
+
+    def _decrypt_crew_room_profile(self, device: CrewRoomDevice) -> dict[str, str]:
+        try:
+            value = self._cipher.decrypt_json(
+                device.profile_ciphertext,
+                associated_data=self._crew_room_device_aad(device.room_id, device.device_digest),
+            )
+        except ValueError as error:
+            raise RelayServiceError(500, "Crew room device record is invalid") from error
+        if (
+            not isinstance(value, dict)
+            or not isinstance(value.get("deviceId"), str)
+            or not isinstance(value.get("displayName"), str)
+        ):
+            raise RelayServiceError(500, "Crew room device record is invalid")
+        return {"deviceId": value["deviceId"], "displayName": value["displayName"]}
+
+    def _crew_room_response(
+        self,
+        room: CrewRoom,
+        *,
+        device_credential: str,
+        invite_token: str | None,
+        device_digest: bytes,
+        now: datetime,
+    ) -> dict[str, Any]:
+        try:
+            alias_value = self._cipher.decrypt_json(
+                room.alias_ciphertext,
+                associated_data=self._crew_room_aad(room.id, "alias"),
+            )
+        except ValueError as error:
+            raise RelayServiceError(500, "Crew room record is invalid") from error
+        alias = alias_value.get("alias") if isinstance(alias_value, dict) else None
+        if not isinstance(alias, str):
+            raise RelayServiceError(500, "Crew room record is invalid")
+        operation_is_active = self._as_utc(room.operation_expires_at) > now
+        return {
+            "roomId": room.id,
+            "alias": alias,
+            "deviceCredential": device_credential,
+            **({"inviteToken": invite_token} if invite_token is not None else {}),
+            "operationGeneration": room.operation_generation,
+            "operation": self._decrypt_crew_room_operation(room) if operation_is_active else None,
+            "operationExpiresAt": self._as_utc(room.operation_expires_at),
+            "owner": hmac.compare_digest(room.owner_device_digest, device_digest),
+        }
 
     def _store_replay(
         self,

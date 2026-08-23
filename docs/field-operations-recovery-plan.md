@@ -259,6 +259,10 @@ contacts remain a separate private overlay.
 - [#75 — optional OS final-approach basemap](https://github.com/osholt/balloon-crumbs/issues/75)
 - [#76 — device-local privacy-governed land access notes](https://github.com/osholt/balloon-crumbs/issues/76)
 
+Implementation evidence for #71 is recorded in
+[Reusable crew rooms](reusable-crew-rooms.md), including its authority,
+revocation, offline and storage boundaries.
+
 ## Delivery evidence
 
 - Shared release, LANDED, retraction and recovery-complete semantics are
