@@ -258,5 +258,10 @@ contacts remain a separate private overlay.
 - [#74 — long pre-launch and recovery acceptance matrix](https://github.com/osholt/balloon-crumbs/issues/74)
 - [#75 — optional OS final-approach basemap](https://github.com/osholt/balloon-crumbs/issues/75)
 - [#76 — device-local privacy-governed land access notes](https://github.com/osholt/balloon-crumbs/issues/76)
+
+## Delivery evidence
+
+- Shared release, LANDED, retraction and recovery-complete semantics are
+  documented in [recovery lifecycle](recovery-lifecycle.md).
 - [#77 — HMLR INSPIRE boundary reference](https://github.com/osholt/balloon-crumbs/issues/77)
 - [#17 — optional planner-only aeronautical context](https://github.com/osholt/balloon-crumbs/issues/17)

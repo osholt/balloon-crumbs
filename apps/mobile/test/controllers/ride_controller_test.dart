@@ -7,6 +7,7 @@ import 'package:balloon_crumbs/data/in_memory_session_store.dart';
 import 'package:balloon_crumbs/domain/quick_message.dart';
 import 'package:balloon_crumbs/domain/completed_ride_store.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart';
+import 'package:balloon_crumbs/domain/flight_landing.dart';
 import 'package:balloon_crumbs/domain/flight_role.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart' as route_domain;
 import 'package:balloon_crumbs/domain/ride_event.dart';
@@ -388,6 +389,85 @@ void main() {
     }
     expect(controller.rideStarted, isTrue);
     expect(controller.rideStartedAt, start.createdAt);
+  });
+
+  test('an aboard declaration keeps a fresh balloon fix confirmed', () async {
+    await controller.createRide('Oliver');
+    await controller.startRide();
+    final now = DateTime.utc(2026, 7, 16, 12);
+
+    await controller.declareFlightLanded(
+      evidence: FlightLandingEvidence.aboard,
+      balloonFix: LocationSample(
+        position: const GeoPoint(latitude: 51.45, longitude: -2.61),
+        recordedAt: now.subtract(const Duration(seconds: 4)),
+        accuracyMeters: 6,
+        altitudeMeters: 92,
+        altitudeSource: AltitudeSource.gnss,
+        altitudeDatum: AltitudeDatum.wgs84Geoid,
+      ),
+    );
+
+    final landing = controller.flightLanding.landing;
+    expect(landing, isNotNull);
+    expect(landing!.evidence, FlightLandingEvidence.aboard);
+    expect(
+      landing.locationConfidence,
+      FlightLandingLocationConfidence.confirmed,
+    );
+    expect(controller.rideEnded, isFalse);
+  });
+
+  test('ground crew can declare, retract and complete recovery', () async {
+    await controller.createRide('Oliver');
+    final chaseCrew = await joinedController(FlightRole.chaseCrew);
+    await chaseCrew.startRide();
+    final staleFix = LocationSample(
+      position: const GeoPoint(latitude: 51.46, longitude: -2.62),
+      recordedAt: DateTime.utc(2026, 7, 16, 11, 56),
+      accuracyMeters: 18,
+    );
+
+    await chaseCrew.declareFlightLanded(
+      evidence: FlightLandingEvidence.radioConfirmed,
+      balloonFix: staleFix,
+    );
+
+    expect(chaseCrew.rideEnded, isFalse);
+    expect(
+      chaseCrew.flightLanding.landing?.locationConfidence,
+      FlightLandingLocationConfidence.bestKnown,
+    );
+    final firstLandingId = chaseCrew.flightLanding.landing!.eventId;
+
+    await chaseCrew.retractFlightLanding(reason: 'Radio correction');
+    expect(chaseCrew.flightLanding.isLanded, isFalse);
+    expect(chaseCrew.events.last.payload['landingEventId'], firstLandingId);
+
+    await chaseCrew.declareFlightLanded(
+      evidence: FlightLandingEvidence.manuallyMarked,
+      balloonFix: LocationSample(
+        position: const GeoPoint(latitude: 51.461, longitude: -2.621),
+        recordedAt: DateTime.utc(2026, 7, 16, 12, 1),
+        accuracyMeters: 0,
+      ),
+    );
+    await chaseCrew.completeRecovery();
+
+    expect(chaseCrew.rideEnded, isTrue);
+    expect(chaseCrew.events.last.type, RideEventType.rideEnded);
+    expect(chaseCrew.events.last.payload['reason'], 'recoveryComplete');
+  });
+
+  test('recovery cannot complete before a landing declaration', () async {
+    await controller.createRide('Oliver');
+    final chaseCrew = await joinedController(FlightRole.chaseDriver);
+    await chaseCrew.startRide();
+
+    await chaseCrew.completeRecovery();
+
+    expect(chaseCrew.rideEnded, isFalse);
+    expect(chaseCrew.errorMessage, contains('Mark the balloon LANDED'));
   });
 
   test('balloon device cannot forge a chase role to start tracking', () async {

@@ -50,6 +50,8 @@ def test_retention_table_matches_the_documented_bands() -> None:
     assert retention("riderContactShared") == timedelta(hours=2)
     assert retention("riderContactShared") == retention("iceInfoShared")
     assert retention("flightStartedByCrew") == timedelta(hours=72)
+    assert retention("flightLanded") == timedelta(hours=72)
+    assert retention("flightLandingRetracted") == timedelta(hours=72)
 
 
 def test_ground_crew_start_is_accepted_and_relayed(client, synchronize, make_event) -> None:
@@ -78,6 +80,51 @@ def test_ground_crew_start_is_accepted_and_relayed(client, synchronize, make_eve
     )
     assert downloaded.status_code == 200
     assert [event["type"] for event in downloaded.json()["events"]] == ["flightStartedByCrew"]
+
+
+def test_landing_and_retraction_are_accepted_and_relayed(client, synchronize, make_event) -> None:
+    ride_id = "flight-landing-lifecycle"
+    shared = [
+        make_event(
+            ride_id,
+            "event-landed",
+            event_type="flightLanded",
+            payload={
+                "declaredByDeviceId": "device-a",
+                "declaredByDisplayName": "Alex",
+                "declaredByRole": "chaseCrew",
+                "evidence": "radioConfirmed",
+            },
+        ),
+        make_event(
+            ride_id,
+            "event-retracted",
+            event_type="flightLandingRetracted",
+            payload={
+                "landingEventId": "event-landed",
+                "retractedByDeviceId": "device-a",
+                "retractedByDisplayName": "Alex",
+                "retractedByRole": "chaseCrew",
+            },
+        ),
+    ]
+
+    uploaded = synchronize(client, ride_id=ride_id, secret=SECRET, events=shared)
+    assert uploaded.status_code == 200
+    assert uploaded.json()["acceptedEventIds"] == ["event-landed", "event-retracted"]
+
+    downloaded = synchronize(
+        client,
+        ride_id=ride_id,
+        secret=SECRET,
+        device_id="device-b",
+        cursor=None,
+    )
+    assert downloaded.status_code == 200
+    assert [item["type"] for item in downloaded.json()["events"]] == [
+        "flightLanded",
+        "flightLandingRetracted",
+    ]
 
 
 def test_a_shared_phone_number_is_accepted_and_capped(client, synchronize, make_event) -> None:

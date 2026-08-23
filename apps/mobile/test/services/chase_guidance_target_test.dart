@@ -1,4 +1,6 @@
 import 'package:balloon_crumbs/domain/craft.dart';
+import 'package:balloon_crumbs/domain/flight_landing.dart';
+import 'package:balloon_crumbs/domain/flight_role.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart';
 import 'package:balloon_crumbs/domain/landing_zone.dart';
 import 'package:balloon_crumbs/domain/ride_event.dart';
@@ -56,6 +58,30 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  test('LANDED retargets guidance to the preserved landing evidence', () {
+    final landingFix = _fix(now.subtract(const Duration(minutes: 5)));
+    final target = resolver.resolve(
+      target: ChaseGuidanceTarget.balloon,
+      now: now,
+      balloonFix: null,
+      landing: FlightLanding(
+        eventId: 'landed',
+        declaredAt: now,
+        declaredByDeviceId: 'crew',
+        declaredByDisplayName: 'Alex',
+        declaredByRole: FlightRole.chaseCrew,
+        evidence: FlightLandingEvidence.radioConfirmed,
+        location: landingFix,
+        locationConfidence: FlightLandingLocationConfidence.bestKnown,
+      ),
+    );
+
+    expect(target, isNotNull);
+    expect(target!.point, landingFix.position);
+    expect(target.label, contains('LANDED'));
+    expect(target.label, contains('Best-known'));
   });
 
   test('moving-target reroutes are time and movement bounded', () {

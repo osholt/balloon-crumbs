@@ -12,6 +12,7 @@ import '../services/craft_roster.dart';
 import '../services/chase_guidance_target.dart';
 import '../domain/event_store.dart';
 import '../domain/flight_replay.dart';
+import '../domain/flight_landing.dart';
 import '../domain/flight_role.dart';
 import '../domain/geo_point.dart' as awareness_geo;
 import '../domain/ice_share.dart';
@@ -27,6 +28,7 @@ import '../domain/ride_role.dart';
 import '../domain/ride_join_payload.dart';
 import '../domain/ride_session.dart';
 import '../domain/rider_color.dart';
+import '../domain/rider_location.dart';
 import '../domain/session_store.dart';
 import '../features/map/craft_icon.dart';
 import '../relay/live_presence.dart';
@@ -122,6 +124,8 @@ class RideController extends ChangeNotifier {
   int _membershipProjectionCount = 0;
   LandingZoneTarget? _landingZoneCache;
   bool _landingZoneDirty = true;
+  FlightLandingState _flightLandingCache = const FlightLandingState();
+  bool _flightLandingDirty = true;
   List<OperationalBoundary> _operationalBoundaryCache = const [];
   bool _operationalBoundaryDirty = true;
 
@@ -240,6 +244,21 @@ class RideController extends ChangeNotifier {
       _landingZoneDirty = false;
     }
     return _landingZoneCache;
+  }
+
+  /// The latest valid shared LANDED/retraction state.
+  FlightLandingState get flightLanding {
+    final activeSession = _session;
+    if (activeSession == null) return const FlightLandingState();
+    if (_flightLandingDirty) {
+      _flightLandingCache = const FlightLandingReducer().fromEvents(
+        rideId: activeSession.rideId,
+        inviteSecret: activeSession.inviteSecret,
+        events: _events,
+      );
+      _flightLandingDirty = false;
+    }
+    return _flightLandingCache;
   }
 
   /// Pilot-authored advisory lines, areas and altitude bands for this flight.
@@ -690,6 +709,10 @@ class RideController extends ChangeNotifier {
     if (_affectsFlightSetup(event.type)) {
       _landingZoneDirty = true;
       _operationalBoundaryDirty = true;
+    }
+    if (event.type == RideEventType.flightLanded ||
+        event.type == RideEventType.flightLandingRetracted) {
+      _flightLandingDirty = true;
     }
     if (_affectsLifecycleOrRoute(event.type)) {
       _rebuildLifecycle();
@@ -1248,6 +1271,13 @@ class RideController extends ChangeNotifier {
         session.flightRole.mayStartFlight;
   }
 
+  bool get canManageRecovery {
+    final session = _session;
+    return session != null &&
+        !session.requiresFlightAssignment &&
+        session.flightRole.mayManageRecovery;
+  }
+
   /// Registers a balloon or vehicle in this ride.
   ///
   /// Idempotent by craft id: re-registering updates the label rather than
@@ -1699,6 +1729,77 @@ class RideController extends ChangeNotifier {
     });
   }
 
+  /// Publishes a shared LANDED declaration without ending location sharing.
+  ///
+  /// [balloonFix] may be stale or relayed: it is preserved exactly and the
+  /// reducer labels it best-known unless this is a fresh fix from a device in
+  /// the balloon. A manually selected point remains explicitly crew-marked.
+  Future<void> declareFlightLanded({
+    required FlightLandingEvidence evidence,
+    LocationSample? balloonFix,
+  }) async {
+    if (flightLanding.isLanded || rideEnded) return;
+    await _run(() async {
+      final session = _requireSession();
+      if (!rideStarted) {
+        throw const FormatException(
+          'Start live tracking before marking the balloon landed.',
+        );
+      }
+      if (!canManageRecovery) {
+        throw const FormatException(
+          'Observers cannot change the shared recovery state.',
+        );
+      }
+      if (evidence == FlightLandingEvidence.manuallyMarked &&
+          balloonFix == null) {
+        throw const FormatException('Choose the landing point on the map.');
+      }
+      await _record(
+        type: RideEventType.flightLanded,
+        priority: EventPriority.important,
+        payload: {
+          'declaredByDeviceId': session.localRiderId,
+          'declaredByDisplayName': session.displayName,
+          'declaredByRole': session.flightRole.name,
+          'evidence': evidence.name,
+          if (balloonFix != null) 'location': balloonFix.toJson(),
+        },
+      );
+    });
+  }
+
+  Future<void> retractFlightLanding({String? reason}) async {
+    final landing = flightLanding.landing;
+    if (landing == null || rideEnded) return;
+    await _run(() async {
+      final session = _requireSession();
+      if (!canManageRecovery) {
+        throw const FormatException(
+          'Observers cannot change the shared recovery state.',
+        );
+      }
+      final cleanReason = reason?.trim();
+      if (cleanReason != null && cleanReason.length > 160) {
+        throw const FormatException(
+          'Keep the retraction note under 160 characters.',
+        );
+      }
+      await _record(
+        type: RideEventType.flightLandingRetracted,
+        priority: EventPriority.important,
+        payload: {
+          'landingEventId': landing.eventId,
+          'retractedByDeviceId': session.localRiderId,
+          'retractedByDisplayName': session.displayName,
+          'retractedByRole': session.flightRole.name,
+          if (cleanReason != null && cleanReason.isNotEmpty)
+            'reason': cleanReason,
+        },
+      );
+    });
+  }
+
   Future<void> noteWindContext(FlightReplayWindContext context) async {
     await _run(() async {
       _requireSession();
@@ -1826,6 +1927,39 @@ class RideController extends ChangeNotifier {
         type: RideEventType.rideEnded,
         priority: EventPriority.important,
         payload: const {},
+      );
+      await _archiveCurrentRideIfComplete();
+      await _purgeUnusedIceSharesIfEnded();
+      await _expireEndedRideIfDue();
+    });
+  }
+
+  /// Ends sharing only after LANDED has been declared and recovery is complete.
+  Future<void> completeRecovery() async {
+    if (rideEnded) return;
+    await _run(() async {
+      final session = _requireSession();
+      final landing = flightLanding.landing;
+      if (landing == null) {
+        throw const FormatException(
+          'Mark the balloon LANDED before completing recovery.',
+        );
+      }
+      if (!canManageRecovery) {
+        throw const FormatException(
+          'Observers cannot complete the shared recovery.',
+        );
+      }
+      await _record(
+        type: RideEventType.rideEnded,
+        priority: EventPriority.important,
+        payload: {
+          'reason': 'recoveryComplete',
+          'landingEventId': landing.eventId,
+          'completedByDeviceId': session.localRiderId,
+          'completedByDisplayName': session.displayName,
+          'completedByRole': session.flightRole.name,
+        },
       );
       await _archiveCurrentRideIfComplete();
       await _purgeUnusedIceSharesIfEnded();
@@ -2315,6 +2449,7 @@ class RideController extends ChangeNotifier {
       ..addAll(_events.map((event) => event.id));
     _invalidateMembershipProjection();
     _landingZoneDirty = true;
+    _flightLandingDirty = true;
     _operationalBoundaryDirty = true;
     _applyLocalPilotAuthorityFromEvents();
   }

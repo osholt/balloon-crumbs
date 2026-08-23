@@ -16,6 +16,7 @@ enum LiveFlightProjectionStatus {
   staleWind,
   outsideWindValidity,
   noUsableWindVector,
+  landed,
 }
 
 class LiveFlightProjection {
@@ -64,6 +65,8 @@ class LiveFlightProjectionAssessment {
       'The forecast is not valid near the current flight time.',
     LiveFlightProjectionStatus.noUsableWindVector =>
       'The forecast contains no usable wind at the balloon position.',
+    LiveFlightProjectionStatus.landed =>
+      'The balloon is marked LANDED; the forecast envelope is no longer extended.',
   };
 }
 
@@ -94,7 +97,13 @@ class LiveFlightProjectionEngine {
     required WindForecastField? wind,
     required DateTime now,
     bool allowReferenceWind = false,
+    bool flightLanded = false,
   }) {
+    if (flightLanded) {
+      return const LiveFlightProjectionAssessment(
+        LiveFlightProjectionStatus.landed,
+      );
+    }
     if (plan == null) {
       return const LiveFlightProjectionAssessment(
         LiveFlightProjectionStatus.noStructuredPlan,

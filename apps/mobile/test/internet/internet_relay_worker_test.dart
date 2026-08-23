@@ -250,6 +250,15 @@ void main() {
     await eventStore.append(
       _event(id: 'crew-start', type: RideEventType.flightStartedByCrew),
     );
+    await eventStore.append(
+      _event(id: 'landed', type: RideEventType.flightLanded),
+    );
+    await eventStore.append(
+      _event(
+        id: 'landing-retracted',
+        type: RideEventType.flightLandingRetracted,
+      ),
+    );
     final api = _CompatibilityApi(
       compatibility: _compatibility(
         RelayCompatibilityDisposition.legacyCompatible,
@@ -283,6 +292,12 @@ void main() {
         _session.rideId,
       )).map((event) => event.id),
       contains('crew-start'),
+    );
+    expect(
+      (await eventStore.pendingEvents(
+        _session.rideId,
+      )).map((event) => event.id),
+      containsAll(['landed', 'landing-retracted']),
     );
     await worker.close();
   });

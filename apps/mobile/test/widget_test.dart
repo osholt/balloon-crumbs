@@ -661,6 +661,55 @@ void main() {
     expect(find.text('Navigation map'), findsOneWidget);
   });
 
+  testWidgets(
+    'LANDED remains a shared recovery phase until explicitly complete',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = await _controller();
+      await controller.createRide('Oliver');
+      await controller.startRide();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(_app(controller));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Flight').last);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('mark-flight-landed')), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('mark-flight-landed')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('mark-flight-landed')));
+      await tester.pumpAndSettle();
+      final radioEvidence = find.byKey(
+        const Key('landing-evidence-radioConfirmed'),
+      );
+      await tester.ensureVisible(radioEvidence);
+      await tester.pumpAndSettle();
+      await tester.tap(radioEvidence);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm-flight-landed')));
+      await tester.pumpAndSettle();
+
+      expect(controller.flightLanding.isLanded, isTrue);
+      expect(controller.rideEnded, isFalse);
+      expect(find.byKey(const Key('flight-landed-status')), findsOneWidget);
+      expect(
+        find.text('Live locations remain shared until Recovery complete.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('retract-flight-landed')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm-retract-landing')));
+      await tester.pumpAndSettle();
+      expect(controller.flightLanding.isLanded, isFalse);
+      expect(find.byKey(const Key('mark-flight-landed')), findsOneWidget);
+    },
+  );
+
   testWidgets('simulated bikes wait for the leader to start the ride', (
     tester,
   ) async {

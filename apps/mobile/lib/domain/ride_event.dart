@@ -108,6 +108,19 @@ enum RideEventType {
   /// the legacy event for mixed-build flights, while a relay can negotiate this
   /// new ground-crew authority explicitly.
   flightStartedByCrew,
+
+  /// An operational crew member declares that the balloon has landed.
+  ///
+  /// The payload preserves how the declaration was obtained and any location
+  /// evidence without upgrading a stale/relayed fix into a confirmed point.
+  /// Location sharing continues until the separate [rideEnded] recovery-
+  /// complete action.
+  flightLanded,
+
+  /// Retracts one specific [flightLanded] event after a mistaken declaration.
+  /// Naming the event prevents a late offline retraction from undoing a newer
+  /// landing declaration.
+  flightLandingRetracted,
 }
 
 enum EventPriority { routine, important, critical }
