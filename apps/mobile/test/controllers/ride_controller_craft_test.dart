@@ -10,6 +10,7 @@ import 'package:balloon_crumbs/domain/ride_join_payload.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/internet/internet_relay_client.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/services/chase_guidance_target.dart';
 import 'package:balloon_crumbs/services/nearby_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -264,6 +265,28 @@ void main() {
         isFalse,
       );
     });
+  });
+
+  test('a chaser records a target choice against their vehicle', () async {
+    final driver = await joinedAs(FlightRole.chaseDriver);
+
+    expect(
+      await driver.setLocalChaseGuidanceTarget(ChaseGuidanceTarget.landingArea),
+      isTrue,
+    );
+    expect(
+      driver.localChaseGuidanceSelection?.target,
+      ChaseGuidanceTarget.landingArea,
+    );
+    expect(driver.events.last.type, RideEventType.chaseGuidanceTargetSelected);
+    expect(driver.events.last.payload['craftId'], driver.localCraftId);
+  });
+
+  test('a balloon device cannot set chase guidance', () async {
+    expect(
+      await controller.setLocalChaseGuidanceTarget(ChaseGuidanceTarget.balloon),
+      isFalse,
+    );
   });
 
   test('the roster survives a journal replay', () async {

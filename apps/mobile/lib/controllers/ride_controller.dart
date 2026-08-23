@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../domain/craft.dart';
 import '../services/craft_roster.dart';
+import '../services/chase_guidance_target.dart';
 import '../domain/event_store.dart';
 import '../domain/flight_replay.dart';
 import '../domain/flight_role.dart';
@@ -1266,6 +1267,35 @@ class RideController extends ChangeNotifier {
           'targetLabel': targetCraftId == null
               ? null
               : roster.byId(targetCraftId)?.craft.label,
+        },
+      );
+    });
+    return _errorMessage == null;
+  }
+
+  /// The road-guidance target shared by the devices aboard this vehicle.
+  ChaseGuidanceSelection? get localChaseGuidanceSelection {
+    final session = _session;
+    if (session == null) return null;
+    final local = resolveCraftRoster().forDevice(session.localRiderId);
+    if (local == null || local.isBalloon) return null;
+    return const ChaseGuidanceSelectionReducer().fromEvents(_events)[local.id];
+  }
+
+  /// Changes this vehicle's shared road-guidance target.
+  Future<bool> setLocalChaseGuidanceTarget(ChaseGuidanceTarget target) async {
+    final session = _session;
+    if (session == null || !session.flightRole.isChasing) return false;
+    final local = resolveCraftRoster().forDevice(session.localRiderId);
+    if (local == null || local.isBalloon) return false;
+    await _run(() async {
+      await _record(
+        type: RideEventType.chaseGuidanceTargetSelected,
+        priority: EventPriority.important,
+        payload: {
+          'craftId': local.id,
+          'vehicleLabel': local.craft.label,
+          'target': target.name,
         },
       );
     });

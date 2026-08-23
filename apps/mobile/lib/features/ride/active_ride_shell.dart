@@ -1253,6 +1253,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   _OperationalBoundaryDraft? _operationalBoundaryDraft;
   double _landingRadiusMeters = 500;
   ChaseGuidanceTarget? _chaseGuidanceTarget;
+  String? _observedLandingGuidanceRevision;
   bool _chaseGuidanceRouting = false;
   DateTime? _lastChaseGuidanceRouteAt;
   awareness_geo.GeoPoint? _lastChaseGuidanceTarget;
@@ -1580,9 +1581,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       _warnings.add('Traffic preferences could not be restored: $error');
     }
     try {
-      await _restoreChaseGuidanceTarget();
+      await _initializeChaseGuidanceTarget();
     } on Object catch (error) {
-      _warnings.add('Chase guidance preference could not be restored: $error');
+      _warnings.add('Chase vehicle guidance could not be restored: $error');
     }
     try {
       await _replaceAwarenessController(route);
@@ -1831,23 +1832,24 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       'traffic-reroute-suppression:'
       '${widget.rideController.session?.rideId ?? 'none'}';
 
-  String get _chaseGuidancePreferenceKey =>
-      'chase-guidance-target:'
-      '${widget.rideController.session?.rideId ?? 'none'}';
-
   bool get _isChaserPerspective =>
       widget.rideController.session?.flightRole.isChasing == true;
 
-  Future<void> _restoreChaseGuidanceTarget() async {
+  Future<void> _initializeChaseGuidanceTarget() async {
     if (!_isChaserPerspective) return;
-    final preferences = await SharedPreferences.getInstance();
-    final stored = preferences.getString(_chaseGuidancePreferenceKey);
-    _chaseGuidanceTarget = ChaseGuidanceTarget.values
-        .where((target) => target.name == stored)
-        .firstOrNull;
-    _chaseGuidanceTarget ??= widget.rideController.landingZone == null
-        ? ChaseGuidanceTarget.balloon
-        : ChaseGuidanceTarget.landingArea;
+    final shared = widget.rideController.localChaseGuidanceSelection;
+    final initial =
+        shared?.target ??
+        (widget.rideController.landingZone == null
+            ? ChaseGuidanceTarget.balloon
+            : ChaseGuidanceTarget.landingArea);
+    _chaseGuidanceTarget = initial;
+    _observedLandingGuidanceRevision = _landingGuidanceRevisionFingerprint(
+      widget.rideController.landingZone,
+    );
+    if (shared == null) {
+      await widget.rideController.setLocalChaseGuidanceTarget(initial);
+    }
   }
 
   /// Publishes a rider's own enforcement sighting to the group.
@@ -3378,6 +3380,18 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   };
 
   void _onRideControllerChanged() {
+    final sharedTarget = _isChaserPerspective
+        ? widget.rideController.localChaseGuidanceSelection?.target
+        : null;
+    final chaseTargetChanged =
+        sharedTarget != null && sharedTarget != _chaseGuidanceTarget;
+    if (sharedTarget != null) _chaseGuidanceTarget = sharedTarget;
+    final landingRevision = _landingGuidanceRevisionFingerprint(
+      widget.rideController.landingZone,
+    );
+    final landingTargetChanged =
+        landingRevision != _observedLandingGuidanceRevision;
+    _observedLandingGuidanceRevision = landingRevision;
     _syncSharedLandingZone();
     _syncOperationalBoundaries();
     if (_isChaserPerspective && _chaseGuidanceTarget == null) {
@@ -3409,13 +3423,27 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         unawaited(_pushNotificationController?.refreshRegistration());
       }
       _publishObserverSnapshot();
-      unawaited(_refreshChaseGuidanceIfNeeded());
+      unawaited(
+        _refreshChaseGuidanceIfNeeded(
+          force:
+              chaseTargetChanged ||
+              (landingTargetChanged &&
+                  _chaseGuidanceTarget == ChaseGuidanceTarget.landingArea),
+        ),
+      );
     }
     if (widget.rideController.rideEnded && !_rideEndHandled) {
       unawaited(_handleRideEnded());
     }
     _schedulePublish();
   }
+
+  static String? _landingGuidanceRevisionFingerprint(
+    LandingZoneTarget? target,
+  ) => target == null
+      ? null
+      : '${target.center.latitude}:${target.center.longitude}:'
+            '${target.radiusMeters}:${target.updatedAt.toUtc().toIso8601String()}';
 
   void _syncSharedLandingZone() {
     final target = widget.rideController.landingZone;
@@ -4303,7 +4331,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           const ListTile(
             title: Text('Directions for this chase vehicle'),
             subtitle: Text(
-              'This changes only this device. The route ends on a road near the target; it never directs a vehicle off-road.',
+              'Driver and crew in this vehicle share this choice. The route ends on a road near the target; it never directs a vehicle off-road.',
             ),
           ),
           ListTile(
@@ -4345,9 +4373,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       ),
     );
     if (selected == null || !mounted) return;
+    final saved = await widget.rideController.setLocalChaseGuidanceTarget(
+      selected,
+    );
+    if (!saved || !mounted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('The shared chase target could not be updated.'),
+          ),
+        );
+      }
+      return;
+    }
     setState(() => _chaseGuidanceTarget = selected);
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_chaseGuidancePreferenceKey, selected.name);
     await _refreshChaseGuidanceIfNeeded(force: true);
   }
 
@@ -4417,7 +4456,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         id: 'personal-chase-${_chaseGuidanceRouteSequence++}',
         name: selected.label,
         description:
-            'Device-local road guidance. The road endpoint is '
+            'Road guidance for this chase vehicle. The road endpoint is '
             '${MeasurementFormatter(widget.distanceUnits.value).distance(separation)} '
             'from ${selected == ChaseGuidanceTarget.balloon ? 'the latest balloon fix' : 'the centre of the intended area'}. Access and stopping suitability remain unverified.',
         importedAt: now,
@@ -5271,7 +5310,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         ? 'Calculating a road rendezvous…'
         : _chaseGuidanceTarget == null
         ? null
-        : '${_chaseGuidanceTarget!.label} · only on this device',
+        : '${_chaseGuidanceTarget!.label} · shared in this vehicle',
     onChooseChaseGuidance: () => unawaited(_chooseChaseGuidanceTarget()),
     maneuverCount: const NavigationGuidancePlanner()
         .instructions(_activeRoute)

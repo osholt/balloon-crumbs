@@ -204,6 +204,12 @@ def test_craft_events_are_accepted_and_relayed(client, synchronize, make_event) 
             event_type="craftChaseAssigned",
             payload={"craftId": "v1", "chasing": "balloon"},
         ),
+        make_event(
+            ride_id,
+            "event-chase-target",
+            event_type="chaseGuidanceTargetSelected",
+            payload={"craftId": "v1", "target": "landingArea"},
+        ),
     ]
 
     uploaded = synchronize(client, ride_id=ride_id, secret=SECRET, events=shared)
@@ -225,6 +231,7 @@ def test_craft_structure_outlives_a_position_report() -> None:
         "deviceAttachedToCraft",
         "craftPrimaryDeviceNominated",
         "craftChaseAssigned",
+        "chaseGuidanceTargetSelected",
     ):
         assert retention(event_type) > retention("riderLocationUpdated")
 

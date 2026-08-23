@@ -76,6 +76,9 @@ EVENT_TYPES = {
     "windContextNoted",
     "operationalBoundaryUpserted",
     "operationalBoundaryRemoved",
+    # One shared navigation target per chase vehicle. The relay carries the
+    # choice; each vehicle still computes and validates its own road route.
+    "chaseGuidanceTargetSelected",
     # Issues #206/#207. The leader saying a ride that ended has not finished
     # after all. Deliberately not "rideResumed", which is the other half of
     # "ridePaused"; conflating them would make a pause look like a resurrection.
@@ -1016,6 +1019,7 @@ class RelayService:
             "windContextNoted": timedelta(hours=72),
             "operationalBoundaryUpserted": timedelta(hours=72),
             "operationalBoundaryRemoved": timedelta(hours=72),
+            "chaseGuidanceTargetSelected": timedelta(hours=72),
             # Who was asked to cover the back of the group, and what they said.
             # Ride-scoped coordination, not history worth keeping for days.
         }.get(event_type, timedelta(hours=72))

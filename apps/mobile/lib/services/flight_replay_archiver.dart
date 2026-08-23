@@ -130,6 +130,7 @@ class FlightReplayArchiver {
           break;
         case RideEventType.operationalBoundaryUpserted:
         case RideEventType.operationalBoundaryRemoved:
+        case RideEventType.chaseGuidanceTargetSelected:
           break;
       }
     }

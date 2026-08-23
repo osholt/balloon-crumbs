@@ -190,6 +190,7 @@ class OperationalBoundaryReducer {
         case RideEventType.craftChaseAssigned:
         case RideEventType.landingAreaNoted:
         case RideEventType.windContextNoted:
+        case RideEventType.chaseGuidanceTargetSelected:
           break;
       }
     }

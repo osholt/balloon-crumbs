@@ -85,6 +85,13 @@ enum RideEventType {
 
   /// Removes one pilot-authored operational boundary by its stable ID.
   operationalBoundaryRemoved,
+
+  /// Which shared target a chase vehicle wants road guidance towards.
+  ///
+  /// This is a vehicle fact, not a phone preference: the driver and chase crew
+  /// attached to the same vehicle therefore converge on the same choice while
+  /// separate vehicles can make independent decisions.
+  chaseGuidanceTargetSelected,
 }
 
 enum EventPriority { routine, important, critical }

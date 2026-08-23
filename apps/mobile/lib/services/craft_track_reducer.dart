@@ -95,6 +95,7 @@ class CraftTrackReducer {
         case RideEventType.windContextNoted:
         case RideEventType.operationalBoundaryUpserted:
         case RideEventType.operationalBoundaryRemoved:
+        case RideEventType.chaseGuidanceTargetSelected:
           break;
       }
     }
