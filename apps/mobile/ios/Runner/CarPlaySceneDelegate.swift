@@ -53,6 +53,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   private var surfaceMode = "unavailable"
   private var canPlanRoute = false
   private var canFreeRoam = false
+  private var mapOrientation = "directionUp"
   private var submittedSearchText = ""
   private weak var interfaceController: CPInterfaceController?
   private var sceneLifecycle = CarPlaySceneLifecycle()
@@ -272,12 +273,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     if navigationSession == nil || routeID != activeRouteID {
       navigationSession?.cancelTrip()
       let origin = MKMapItem(placemark: MKPlacemark(coordinate: first))
-      origin.name = "Ride start"
+      origin.name = "Recovery start"
       let destination = MKMapItem(placemark: MKPlacemark(coordinate: last))
       destination.name = routeName
       let choice = CPRouteChoice(
         summaryVariants: [routeName],
-        additionalInformationVariants: ["Group motorcycle route"],
+        additionalInformationVariants: ["Recovery road route"],
         selectionSummaryVariants: [routeName]
       )
       let trip = CPTrip(origin: origin, destination: destination, routeChoices: [choice])
@@ -424,6 +425,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     surfaceMode = nonEmptyString(snapshot["surfaceMode"]) ?? "unavailable"
     canPlanRoute = (snapshot["canPlanRoute"] as? NSNumber)?.boolValue ?? false
     canFreeRoam = (snapshot["canFreeRoam"] as? NSNumber)?.boolValue ?? false
+    mapOrientation = snapshot["mapOrientation"] as? String == "northUp"
+      ? "northUp"
+      : "directionUp"
     guard let mapTemplate else { return }
 
     // Active-ride actions are app-owned buttons on the map canvas, matching the
@@ -431,11 +435,28 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     // blue template buttons duplicated those actions and obscured the road.
     // Route entry remains a template interaction on the stationary home map.
     var buttons: [CPMapButton] = []
-    if surfaceMode != "activeRide" {
+    if surfaceMode == "activeRide" {
+      buttons.append(mapOrientationButton())
+    } else {
       if canPlanRoute { buttons.append(planRouteButton()) }
       if canFreeRoam { buttons.append(freeRoamButton()) }
     }
     mapTemplate.mapButtons = buttons
+  }
+
+  private func mapOrientationButton() -> CPMapButton {
+    let button = CPMapButton { _ in
+      (UIApplication.shared.delegate as? AppDelegate)?.toggleCarPlayMapOrientation()
+    }
+    let northUp = mapOrientation == "northUp"
+    button.image = mapButtonImage(
+      named: northUp ? "location.north.fill" : "location.north.line.fill",
+      color: CarPlayPalette.actionInk,
+      accessibilityLabel: northUp
+        ? "North-up map. Switch to direction-up"
+        : "Direction-up map. Switch to north-up"
+    )
+    return button
   }
 
   private func planRouteButton() -> CPMapButton {
@@ -623,10 +644,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     let actions: [CPAlertAction]
     if surfaceMode == "home" {
       actions = [
-        CPAlertAction(title: "Ride solo", style: .default) { [weak self] _ in
+        CPAlertAction(title: "Drive solo", style: .default) { [weak self] _ in
           self?.requestDestinationPlan(destination, groupRide: false)
         },
-        CPAlertAction(title: "Create group ride", style: .default) { [weak self] _ in
+        CPAlertAction(title: "Create crew flight", style: .default) { [weak self] _ in
           self?.requestDestinationPlan(destination, groupRide: true)
         },
         CPAlertAction(title: "Cancel", style: .cancel) { _ in
@@ -644,7 +665,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       ]
     }
     let sheet = CPActionSheetTemplate(
-      title: "Ride to \(shortLabel)?",
+      title: "Route to \(shortLabel)?",
       message: label,
       actions: actions
     )
@@ -691,7 +712,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     else { return }
     let sheet = CPActionSheetTemplate(
       title: "Start free roam?",
-      message: "Starts a solo ride with no planned route. Your track is still recorded.",
+      message: "Starts a recovery session with no planned road route. Your track is still recorded.",
       actions: [
         CPAlertAction(title: "Start free roam", style: .default) { [weak self] _ in
           interfaceController.dismissTemplate(animated: true) { _, _ in
@@ -797,10 +818,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     let warning = nonEmptyString(prompt["warning"])
     let message = [detail, warning].compactMap { $0 }.joined(separator: "\n\n")
     let sheet = CPActionSheetTemplate(
-      title: "Start prepared ride?",
+      title: "Start prepared flight?",
       message: message.isEmpty ? nil : message,
       actions: [
-        CPAlertAction(title: "Start ride", style: .default) { [weak self] _ in
+        CPAlertAction(title: "Start flight", style: .default) { [weak self] _ in
           interfaceController.dismissTemplate(animated: true) { _, error in
             if let error {
               NSLog("CarPlay start sheet could not be dismissed: %@", error.localizedDescription)
@@ -843,12 +864,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       title: "Report to group",
       message: "Uses your current position",
       actions: [
-        CPAlertAction(title: "Speed camera", style: .default) { _ in
-          report("speedCamera")
-        },
-        CPAlertAction(title: "Police", style: .default) { _ in
-          report("policeActivity")
-        },
         CPAlertAction(title: "Road hazard", style: .default) { _ in
           report("other")
         },
@@ -900,10 +915,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   private func presentLeaveConfirmation() {
     guard sceneLifecycle.rootReady, let interfaceController else { return }
     let sheet = CPActionSheetTemplate(
-      title: "Leave this ride?",
-      message: "Stops sharing this rider's position and returns the phone and CarPlay to the home map.",
+      title: "Leave this flight?",
+      message: "Stops sharing this crew device's position and returns the phone and CarPlay to the home map.",
       actions: [
-        CPAlertAction(title: "Leave ride", style: .destructive) { _ in
+        CPAlertAction(title: "Leave flight", style: .destructive) { _ in
           interfaceController.dismissTemplate(animated: true) { _, error in
             if let error {
               NSLog("CarPlay leave sheet could not be dismissed: %@", error.localizedDescription)
@@ -1003,7 +1018,7 @@ private enum CarPlayPalette {
   static let rider = UIColor(red: 0x6E / 255, green: 0xD8 / 255, blue: 0x9A / 255, alpha: 1)
   static let alerting = UIColor(red: 0xFF / 255, green: 0x5D / 255, blue: 0x73 / 255, alpha: 1)
 
-  /// The ride chrome's card fill and its label ink, from the phone's TEC card.
+  /// The recovery chrome's card fill and label ink, matching the phone.
   static let cardFill = UIColor(red: 0x25 / 255, green: 0x2E / 255, blue: 0x39 / 255, alpha: 0.90)
   static let primaryPanelFill = UIColor(
     red: 0x25 / 255,
@@ -1037,7 +1052,6 @@ private final class CarPlayNavigationViewController: UIViewController,
   MLNMapViewDelegate
 {
   private var mapView: MLNMapView?
-  private let tecBadge = CarPlayTecBadge()
   private let speedBadge = CarPlaySpeedLimitBadge()
   private let compassBadge = CarPlayCompassBadge()
   private let groupMiniMap = CarPlayGroupMiniMapView()
@@ -1046,6 +1060,7 @@ private final class CarPlayNavigationViewController: UIViewController,
   private let guidanceView = CarPlayGuidanceView()
   private let rideActionsView = CarPlayRideActionsView()
   private var routeSource: MLNShapeSource?
+  private var sharedTraceSources: [String: MLNShapeSource] = [:]
   private var routeCoordinates: [CLLocationCoordinate2D] = []
   private var routeID: String?
   private var routeProjectionKey: String?
@@ -1054,6 +1069,7 @@ private final class CarPlayNavigationViewController: UIViewController,
   private var localHeading: CLLocationDirection?
   private var followsLocalRider = true
   private var snapshotWantsRiderFollow = false
+  private var mapOrientation = "directionUp"
   private var panGestureStartCoordinate: CLLocationCoordinate2D?
   private var hasFramedFirstFix = false
   private var surfaceMode = "unavailable"
@@ -1112,8 +1128,6 @@ private final class CarPlayNavigationViewController: UIViewController,
     // CarPlay keeps the same information hierarchy as the phone in landscape:
     // route/status cards form a left column, the rider and road ahead stay
     // clear through the middle, and the speed pair remains top-trailing.
-    tecBadge.translatesAutoresizingMaskIntoConstraints = false
-    view.addSubview(tecBadge)
     speedBadge.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(speedBadge)
     compassBadge.translatesAutoresizingMaskIntoConstraints = false
@@ -1155,16 +1169,6 @@ private final class CarPlayNavigationViewController: UIViewController,
         constant: -3
       ),
       compassBadge.topAnchor.constraint(equalTo: speedBadge.topAnchor),
-      tecBadge.leadingAnchor.constraint(
-        equalTo: groupMiniMap.leadingAnchor
-      ),
-      tecBadge.trailingAnchor.constraint(
-        equalTo: groupMiniMap.trailingAnchor
-      ),
-      tecBadge.bottomAnchor.constraint(
-        equalTo: groupMiniMap.topAnchor,
-        constant: -8
-      ),
       // Scale with the head unit instead of assuming a phone-sized 196-point
       // card. The overview can never escape the left 28% status rail.
       groupMiniMap.widthAnchor.constraint(
@@ -1193,8 +1197,8 @@ private final class CarPlayNavigationViewController: UIViewController,
         equalTo: view.safeAreaLayoutGuide.topAnchor,
         constant: 12
       ),
-      // Keep all group-wide status in one left-hand reading column: journey
-      // ETA, TEC gap, then the group overview. The manoeuvre remains the only
+      // Keep group-wide status in one left-hand reading column: journey ETA,
+      // then the recovery overview. The manoeuvre remains the only
       // bottom-trailing card, leaving the rider and road ahead unobstructed.
       routeProgressView.leadingAnchor.constraint(
         equalTo: groupMiniMap.leadingAnchor
@@ -1203,7 +1207,7 @@ private final class CarPlayNavigationViewController: UIViewController,
         equalTo: groupMiniMap.trailingAnchor
       ),
       routeProgressView.bottomAnchor.constraint(
-        equalTo: tecBadge.topAnchor,
+        equalTo: groupMiniMap.topAnchor,
         constant: -8
       ),
       guidanceView.trailingAnchor.constraint(
@@ -1237,6 +1241,9 @@ private final class CarPlayNavigationViewController: UIViewController,
 
   func apply(snapshot: [String: Any]) {
     latestSnapshot = snapshot
+    mapOrientation = snapshot["mapOrientation"] as? String == "northUp"
+      ? "northUp"
+      : "directionUp"
     updateStyleURLs(snapshot["basemap"] as? [String: Any])
     guard let mapView else { return }
     surfaceMode = snapshot["surfaceMode"] as? String ?? "activeRide"
@@ -1269,6 +1276,7 @@ private final class CarPlayNavigationViewController: UIViewController,
       routeID = incomingRouteID
       routeProjectionKey = routeKey
     }
+    updateSharedTraces(snapshot["sharedTraces"])
     updateRiders(snapshot)
     if surfaceMode == "home" {
       groupMiniMap.isHidden = true
@@ -1279,7 +1287,6 @@ private final class CarPlayNavigationViewController: UIViewController,
         styleJSON: phoneStyleJSON
       )
     }
-    tecBadge.apply(snapshot["tec"] as? [String: Any])
     speedBadge.apply(snapshot["speed"] as? [String: Any])
     routeProgressView.apply(
       snapshot["journeyProgress"] as? [String: Any],
@@ -1542,7 +1549,10 @@ private final class CarPlayNavigationViewController: UIViewController,
     let adjustedZoom = phoneZoom + log2(heightRatio)
     let rawTilt = (viewport["tilt"] as? NSNumber)?.doubleValue ?? 0
     let tilt = min(60, max(0, rawTilt))
-    let bearing = (viewport["bearing"] as? NSNumber)?.doubleValue ?? 0
+    let publishedBearing = (viewport["bearing"] as? NSNumber)?.doubleValue ?? 0
+    let bearing = mapOrientation == "northUp"
+      ? 0
+      : (localHeading ?? publishedBearing)
     let riderVerticalFraction = min(
       0.8,
       max(0.35, (viewport["riderViewportFraction"] as? NSNumber)?.doubleValue ?? 0.64)
@@ -1675,6 +1685,7 @@ private final class CarPlayNavigationViewController: UIViewController,
       mapView.removeAnnotations(previousAnnotations)
     }
     routeSource = nil
+    sharedTraceSources = [:]
     riderAnnotations = []
     routeID = nil
     routeProjectionKey = nil
@@ -1683,6 +1694,106 @@ private final class CarPlayNavigationViewController: UIViewController,
   }
 
   // MARK: - Content
+
+  private func updateSharedTraces(_ raw: Any?) {
+    guard let mapView, let style = mapView.style else { return }
+    let traces = raw as? [[String: Any]] ?? []
+    var groups: [String: (color: UIColor, width: CGFloat, casing: CGFloat,
+      dash: [NSNumber]?, shapes: [MLNPolylineFeature])] = [:]
+
+    for trace in traces {
+      guard
+        let kind = trace["kind"] as? String,
+        let colorArgb = (trace["colorArgb"] as? NSNumber)?.uint32Value,
+        let width = (trace["width"] as? NSNumber)?.doubleValue,
+        let casing = (trace["casingWidth"] as? NSNumber)?.doubleValue
+      else { continue }
+      var coordinates = (trace["points"] as? [[String: Any]] ?? [])
+        .compactMap(coordinate(from:))
+      guard coordinates.count >= 2 else { continue }
+      let feature = MLNPolylineFeature(
+        coordinates: &coordinates,
+        count: UInt(coordinates.count)
+      )
+      let key = "\(kind)-\(colorArgb)"
+      let color = colorFromArgb(colorArgb)
+      if var group = groups[key] {
+        group.shapes.append(feature)
+        groups[key] = group
+      } else {
+        groups[key] = (
+          color: color,
+          width: CGFloat(width),
+          casing: CGFloat(casing),
+          dash: trace["dash"] as? [NSNumber],
+          shapes: [feature]
+        )
+      }
+    }
+
+    for (key, source) in sharedTraceSources where groups[key] == nil {
+      source.shape = nil
+    }
+    for (key, group) in groups {
+      let identifier = "balloon-crumbs-shared-\(safeStyleIdentifier(key))"
+      let source: MLNShapeSource
+      if let existing = sharedTraceSources[key] {
+        source = existing
+      } else if
+        let existing = style.source(withIdentifier: identifier) as? MLNShapeSource
+      {
+        source = existing
+        sharedTraceSources[key] = existing
+      } else {
+        let created = MLNShapeSource(identifier: identifier, shape: nil, options: nil)
+        style.addSource(created)
+        sharedTraceSources[key] = created
+        source = created
+      }
+      let casingID = "\(identifier)-casing"
+      if style.layer(withIdentifier: casingID) == nil {
+        let layer = MLNLineStyleLayer(identifier: casingID, source: source)
+        layer.lineColor = NSExpression(forConstantValue: CarPlayPalette.casing)
+        layer.lineWidth = NSExpression(forConstantValue: group.casing)
+        layer.lineCap = NSExpression(forConstantValue: "round")
+        layer.lineJoin = NSExpression(forConstantValue: "round")
+        if let dash = group.dash { layer.lineDashPattern = NSExpression(forConstantValue: dash) }
+        if let routeLayer = style.layer(withIdentifier: "balloon-crumbs-route-ahead-casing") {
+          style.insertLayer(layer, below: routeLayer)
+        } else {
+          style.addLayer(layer)
+        }
+      }
+      let lineID = "\(identifier)-line"
+      if style.layer(withIdentifier: lineID) == nil {
+        let layer = MLNLineStyleLayer(identifier: lineID, source: source)
+        layer.lineColor = NSExpression(forConstantValue: group.color)
+        layer.lineWidth = NSExpression(forConstantValue: group.width)
+        layer.lineCap = NSExpression(forConstantValue: "round")
+        layer.lineJoin = NSExpression(forConstantValue: "round")
+        if let dash = group.dash { layer.lineDashPattern = NSExpression(forConstantValue: dash) }
+        if let routeLayer = style.layer(withIdentifier: "balloon-crumbs-route-ahead-casing") {
+          style.insertLayer(layer, below: routeLayer)
+        } else {
+          style.addLayer(layer)
+        }
+      }
+      source.shape = MLNShapeCollectionFeature(shapes: group.shapes)
+    }
+  }
+
+  private func colorFromArgb(_ argb: UInt32) -> UIColor {
+    UIColor(
+      red: CGFloat((argb >> 16) & 0xFF) / 255,
+      green: CGFloat((argb >> 8) & 0xFF) / 255,
+      blue: CGFloat(argb & 0xFF) / 255,
+      alpha: CGFloat((argb >> 24) & 0xFF) / 255
+    )
+  }
+
+  private func safeStyleIdentifier(_ value: String) -> String {
+    value.unicodeScalars.map { String(format: "%02x", $0.value) }.joined()
+  }
 
   private func updateRoute(_ raw: Any?, remaining: Any?) {
     let allPoints = (raw as? [[String: Any]] ?? []).compactMap(coordinate(from:))
@@ -1708,9 +1819,9 @@ private final class CarPlayNavigationViewController: UIViewController,
   /// matching the phone navigation surface.
   private func updateRemainingRoute(_ points: [CLLocationCoordinate2D]) {
     guard let mapView, let style = mapView.style else { return }
-    let sourceIdentifier = "tailendcharlie-route-ahead-source"
-    let casingIdentifier = "tailendcharlie-route-ahead-casing"
-    let lineIdentifier = "tailendcharlie-route-ahead-line"
+    let sourceIdentifier = "balloon-crumbs-route-ahead-source"
+    let casingIdentifier = "balloon-crumbs-route-ahead-casing"
+    let lineIdentifier = "balloon-crumbs-route-ahead-line"
     let source: MLNShapeSource
     if let routeSource {
       source = routeSource
@@ -1798,14 +1909,17 @@ private final class CarPlayNavigationViewController: UIViewController,
       let isLocal = (rider["isLocal"] as? NSNumber)?.boolValue ?? false
       let annotation = CarPlayRiderAnnotation(
         coordinate: coordinate,
-        title: rider["label"] as? String ?? "Rider",
-        subtitle: rider["role"] as? String,
+        title: rider["label"] as? String ?? "Craft",
+        subtitle: (rider["detail"] as? String) ?? (rider["role"] as? String),
         isLocal: isLocal,
         isTec: (rider["isTec"] as? NSNumber)?.boolValue ?? false,
         needsAttention: (rider["needsAttention"] as? NSNumber)?.boolValue ?? false,
-        riderSymbol: rider["riderSymbol"] as? String ?? "motorcycle",
-        motorcycleStyle: rider["motorcycleStyle"] as? String ?? "adventureTourer",
-        riderColor: rider["riderColor"] as? String ?? "green"
+        riderSymbol: rider["riderSymbol"] as? String ?? "craft",
+        craftStyle: (rider["craftStyle"] as? String)
+          ?? (rider["motorcycleStyle"] as? String)
+          ?? "fourByFour",
+        riderColor: rider["riderColor"] as? String ?? "green",
+        riderColorArgb: (rider["riderColorArgb"] as? NSNumber)?.uint32Value
       )
       riderAnnotations.append(annotation)
       if isLocal {
@@ -1918,8 +2032,9 @@ private final class CarPlayRiderAnnotation: NSObject, MLNAnnotation {
   let isTec: Bool
   let needsAttention: Bool
   let riderSymbol: String
-  let motorcycleStyle: String
+  let craftStyle: String
   let riderColor: String
+  let riderColorArgb: UInt32?
 
   init(
     coordinate: CLLocationCoordinate2D,
@@ -1929,8 +2044,9 @@ private final class CarPlayRiderAnnotation: NSObject, MLNAnnotation {
     isTec: Bool,
     needsAttention: Bool,
     riderSymbol: String,
-    motorcycleStyle: String,
-    riderColor: String
+    craftStyle: String,
+    riderColor: String,
+    riderColorArgb: UInt32?
   ) {
     self.coordinate = coordinate
     self.title = title
@@ -1939,8 +2055,9 @@ private final class CarPlayRiderAnnotation: NSObject, MLNAnnotation {
     self.isTec = isTec
     self.needsAttention = needsAttention
     self.riderSymbol = riderSymbol
-    self.motorcycleStyle = motorcycleStyle
+    self.craftStyle = craftStyle
     self.riderColor = riderColor
+    self.riderColorArgb = riderColorArgb
   }
 }
 
@@ -1985,7 +2102,8 @@ private final class CarPlayRiderAnnotationView: MLNAnnotationView {
   func apply(_ rider: CarPlayRiderAnnotation) {
     frame = CGRect(x: 0, y: 0, width: 38, height: 38)
     layer.cornerRadius = 19
-    backgroundColor = identityColor(named: rider.riderColor)
+    backgroundColor = rider.riderColorArgb.map(colorFromArgb)
+      ?? identityColor(named: rider.riderColor)
     layer.borderColor = CarPlayPalette.casing.cgColor
     label.text = nil
     label.attributedText = nil
@@ -1993,6 +2111,13 @@ private final class CarPlayRiderAnnotationView: MLNAnnotationView {
     label.shadowColor = nil
     label.shadowOffset = .zero
     imageView.image = nil
+    isAccessibilityElement = true
+    accessibilityLabel = [rider.title, rider.subtitle]
+      .compactMap { value in
+        guard let value, !value.isEmpty else { return nil }
+        return value
+      }
+      .joined(separator: ". ")
 
     if let initials = initialsIdentity(
       symbol: rider.riderSymbol,
@@ -2010,7 +2135,7 @@ private final class CarPlayRiderAnnotationView: MLNAnnotationView {
       label.text = String(rider.riderSymbol.dropFirst("emoji:".count))
       label.font = .systemFont(ofSize: 21)
     } else {
-      imageView.image = motorcycleImage(for: rider.motorcycleStyle)
+      imageView.image = craftImage(for: rider.craftStyle)
     }
     setNeedsLayout()
   }
@@ -2098,32 +2223,32 @@ private final class CarPlayRiderAnnotationView: MLNAnnotationView {
     }
   }
 
-  private func motorcycleImage(for style: String) -> UIImage? {
-    let fileName = Self.motorcycleFiles[style] ?? "00_adventure_tourer"
-    let asset = "assets/icons/motorcycles/\(fileName).png"
+  private func colorFromArgb(_ argb: UInt32) -> UIColor {
+    UIColor(
+      red: CGFloat((argb >> 16) & 0xFF) / 255,
+      green: CGFloat((argb >> 8) & 0xFF) / 255,
+      blue: CGFloat(argb & 0xFF) / 255,
+      alpha: CGFloat((argb >> 24) & 0xFF) / 255
+    )
+  }
+
+  private func craftImage(for style: String) -> UIImage? {
+    let fileName = Self.craftFiles[style] ?? "1_four_by_four"
+    let asset = "assets/icons/craft/\(fileName).png"
     let key = FlutterDartProject.lookupKey(forAsset: asset)
     guard let path = Bundle.main.path(forResource: key, ofType: nil) else {
-      return UIImage(systemName: "motorcycle.fill")?.withRenderingMode(.alwaysTemplate)
+      let symbol = style == "balloon" ? "balloon.fill" : "car.fill"
+      return UIImage(systemName: symbol)?.withRenderingMode(.alwaysTemplate)
     }
     return UIImage(contentsOfFile: path)?.withRenderingMode(.alwaysTemplate)
   }
 
-  private static let motorcycleFiles = [
-    "adventureTourer": "00_adventure_tourer",
-    "roadster": "01_roadster",
-    "dualSport": "02_dual_sport",
-    "sportNaked": "03_sport_naked",
-    "cruiserClassic": "04_cruiser_classic",
-    "standardTwin": "05_standard_twin",
-    "cafeRacer": "06_cafe_racer",
-    "dirtBike": "07_dirt_bike",
-    "fullTourer": "08_full_tourer",
-    "cruiserBagger": "09_cruiser_bagger",
-    "scrambler": "10_scrambler",
-    "sportTouring": "11_sport_touring",
-    "scooter": "12_scooter",
-    "sidecarRig": "13_sidecar_rig",
-    "streetFighter": "14_street_fighter",
+  private static let craftFiles = [
+    "balloon": "0_balloon",
+    "fourByFour": "1_four_by_four",
+    "pickup": "2_pickup",
+    "van": "3_van",
+    "trailer": "4_trailer",
   ]
 }
 
@@ -2854,69 +2979,7 @@ private final class CarPlaySpeedLimitBadge: UIView {
   }
 }
 
-/// The persistent back-marker readout on the CarPlay map canvas.
-///
-/// The ride-status list already carries the full sentence, but it is a template
-/// a rider has to navigate to. This is the version that is simply *there* while
-/// the map is up, which is the whole point on a screen nobody should be reading
-/// for more than a moment.
-///
-/// Colour is never the only signal: the trend arrow is already in the text, and
-/// the states differ in words as well as tint. Riders wear tinted visors in
-/// direct sunlight, and some cannot tell the tints apart at all.
-private final class CarPlayTecBadge: UIView {
-  private let label = UILabel()
-
-  init() {
-    super.init(frame: .zero)
-    isHidden = true
-    layer.cornerRadius = 8
-    layer.cornerCurve = .continuous
-    backgroundColor = CarPlayPalette.cardFill
-    label.translatesAutoresizingMaskIntoConstraints = false
-    label.font = .systemFont(ofSize: 15, weight: .semibold)
-    label.textColor = CarPlayPalette.cardTitle
-    label.numberOfLines = 1
-    label.adjustsFontSizeToFitWidth = true
-    label.minimumScaleFactor = 0.72
-    addSubview(label)
-    NSLayoutConstraint.activate([
-      label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-      label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-      label.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-      label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
-    ])
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-  func apply(_ tec: [String: Any]?) {
-    // No TEC block at all means no ride is being projected yet, which is not
-    // the same as a ride with no back-marker - that arrives with state "none"
-    // and is shown, deliberately, as "No TEC".
-    guard let tec, let headline = tec["headline"] as? String else {
-      isHidden = true
-      return
-    }
-    isHidden = false
-    label.text = headline
-    // The card keeps the app's own fill and the *ink* carries the state, for the
-    // same reason the trend is a word and an arrow rather than a colour: a
-    // tinted visor in daylight flattens these, and some riders cannot tell them
-    // apart at all. The headline already says which state it is in words.
-    switch tec["state"] as? String {
-    case "none":
-      label.textColor = CarPlayPalette.alerting
-    case "stale", "awaitingLocation":
-      label.textColor = CarPlayPalette.cardLabel
-    default:
-      label.textColor = CarPlayPalette.cardTitle
-    }
-  }
-}
-
-/// Compact route-wide timing above TEC in the left status column.
+/// Compact route-wide timing above the recovery overview.
 ///
 /// Dart owns the estimate and waypoint selection so the phone and car never
 /// disagree. Native only formats the rider's units and local clock convention.

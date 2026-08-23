@@ -1475,6 +1475,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   int _routeGeneration = 0;
   int _selectedIndex = 0;
   late MapOrientationMode _mapOrientationMode;
+  MapOrientationMode _carPlayOrientationMode = MapOrientationMode.directionUp;
   MapOrientationPreferences? _mapOrientationPreferences;
   Object? _changeRouteRequestToken;
   PickedGpxFile? _pendingSharedGpxFile;
@@ -1531,6 +1532,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         widget.rideController.session?.flightRole.isAboardBalloon == true
         ? MapOrientationMode.northUp
         : MapOrientationMode.directionUp;
+    _carPlayOrientationMode = MapOrientationMode.directionUp;
     unawaited(_loadMapOrientation());
     WidgetsBinding.instance.addObserver(this);
     // Headless and test surfaces have no audio to speak through, and must not
@@ -1617,6 +1619,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         if (!mounted) return;
         _updateMapOverlays(updateDerivedState: false);
       },
+      onMapOrientationToggleRequested: _toggleCarPlayMapOrientation,
     );
   }
 
@@ -1631,10 +1634,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
     final fallback = _mapOrientationMode;
     final stored = preferences.read(_mapOrientationScope, fallback: fallback);
+    final storedCarPlay = preferences.read(
+      MapOrientationScope.carPlay,
+      fallback: MapOrientationMode.directionUp,
+    );
     if (!mounted) return;
     setState(() {
       _mapOrientationPreferences = preferences;
       _mapOrientationMode = stored;
+      _carPlayOrientationMode = storedCarPlay;
     });
   }
 
@@ -1645,6 +1653,18 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (preferences != null) {
       await preferences.write(_mapOrientationScope, mode);
     }
+  }
+
+  Future<void> _toggleCarPlayMapOrientation() async {
+    final mode = _carPlayOrientationMode.toggled;
+    _carPlayOrientationMode = mode;
+    final preferences =
+        _mapOrientationPreferences ??
+        MapOrientationPreferences(await SharedPreferences.getInstance());
+    _mapOrientationPreferences ??= preferences;
+    await preferences.write(MapOrientationScope.carPlay, mode);
+    if (!mounted) return;
+    _updateMapOverlays(updateDerivedState: false);
   }
 
   /// A GPX file can arrive (via the platform's "Open in..." delivery) while
@@ -3045,6 +3065,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 : navigationPosition?.speedMetersPerSecond,
             now: DateTime.now(),
           );
+    final intendedLanding = widget.rideController.landingZone;
+    final confirmedLanding = widget.rideController.flightLanding.landing;
     unawaited(
       bridge.publish(
         session: session,
@@ -3073,6 +3095,36 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             !widget.rideController.rideStarted &&
             !widget.rideController.rideEnded &&
             !widget.rideController.busy,
+        localRider: session == null
+            ? null
+            : CarPlayLocalRider(
+                riderId: session.localRiderId,
+                displayName: session.displayName,
+                motorcycleStyle: session.flightRole.isAboardBalloon
+                    ? CraftIconStyle.balloon
+                    : session.motorcycleStyle,
+                riderSymbol: session.riderSymbol,
+                riderColor: session.riderColor,
+                roleLabel: session.flightRole.label,
+                detail: [
+                  session.flightRole.isAboardBalloon
+                      ? 'Balloon'
+                      : 'Chase vehicle',
+                  ?craftGroundMotionLabel(
+                    speedMetersPerSecond:
+                        navigationPosition?.speedMetersPerSecond,
+                    headingDegrees: navigationPosition?.headingDegrees,
+                  ),
+                  if (session.flightRole.isAboardBalloon &&
+                      navigationPosition?.altitudeMeters != null)
+                    '${navigationPosition!.altitudeMeters!.round()} m',
+                  navigationPosition == null
+                      ? 'unknown'
+                      : localSpeedIsAgeing
+                      ? 'stale'
+                      : 'live',
+                ].join(' · '),
+              ),
         basemap: selectedBasemap,
         mapStyleJson: _carPlayMapStyleJson,
         localPosition: _mapPosition.value,
@@ -3088,8 +3140,175 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         speedLimitUnlimited: widget.speedLimitDisplay.limit?.unlimited ?? false,
         routeProgress: routeProgress,
         journeyProgress: journeyProgress,
+        craftLocations: _carPlayCraftLocations(),
+        sharedTraces: _carPlaySharedTraces(),
+        intendedLandingArea: intendedLanding == null
+            ? null
+            : CarPlayLandingArea(
+                label: intendedLanding.label,
+                center: route_domain.GeoPoint(
+                  latitude: intendedLanding.center.latitude,
+                  longitude: intendedLanding.center.longitude,
+                ),
+                radiusMeters: intendedLanding.radiusMeters,
+                confirmed: false,
+              ),
+        confirmedLanding: confirmedLanding?.location == null
+            ? null
+            : CarPlayLandingArea(
+                label: 'Confirmed landing',
+                center: route_domain.GeoPoint(
+                  latitude: confirmedLanding!.location!.position.latitude,
+                  longitude: confirmedLanding.location!.position.longitude,
+                ),
+                radiusMeters: 35,
+                confirmed: true,
+              ),
+        mapOrientation: _carPlayOrientationMode,
       ),
     );
+  }
+
+  List<CarPlayCraftLocation> _carPlayCraftLocations() {
+    if (_isSimulation) {
+      return [
+        for (final craft
+            in _simulationController?.riders ??
+                const <SimulatedRiderSnapshot>[])
+          CarPlayCraftLocation(
+            id: craft.id,
+            label: craft.displayName,
+            detail: [
+              craft.role == RideRole.lead ? 'Balloon' : 'Chase vehicle',
+              ?craftGroundMotionLabel(
+                speedMetersPerSecond: craft.speedMetersPerSecond,
+                headingDegrees: craft.headingDegrees,
+              ),
+              if (craft.role == RideRole.lead && craft.altitudeMeters != null)
+                '${craft.altitudeMeters!.round()} m',
+              'bundled rehearsal · now',
+            ].join(' · '),
+            point: route_domain.GeoPoint(
+              latitude: craft.position.latitude,
+              longitude: craft.position.longitude,
+            ),
+            craftStyle: craft.role == RideRole.lead
+                ? CraftIconStyle.balloon
+                : craft.motorcycleStyle,
+            riderSymbol: craft.role == RideRole.lead
+                ? riderSymbolDefault
+                : craft.riderSymbol,
+            colorArgb: craft.riderColor.color.toARGB32(),
+            headingDegrees: craft.headingDegrees,
+          ),
+      ];
+    }
+    final session = widget.rideController.session;
+    if (session == null) return const [];
+    final freshness = {
+      for (final presence in _reconciledLivePresence())
+        presence.riderId: presence,
+    };
+    final roster = widget.rideController.resolveCraftRoster();
+    return [
+      for (final craft in _productionCraftMapLocations(
+        roster,
+        localRiderId: session.localRiderId,
+      ))
+        CarPlayCraftLocation(
+          id: craft.id,
+          label: craft.displayName,
+          detail: [
+            craft.isBalloon ? 'Balloon' : 'Chase vehicle',
+            ?craftGroundMotionLabel(
+              speedMetersPerSecond: craft.speedMetersPerSecond,
+              headingDegrees: craft.headingDegrees,
+            ),
+            if (craft.isBalloon && craft.altitudeMeters != null)
+              '${craft.altitudeMeters!.round()} m',
+            freshness[craft.freshnessDeviceId]?.freshnessLabel ?? 'unknown',
+          ].join(' · '),
+          point: craft.point,
+          craftStyle: craft.motorcycleStyle,
+          riderSymbol: craft.riderSymbol,
+          colorArgb: craft.riderColor.color.toARGB32(),
+          headingDegrees: craft.headingDegrees,
+        ),
+    ];
+  }
+
+  List<CarPlayMapTrace> _carPlaySharedTraces() {
+    final projected = <CarPlayMapTrace>[];
+    final intended = widget.rideController.landingZone;
+    final landed = widget.rideController.flightLanding.landing;
+    final traces = <MapOverlayTrace>[
+      ..._riderTrails.value,
+      if (intended != null)
+        MapOverlayTrace(
+          id: 'carplay-intended-landing-area',
+          points: MapLandingZone(
+            center: route_domain.GeoPoint(
+              latitude: intended.center.latitude,
+              longitude: intended.center.longitude,
+            ),
+            label: intended.label,
+            radiusMeters: intended.radiusMeters,
+          ).boundary,
+          label:
+              '${intended.label} · intended area; access and suitability unverified',
+          kind: RiderTrailKind.liveLandingEnvelope,
+        ),
+      if (landed?.location != null)
+        MapOverlayTrace(
+          id: 'carplay-confirmed-landing',
+          points: MapLandingZone(
+            center: route_domain.GeoPoint(
+              latitude: landed!.location!.position.latitude,
+              longitude: landed.location!.position.longitude,
+            ),
+            label: 'Confirmed landing',
+            radiusMeters: 35,
+          ).boundary,
+          label: 'Confirmed landing point',
+          kind: RiderTrailKind.operationalBoundary,
+          color: const Color(0xFF72D5A4),
+        ),
+    ];
+    for (final trace in traces) {
+      final style = trace.style;
+      final altitudeStyled =
+          trace.kind == RiderTrailKind.balloonGroundTrack ||
+          trace.kind == RiderTrailKind.forecastTrack ||
+          trace.kind == RiderTrailKind.liveProjectionTrack;
+      final parts = altitudeStyled
+          ? [
+              for (final (index, segment) in BalloonAltitudeStyle.segments(
+                trace.points,
+              ).indexed)
+                (
+                  id: '${trace.id}-altitude-$index',
+                  points: segment.points,
+                  color: segment.color,
+                ),
+            ]
+          : [(id: trace.id, points: trace.points, color: trace.effectiveColor)];
+      for (final part in parts) {
+        if (part.points.length < 2) continue;
+        projected.add(
+          CarPlayMapTrace(
+            id: part.id,
+            kind: trace.kind.name,
+            label: trace.label,
+            points: part.points,
+            colorArgb: part.color.toARGB32(),
+            width: style.widthPixels,
+            casingWidth: style.casingWidthPixels,
+            dash: style.maplibreDashArray,
+          ),
+        );
+      }
+    }
+    return List.unmodifiable(projected);
   }
 
   Future<List<CarPlayDestination>> _searchCarPlayDestinations(
