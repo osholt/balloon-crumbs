@@ -154,7 +154,6 @@ Create these once, under Settings → Secrets and variables → Actions:
 | `APPSTORE_CONNECT_REVIEW_API_KEY_ID` | the App Manager-role review key's ID |
 | `APPSTORE_CONNECT_REVIEW_API_ISSUER_ID` | the review key account's issuer ID |
 | `APPSTORE_CONNECT_REVIEW_API_PRIVATE_KEY_BASE64` | the review key's `.p8`, base64 |
-| `BALLOON_CRUMBS_OPENAIP_API_KEY` | OpenAIP third-party application key for the advisory airspace layer |
 
 Set the `BALLOON_CRUMBS_API_BASE_URL` **variable** (not a secret) to
 `https://balloon-crumbs.pages.dev/api`. Set
@@ -166,6 +165,10 @@ Developer privilege; assigning an external group and creating its beta review
 submission uses the separate App Manager key. The `submit_external` workflow
 input defaults to true and the operation is idempotent: a retry leaves an
 existing group assignment or active review submission in place.
+
+OpenAIP is not a mobile release secret. Aeronautical charts are optional
+planner-only context and the planner reaches them through the relay's bounded
+server-side proxy, so TestFlight binaries contain no OpenAIP credential.
 
 To produce the two base64 values:
 
