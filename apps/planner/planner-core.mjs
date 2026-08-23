@@ -1226,6 +1226,173 @@ export function buildFlightPlanGpx({
   );
 }
 
+function isoDate(value, label) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw new TypeError(`${label} is invalid.`);
+  return date.toISOString();
+}
+
+/// Builds the versioned evidence document consumed by the mobile app.
+///
+/// GPX remains inside the document and beside it in the relay request so older
+/// clients can still import the forecast line. The structured fields retain
+/// the choices and provenance that GPX cannot express.
+export function buildForecastPlanDocument({
+  id,
+  name,
+  createdAt = new Date(),
+  launch,
+  launchElevationMetresMsl,
+  intendedLanding,
+  intendedLandingRadiusMetres,
+  forecastLanding,
+  routePlan,
+  landingEnvelope = [],
+  wind,
+  operationalBoundaries = [],
+  gpxFallback,
+}) {
+  if (!routePlan?.track || routePlan.track.length < 2) {
+    throw new Error("A planned forecast track is required.");
+  }
+  if (typeof gpxFallback !== "string" || !gpxFallback) {
+    throw new Error("A GPX fallback is required.");
+  }
+  const safeName = String(name || "Forecast balloon flight").trim().slice(0, 200);
+  const created = isoDate(createdAt, "Plan creation time");
+  const departureAt = new Date(routePlan.departureAt);
+  if (Number.isNaN(departureAt.getTime())) throw new TypeError("Departure time is invalid.");
+  const launchPoint = validPoint(launch, "launch");
+  const intendedPoint = validPoint(intendedLanding, "intended landing");
+  const forecastPoint = validPoint(forecastLanding, "forecast landing");
+  const launchAltitude = finiteNumber(launchElevationMetresMsl, "launch elevation");
+  const durationMinutes = finiteNumber(routePlan.durationMinutes, "flight duration");
+  const fractions = ROUTE_CONTROL_FRACTIONS;
+  const stageAltitudes =
+    routePlan.kind === "representative"
+      ? fractions.map((fraction) =>
+          altitudeForFlightFraction({
+            fraction,
+            launchElevationMetresMsl: launchAltitude,
+            maximumAltitudeMetresMsl: routePlan.peakAltitudeMetresMsl,
+          }),
+        )
+      : [launchAltitude, ...routePlan.controlAltitudesMetresMsl, launchAltitude];
+  const altitudeStages = fractions.map((fraction, index) => {
+    const altitudeMsl = finiteNumber(stageAltitudes[index], `stage ${index + 1} altitude`);
+    const previous = index === 0 ? altitudeMsl : stageAltitudes[index - 1];
+    const stageSeconds = index === 0 ? 1 : durationMinutes * 60 * 0.2;
+    return {
+      fraction,
+      plannedAt: new Date(
+        departureAt.getTime() + durationMinutes * fraction * 60_000,
+      ).toISOString(),
+      altitudeMsl,
+      changeRateMps: index === 0 ? 0 : (altitudeMsl - previous) / stageSeconds,
+    };
+  });
+  const constraints = {
+    altitudeCeilingMsl: finiteNumber(routePlan.altitudeCeilingMetresMsl, "altitude ceiling"),
+    maximumAscentRateMps: finiteNumber(
+      routePlan.maximumAscentRateMetresPerSecond,
+      "maximum ascent rate",
+    ),
+    maximumDescentRateMps: finiteNumber(
+      routePlan.maximumDescentRateMetresPerSecond,
+      "maximum descent rate",
+    ),
+    minimumDurationMinutes: finiteNumber(
+      routePlan.minimumDurationMinutes ?? durationMinutes,
+      "minimum duration",
+    ),
+    maximumDurationMinutes: finiteNumber(
+      routePlan.maximumDurationMinutes ?? durationMinutes,
+      "maximum duration",
+    ),
+  };
+  const normalisedWind = {
+    provider: String(wind?.provider ?? "").trim(),
+    model: String(wind?.model ?? "").trim(),
+    requestedAt: isoDate(wind?.requestedAt, "Wind request time"),
+    validFrom: isoDate(wind?.validFrom, "Wind validity start"),
+    validTo: isoDate(wind?.validTo, "Wind validity end"),
+    attribution: String(wind?.attribution ?? "").trim(),
+    licence: String(wind?.licence ?? "").trim(),
+    forecastOnly: true,
+    fieldDigest: String(wind?.fieldDigest ?? "").trim(),
+  };
+  if (
+    !normalisedWind.provider ||
+    !normalisedWind.model ||
+    !normalisedWind.attribution ||
+    !normalisedWind.licence ||
+    !normalisedWind.fieldDigest
+  ) {
+    throw new Error("Wind provenance is incomplete.");
+  }
+  const updatedAt = created;
+  const boundaries = operationalBoundaries.map((boundary) => ({
+    ...normaliseOperationalBoundary(boundary),
+    updatedAt: isoDate(boundary.updatedAt ?? updatedAt, "Boundary update time"),
+  }));
+  const reachesDestination = routePlan.reachesDestination;
+  const missDistanceMetres = routePlan.missDistanceMetres;
+  return Object.freeze({
+    schemaVersion: 1,
+    id: String(id || "").trim().slice(0, 128),
+    name: safeName,
+    createdAt: created,
+    source: "Balloon Crumbs web planner",
+    launch: {
+      point: launchPoint,
+      elevationMsl: launchAltitude,
+      datum: "wgs84Geoid",
+    },
+    destination: {
+      point: intendedPoint,
+      toleranceMetres: routePlan.acceptedMissDistanceMetres ?? 100,
+    },
+    intendedLandingArea: {
+      centre: intendedPoint,
+      radiusMetres: finiteNumber(intendedLandingRadiusMetres, "landing area radius"),
+      polygon: [],
+      updatedAt,
+    },
+    forecastLanding: forecastPoint,
+    departure: {
+      selectedAt: departureAt.toISOString(),
+      ...(routePlan.departureWindow
+        ? {
+            matchingWindowStart: isoDate(
+              routePlan.departureWindow.startAt,
+              "Matching window start",
+            ),
+            matchingWindowEnd: isoDate(
+              routePlan.departureWindow.endAt,
+              "Matching window end",
+            ),
+          }
+        : {}),
+    },
+    constraints,
+    altitudeStages,
+    plannedTrack: routePlan.track.map((point) => ({
+      ...validPoint(point, "planned track point"),
+      altitudeMsl: finiteNumber(point.altitudeMetresMsl, "planned track altitude"),
+      elapsedSeconds: finiteNumber(point.elapsedSeconds, "planned track time"),
+    })),
+    landingEnvelope: landingEnvelope.map((point) => validPoint(point, "landing envelope")),
+    wind: normalisedWind,
+    operationalBoundaries: boundaries,
+    result: {
+      kind: routePlan.kind === "representative" ? "representative" : "optimised",
+      ...(typeof reachesDestination === "boolean" ? { reachesDestination } : {}),
+      ...(Number.isFinite(missDistanceMetres) ? { missDistanceMetres } : {}),
+    },
+    gpxFallback,
+  });
+}
+
 export function forecastDistanceMetres(track) {
   let total = 0;
   for (let index = 1; index < track.length; index += 1) {

@@ -9,6 +9,7 @@ import {
   altitudeForProfileFraction,
   altitudeForStrategyFraction,
   buildFlightPlanGpx,
+  buildForecastPlanDocument,
   circlePolygon,
   forecastAltitudeProfileTrack,
   forecastLandingEnvelope,
@@ -23,6 +24,79 @@ import {
   vectorAtPosition,
   windForecastGrid,
 } from "./planner-core.mjs";
+
+test("structured plans retain constraints, stages, envelope and wind provenance", () => {
+  const departureAt = new Date("2026-08-23T07:00:00Z");
+  const routePlan = {
+    kind: "optimised",
+    departureAt,
+    departureWindow: {
+      startAt: new Date("2026-08-23T06:55:00Z"),
+      endAt: new Date("2026-08-23T07:05:00Z"),
+    },
+    durationMinutes: 60,
+    altitudeCeilingMetresMsl: 1200,
+    maximumAscentRateMetresPerSecond: 3,
+    maximumDescentRateMetresPerSecond: 4,
+    minimumDurationMinutes: 10,
+    maximumDurationMinutes: 180,
+    acceptedMissDistanceMetres: 100,
+    reachesDestination: true,
+    missDistanceMetres: 42,
+    controlAltitudesMetresMsl: [200, 400, 600, 300],
+    track: [
+      { latitude: 51.5, longitude: -2.6, altitudeMetresMsl: 80, elapsedSeconds: 0 },
+      { latitude: 51.6, longitude: -2.4, altitudeMetresMsl: 80, elapsedSeconds: 3600 },
+    ],
+  };
+  const gpxFallback = buildFlightPlanGpx({
+    name: "Sunday flight",
+    track: routePlan.track,
+    departureAt,
+    launch: routePlan.track[0],
+    forecastLanding: routePlan.track[1],
+    intendedLanding: routePlan.track[1],
+  });
+  const document = buildForecastPlanDocument({
+    id: "plan-1",
+    name: "Sunday flight",
+    createdAt: new Date("2026-08-23T06:00:00Z"),
+    launch: routePlan.track[0],
+    launchElevationMetresMsl: 80,
+    intendedLanding: routePlan.track[1],
+    intendedLandingRadiusMetres: 400,
+    forecastLanding: routePlan.track[1],
+    routePlan,
+    landingEnvelope: [
+      { latitude: 51.59, longitude: -2.41 },
+      { latitude: 51.61, longitude: -2.41 },
+      { latitude: 51.60, longitude: -2.39 },
+    ],
+    wind: {
+      provider: "Open-Meteo",
+      model: "UKMO seamless",
+      requestedAt: new Date("2026-08-23T06:00:00Z"),
+      validFrom: new Date("2026-08-23T06:00:00Z"),
+      validTo: new Date("2026-08-24T06:00:00Z"),
+      attribution: "Weather data by Open-Meteo",
+      licence: "CC BY 4.0",
+      fieldDigest: "fnv1a32:12345678",
+    },
+    operationalBoundaries: [],
+    gpxFallback,
+  });
+
+  assert.equal(document.schemaVersion, 1);
+  assert.equal(document.altitudeStages.length, 6);
+  assert.deepEqual(
+    document.altitudeStages.map((stage) => stage.altitudeMsl),
+    [80, 200, 400, 600, 300, 80],
+  );
+  assert.equal(document.constraints.maximumDescentRateMps, 4);
+  assert.equal(document.landingEnvelope.length, 3);
+  assert.equal(document.wind.forecastOnly, true);
+  assert.equal(document.gpxFallback, gpxFallback);
+});
 
 function payload({ direction = 270, speed = 36 } = {}) {
   const hourly = { time: ["2026-08-21T08:00", "2026-08-21T09:00"] };

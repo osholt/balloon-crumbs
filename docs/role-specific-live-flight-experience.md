@@ -1,7 +1,6 @@
 # Role-specific live flight experience
 
-Status: **Proposed implementation plan — no implementation starts until the
-decisions at the end of this document are accepted**
+Status: **Accepted — implementation in progress**
 
 Date: 23 August 2026
 
@@ -770,12 +769,12 @@ and a UI rebuild cannot change authority.
 
 ### P0.5 Structured planner plan
 
-- [ ] Relay and mobile remain backward-compatible with GPX-only plan codes.
-- [ ] Structured plans retain all web-planner inputs, stages, envelopes, source
+- [x] Relay and mobile remain backward-compatible with GPX-only plan codes.
+- [x] Structured plans retain all web-planner inputs, stages, envelopes, source
       metadata and operational boundaries.
-- [ ] The app displays original forecast, profile and limitations offline after
+- [x] The app displays original forecast, profile and limitations offline after
       one successful import.
-- [ ] Unknown schema versions fail safely and do not activate partial geometry.
+- [x] Unknown schema versions fail safely and do not activate partial geometry.
 
 ### P0.6 Airborne forecast context
 

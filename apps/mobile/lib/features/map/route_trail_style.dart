@@ -75,6 +75,7 @@ class RouteLineStyle {
 /// | travelled     | #FF7A1A |      2.81  |        6.52  |     7.02  |
 /// | leader trail  | #D3B8FF |      4.22  |        9.78  |    10.53  |
 /// | flight forecast | #00E5FF |    4.77  |       11.06  |    11.91  |
+/// | original envelope | #C69CFF |  3.36  |        7.78  |     8.38  |
 /// | connector     | #00E5FF |      4.77  |       11.06  |    11.91  |
 /// | boundary      | #FF8FA3 |      3.39  |        7.87  |     8.47  |
 ///
@@ -184,6 +185,16 @@ class RouteTrailStyle {
     dashPixels: [10, 7],
   );
 
+  /// Feasible landing endpoints retained from the original planner run.
+  /// Purple and a longer dash distinguish historical forecast evidence from
+  /// the pilot's current green intent and the pink advisory boundaries.
+  static const originalLandingEnvelope = RouteLineStyle(
+    color: Color(0xFFC69CFF),
+    widthPixels: 3.5,
+    casingWidthPixels: 7.5,
+    dashPixels: [18, 10],
+  );
+
   /// The road route to the start of the planned route (#133), which claimed this
   /// cyan and renders it dashed. Declared here so the palette stays one table and
   /// the widths and dash runs stay distinct from every other line.
@@ -213,6 +224,7 @@ class RouteTrailStyle {
     RiderTrailKind.balloonGroundTrack => balloonGroundTrack,
     RiderTrailKind.forecastTrack => forecastTrack,
     RiderTrailKind.operationalBoundary => operationalBoundary,
+    RiderTrailKind.originalLandingEnvelope => originalLandingEnvelope,
     RiderTrailKind.routeStartConnector => routeStartConnectorLine,
   };
 
@@ -270,6 +282,7 @@ class RouteTrailStyle {
     'balloon ground track': balloonGroundTrack,
     'flight forecast': forecastTrack,
     'operational boundary': operationalBoundary,
+    'original landing envelope': originalLandingEnvelope,
     'route start connector': routeStartConnectorLine,
   };
 

@@ -18,7 +18,7 @@ import '../../controllers/shared_route_controller.dart';
 import '../../controllers/speed_limit_display_controller.dart';
 import '../../controllers/ride_diagnostics_controller.dart';
 import '../../controllers/spoken_guidance_controller.dart';
-import '../../domain/imported_route.dart' show GeoPoint;
+import '../../domain/imported_route.dart' show GeoPoint, ImportedRoute;
 import '../../domain/geo_point.dart' as awareness_geo;
 import '../../domain/landing_zone.dart';
 import '../../domain/map_style_mode.dart';
@@ -37,6 +37,7 @@ import '../../services/build_identity.dart';
 import '../../services/basemap_configuration.dart';
 import '../../services/carplay_bridge.dart';
 import '../../services/gpx_import_source.dart';
+import '../../services/forecast_plan_importer.dart';
 import '../../services/flight_planner_launcher.dart';
 import '../../services/stored_route_library.dart';
 import '../../services/landing_zone_library.dart';
@@ -1084,6 +1085,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
   bool _checkingPlanCode = false;
   String? _planCodeError;
   PickedGpxFile? _pendingPlanFile;
+  ImportedRoute? _pendingStructuredPlan;
 
   /// Captured when pasted text includes a join token alongside the six
   /// digits - see [parseJoinInvite]. Typing the code by hand leaves this
@@ -1436,6 +1438,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
     if (widget.creating) {
       final code = _planCodeController.text.trim();
       _pendingPlanFile = null;
+      _pendingStructuredPlan = null;
       if (code.isNotEmpty) {
         setState(() {
           _checkingPlanCode = true;
@@ -1448,10 +1451,19 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
           final plan = await (widget.planDirectory ?? ownedDirectory!).fetch(
             code,
           );
-          _pendingPlanFile = PickedGpxFile(
-            name: '${plan.name ?? 'planned-route'}.gpx',
-            bytes: Uint8List.fromList(utf8.encode(plan.gpx)),
-          );
+          final structured = plan.forecastPlan;
+          if (structured == null) {
+            _pendingPlanFile = PickedGpxFile(
+              name: '${plan.name ?? 'planned-route'}.gpx',
+              bytes: Uint8List.fromList(utf8.encode(plan.gpx)),
+            );
+          } else {
+            _pendingStructuredPlan = const ForecastPlanImporter().import(
+              structured,
+              importedAt: DateTime.now(),
+              sourceFileName: '${plan.name ?? 'planned-route'}.forecast-plan',
+            );
+          }
         } on PlanDirectoryException catch (error) {
           if (mounted) setState(() => _planCodeError = error.message);
           return;
@@ -1521,7 +1533,10 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
   }
 
   void _finishCreating() {
-    if (_pendingPlanFile case final file?) {
+    if (_pendingStructuredPlan case final route?) {
+      widget.sharedRoutes.stagePendingInAppRoute(route);
+      _pendingStructuredPlan = null;
+    } else if (_pendingPlanFile case final file?) {
       widget.sharedRoutes.stagePending(file);
       _pendingPlanFile = null;
     } else if (widget.pendingInAppRoute case final route?) {

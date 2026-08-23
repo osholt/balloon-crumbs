@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import '../internet/plan_directory.dart';
 import '../domain/imported_route.dart';
 import '../services/gpx_import_source.dart';
+import '../services/forecast_plan_importer.dart';
 import '../services/planner_link_channel.dart';
 import '../services/shared_gpx_channel.dart';
 
@@ -151,10 +152,23 @@ class SharedRouteController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     try {
       final plan = await _planDirectory.fetch(code);
-      _pending = PickedGpxFile(
-        name: _plannerFileName(plan.name),
-        bytes: Uint8List.fromList(utf8.encode(plan.gpx)),
-      );
+      final structured = plan.forecastPlan;
+      if (structured == null) {
+        _pending = PickedGpxFile(
+          name: _plannerFileName(plan.name),
+          bytes: Uint8List.fromList(utf8.encode(plan.gpx)),
+        );
+        _pendingInAppRoute = null;
+      } else {
+        _pending = null;
+        _pendingInAppRoute = PendingInAppRoute(
+          route: const ForecastPlanImporter().import(
+            structured,
+            importedAt: DateTime.now(),
+            sourceFileName: _plannerFileName(plan.name),
+          ),
+        );
+      }
       _plannerLinkStatus = PlannerLinkStatus.idle;
       _plannerLinkMessage = null;
       _plannerLinkRetryable = false;

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'altitude.dart';
+import 'forecast_plan.dart';
 import 'route_preferences.dart';
 
 export 'route_preferences.dart';
@@ -348,6 +349,7 @@ class ImportedRoute {
     this.purpose = ImportedRoutePurpose.unspecified,
     this.preferences,
     this.plannedDuration,
+    this.forecastPlan,
   });
 
   static const schemaVersion = 1;
@@ -369,6 +371,10 @@ class ImportedRoute {
   /// timing. Keeping this on the persisted route lets ETA exist before the
   /// first moving GPS fix and after an app restart (#413).
   final Duration? plannedDuration;
+
+  /// Structured planner evidence retained beside the renderable route.
+  /// Null for ordinary GPX and for plans created by older planner builds.
+  final ForecastPlanDocument? forecastPlan;
 
   /// The route character this route was planned for, when it was planned rather
   /// than recorded or imported from a tool that records none.
@@ -408,6 +414,7 @@ class ImportedRoute {
         maneuvers: maneuvers,
         preferences: preferences,
         plannedDuration: plannedDuration,
+        forecastPlan: forecastPlan,
       );
 
   Map<String, Object?> toJson() => {
@@ -428,6 +435,7 @@ class ImportedRoute {
       'preferences': routePreferences.toJson(),
     if (plannedDuration case final duration?)
       'plannedDurationSeconds': duration.inSeconds,
+    if (forecastPlan case final plan?) 'forecastPlan': plan.toJson(),
   };
 
   String toJsonString() => jsonEncode(toJson());
@@ -488,6 +496,7 @@ class ImportedRoute {
       throw const FormatException('A route must contain geometry.');
     }
     final rawPreferences = json['preferences'];
+    final rawForecastPlan = json['forecastPlan'];
     final sourceFileName = _requiredString(json, 'sourceFileName');
     final description = _optionalString(json['description']);
     return ImportedRoute(
@@ -514,6 +523,11 @@ class ImportedRoute {
             sourceFileName: sourceFileName,
             description: description,
           ),
+      forecastPlan: rawForecastPlan is Map
+          ? ForecastPlanDocument.fromJson(
+              Map<String, Object?>.from(rawForecastPlan),
+            )
+          : null,
     );
   }
 

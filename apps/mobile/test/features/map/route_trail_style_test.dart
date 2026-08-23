@@ -22,6 +22,7 @@ void main() {
       'balloon ground track': (4.77, 11.06, 11.91),
       'flight forecast': (4.77, 11.06, 11.91),
       'operational boundary': (3.39, 7.87, 8.47),
+      'original landing envelope': (3.36, 7.78, 8.38),
       'route start connector': (4.77, 11.06, 11.91),
     };
 

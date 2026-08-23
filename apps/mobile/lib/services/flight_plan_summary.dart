@@ -43,6 +43,14 @@ class FlightPlanSummary {
     required this.maximumDescentRateMetersPerSecond,
     required this.forecastLanding,
     required this.intendedLanding,
+    this.matchingWindowStart,
+    this.matchingWindowEnd,
+    this.altitudeCeilingMetersMsl,
+    this.windProvider,
+    this.windModel,
+    this.windValidFrom,
+    this.windValidTo,
+    this.landingEnvelope = const [],
   });
 
   final String routeName;
@@ -56,6 +64,14 @@ class FlightPlanSummary {
   final double? maximumDescentRateMetersPerSecond;
   final GeoPoint? forecastLanding;
   final GeoPoint? intendedLanding;
+  final DateTime? matchingWindowStart;
+  final DateTime? matchingWindowEnd;
+  final double? altitudeCeilingMetersMsl;
+  final String? windProvider;
+  final String? windModel;
+  final DateTime? windValidFrom;
+  final DateTime? windValidTo;
+  final List<GeoPoint> landingEnvelope;
 
   bool get hasTimedAltitudeProfile =>
       stages.any((stage) => stage.time != null) &&
@@ -66,9 +82,14 @@ class FlightPlanSummary {
     final points = [for (final path in route.paths) ...path.points];
     if (points.isEmpty) return null;
 
+    final structured = route.forecastPlan;
     final timed = points.where((point) => point.recordedAt != null).toList();
-    final startTime = timed.isEmpty ? null : timed.first.recordedAt;
-    final landingTime = timed.isEmpty ? null : timed.last.recordedAt;
+    final startTime =
+        structured?.departure.selectedAt ??
+        (timed.isEmpty ? null : timed.first.recordedAt);
+    final landingTime =
+        structured?.altitudeStages.last.plannedAt ??
+        (timed.isEmpty ? null : timed.last.recordedAt);
     final timedDuration = startTime != null && landingTime != null
         ? landingTime.difference(startTime)
         : null;
@@ -123,18 +144,33 @@ class FlightPlanSummary {
         : points.indexWhere(
             (point) => point.elevationMeters == maximumAltitude,
           );
-    final stages = <FlightPlanStage>[];
-    for (final index in stageIndices) {
-      final point = points[index];
-      stages.add(
-        FlightPlanStage(
-          point: point,
-          time: point.recordedAt,
-          altitudeMetersMsl: point.elevationMeters,
-          phase: _phaseAt(points, index, maximumIndex: maximumIndex),
-        ),
-      );
-    }
+    final stages = structured == null
+        ? <FlightPlanStage>[
+            for (final index in stageIndices)
+              FlightPlanStage(
+                point: points[index],
+                time: points[index].recordedAt,
+                altitudeMetersMsl: points[index].elevationMeters,
+                phase: _phaseAt(points, index, maximumIndex: maximumIndex),
+              ),
+          ]
+        : <FlightPlanStage>[
+            for (final (index, stage) in structured.altitudeStages.indexed)
+              FlightPlanStage(
+                point: _nearestPointAt(points, stage.plannedAt),
+                time: stage.plannedAt,
+                altitudeMetersMsl: stage.altitudeMetersMsl,
+                phase: index == 0
+                    ? FlightPlanStagePhase.launch
+                    : index == structured.altitudeStages.length - 1
+                    ? FlightPlanStagePhase.landing
+                    : stage.changeRateMetersPerSecond > 0.01
+                    ? FlightPlanStagePhase.climb
+                    : stage.changeRateMetersPerSecond < -0.01
+                    ? FlightPlanStagePhase.descend
+                    : FlightPlanStagePhase.level,
+              ),
+          ];
 
     GeoPoint? waypointNamed(String text) {
       for (final waypoint in route.waypoints) {
@@ -156,12 +192,48 @@ class FlightPlanSummary {
       duration: duration,
       minimumAltitudeMetersMsl: minimumAltitude,
       maximumAltitudeMetersMsl: maximumAltitude,
-      maximumAscentRateMetersPerSecond: maximumAscentRate,
-      maximumDescentRateMetersPerSecond: maximumDescentRate,
-      forecastLanding: waypointNamed('forecast landing') ?? points.last,
-      intendedLanding: waypointNamed('intended landing'),
+      maximumAscentRateMetersPerSecond:
+          structured?.constraints.maximumAscentRateMetersPerSecond ??
+          maximumAscentRate,
+      maximumDescentRateMetersPerSecond:
+          structured?.constraints.maximumDescentRateMetersPerSecond ??
+          maximumDescentRate,
+      forecastLanding: structured == null
+          ? waypointNamed('forecast landing') ?? points.last
+          : GeoPoint(
+              latitude: structured.forecastLanding.latitude,
+              longitude: structured.forecastLanding.longitude,
+            ),
+      intendedLanding: structured == null
+          ? waypointNamed('intended landing')
+          : GeoPoint(
+              latitude: structured.intendedLandingArea.center.latitude,
+              longitude: structured.intendedLandingArea.center.longitude,
+            ),
+      matchingWindowStart: structured?.departure.matchingWindowStart,
+      matchingWindowEnd: structured?.departure.matchingWindowEnd,
+      altitudeCeilingMetersMsl:
+          structured?.constraints.altitudeCeilingMetersMsl,
+      windProvider: structured?.wind.provider,
+      windModel: structured?.wind.model,
+      windValidFrom: structured?.wind.validFrom,
+      windValidTo: structured?.wind.validTo,
+      landingEnvelope: [
+        for (final point in structured?.landingEnvelope ?? const [])
+          GeoPoint(latitude: point.latitude, longitude: point.longitude),
+      ],
     );
   }
+}
+
+GeoPoint _nearestPointAt(List<GeoPoint> points, DateTime time) {
+  final timed = points.where((point) => point.recordedAt != null).toList();
+  if (timed.isEmpty) return points.first;
+  return timed.reduce((best, candidate) {
+    final bestDistance = best.recordedAt!.difference(time).abs();
+    final candidateDistance = candidate.recordedAt!.difference(time).abs();
+    return candidateDistance < bestDistance ? candidate : best;
+  });
 }
 
 List<int> _stageIndices(List<GeoPoint> points) {

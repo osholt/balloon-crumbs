@@ -1,4 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:balloon_crumbs/domain/forecast_plan.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/services/forecast_plan_importer.dart';
 import 'package:balloon_crumbs/services/flight_plan_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -100,6 +105,33 @@ void main() {
     expect(summary.duration, const Duration(hours: 1));
     expect(summary.startTime, isNull);
     expect(summary.hasTimedAltitudeProfile, isFalse);
+  });
+
+  test('prefers exact structured stages, limits and source evidence', () {
+    final plan = ForecastPlanDocument.fromJson(
+      Map<String, Object?>.from(
+        jsonDecode(
+              File('../../fixtures/forecast_plan_v1.json').readAsStringSync(),
+            )
+            as Map,
+      ),
+    );
+    final route = const ForecastPlanImporter().import(
+      plan,
+      importedAt: DateTime.utc(2026, 8, 23, 6),
+      sourceFileName: 'fixture.forecast-plan',
+    );
+
+    final summary = FlightPlanSummary.fromRoute(route)!;
+
+    expect(summary.stages, hasLength(6));
+    expect(summary.stages[2].altitudeMetersMsl, 600);
+    expect(summary.maximumAscentRateMetersPerSecond, 3);
+    expect(summary.maximumDescentRateMetersPerSecond, 4);
+    expect(summary.altitudeCeilingMetersMsl, 1200);
+    expect(summary.matchingWindowStart, DateTime.utc(2026, 8, 23, 6, 24));
+    expect(summary.windProvider, 'Open-Meteo');
+    expect(summary.landingEnvelope, hasLength(4));
   });
 
   test('does not interpret a road route as a flight plan', () {

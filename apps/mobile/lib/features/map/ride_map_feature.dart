@@ -4305,6 +4305,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await _addTrailLayers(controller, RiderTrailKind.forecastTrack);
       await _addTrailLayers(controller, RiderTrailKind.rider);
       await _addTrailLayers(controller, RiderTrailKind.operationalBoundary);
+      await _addTrailLayers(controller, RiderTrailKind.originalLandingEnvelope);
       await controller.addGeoJsonSource(
         _remainingRouteSource,
         _remainingRouteGeoJson(),
@@ -4785,7 +4786,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
     // ordinary ones.
     final byImportance =
         _visibleRiderTrails
-            .where((trace) => trace.kind != RiderTrailKind.operationalBoundary)
+            .where(
+              (trace) =>
+                  trace.kind != RiderTrailKind.operationalBoundary &&
+                  trace.kind != RiderTrailKind.originalLandingEnvelope,
+            )
             .toList()
           ..sort(
             (first, second) => _arrowPriority(
@@ -4842,6 +4847,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     RiderTrailKind.leader => 1,
     RiderTrailKind.rider => 3,
     RiderTrailKind.operationalBoundary => 4,
+    RiderTrailKind.originalLandingEnvelope => 4,
   };
 
   Map<String, dynamic> _trailDirectionArrowGeoJson() => MapGeoJson.points(

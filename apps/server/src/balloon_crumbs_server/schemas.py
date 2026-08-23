@@ -230,11 +230,183 @@ class TrafficRerouteRequest(BaseModel):
         return cleaned
 
 
+class ForecastPlanPoint(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class ForecastPlanLaunch(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    point: ForecastPlanPoint
+    elevationMsl: float = Field(ge=-500, le=20_000)
+    datum: str = Field(min_length=1, max_length=64)
+
+
+class ForecastPlanDestination(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    point: ForecastPlanPoint
+    toleranceMetres: float = Field(gt=0, le=100_000)
+
+
+class ForecastPlanLandingArea(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    centre: ForecastPlanPoint
+    radiusMetres: float | None = Field(default=None, gt=0, le=100_000)
+    polygon: list[ForecastPlanPoint] = Field(default_factory=list, max_length=512)
+    updatedAt: datetime
+
+    @model_validator(mode="after")
+    def has_bounded_area(self) -> ForecastPlanLandingArea:
+        if self.radiusMetres is None and len(self.polygon) < 3:
+            raise ValueError("An intended landing area needs a radius or polygon")
+        return self
+
+
+class ForecastPlanDeparture(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    selectedAt: datetime
+    matchingWindowStart: datetime | None = None
+    matchingWindowEnd: datetime | None = None
+
+    @model_validator(mode="after")
+    def window_is_ordered(self) -> ForecastPlanDeparture:
+        if (
+            self.matchingWindowStart is not None
+            and self.matchingWindowEnd is not None
+            and self.matchingWindowEnd < self.matchingWindowStart
+        ):
+            raise ValueError("The matching departure window is reversed")
+        return self
+
+
+class ForecastPlanConstraints(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    altitudeCeilingMsl: float = Field(ge=-500, le=20_000)
+    maximumAscentRateMps: float = Field(gt=0, le=30)
+    maximumDescentRateMps: float = Field(gt=0, le=30)
+    minimumDurationMinutes: float = Field(gt=0, le=24 * 60)
+    maximumDurationMinutes: float = Field(gt=0, le=24 * 60)
+
+    @model_validator(mode="after")
+    def durations_are_ordered(self) -> ForecastPlanConstraints:
+        if self.maximumDurationMinutes < self.minimumDurationMinutes:
+            raise ValueError("Maximum duration must not precede minimum duration")
+        return self
+
+
+class ForecastPlanStage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    fraction: float = Field(ge=0, le=1)
+    plannedAt: datetime
+    altitudeMsl: float = Field(ge=-500, le=20_000)
+    changeRateMps: float = Field(ge=-30, le=30)
+
+
+class ForecastPlanTrackPoint(ForecastPlanPoint):
+    altitudeMsl: float = Field(ge=-500, le=20_000)
+    elapsedSeconds: float = Field(ge=0, le=24 * 60 * 60)
+
+
+class ForecastPlanWind(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    provider: str = Field(min_length=1, max_length=120)
+    model: str = Field(min_length=1, max_length=120)
+    requestedAt: datetime
+    validFrom: datetime
+    validTo: datetime
+    attribution: str = Field(min_length=1, max_length=500)
+    licence: str = Field(min_length=1, max_length=500)
+    forecastOnly: Literal[True]
+    fieldDigest: str = Field(min_length=1, max_length=128)
+
+
+class ForecastPlanBoundary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(min_length=1, max_length=96)
+    label: str = Field(min_length=1, max_length=96)
+    kind: Literal["line", "area", "altitudeBand"]
+    points: list[ForecastPlanPoint] = Field(default_factory=list, max_length=512)
+    source: str = Field(min_length=1, max_length=160)
+    updatedAt: datetime
+    lowerAltitudeMeters: float | None = Field(default=None, ge=-500, le=20_000)
+    upperAltitudeMeters: float | None = Field(default=None, ge=-500, le=20_000)
+    altitudeDatum: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def geometry_matches_kind(self) -> ForecastPlanBoundary:
+        if self.kind == "line" and len(self.points) < 2:
+            raise ValueError("A boundary line needs two points")
+        if self.kind == "area" and len(self.points) < 3:
+            raise ValueError("A boundary area needs three points")
+        if self.kind == "altitudeBand" and self.points:
+            raise ValueError("An altitude band cannot contain points")
+        if (
+            self.lowerAltitudeMeters is not None
+            and self.upperAltitudeMeters is not None
+            and self.lowerAltitudeMeters >= self.upperAltitudeMeters
+        ):
+            raise ValueError("Boundary altitude limits are reversed")
+        return self
+
+
+class ForecastPlanResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    kind: str = Field(min_length=1, max_length=80)
+    reachesDestination: bool | None = None
+    missDistanceMetres: float | None = Field(default=None, ge=0, le=50_000_000)
+
+
+class ForecastPlanDocument(BaseModel):
+    """Bounded version-one planner evidence; additive fields are ignored."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    schemaVersion: Literal[1]
+    id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=200)
+    createdAt: datetime
+    expiresAt: datetime | None = None
+    source: Literal["Balloon Crumbs web planner"]
+    launch: ForecastPlanLaunch
+    destination: ForecastPlanDestination | None = None
+    intendedLandingArea: ForecastPlanLandingArea
+    forecastLanding: ForecastPlanPoint
+    departure: ForecastPlanDeparture
+    constraints: ForecastPlanConstraints
+    altitudeStages: list[ForecastPlanStage] = Field(min_length=2, max_length=32)
+    plannedTrack: list[ForecastPlanTrackPoint] = Field(min_length=2, max_length=20_000)
+    landingEnvelope: list[ForecastPlanPoint] = Field(default_factory=list, max_length=512)
+    wind: ForecastPlanWind
+    operationalBoundaries: list[ForecastPlanBoundary] = Field(default_factory=list, max_length=64)
+    result: ForecastPlanResult
+    gpxFallback: str = Field(min_length=1)
+
+    def geometry_point_count(self) -> int:
+        return (
+            len(self.plannedTrack)
+            + len(self.landingEnvelope)
+            + len(self.intendedLandingArea.polygon)
+            + sum(len(boundary.points) for boundary in self.operationalBoundaries)
+        )
+
+
 class CreatePlanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, max_length=200)
     gpx: str = Field(min_length=1)
+    forecastPlan: ForecastPlanDocument | None = None
 
 
 class CreatePlanResponse(BaseModel):
@@ -250,6 +422,7 @@ class GetPlanResponse(BaseModel):
     code: str
     name: str | None
     gpx: str
+    forecastPlan: dict[str, Any] | None = None
     createdAt: str
     expiresAt: str
 

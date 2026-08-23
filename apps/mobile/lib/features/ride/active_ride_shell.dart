@@ -2125,19 +2125,26 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       } else {
         await widget.rideController.publishRoute(route);
         final plan = FlightPlanSummary.fromRoute(route);
+        final structuredPlan = route.forecastPlan;
         final intendedLanding = plan?.intendedLanding;
         if (intendedLanding != null) {
+          final plannedArea = structuredPlan?.intendedLandingArea;
           await widget.rideController.setLandingZone(
             LandingZoneTarget(
               center: awareness_geo.GeoPoint(
                 latitude: intendedLanding.latitude,
                 longitude: intendedLanding.longitude,
               ),
-              radiusMeters: _landingRadiusMeters,
+              radiusMeters: plannedArea?.radiusMeters ?? _landingRadiusMeters,
               label: 'Planner intended landing area',
-              updatedAt: DateTime.now(),
+              updatedAt: plannedArea?.updatedAt ?? DateTime.now(),
             ),
           );
+        }
+        for (final boundary
+            in structuredPlan?.operationalBoundaries ??
+                const <OperationalBoundary>[]) {
+          await widget.rideController.upsertOperationalBoundary(boundary);
         }
       }
       _appliedAuthoritativeRouteRevision =
@@ -3168,6 +3175,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               RiderTrailKind.rider => '${trail.displayName} trail',
               RiderTrailKind.operationalBoundary =>
                 '${trail.displayName} operational boundary',
+              RiderTrailKind.originalLandingEnvelope =>
+                '${trail.displayName} original landing envelope',
               // RiderTrailRecorder only records where riders have been, so it
               // never produces a route-start connector; the map composes that
               // one itself.
@@ -3189,13 +3198,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _riderTrails.value = List.unmodifiable([
       for (final trace in _recordedTrailTraces) _simplifiedForDisplay(trace),
       ..._sharedForecastTraces,
+      ..._originalLandingEnvelopeTraces,
       ..._operationalBoundaryTraces,
     ]);
   }
 
   List<MapOverlayTrace> get _sharedForecastTraces {
     final plan = _liveRoutes.sharedFlightPlan;
-    if (_isSimulation || !_isChaserPerspective || plan == null) return const [];
+    final role = widget.rideController.session?.flightRole;
+    if (_isSimulation ||
+        !_isChaserPerspective ||
+        role == FlightRole.chaseDriver ||
+        plan == null) {
+      return const [];
+    }
     return [
       for (final (index, path) in plan.paths.indexed)
         if (path.points.length >= 2)
@@ -3205,6 +3221,38 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             label: path.name ?? '${plan.name} shared flight forecast',
             kind: RiderTrailKind.forecastTrack,
           ),
+    ];
+  }
+
+  List<MapOverlayTrace> get _originalLandingEnvelopeTraces {
+    final role = widget.rideController.session?.flightRole;
+    final plan = _liveRoutes.sharedFlightPlan?.forecastPlan;
+    final envelope = plan?.landingEnvelope ?? const [];
+    if (_isSimulation ||
+        role == FlightRole.chaseDriver ||
+        envelope.length < 3) {
+      return const [];
+    }
+    final points = <route_domain.GeoPoint>[
+      for (final point in envelope)
+        route_domain.GeoPoint(
+          latitude: point.latitude,
+          longitude: point.longitude,
+        ),
+      route_domain.GeoPoint(
+        latitude: envelope.first.latitude,
+        longitude: envelope.first.longitude,
+      ),
+    ];
+    return [
+      MapOverlayTrace(
+        id: 'original-landing-envelope-${plan!.id}',
+        points: _trailSimplifier.simplify(points),
+        label:
+            'Original landing envelope · forecast wind valid to '
+            '${plan.wind.validTo.toLocal()}',
+        kind: RiderTrailKind.originalLandingEnvelope,
+      ),
     ];
   }
 

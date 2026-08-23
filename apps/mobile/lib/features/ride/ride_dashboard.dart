@@ -587,9 +587,17 @@ class _FlightPlanOverview extends StatelessWidget {
     final duration = plan.duration == null
         ? null
         : _formatDuration(plan.duration!);
-    final altitude = plan.maximumAltitudeMetersMsl == null
+    final altitude = plan.altitudeCeilingMetersMsl == null
+        ? plan.maximumAltitudeMetersMsl == null
+              ? null
+              : 'forecast max ${plan.maximumAltitudeMetersMsl!.round()} m MSL'
+        : 'ceiling ${plan.altitudeCeilingMetersMsl!.round()} m MSL';
+    final window = plan.matchingWindowStart == null
         ? null
-        : 'max ${plan.maximumAltitudeMetersMsl!.round()} m MSL';
+        : plan.matchingWindowEnd == null ||
+              plan.matchingWindowEnd == plan.matchingWindowStart
+        ? 'matching start ${_formatTime(context, plan.matchingWindowStart!)}'
+        : 'start window ${_formatTime(context, plan.matchingWindowStart!)}–${_formatTime(context, plan.matchingWindowEnd!)}';
     final climb = plan.maximumAscentRateMetersPerSecond == null
         ? null
         : 'climb ${plan.maximumAscentRateMetersPerSecond!.toStringAsFixed(1)} m/s';
@@ -599,6 +607,7 @@ class _FlightPlanOverview extends StatelessWidget {
     final detail = [
       times,
       duration,
+      window,
       altitude,
       climb,
       descent,
@@ -612,6 +621,18 @@ class _FlightPlanOverview extends StatelessWidget {
           title: plan.routeName,
           detail: '$detail. Forecast path only; actual drift may differ.',
         ),
+        if (!reduced && plan.windProvider != null) ...[
+          const SizedBox(height: 8),
+          _InformationRow(
+            key: const Key('flight-plan-original-wind'),
+            icon: Icons.air_outlined,
+            title:
+                'Original wind · ${plan.windProvider} ${plan.windModel ?? ''}'
+                    .trim(),
+            detail:
+                'Valid ${plan.windValidFrom == null ? 'time unavailable' : _formatTime(context, plan.windValidFrom!)}–${plan.windValidTo == null ? 'time unavailable' : _formatTime(context, plan.windValidTo!)} · forecast model only; not an aviation briefing.',
+          ),
+        ],
         if (!reduced && plan.stages.isNotEmpty) ...[
           const SizedBox(height: 8),
           ExpansionTile(

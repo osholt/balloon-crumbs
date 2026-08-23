@@ -78,7 +78,7 @@ class RideJoinCode(Base):
 
 
 class RidePlan(Base):
-    """An encrypted, pre-ride GPX route behind a short lookup code.
+    """An encrypted, pre-ride forecast plan behind a short lookup code.
 
     Unrelated to the live ride/join-code tables: a plan never carries a ride
     secret and a fetched plan never claims a ride. The phone that loads one
@@ -90,6 +90,9 @@ class RidePlan(Base):
 
     code: Mapped[str] = mapped_column(String(16), primary_key=True)
     name: Mapped[str | None] = mapped_column(String(200))
+    # Kept under its deployed column name. Older rows decrypt to a GPX string;
+    # structured rows decrypt to {gpx, forecastPlan}, so no plaintext migration
+    # or compatibility-breaking schema change is required.
     gpx_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
