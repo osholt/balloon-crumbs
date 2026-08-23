@@ -76,10 +76,15 @@ class WindForecastVector {
 }
 
 class WindForecastColumn {
-  const WindForecastColumn({required this.position, required this.vectors});
+  const WindForecastColumn({
+    required this.position,
+    required this.vectors,
+    this.groundElevationMetersMsl,
+  });
 
   final GeoPoint position;
   final List<WindForecastVector> vectors;
+  final double? groundElevationMetersMsl;
 
   WindForecastVector? atAltitude(double altitudeMetersMsl) {
     if (vectors.isEmpty) return null;
@@ -153,6 +158,22 @@ class WindForecastField {
           : second,
     );
     return nearest.atAltitude(altitudeMetersMsl);
+  }
+
+  double? groundElevationAt(GeoPoint position) {
+    final available = columns
+        .where((column) => column.groundElevationMetersMsl != null)
+        .toList(growable: false);
+    if (available.isEmpty) return null;
+    return available
+        .reduce(
+          (first, second) =>
+              GeoCalculations.distanceMeters(position, first.position) <=
+                  GeoCalculations.distanceMeters(position, second.position)
+              ? first
+              : second,
+        )
+        .groundElevationMetersMsl;
   }
 
   List<WindForecastSample> vectorsAt(double altitudeMetersMsl) =>
@@ -243,6 +264,7 @@ class OpenMeteoWindProvider implements WindForecastProvider {
       if (entry is! Map) continue;
       final latitude = (entry['latitude'] as num?)?.toDouble();
       final longitude = (entry['longitude'] as num?)?.toDouble();
+      final groundElevation = (entry['elevation'] as num?)?.toDouble();
       final hourly = entry['hourly'];
       if (latitude == null || longitude == null || hourly is! Map) continue;
       final times = hourly['time'];
@@ -288,6 +310,9 @@ class OpenMeteoWindProvider implements WindForecastProvider {
           WindForecastColumn(
             position: GeoPoint(latitude: latitude, longitude: longitude),
             vectors: List.unmodifiable(vectors),
+            groundElevationMetersMsl: groundElevation?.isFinite == true
+                ? groundElevation
+                : null,
           ),
         );
       }
