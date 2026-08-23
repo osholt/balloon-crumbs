@@ -142,6 +142,7 @@ class RideRouteReducer {
           break;
         case RideEventType.riderLeft:
         case RideEventType.rideStarted:
+        case RideEventType.flightStartedByCrew:
         case RideEventType.statusMessage:
         case RideEventType.riderLocationUpdated:
         case RideEventType.hazardReported:

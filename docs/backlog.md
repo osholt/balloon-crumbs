@@ -1,5 +1,10 @@
 # Initial Backlog
 
+Field evidence from 23 August 2026 is planned in
+[field operations and recovery coordination](field-operations-recovery-plan.md).
+Its recovery-first P0 order supersedes the earlier pilot/planner ordering below;
+the existing work packages remain useful implementation dependencies.
+
 The next coordinated implementation is specified in
 [role-specific live flight experience](role-specific-live-flight-experience.md).
 Its slices supersede implementing WP3/WP5/WP6/WP7/WP10b/WP11 independently:

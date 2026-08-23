@@ -6,6 +6,7 @@ from balloon_crumbs_server.app import create_app
 
 SECRET = "0123456789abcdef0123456789abcdef"
 CURRENT_CAPABILITIES = [
+    "crew-flight-lifecycle-v1",
     "ride-start-v1",
     "live-presence-v2",
     "membership-v1",

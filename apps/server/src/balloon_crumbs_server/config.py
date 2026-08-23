@@ -102,6 +102,10 @@ class Settings(BaseSettings):
             # its leader back on the map while every other rider still sees a
             # finished ride.
             "ride-reopen-v1",
+            # A chase-role device may record balloon release and begin live
+            # recovery tracking. Additive so older relays reject rather than
+            # silently storing an event they did not negotiate.
+            "crew-flight-lifecycle-v1",
         ]
     )
     required_capabilities: list[str] = Field(default_factory=list)

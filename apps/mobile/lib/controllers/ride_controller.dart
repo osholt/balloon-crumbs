@@ -704,6 +704,7 @@ class RideController extends ChangeNotifier {
   static bool _affectsLifecycleOrRoute(RideEventType type) => switch (type) {
     RideEventType.rideCreated ||
     RideEventType.rideStarted ||
+    RideEventType.flightStartedByCrew ||
     RideEventType.ridePaused ||
     RideEventType.rideResumed ||
     RideEventType.rideEnded ||
@@ -1235,6 +1236,18 @@ class RideController extends ChangeNotifier {
         session.flightRole.hasFlightAuthority;
   }
 
+  /// Whether this device may record balloon release and begin live tracking.
+  ///
+  /// Field operations put the normal action with the chase team, while the
+  /// pilot remains an available fallback and retains separate authority over
+  /// balloon-only decisions.
+  bool get canStartFlight {
+    final session = _session;
+    return session != null &&
+        !session.requiresFlightAssignment &&
+        session.flightRole.mayStartFlight;
+  }
+
   /// Registers a balloon or vehicle in this ride.
   ///
   /// Idempotent by craft id: re-registering updates the label rather than
@@ -1603,16 +1616,26 @@ class RideController extends ChangeNotifier {
     if (rideStarted || rideEnded) return;
     await _run(() async {
       final session = _requireSession();
-      if (!hasFlightAuthority) {
-        throw const FormatException('Only the pilot can start the flight.');
+      if (!canStartFlight) {
+        throw const FormatException(
+          'Only the pilot or chase crew can start live tracking.',
+        );
       }
       await _record(
-        type: RideEventType.rideStarted,
+        type: hasFlightAuthority
+            ? RideEventType.rideStarted
+            : RideEventType.flightStartedByCrew,
         priority: EventPriority.important,
-        payload: {
-          'leaderRiderId': session.localRiderId,
-          'leaderDisplayName': session.displayName,
-        },
+        payload: hasFlightAuthority
+            ? {
+                'leaderRiderId': session.localRiderId,
+                'leaderDisplayName': session.displayName,
+              }
+            : {
+                'crewRiderId': session.localRiderId,
+                'crewDisplayName': session.displayName,
+                'flightRole': session.flightRole.name,
+              },
       );
     });
   }

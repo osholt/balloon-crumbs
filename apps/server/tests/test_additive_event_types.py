@@ -49,6 +49,35 @@ def test_retention_table_matches_the_documented_bands() -> None:
     # gets, and is capped independently of whatever expiry a client asks for.
     assert retention("riderContactShared") == timedelta(hours=2)
     assert retention("riderContactShared") == retention("iceInfoShared")
+    assert retention("flightStartedByCrew") == timedelta(hours=72)
+
+
+def test_ground_crew_start_is_accepted_and_relayed(client, synchronize, make_event) -> None:
+    ride_id = "ride-ground-crew-start"
+    start = make_event(
+        ride_id,
+        "event-ground-start",
+        event_type="flightStartedByCrew",
+        payload={
+            "crewRiderId": "device-a",
+            "crewDisplayName": "Alex",
+            "flightRole": "chaseCrew",
+        },
+    )
+
+    uploaded = synchronize(client, ride_id=ride_id, secret=SECRET, events=[start])
+    assert uploaded.status_code == 200
+    assert uploaded.json()["acceptedEventIds"] == ["event-ground-start"]
+
+    downloaded = synchronize(
+        client,
+        ride_id=ride_id,
+        secret=SECRET,
+        device_id="device-b",
+        cursor=None,
+    )
+    assert downloaded.status_code == 200
+    assert [event["type"] for event in downloaded.json()["events"]] == ["flightStartedByCrew"]
 
 
 def test_a_shared_phone_number_is_accepted_and_capped(client, synchronize, make_event) -> None:

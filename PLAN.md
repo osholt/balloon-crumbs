@@ -1,17 +1,20 @@
 # Balloon Crumbs — Product Requirements and Delivery Plan
 
-Status: concept scaffold
+Status: private field-test iteration
 
 Working title: **Balloon Crumbs**
 
 Platforms: iOS and Android
 Initial users: UK hot-air-balloon pilots, ground crew, and chase drivers
 
-Active implementation specification:
-[role-specific live flight experience](docs/role-specific-live-flight-experience.md).
-This defines the production role/craft assignment, four distinct live views,
-planner-to-app contract, shared tracks and per-vehicle chase guidance that must
-land before the next broad live-flight UI implementation.
+Active product specification:
+[field operations and recovery coordination](docs/field-operations-recovery-plan.md).
+It is based on a complete launch-to-recovery field observation and makes crew
+assembly, live team tracking, CarPlay guidance, landing confirmation and land
+access the core product. The earlier
+[role-specific live flight experience](docs/role-specific-live-flight-experience.md)
+remains the technical foundation for role/craft assignment and shared tracks,
+but its pilot/planner emphasis no longer defines product priority.
 
 ## Problem statement
 
@@ -30,8 +33,10 @@ flight.
    is relayed over nearby or internet transport.
 3. **No false certainty.** Position, altitude, weather, and routing display a
    source, fix time, freshness, and uncertainty where available.
-4. **No account required.** A six-digit code or QR creates temporary,
-   operation-scoped membership for all participants.
+4. **No account required.** A memorable reusable crew-room alias identifies a
+   regular team, while a private stored credential, QR/link or explicit approval
+   grants access to each fresh operation. A guessable alias is never sufficient
+   authority on its own.
 5. **The road and the balloon are different systems.** Chase guidance chooses a
    legal road-accessible rendezvous; it never asks a vehicle to follow the raw
    airborne coordinate.

@@ -52,9 +52,19 @@ extension FlightRoleLabel on FlightRole {
   /// warning is noise to a pilot and attention taken from flying.
   bool get seesRoadFurniture => this == FlightRole.chaseDriver;
 
-  /// Whether this role may start and end the flight, nominate the balloon's
-  /// primary device, or declare a landing.
+  /// Whether this role holds pilot-only authority over the balloon and shared
+  /// forecast. Starting live recovery is deliberately a separate permission:
+  /// field testing showed that the ground crew are the people free to do it at
+  /// release, while the pilot is occupied with the aircraft.
   bool get hasFlightAuthority => this == FlightRole.pilot;
+
+  /// Whether this role may begin live tracking when the balloon is released.
+  ///
+  /// The pilot remains a fallback for compatibility and unusual operations,
+  /// but both chase roles can take the normal field action. Balloon crew stay
+  /// out of this path for the same workload reason as the pilot, and observers
+  /// are always read-only.
+  bool get mayStartFlight => hasFlightAuthority || isChasing;
 }
 
 /// Reads a role name that another build may have written.

@@ -630,8 +630,9 @@ class CarPlayBridge {
   }
 }
 
-/// A leader-owned ride that has already been configured on the phone and can
-/// therefore be started without moving route or group setup onto CarPlay.
+/// A flight that has already been configured on the phone and can therefore be
+/// started by an authorised pilot or chase device without moving setup onto
+/// CarPlay.
 class CarPlayRideStart {
   const CarPlayRideStart({
     required this.enabled,
@@ -647,7 +648,7 @@ class CarPlayRideStart {
 
   static CarPlayRideStart? project({
     required bool hasSession,
-    required bool isLeader,
+    required bool canStartFlight,
     required bool rideStarted,
     required bool rideEnded,
     required bool busy,
@@ -656,7 +657,7 @@ class CarPlayRideStart {
     String? routeName,
     bool routeIsBalloonForecast = false,
   }) {
-    if (!hasSession || !isLeader || rideStarted || rideEnded) return null;
+    if (!hasSession || !canStartFlight || rideStarted || rideEnded) return null;
     return CarPlayRideStart(
       enabled: !busy && locationReady,
       detail: routeIsBalloonForecast

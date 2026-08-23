@@ -632,8 +632,11 @@ void main() {
     await tester.pumpWidget(_app(controller));
     await tester.pumpAndSettle();
 
-    expect(find.text('Waiting for launch'), findsOneWidget);
-    expect(find.textContaining('Current positions only'), findsOneWidget);
+    expect(find.text('Crew room ready'), findsOneWidget);
+    expect(
+      find.textContaining('Live crew positions before release'),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('pre-start-roster')), findsOneWidget);
     expect(find.textContaining('Oliver (you)'), findsOneWidget);
     expect(
@@ -644,9 +647,9 @@ void main() {
 
     await tester.tap(find.byKey(const Key('start-ride-button')));
     await tester.pumpAndSettle();
-    expect(find.text('Start this flight?'), findsOneWidget);
+    expect(find.text('Balloon released?'), findsOneWidget);
     expect(
-      find.textContaining('No forecast plan or chase route is selected'),
+      find.textContaining('Start live recovery tracking now'),
       findsOneWidget,
     );
 
@@ -654,7 +657,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.rideStarted, isTrue);
-    expect(find.text('Waiting for launch'), findsNothing);
+    expect(find.text('Crew room ready'), findsNothing);
     expect(find.text('Navigation map'), findsOneWidget);
   });
 
