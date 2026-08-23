@@ -34,6 +34,21 @@ import 'package:balloon_crumbs/services/road_routing.dart';
 import 'package:balloon_crumbs/services/speed_limit.dart';
 
 void main() {
+  test('a chase craft trace can retain its identity colour', () {
+    const identity = Color(0xFF5AC8FA);
+    const trace = MapOverlayTrace(
+      id: 'trail-land-rover',
+      label: 'Land Rover trail',
+      points: [
+        GeoPoint(latitude: 51.4, longitude: -2.5),
+        GeoPoint(latitude: 51.41, longitude: -2.49),
+      ],
+      color: identity,
+    );
+
+    expect(trace.effectiveColor, identity);
+  });
+
   test('navigation panels preserve map context and rider clearance', () {
     expect(rideMapPrimaryPanelFill.toARGB32(), 0xD9252E39);
     expect(

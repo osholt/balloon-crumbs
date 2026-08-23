@@ -173,9 +173,9 @@ abstract interface class WindForecastProvider {
 /// Latest UK Met Office UKV wind forecast, delivered by Open-Meteo.
 ///
 /// This is forecast model output, not an airborne observation and not an
-/// aviation weather briefing. The request intentionally asks for a small 3×3
-/// grid and a short time window; slider changes reuse the vertical profile and
-/// never create another network request.
+/// aviation weather briefing. The request asks for the same 5×5, approximately
+/// 120 km field as the planner and a short time window; slider changes reuse
+/// the vertical profile and never create another network request.
 class OpenMeteoWindProvider implements WindForecastProvider {
   OpenMeteoWindProvider({
     required this.client,
@@ -305,10 +305,10 @@ class OpenMeteoWindProvider implements WindForecastProvider {
   }
 }
 
-/// Nine sample points covering roughly 9 × 9 km around [center].
+/// Twenty-five sample points covering roughly 120 × 120 km around [center].
 List<GeoPoint> windForecastGrid(GeoPoint center) => List.unmodifiable([
-  for (final latitudeOffset in const [-0.04, 0.0, 0.04])
-    for (final longitudeOffset in const [-0.06, 0.0, 0.06])
+  for (final latitudeOffset in const [-0.54, -0.27, 0.0, 0.27, 0.54])
+    for (final longitudeOffset in const [-0.85, -0.425, 0.0, 0.425, 0.85])
       GeoPoint(
         latitude: (center.latitude + latitudeOffset).clamp(-90, 90),
         longitude: (center.longitude + longitudeOffset).clamp(-180, 180),
@@ -322,18 +322,23 @@ class WindForecastController extends ChangeNotifier {
     WindForecastField? initialField,
     bool enabled = true,
     int selectedAltitudeMetersMsl = 500,
+    bool followBalloonAltitude = true,
+    this.recenterDistanceMeters = 25000,
   }) : _clock = clock ?? DateTime.now,
        _field = initialField,
        _selectedAltitudeMetersMsl = _nearestLevel(
          selectedAltitudeMetersMsl.toDouble(),
        ) {
     _enabled = enabled;
+    _followBalloonAltitude = followBalloonAltitude;
   }
 
   final WindForecastProvider _provider;
   final DateTime Function() _clock;
+  final double recenterDistanceMeters;
   WindForecastField? _field;
   bool _enabled = true;
+  bool _followBalloonAltitude = true;
   int _selectedAltitudeMetersMsl;
   bool _loading = false;
   String? _error;
@@ -343,6 +348,7 @@ class WindForecastController extends ChangeNotifier {
 
   WindForecastField? get field => _field;
   bool get enabled => _enabled;
+  bool get followBalloonAltitude => _followBalloonAltitude;
   bool get loading => _loading;
   String? get error => _error;
   int get selectedAltitudeMetersMsl => _selectedAltitudeMetersMsl;
@@ -354,7 +360,25 @@ class WindForecastController extends ChangeNotifier {
   }
 
   void setSelectedAltitude(double value) {
+    _followBalloonAltitude = false;
     final next = _nearestLevel(value);
+    if (next == _selectedAltitudeMetersMsl) {
+      notifyListeners();
+      return;
+    }
+    _selectedAltitudeMetersMsl = next;
+    notifyListeners();
+  }
+
+  void setFollowBalloonAltitude(bool value) {
+    if (_followBalloonAltitude == value) return;
+    _followBalloonAltitude = value;
+    notifyListeners();
+  }
+
+  void updateBalloonAltitude(double? altitudeMetersMsl) {
+    if (!_followBalloonAltitude || altitudeMetersMsl == null) return;
+    final next = _nearestLevel(altitudeMetersMsl);
     if (next == _selectedAltitudeMetersMsl) return;
     _selectedAltitudeMetersMsl = next;
     notifyListeners();
@@ -377,7 +401,8 @@ class WindForecastController extends ChangeNotifier {
         now.difference(field.fetchedAt).abs() < const Duration(minutes: 30);
     final nearby =
         lastCenter != null &&
-        GeoCalculations.distanceMeters(lastCenter, center) < 5000;
+        GeoCalculations.distanceMeters(lastCenter, center) <
+            recenterDistanceMeters;
     if (!force && fresh && nearby && field.isLiveForecast) return;
     final generation = ++_generation;
     _lastAttemptAt = now;

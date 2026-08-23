@@ -4505,11 +4505,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
       _riderTrailSource,
       'balloon-crumbs-trail-${kind.name}-line',
       ml.LineLayerProperties(
-        lineColor:
-            kind == RiderTrailKind.balloonGroundTrack ||
-                kind == RiderTrailKind.forecastTrack
-            ? const ['get', 'color']
-            : _hexColor(style.color),
+        // Every feature carries its resolved colour. Balloon and forecast
+        // segments use altitude colours; chase craft retain the identity
+        // colour of their elected reporter across both map renderers.
+        lineColor: const ['get', 'color'],
         lineWidth: style.widthPixels,
         lineDasharray: style.maplibreDashArray,
         lineCap: 'round',
@@ -4756,7 +4755,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   _renderedTrailParts(MapOverlayTrace trace) sync* {
     if (trace.kind != RiderTrailKind.balloonGroundTrack &&
         trace.kind != RiderTrailKind.forecastTrack) {
-      yield (id: trace.id, points: trace.points, color: trace.style.color);
+      yield (id: trace.id, points: trace.points, color: trace.effectiveColor);
       return;
     }
     for (final (index, segment) in BalloonAltitudeStyle.segments(
@@ -4816,7 +4815,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           TrailDirectionArrowSource(
             paths: [trace.points],
             style: _TrailArrowStyle(
-              color: trace.style.color,
+              color: trace.effectiveColor,
               idPrefix: trace.id,
               semanticLabel: '${trace.label} direction',
             ),
@@ -6238,14 +6237,17 @@ class MapOverlayTrace {
     required this.points,
     required this.label,
     this.kind = RiderTrailKind.rider,
+    this.color,
   });
 
   final String id;
   final List<GeoPoint> points;
   final String label;
   final RiderTrailKind kind;
+  final Color? color;
 
   RouteLineStyle get style => RouteTrailStyle.forTrail(kind);
+  Color get effectiveColor => color ?? style.color;
 }
 
 /// How one source's arrows are drawn. Carried through the selection untouched.
@@ -8684,6 +8686,16 @@ class _WindForecastControl extends StatelessWidget {
                 ],
               ),
               if (controller.enabled) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilterChip(
+                    key: const Key('wind-follow-balloon-altitude'),
+                    avatar: const Icon(Icons.air_outlined, size: 16),
+                    label: const Text('Follow balloon altitude'),
+                    selected: controller.followBalloonAltitude,
+                    onSelected: controller.setFollowBalloonAltitude,
+                  ),
+                ),
                 Row(
                   children: [
                     const Text('20', style: TextStyle(fontSize: 9)),

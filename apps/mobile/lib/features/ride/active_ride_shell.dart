@@ -58,6 +58,8 @@ import '../../relay/relay_engine.dart';
 import '../../relay/sqlite_relay_queue.dart';
 import '../../services/carplay_bridge.dart';
 import '../../services/chase_guidance_target.dart';
+import '../../services/craft_roster.dart';
+import '../../services/craft_track_reducer.dart';
 import '../../services/fiesta_flight_loader.dart';
 import '../../services/flight_plan_summary.dart';
 import '../../services/geo_calculations.dart';
@@ -341,6 +343,32 @@ RouteStore? activeRideMapStoreWhenReady({
 }) {
   if (initializing) return null;
   return isSimulation ? simulationRouteStore : rideRouteStore;
+}
+
+class _CraftMapLocation {
+  const _CraftMapLocation({
+    required this.id,
+    required this.displayName,
+    required this.sourceDeviceIds,
+    required this.freshnessDeviceId,
+    required this.isBalloon,
+    required this.motorcycleStyle,
+    required this.riderSymbol,
+    required this.riderColor,
+    required this.altitudeMeters,
+    required this.point,
+  });
+
+  final String id;
+  final String displayName;
+  final List<String> sourceDeviceIds;
+  final String freshnessDeviceId;
+  final bool isBalloon;
+  final CraftIconStyle motorcycleStyle;
+  final RiderSymbol riderSymbol;
+  final RiderColor riderColor;
+  final double? altitudeMeters;
+  final route_domain.GeoPoint point;
 }
 
 /// What the ride map should present of the quick messages in the journal, and
@@ -2390,6 +2418,43 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     });
   }
 
+  List<_CraftMapLocation> _productionCraftMapLocations(
+    CraftRoster roster, {
+    required String localRiderId,
+  }) {
+    final locations = <_CraftMapLocation>[];
+    for (final craft in roster.crafts) {
+      if (craft.deviceIds.contains(localRiderId)) continue;
+      final sample = craft.fix.sample;
+      final reporterId = craft.fix.deviceId;
+      if (sample == null || reporterId == null) continue;
+      final reporter = widget.rideController.participantFor(reporterId);
+      locations.add(
+        _CraftMapLocation(
+          id: craft.id,
+          displayName: craft.craft.label,
+          sourceDeviceIds: craft.deviceIds,
+          freshnessDeviceId: reporterId,
+          isBalloon: craft.isBalloon,
+          motorcycleStyle: craft.isBalloon
+              ? CraftIconStyle.balloon
+              : reporter?.motorcycleStyle ?? craftIconStyleDefault,
+          riderSymbol: craft.isBalloon
+              ? riderSymbolDefault
+              : reporter?.riderSymbol ?? riderSymbolDefault,
+          riderColor: reporter?.riderColor ?? riderColorDefault,
+          altitudeMeters: sample.altitudeMeters,
+          point: route_domain.GeoPoint(
+            latitude: sample.position.latitude,
+            longitude: sample.position.longitude,
+            recordedAt: sample.recordedAt,
+          ),
+        ),
+      );
+    }
+    return List.unmodifiable(locations);
+  }
+
   void _updateMapOverlays({
     bool updateDerivedState = true,
     bool updateOverlayMarkers = true,
@@ -2397,14 +2462,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }) {
     final awareness = _awarenessController;
     if (awareness == null) return;
-    final balloonDeviceIds = _isSimulation
-        ? const <String>{}
-        : (widget.rideController
-                  .resolveCraftRoster()
-                  .balloon
-                  ?.deviceIds
-                  .toSet() ??
-              const <String>{});
+    final craftRoster = _isSimulation
+        ? null
+        : widget.rideController.resolveCraftRoster();
     // One reconciled model for both ride phases and both transports, so nobody
     // disappears at the `rideStarted` transition, a late joiner appears at once,
     // and the count can never disagree with the drawn markers (#132).
@@ -2519,6 +2579,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               altitudeRecordedAt: localMapSample?.recordedAt,
             );
       _mapPosition.value = mapPoint;
+      final role = widget.rideController.session?.flightRole;
+      final balloonAltitude = role?.isAboardBalloon == true
+          ? localMapSample?.altitudeMeters
+          : _latestBalloonFix()?.altitudeMeters;
+      _windForecastController?.updateBalloonAltitude(balloonAltitude);
     }
 
     // A simulation can finish between throttled overlay frames. Completion
@@ -2554,36 +2619,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       for (final judgement in hazardJudgements)
         if (judgement.isVisible) _hazardOverlayMarker(judgement.report, now),
       ...(simulatedRiders == null
-              ? visibleRiderLocations
-                    .where(
-                      (location) => location.riderId != localLocation?.riderId,
-                    )
-                    .map(
-                      (location) => (
-                        riderId: location.riderId,
-                        displayName: location.displayName,
-                        role: location.role,
-                        motorcycleStyle:
-                            balloonDeviceIds.contains(location.riderId)
-                            ? CraftIconStyle.balloon
-                            : location.motorcycleStyle,
-                        riderSymbol: location.riderSymbol,
-                        riderColor: location.riderColor,
-                        altitudeMeters: location.sample.altitudeMeters,
-                        point: route_domain.GeoPoint(
-                          latitude: location.sample.position.latitude,
-                          longitude: location.sample.position.longitude,
-                          recordedAt: location.sample.recordedAt,
-                        ),
-                      ),
-                    )
+              ? _productionCraftMapLocations(
+                  craftRoster!,
+                  localRiderId:
+                      widget.rideController.session?.localRiderId ?? '',
+                )
               : simulatedRiders
                     .where((rider) => !rider.isLocal)
                     .map(
-                      (rider) => (
-                        riderId: rider.id,
+                      (rider) => _CraftMapLocation(
+                        id: rider.id,
                         displayName: rider.displayName,
-                        role: rider.role,
+                        sourceDeviceIds: [rider.id],
+                        freshnessDeviceId: rider.id,
+                        isBalloon: rider.role == RideRole.lead,
                         motorcycleStyle: rider.role == RideRole.lead
                             ? CraftIconStyle.balloon
                             : rider.motorcycleStyle,
@@ -2597,36 +2646,34 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                       ),
                     ))
           .map((location) {
-            final isLead = location.role == RideRole.lead;
-            final isBalloonCraft = _isSimulation
-                ? isLead
-                : balloonDeviceIds.contains(location.riderId);
+            final isBalloonCraft = location.isBalloon;
             // A position past its freshness threshold is demoted explicitly in
             // the label. The identity fill remains stable across surfaces.
             final freshness =
-                freshnessByRider[location.riderId]?.freshness ??
+                freshnessByRider[location.freshnessDeviceId]?.freshness ??
                 PresenceFreshness.live;
             final ageSuffix = switch (freshness) {
               PresenceFreshness.live => null,
               PresenceFreshness.none => PresenceFreshness.none.label,
               _ =>
-                freshnessByRider[location.riderId]?.freshnessLabel ??
+                freshnessByRider[location.freshnessDeviceId]?.freshnessLabel ??
                     freshness.label,
             };
             // Issue #151's map companion, kept deliberately minimal: the rider
             // who raised something already has a marker, so it says what they
             // raised rather than inventing a second symbol beside it.
-            final raised = quickMessagesBySender[location.riderId];
+            final raised = location.sourceDeviceIds
+                .map((deviceId) => quickMessagesBySender[deviceId])
+                .whereType<ReceivedQuickMessage>()
+                .firstOrNull;
             final roleSuffix = raised != null
                 ? raised.label
                 : isBalloonCraft
                 ? 'Balloon'
-                : isLead
-                ? 'Lead'
-                : null;
+                : 'Chase vehicle';
             final label = [
               location.displayName,
-              ?roleSuffix,
+              roleSuffix,
               if (isBalloonCraft && location.altitudeMeters != null)
                 '${location.altitudeMeters!.round()} m',
               ?ageSuffix,
@@ -2636,7 +2683,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             // rider look like different people across surfaces (#250).
             final baseColor = location.riderColor.color;
             return MapOverlayMarker(
-              id: 'rider-${location.riderId}',
+              id: 'craft-${location.id}',
               point: location.point,
               label: label,
               motorcycleStyle: location.motorcycleStyle,
@@ -3021,53 +3068,51 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// controller's leader history, which is rebuilt from the durable journal on
   /// restart, so it survives an app restart mid-ride as far as the journal
   /// allows.
-  void _updateRiderTrails(SituationalAwarenessController awareness) {
+  void _updateRiderTrails(SituationalAwarenessController _) {
     if (!widget.rideController.rideStarted) {
       _trailRecorder.clear();
       _publishRiderTrails(const []);
       return;
     }
-    final balloonDeviceIds =
-        widget.rideController.resolveCraftRoster().balloon?.deviceIds.toSet() ??
-        const <String>{};
+    final tracks = const CraftTrackReducer().fromEvents(
+      widget.rideController.events,
+    );
+    final roster = widget.rideController.resolveCraftRoster();
     _publishRiderTrails(
-      _trailRecorder.update([
-        for (final location in awareness.riderLocations)
-          RiderTrailUpdate(
-            riderId: location.riderId,
-            displayName: location.displayName,
-            position: route_domain.GeoPoint(
-              latitude: location.sample.position.latitude,
-              longitude: location.sample.position.longitude,
-              elevationMeters: location.sample.altitudeMeters,
-              altitudeSource: location.sample.altitudeSource,
-              altitudeDatum: location.sample.altitudeDatum,
-              altitudeAccuracyMeters: location.sample.altitudeAccuracyMeters,
-              recordedAt: location.sample.recordedAt,
-            ),
-            isLeader: location.role == RideRole.lead,
-            isBalloon: balloonDeviceIds.contains(location.riderId),
-            isEligible:
-                widget.rideController
-                    .participantFor(location.riderId)
-                    ?.isEligibleForLivePosition ==
-                true,
-            journalTrail: location.role == RideRole.lead
-                ? [
-                    for (final sample in awareness.leaderLocationSamples)
-                      route_domain.GeoPoint(
-                        latitude: sample.position.latitude,
-                        longitude: sample.position.longitude,
-                        elevationMeters: sample.altitudeMeters,
-                        altitudeSource: sample.altitudeSource,
-                        altitudeDatum: sample.altitudeDatum,
-                        altitudeAccuracyMeters: sample.altitudeAccuracyMeters,
-                        recordedAt: sample.recordedAt,
-                      ),
-                  ]
-                : null,
+      [
+        for (final track in tracks)
+          RiderTrail(
+            riderId: track.craftId,
+            displayName: track.label,
+            kind: track.isBalloon
+                ? RiderTrailKind.balloonGroundTrack
+                : RiderTrailKind.rider,
+            points: _trailRecorder.boundedTrail([
+              for (final sample in track.samples)
+                route_domain.GeoPoint(
+                  latitude: sample.position.latitude,
+                  longitude: sample.position.longitude,
+                  elevationMeters: sample.altitudeMeters,
+                  altitudeSource: sample.altitudeSource,
+                  altitudeDatum: sample.altitudeDatum,
+                  altitudeAccuracyMeters: sample.altitudeAccuracyMeters,
+                  recordedAt: sample.recordedAt,
+                ),
+            ]),
           ),
-      ]),
+      ],
+      colors: {
+        for (final track in tracks)
+          if (!track.isBalloon)
+            track.craftId:
+                widget.rideController
+                    .participantFor(
+                      roster.byId(track.craftId)?.fix.deviceId ?? '',
+                    )
+                    ?.riderColor
+                    .color ??
+                riderColorDefault.color,
+      },
     );
   }
 
@@ -3096,7 +3141,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       ),
   ];
 
-  void _publishRiderTrails(List<RiderTrail> trails) {
+  void _publishRiderTrails(
+    List<RiderTrail> trails, {
+    Map<String, Color> colors = const {},
+  }) {
     _recordedTrailTraces = List.unmodifiable([
       for (final trail in trails.where((trail) => trail.isRenderable))
         for (final (index, points)
@@ -3125,6 +3173,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 '${trail.displayName} route to start',
             },
             kind: trail.kind,
+            color: colors[trail.riderId],
           ),
     ]);
     _pushRiderTrails();
