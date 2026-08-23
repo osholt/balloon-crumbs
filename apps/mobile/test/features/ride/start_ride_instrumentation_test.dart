@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// #441: "with CarPlay connected, the Start ride control on the phone does
+/// #441: "with CarPlay connected, the Start flight control on the phone does
 /// nothing."
 ///
 /// ## Why this is instrumentation and not a fix
@@ -17,20 +17,20 @@ import 'package:flutter_test/flutter_test.dart';
 /// So there is nothing to fix that I can point at, and guessing at a
 /// safety-relevant control is how #408 nearly shipped an illegal manoeuvre.
 ///
-/// What the log can settle in one ride:
+/// What the log can settle in one flight:
 ///
-/// - **no `start ride tapped` entry** — the tap never reached Dart, which points
+/// - **no `start flight tapped` entry** — the tap never reached Dart, which points
 ///   at the Flutter view not receiving touches while CarPlay is attached;
 /// - **tapped, then `refused before the dialog`** — the leadership or
 ///   already-started gate swallowed it, and the entry says which;
 /// - **tapped, then `decision: dismissed`** — the dialog appeared and was
 ///   dismissed, which would mean the control works and the dialog is the
 ///   problem;
-/// - **tapped, then `decision: chooseRoute`** — the phone demanded a route
+/// - **tapped, then `decision: chooseRoute`** — the phone demanded a plan
 ///   decision where CarPlay starts immediately, which is a real asymmetry
 ///   between the two surfaces and would be the thing to fix.
 ///
-/// The entries are asserted structurally because starting a ride needs a
+/// The entries are asserted structurally because starting a flight needs a
 /// session, a relay, a location stream and a map, and no test here constructs
 /// `ActiveRideShell`.
 void main() {
@@ -38,13 +38,13 @@ void main() {
     'lib/features/ride/active_ride_shell.dart',
   ).readAsStringSync();
 
-  group('the next ride can say what the start button did (#441)', () {
+  group('the next flight can say what the start button did (#441)', () {
     test('the tap is recorded before any gate can swallow it', () {
-      expect(source, contains('start ride tapped on the phone'));
+      expect(source, contains('start flight tapped on the phone'));
       // Before the early return, or a refused tap would leave no trace at all.
       expect(
-        source.indexOf('start ride tapped on the phone'),
-        lessThan(source.indexOf('start ride refused before the dialog')),
+        source.indexOf('start flight tapped on the phone'),
+        lessThan(source.indexOf('start flight refused before the dialog')),
       );
     });
 
@@ -56,13 +56,13 @@ void main() {
     });
 
     test('the outcome of the dialog is recorded', () {
-      expect(source, contains('start ride decision:'));
+      expect(source, contains('start flight decision:'));
     });
 
     test('a CarPlay start is distinguishable from a phone start', () {
       // The report is that only the car could start the ride, so a log has to
       // say which surface did.
-      expect(source, contains('start ride accepted from CarPlay'));
+      expect(source, contains('start flight accepted from CarPlay'));
     });
   });
 
