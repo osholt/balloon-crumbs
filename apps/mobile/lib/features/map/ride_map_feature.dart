@@ -2649,10 +2649,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           PolylineLayer(
             polylines: [
               ..._trailPolylines(dashed: false),
-              if (_displayedRoutePaths.isNotEmpty)
-                ..._displayedRoutePaths.map(
-                  (path) => _routePolyline(path, RouteTrailStyle.routeAhead),
-                ),
+              ..._displayedRoutePolylines,
               ..._trailPolylines(dashed: true),
             ],
           ),
@@ -4312,13 +4309,16 @@ class _RideMapScreenState extends State<RideMapScreen> {
         _remainingRouteSource,
         _remainingRouteGeoJson(),
       );
+      final displayedRouteStyle = _route?.isBalloonForecast == true
+          ? RouteTrailStyle.forecastTrack
+          : RouteTrailStyle.routeAhead;
       await controller.addLineLayer(
         _remainingRouteSource,
         'balloon-crumbs-route-remaining-border',
         ml.LineLayerProperties(
           lineColor: _casingHex,
-          lineWidth: RouteTrailStyle.routeAhead.casingWidthPixels,
-          lineDasharray: RouteTrailStyle.routeAhead.maplibreCasingDashArray,
+          lineWidth: displayedRouteStyle.casingWidthPixels,
+          lineDasharray: displayedRouteStyle.maplibreCasingDashArray,
           lineCap: 'round',
           lineJoin: 'round',
         ),
@@ -4328,9 +4328,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
         _remainingRouteSource,
         'balloon-crumbs-route-remaining',
         ml.LineLayerProperties(
-          lineColor: _hexColor(RouteTrailStyle.routeAhead.color),
-          lineWidth: RouteTrailStyle.routeAhead.widthPixels,
-          lineDasharray: RouteTrailStyle.routeAhead.maplibreDashArray,
+          lineColor: _route?.isBalloonForecast == true
+              ? const ['get', 'color']
+              : _hexColor(displayedRouteStyle.color),
+          lineWidth: displayedRouteStyle.widthPixels,
+          lineDasharray: displayedRouteStyle.maplibreDashArray,
           lineCap: 'round',
           lineJoin: 'round',
         ),
@@ -4623,8 +4625,67 @@ class _RideMapScreenState extends State<RideMapScreen> {
     }
   }
 
-  Map<String, dynamic> _remainingRouteGeoJson() =>
-      MapGeoJson.lines(_displayedRoutePaths, idPrefix: 'remaining-route');
+  Map<String, dynamic> _remainingRouteGeoJson() {
+    if (_route?.isBalloonForecast != true) {
+      return MapGeoJson.lines(
+        _displayedRoutePaths,
+        idPrefix: 'remaining-route',
+      );
+    }
+    return {
+      'type': 'FeatureCollection',
+      'features': [
+        for (final part in _displayedRouteParts)
+          {
+            'type': 'Feature',
+            'id': part.id,
+            'properties': {'color': _hexColor(part.color)},
+            'geometry': {
+              'type': 'LineString',
+              'coordinates': [
+                for (final point in part.points)
+                  [point.longitude, point.latitude],
+              ],
+            },
+          },
+      ],
+    };
+  }
+
+  Iterable<Polyline> get _displayedRoutePolylines => _displayedRouteParts.map(
+    (part) => _routePolyline(
+      part.points,
+      (_route?.isBalloonForecast == true
+              ? RouteTrailStyle.forecastTrack
+              : RouteTrailStyle.routeAhead)
+          .withColor(part.color),
+    ),
+  );
+
+  Iterable<({String id, List<GeoPoint> points, Color color})>
+  get _displayedRouteParts sync* {
+    if (_route?.isBalloonForecast != true) {
+      for (final (index, path) in _displayedRoutePaths.indexed) {
+        yield (
+          id: 'remaining-route-$index',
+          points: path,
+          color: RouteTrailStyle.routeAhead.color,
+        );
+      }
+      return;
+    }
+    for (final (pathIndex, path) in _route!.paths.indexed) {
+      for (final (segmentIndex, segment) in BalloonAltitudeStyle.segments(
+        path.points,
+      ).indexed) {
+        yield (
+          id: 'forecast-$pathIndex-altitude-$segmentIndex',
+          points: segment.points,
+          color: segment.color,
+        );
+      }
+    }
+  }
 
   List<List<GeoPoint>> get _displayedRoutePaths {
     if (_route?.isBalloonForecast == true) {
@@ -4740,9 +4801,15 @@ class _RideMapScreenState extends State<RideMapScreen> {
             paths: _displayedRoutePaths,
             reserve: _plannedRouteArrowReserve,
             style: _TrailArrowStyle(
-              color: RouteTrailStyle.routeAhead.color,
-              idPrefix: 'route-ahead',
-              semanticLabel: 'Route direction',
+              color: _route?.isBalloonForecast == true
+                  ? RouteTrailStyle.forecastTrack.color
+                  : RouteTrailStyle.routeAhead.color,
+              idPrefix: _route?.isBalloonForecast == true
+                  ? 'flight-forecast'
+                  : 'route-ahead',
+              semanticLabel: _route?.isBalloonForecast == true
+                  ? 'Flight forecast direction'
+                  : 'Route direction',
             ),
           ),
         for (final trace in byImportance)

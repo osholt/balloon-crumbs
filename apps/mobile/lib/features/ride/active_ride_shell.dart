@@ -3112,7 +3112,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   List<MapOverlayTrace> get _sharedForecastTraces {
     final plan = _liveRoutes.sharedFlightPlan;
-    if (_isSimulation || plan == null) return const [];
+    if (_isSimulation || !_isChaserPerspective || plan == null) return const [];
     return [
       for (final (index, path) in plan.paths.indexed)
         if (path.points.length >= 2)

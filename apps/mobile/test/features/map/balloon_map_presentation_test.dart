@@ -357,11 +357,12 @@ void main() {
     expect(
       layer.polylines.any(
         (line) =>
-            line.color == RouteTrailStyle.routeAhead.color &&
+            line.color == BalloonAltitudeStyle.colorForMeters(510) &&
             line.points.length == 2,
       ),
       isTrue,
-      reason: 'the forecast line should remain visible to the pilot',
+      reason:
+          'the forecast line should remain visible and altitude-coloured for the pilot',
     );
     expect(find.byTooltip('Fit forecast plan'), findsOneWidget);
     expect(find.byTooltip('Navigate or export route'), findsNothing);
