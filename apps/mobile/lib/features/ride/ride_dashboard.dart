@@ -8,6 +8,7 @@ import '../../controllers/internet_relay_controller.dart';
 import '../../controllers/ride_controller.dart';
 import '../../controllers/nearby_relay_controller.dart';
 import '../../domain/quick_message.dart';
+import '../../domain/flight_role.dart';
 import '../../domain/ride_coordination_mode.dart';
 import '../../domain/ride_event.dart';
 import '../../domain/ride_role.dart';
@@ -67,10 +68,17 @@ class RideDashboard extends StatelessWidget {
                 _RideHeader(
                   rideCode: session.rideCode,
                   displayName: session.displayName,
-                  role: controller.session!.role,
+                  role: session.flightRole,
+                  craftLabel:
+                      controller.localCraft?.craft.label ??
+                      (session.flightRole.isAboardBalloon
+                          ? 'Balloon'
+                          : 'Unassigned craft'),
                   coordinationMode: mode,
-                  onRoleChanged: controller.setRole,
+                  onRoleChanged: controller.setFlightRole,
                 ),
+                const SizedBox(height: 14),
+                _RoleBriefingCard(role: session.flightRole),
                 rideActions,
                 if (!isSolo) ...[
                   const SizedBox(height: 14),
@@ -137,15 +145,17 @@ class _RideHeader extends StatelessWidget {
     required this.rideCode,
     required this.displayName,
     required this.role,
+    required this.craftLabel,
     required this.coordinationMode,
     required this.onRoleChanged,
   });
 
   final String rideCode;
   final String displayName;
-  final RideRole role;
+  final FlightRole role;
+  final String craftLabel;
   final RideCoordinationMode coordinationMode;
-  final ValueChanged<RideRole> onRoleChanged;
+  final ValueChanged<FlightRole> onRoleChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -181,16 +191,21 @@ class _RideHeader extends StatelessWidget {
                   displayName,
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  '${role.label} · $craftLabel',
+                  style: const TextStyle(color: Color(0xFFABB5C1)),
+                ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          if (coordinationMode != RideCoordinationMode.solo)
+          if (coordinationMode != RideCoordinationMode.solo && role.isChasing)
             DropdownButtonHideUnderline(
-              child: DropdownButton<RideRole>(
+              child: DropdownButton<FlightRole>(
                 value: role,
                 borderRadius: BorderRadius.circular(14),
-                items: RideRole.values
+                items: const [FlightRole.chaseDriver, FlightRole.chaseCrew]
                     .map(
                       (item) => DropdownMenuItem(
                         value: item,
@@ -206,6 +221,51 @@ class _RideHeader extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _RoleBriefingCard extends StatelessWidget {
+  const _RoleBriefingCard({required this.role});
+
+  final FlightRole role;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, title, detail) = switch (role) {
+      FlightRole.pilot => (
+        Icons.air_outlined,
+        'Pilot flight deck',
+        'The map prioritises altitude, forecast wind, the altitude-coloured track, airspace context and landing intent. Road directions and speed limits are hidden.',
+      ),
+      FlightRole.balloonCrew => (
+        Icons.air,
+        'Airborne crew view',
+        'Inspect the wind grid, altitude profile, possible landing areas and chase craft without changing pilot authority.',
+      ),
+      FlightRole.chaseDriver => (
+        Icons.directions_car,
+        'Driver navigation',
+        'Road guidance, speed limits and spoken alerts are prioritised. Tactical editing stays with chase crew while the vehicle is moving.',
+      ),
+      FlightRole.chaseCrew => (
+        Icons.groups_2_outlined,
+        'Chase coordination',
+        'Use the team map to compare the balloon, shared tracks, landing intent and this vehicle’s road rendezvous.',
+      ),
+      FlightRole.observer => (
+        Icons.visibility_outlined,
+        'Observer',
+        'This role is read-only and receives reduced flight information.',
+      ),
+    };
+    return Card(
+      key: Key('flight-role-briefing-${role.name}'),
+      child: ListTile(
+        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(detail),
       ),
     );
   }

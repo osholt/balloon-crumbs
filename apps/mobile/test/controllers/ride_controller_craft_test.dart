@@ -5,7 +5,9 @@ import 'package:balloon_crumbs/data/in_memory_event_store.dart';
 import 'package:balloon_crumbs/data/in_memory_session_store.dart';
 import 'package:balloon_crumbs/domain/craft.dart';
 import 'package:balloon_crumbs/domain/flight_role.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
 import 'package:balloon_crumbs/domain/ride_join_payload.dart';
+import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/internet/internet_relay_client.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/services/nearby_bridge.dart';
@@ -283,6 +285,91 @@ void main() {
     expect(second.crafts.map((c) => c.id), first.crafts.map((c) => c.id));
     expect(second.byId('v1')!.craft.chasing, controller.localCraftId);
     expect(second.balloon!.crewCount, 1);
+  });
+
+  group('legacy assignment repair', () {
+    Future<({RideController controller, InMemoryEventStore events})>
+    restoreLegacy(RideRole legacyRole) async {
+      final sessions = InMemorySessionStore();
+      final events = InMemoryEventStore();
+      final persisted =
+          RideSession(
+              rideId: 'legacy-flight',
+              rideCode: '123456',
+              inviteSecret: 'legacy-secret-with-enough-entropy',
+              joinToken: 'legacy-token-with-enough-entropy',
+              localRiderId: 'legacy-device',
+              displayName: 'Alex',
+              role: legacyRole,
+              joinedAt: DateTime.utc(2026, 8, 1),
+            ).toJson()
+            ..remove('flightRole')
+            ..remove('localCraftId');
+      await sessions.save(RideSession.fromJson(persisted));
+      var eventId = 0;
+      final restored = RideController(
+        events,
+        sessions,
+        const _FakeNearbyBridge(),
+        clock: () => DateTime.utc(2026, 8, 23, 9),
+        idFactory: () => 'repair-${eventId++}',
+        rideCodeDirectory: _InMemoryRideCodeDirectory(),
+      );
+      addTearDown(restored.dispose);
+      await restored.initialize();
+      return (controller: restored, events: events);
+    }
+
+    test('the legacy creator explicitly restores pilot and balloon', () async {
+      final fixture = await restoreLegacy(RideRole.lead);
+      expect(fixture.controller.hasFlightAuthority, isFalse);
+      expect(fixture.controller.session!.requiresFlightAssignment, isTrue);
+
+      await fixture.controller.repairFlightAssignment(role: FlightRole.pilot);
+
+      expect(fixture.controller.errorMessage, isNull);
+      expect(fixture.controller.localFlightRole, FlightRole.pilot);
+      expect(fixture.controller.hasFlightAuthority, isTrue);
+      expect(fixture.controller.session!.requiresFlightAssignment, isFalse);
+      expect(fixture.controller.localCraft?.craft.kind, CraftKind.balloon);
+      expect(fixture.controller.localCraft?.primaryDeviceId, 'legacy-device');
+      final recorded = await fixture.events.eventsForRide('legacy-flight');
+      expect(
+        recorded.map((event) => event.type),
+        containsAll(<RideEventType>[
+          RideEventType.roleChanged,
+          RideEventType.craftRegistered,
+          RideEventType.deviceAttachedToCraft,
+          RideEventType.craftPrimaryDeviceNominated,
+        ]),
+      );
+    });
+
+    test('a legacy participant repairs into a named chase vehicle', () async {
+      final fixture = await restoreLegacy(RideRole.rider);
+
+      await fixture.controller.repairFlightAssignment(
+        role: FlightRole.chaseDriver,
+        vehicleLabel: '  Land   Rover  ',
+      );
+
+      expect(fixture.controller.errorMessage, isNull);
+      expect(fixture.controller.localFlightRole, FlightRole.chaseDriver);
+      expect(fixture.controller.hasFlightAuthority, isFalse);
+      expect(fixture.controller.localCraft?.craft.kind, CraftKind.vehicle);
+      expect(fixture.controller.localCraft?.craft.label, 'Land Rover');
+    });
+
+    test('a legacy participant cannot claim pilot authority', () async {
+      final fixture = await restoreLegacy(RideRole.rider);
+
+      await fixture.controller.repairFlightAssignment(role: FlightRole.pilot);
+
+      expect(fixture.controller.errorMessage, isNotNull);
+      expect(fixture.controller.localFlightRole, FlightRole.observer);
+      expect(fixture.controller.session!.requiresFlightAssignment, isTrue);
+      expect(fixture.controller.hasFlightAuthority, isFalse);
+    });
   });
 }
 

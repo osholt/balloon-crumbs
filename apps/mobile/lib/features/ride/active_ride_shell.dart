@@ -1453,7 +1453,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             } else {
               await _rideRouteStore!.saveActiveRoute(route);
             }
-          } else if (session.role != RideRole.lead) {
+          } else if (!widget.rideController.hasFlightAuthority) {
             route = null;
             await _rideRouteStore!.clearActiveRoute();
           } else {
@@ -1520,7 +1520,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (widget.enableNativeServices && !_isSimulation) {
       final session = widget.rideController.session;
       final groupRide = widget.rideController.coordinationMode.isGroup;
-      if (groupRide && session?.role == RideRole.lead) {
+      if (groupRide && widget.rideController.hasFlightAuthority) {
         try {
           await widget.rideController.publishRideCode();
         } on RideCodeDirectoryException catch (error) {
@@ -1744,7 +1744,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       '${widget.rideController.session?.rideId ?? 'none'}';
 
   bool get _isChaserPerspective =>
-      widget.rideController.session?.role != RideRole.lead;
+      widget.rideController.session?.flightRole.isChasing == true;
 
   Future<void> _restoreChaseGuidanceTarget() async {
     if (!_isChaserPerspective) return;
@@ -1951,7 +1951,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // adapter itself stays in the repository, where a closed investigation
     // belongs, and is exercised by its own test.
     final externalProviders = <ExternalHazardProvider>[
-      if (session.role == RideRole.lead && !_isSimulation)
+      if (session.flightRole == FlightRole.chaseDriver && !_isSimulation)
         RelayTrafficHazardProvider(
           configuration: InternetRelayConfiguration.fromEnvironment(),
         ),
@@ -1970,7 +1970,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       // same event once each. The ids are derived from the OpenStreetMap node
       // so they merge into one hazard either way, but there is no reason to pay
       // for it six times over.
-      if (session.role == RideRole.lead)
+      if (session.flightRole == FlightRole.chaseDriver)
         FixedSpeedCameraProvider(readCatalogue: _loadFixedSpeedCameras),
     ];
     final controller = SituationalAwarenessController(
@@ -2007,7 +2007,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     }
     _pushRiderTrails();
     controller.addListener(_onAwarenessChanged);
-    if (session.role == RideRole.lead &&
+    if (session.flightRole == FlightRole.chaseDriver &&
         !_isSimulation &&
         widget.enableNativeServices) {
       unawaited(controller.refreshExternalHazards());
@@ -2823,7 +2823,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     // A real ride remains leader-owned. Ride Lab drives the entire virtual
     // group locally, so completion must work from its leader, follower and TEC
     // perspectives alike.
-    if (session == null || (!_isSimulation && session.role != RideRole.lead)) {
+    if (session == null ||
+        (!_isSimulation && !widget.rideController.hasFlightAuthority)) {
       return;
     }
     final route = _activeRoute;
@@ -3676,7 +3677,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 // record in the ride roster instead (#144).
                 participants: widget.rideController.liveParticipants,
                 coordinationMode: widget.rideController.coordinationMode,
-                isLeader: session.role == RideRole.lead,
+                isLeader: widget.rideController.hasFlightAuthority,
                 busy: widget.rideController.busy || _loading,
                 routeName: _activeRoute?.name,
                 onStartRide: _confirmStartRide,
@@ -3705,6 +3706,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         // the map viewport until the rider deliberately leaves the map tab.
         final hideWhileMoving =
             widget.rideController.rideStarted &&
+            session.flightRole == FlightRole.chaseDriver &&
             _selectedIndex == 0 &&
             _activeRoute != null &&
             navigationPosition != null;
@@ -3830,7 +3832,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final session = widget.rideController.session;
+    final flightRole = session?.flightRole;
     final isBalloonView = session?.flightRole.isAboardBalloon == true;
+    final isDriverView = flightRole == FlightRole.chaseDriver;
     final landingZoneUpdates = _isSimulation
         ? _simulationLandingZone
         : _sharedLandingZone;
@@ -3856,7 +3860,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       onOpenRoster: _openRoster,
       // Deliberately not `onOpenRideMenu`. The control that reaches the other
       // tabs is rendered by this shell instead — see _openRideMenu and #404.
-      enforcementAlert: isBalloonView ? null : _enforcementAlert,
+      enforcementAlert: isDriverView ? _enforcementAlert : null,
       rideCompletionSuggestion: _rideCompletionSuggestion,
       onEndRideForEveryone: _endRideFromCompletionSuggestion,
       onDismissRideCompletion: _dismissRideCompletionSuggestion,
@@ -3871,9 +3875,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       initialRouteStartConnector: _routeStartConnector,
       onRouteStartConnectorChanged: (connector) =>
           _routeStartConnector = connector,
-      onReportHazard: isBalloonView || _awarenessController == null
-          ? null
-          : _reportHazardFromMap,
+      onReportHazard: isDriverView && _awarenessController != null
+          ? _reportHazardFromMap
+          : null,
       emergencyContacts: _emergencyContacts,
       onEmergencyAlert: _sendEmergencyMapAlert,
       onEmergencyIssue: _sendEmergencyMapIssue,
@@ -3883,10 +3887,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       rideStarted: widget.rideController.rideStarted,
       onLeaveRide: _confirmLeaveRideFromMap,
       onRouteCommitted: _onRouteChanged,
-      onNavigationGuidanceChanged: isBalloonView
-          ? null
-          : _onNavigationGuidanceChanged,
-      onNavigationViewportChanged: isBalloonView
+      onNavigationGuidanceChanged: isDriverView
+          ? _onNavigationGuidanceChanged
+          : null,
+      onNavigationViewportChanged: !isDriverView
           ? null
           : (viewport) {
               final bridge = _carPlayBridge;
@@ -3923,10 +3927,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           !isBalloonView &&
           (_isSimulation || widget.rideController.isLocalRideLeader),
       distanceUnit: widget.distanceUnits.value,
-      speedLimitDisplay: isBalloonView ? null : widget.speedLimitDisplay,
+      speedLimitDisplay: isDriverView ? widget.speedLimitDisplay : null,
       chaseVehicle: widget.chaseVehicle?.vehicle ?? ChaseVehicle.unspecified,
       showRouteProgress:
-          !isBalloonView && (widget.routeProgressDisplay?.enabled ?? true),
+          isDriverView && (widget.routeProgressDisplay?.enabled ?? true),
       darkMapStyle: widget.mapStyleMode.resolveDark(
         MediaQuery.platformBrightnessOf(context),
       ),
@@ -4694,7 +4698,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final contacts = <String, MapEmergencyContact>{};
     final sharedNumbers = widget.rideController.receivedRiderContacts;
     final session = widget.rideController.session;
-    if (session != null && session.role == RideRole.lead) {
+    if (session != null && session.flightRole == FlightRole.pilot) {
       contacts[session.localRiderId] = MapEmergencyContact(
         riderId: session.localRiderId,
         displayName: session.displayName,
@@ -4928,7 +4932,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   String? get _currentLeaderRiderId {
     final session = widget.rideController.session;
-    if (session?.role == RideRole.lead) return session!.localRiderId;
+    if (session?.flightRole == FlightRole.pilot) {
+      return session!.localRiderId;
+    }
     for (final rider in _awarenessController?.riderLocations ?? const []) {
       if (rider.role == RideRole.lead) return rider.riderId;
     }
@@ -4966,7 +4972,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     }
     _rideStartFlowInProgress = true;
     try {
-      if (controller.session?.role != RideRole.lead || controller.rideStarted) {
+      if (!controller.hasFlightAuthority || controller.rideStarted) {
         _diagnostics?.recordNote(
           'start ride refused before the dialog: not the leader, or already '
           'started',
@@ -5139,7 +5145,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     canToggleRidePause:
         !_isSimulation &&
         widget.rideController.rideStarted &&
-        widget.rideController.session?.role == RideRole.lead,
+        widget.rideController.hasFlightAuthority,
     onToggleRidePause: _toggleRidePause,
     onLeaveOrEndRide: _confirmLeaveRideFromMap,
   );
@@ -6074,7 +6080,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         controller.rideStarted ||
         controller.busy ||
         controller.coordinationMode != RideCoordinationMode.solo ||
-        controller.session?.role != RideRole.lead) {
+        !controller.hasFlightAuthority) {
       return;
     }
     await _leaveRide();

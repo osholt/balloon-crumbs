@@ -21,6 +21,7 @@ import '../features/home/home_screen.dart';
 import 'ride_invitation_link_gate.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/ride/active_ride_shell.dart';
+import '../features/ride/flight_assignment_screen.dart';
 import '../internet/plan_directory.dart';
 import '../services/test_control_registry.dart';
 
@@ -165,6 +166,9 @@ class BalloonCrumbsApp extends StatelessWidget {
         // An ended ride the user has stepped away from stays on the phone and
         // stays archived; it just stops owning the whole screen (#207).
         if (controller.hasActiveRide && !controller.rideSetAside) {
+          if (controller.session!.requiresFlightAssignment) {
+            return FlightAssignmentScreen(controller: controller);
+          }
           return ActiveRideShell(
             key: ValueKey(controller.session!.rideId),
             rideController: controller,

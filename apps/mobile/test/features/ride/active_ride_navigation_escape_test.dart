@@ -13,7 +13,6 @@ import 'package:balloon_crumbs/data/in_memory_event_store.dart';
 import 'package:balloon_crumbs/data/in_memory_session_store.dart';
 import 'package:balloon_crumbs/domain/completed_ride_store.dart';
 import 'package:balloon_crumbs/domain/recorded_route_store.dart';
-import 'package:balloon_crumbs/features/map/ride_map.dart';
 import 'package:balloon_crumbs/services/nearby_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -45,7 +44,7 @@ void main() {
     );
   });
 
-  testWidgets('a moving rider can still reach the other tabs (#404)', (
+  testWidgets('a moving pilot keeps the role navigation visible', (
     tester,
   ) async {
     // The defect: once a ride is under way on the map tab with a route and a
@@ -117,47 +116,19 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull, reason: 'map tab');
 
-    // Ride until the shell decides the rider is navigating and takes the bar
-    // away. That state is the whole point of the test: if it never arrives,
-    // the test is not exercising the defect and must say so rather than pass.
-    await pumpUntil(() => find.byType(NavigationBar).evaluate().isEmpty);
+    // A balloon role is not a road-navigation role. It keeps the main role
+    // destinations visible even while the replay is moving; only a chase
+    // driver's glance-limited road view may collapse this chrome.
+    await tester.pump(const Duration(seconds: 2));
     expect(
       find.byType(NavigationBar),
-      findsNothing,
-      reason: 'the moving-map state this regression is about was never reached',
+      findsOneWidget,
+      reason: 'a moving pilot must not inherit the driver-only chrome',
     );
+    expect(find.byKey(const Key('ride-menu-button')), findsNothing);
 
-    // Pre-fix this found nothing: ActiveRideShell never passed
-    // `onOpenRideMenu`, so the corner button existed only where a test supplied
-    // it and the rider had no way off the map at all.
-    final rideMenu = find.byKey(const Key('ride-menu-button'));
-    expect(rideMenu, findsOneWidget);
-    expect(
-      tester.getRect(rideMenu).top,
-      closeTo(portraitRideMenuTopOffset, 1),
-      reason: 'the menu should sit below the ETA/mini-map header',
-    );
-
-    // Bounded pumps, not pumpAndSettle: a running simulation never settles.
-    await tester.tap(rideMenu);
-    await pumpUntil(
-      () => find
-          .byKey(const Key('ride-menu-destination-2'))
-          .evaluate()
-          .isNotEmpty,
-    );
-    expect(tester.takeException(), isNull, reason: 'flight menu opening');
-    // The tile exists as soon as the sheet starts sliding up; tapping then
-    // lands on the barrier instead. Let it finish arriving.
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(tester.takeException(), isNull, reason: 'flight menu open');
-    expect(find.text('Flight'), findsWidgets);
-    expect(find.text('Settings'), findsWidgets);
-
-    // Leaving the map puts the rider's navigation back, because the condition
-    // that hid it required the map tab.
-    await tester.tap(find.byKey(const Key('ride-menu-destination-2')));
-    await pumpUntil(() => find.byType(NavigationBar).evaluate().isNotEmpty);
+    await tester.tap(find.text('Flight').last);
+    await tester.pump();
     expect(tester.takeException(), isNull, reason: 'flight tab');
     expect(find.byType(NavigationBar), findsOneWidget);
 

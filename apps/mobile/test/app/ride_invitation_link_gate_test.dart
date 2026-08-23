@@ -8,6 +8,8 @@ import 'package:balloon_crumbs/controllers/ride_invitation_link_controller.dart'
 import 'package:balloon_crumbs/controllers/rider_profile_controller.dart';
 import 'package:balloon_crumbs/data/in_memory_event_store.dart';
 import 'package:balloon_crumbs/data/in_memory_session_store.dart';
+import 'package:balloon_crumbs/domain/craft.dart';
+import 'package:balloon_crumbs/domain/flight_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/internet/internet_relay_client.dart';
 import 'package:balloon_crumbs/services/nearby_bridge.dart';
@@ -50,9 +52,34 @@ void main() {
       expect(directory.seenToken, token);
       expect(fixture.rideController.session?.rideCode, '123456');
       expect(fixture.rideController.session?.inviteSecret, directory.secret);
+      expect(fixture.rideController.session?.flightRole, FlightRole.chaseCrew);
+      expect(fixture.rideController.localCraft?.craft.kind, CraftKind.vehicle);
       expect(fixture.links.hasNotice, isFalse);
     },
   );
+
+  testWidgets('a link join explicitly assigns balloon crew to the balloon', (
+    tester,
+  ) async {
+    const token = 'Abcdefghijklmnop12345678';
+    final fixture = await _Fixture.create(
+      directory: _Directory(expectedCode: '123456', expectedToken: token),
+      link: rideInvitationUrl('123456', token),
+    );
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(fixture.app);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('invitation-role-balloonCrew')));
+    await tester.pump();
+    expect(find.byKey(const Key('invitation-vehicle-label')), findsNothing);
+    await tester.tap(find.byKey(const Key('accept-ride-invitation-link')));
+    await tester.pumpAndSettle();
+
+    expect(fixture.rideController.session?.flightRole, FlightRole.balloonCrew);
+    expect(fixture.rideController.localCraft?.craft.kind, CraftKind.balloon);
+    expect(fixture.rideController.hasFlightAuthority, isFalse);
+  });
 
   testWidgets('an invitation cannot silently replace an active ride', (
     tester,

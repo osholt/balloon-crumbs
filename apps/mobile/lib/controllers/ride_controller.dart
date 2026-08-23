@@ -1022,6 +1022,80 @@ class RideController extends ChangeNotifier {
     });
   }
 
+  /// Completes the one-time assignment for a session written before explicit
+  /// flight roles and crafts existed.
+  ///
+  /// The legacy creator may restore as pilot. Other participants must choose a
+  /// non-authority role; a legacy `lead` flag is never accepted from them as a
+  /// shortcut to pilot authority.
+  Future<void> repairFlightAssignment({
+    required FlightRole role,
+    String vehicleLabel = 'Land Rover',
+  }) async {
+    await _run(() async {
+      final activeSession = _requireSession();
+      if (!activeSession.requiresFlightAssignment) return;
+      if (role == FlightRole.observer ||
+          (role == FlightRole.pilot && activeSession.role != RideRole.lead)) {
+        throw const FormatException('Choose a valid role for this flight.');
+      }
+      final craftKind = role.isAboardBalloon
+          ? CraftKind.balloon
+          : CraftKind.vehicle;
+      final craftLabel = craftKind == CraftKind.balloon
+          ? 'Balloon'
+          : _normaliseVehicleLabel(vehicleLabel);
+      final craftId = _craftIdFor(
+        rideId: activeSession.rideId,
+        kind: craftKind,
+        label: craftLabel,
+      );
+      final updated = activeSession.copyWith(
+        flightRole: role,
+        localCraftId: craftId,
+        requiresFlightAssignment: false,
+      );
+
+      await _record(
+        type: RideEventType.roleChanged,
+        priority: EventPriority.important,
+        payload: {'role': updated.role.name, 'flightRole': role.name},
+      );
+      await _record(
+        type: RideEventType.craftRegistered,
+        priority: EventPriority.important,
+        payload: {
+          'craftId': craftId,
+          'kind': craftKind.name,
+          'label': craftLabel,
+        },
+      );
+      await _record(
+        type: RideEventType.deviceAttachedToCraft,
+        priority: EventPriority.important,
+        payload: {
+          'deviceId': activeSession.localRiderId,
+          'craftId': craftId,
+          'craftLabel': craftLabel,
+        },
+      );
+      if (role == FlightRole.pilot) {
+        await _record(
+          type: RideEventType.craftPrimaryDeviceNominated,
+          priority: EventPriority.important,
+          payload: {
+            'craftId': craftId,
+            'deviceId': activeSession.localRiderId,
+            'craftLabel': craftLabel,
+          },
+        );
+      }
+      _session = updated;
+      await _sessionStore.save(updated);
+      _invalidateMembershipProjection();
+    });
+  }
+
   /// The rider currently holding [RideRole.lead] in the reconciled roster.
   ///
   /// Used to address a leader-only event. Null when the leader has left or is
