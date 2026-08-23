@@ -74,6 +74,7 @@ class RouteLineStyle {
 /// | route ahead   | #3DDC84 |      4.11  |        9.54  |    10.27  |
 /// | travelled     | #FF7A1A |      2.81  |        6.52  |     7.02  |
 /// | leader trail  | #D3B8FF |      4.22  |        9.78  |    10.53  |
+/// | flight forecast | #00E5FF |    4.77  |       11.06  |    11.91  |
 /// | connector     | #00E5FF |      4.77  |       11.06  |    11.91  |
 /// | boundary      | #FF8FA3 |      3.39  |        7.87  |     8.47  |
 ///
@@ -165,6 +166,15 @@ class RouteTrailStyle {
     casingWidthPixels: 11,
   );
 
+  /// Pilot-published predicted flight geometry. The dash is the non-colour cue
+  /// that it is a forecast rather than the aircraft's observed ground track.
+  static const forecastTrack = RouteLineStyle(
+    color: Color(0xFF00E5FF),
+    widthPixels: 5.5,
+    casingWidthPixels: 9.5,
+    dashPixels: [14, 8],
+  );
+
   /// Advisory operational geometry. Magenta and a short dash keep it distinct
   /// from road guidance and all recorded tracks.
   static const operationalBoundary = RouteLineStyle(
@@ -201,6 +211,7 @@ class RouteTrailStyle {
     RiderTrailKind.rider => travelled,
     RiderTrailKind.leader => leaderTrail,
     RiderTrailKind.balloonGroundTrack => balloonGroundTrack,
+    RiderTrailKind.forecastTrack => forecastTrack,
     RiderTrailKind.operationalBoundary => operationalBoundary,
     RiderTrailKind.routeStartConnector => routeStartConnectorLine,
   };
@@ -257,6 +268,7 @@ class RouteTrailStyle {
     'travelled': travelled,
     'leader trail': leaderTrail,
     'balloon ground track': balloonGroundTrack,
+    'flight forecast': forecastTrack,
     'operational boundary': operationalBoundary,
     'route start connector': routeStartConnectorLine,
   };

@@ -36,6 +36,7 @@ import '../../domain/geo_point.dart' as awareness_geo;
 import '../../domain/hazard.dart';
 import '../../domain/imported_route.dart' as route_domain;
 import '../../domain/landing_zone.dart';
+import '../../domain/live_route_state.dart';
 import '../../domain/operational_boundary.dart';
 import '../../domain/map_style_mode.dart';
 import '../../domain/quick_message.dart';
@@ -1222,7 +1223,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   String? _trailLifecycleFingerprint;
   String? _appliedAuthoritativeRouteRevision;
   String? _simulationRouteFingerprint;
-  route_domain.ImportedRoute? _activeRoute;
+  LiveRouteState _liveRoutes = const LiveRouteState();
+  route_domain.ImportedRoute? _simulationChaseRoute;
   NavigationGuidance? _latestNavigationGuidance;
   TrafficRerouteSuppression? _trafficRerouteSuppression;
   String? _lastTrafficOfferFingerprint;
@@ -1255,6 +1257,27 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   RideRole? _lastPushRole;
 
   bool get _isSimulation => widget.rideController.session?.isSimulation == true;
+
+  /// The route this device actively follows. The shared aircraft forecast and
+  /// a chase vehicle's road route are deliberately separate sources of truth.
+  route_domain.ImportedRoute? get _activeRoute {
+    if (_isSimulation) return _simulationChaseRoute;
+    final role = widget.rideController.session?.flightRole;
+    return role == null ? null : _liveRoutes.activeFor(role);
+  }
+
+  set _activeRoute(route_domain.ImportedRoute? route) {
+    if (_isSimulation) {
+      _simulationChaseRoute = route;
+      return;
+    }
+    final role = widget.rideController.session?.flightRole;
+    if (role?.isChasing == true) {
+      _liveRoutes = _liveRoutes.withVehicleRoadRoute(route);
+    } else {
+      _liveRoutes = _liveRoutes.withSharedFlightPlan(route);
+    }
+  }
 
   @override
   void initState() {
@@ -1312,25 +1335,21 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     widget.sharedRoutes.addListener(_onSharedRoutesChanged);
     _capturePlannerLinkError();
     if (widget.sharedRoutes.pending case final file?) {
-      if (widget.rideController.isLocalRideLeader) {
+      if (widget.rideController.hasFlightAuthority) {
         _selectedIndex = 0;
         _changeRouteRequestToken = Object();
         _pendingSharedGpxFile = file;
       } else {
-        _warnings.add(
-          'Only the pilot or coordinator can replace the crew route.',
-        );
+        _warnings.add('Only the pilot can replace the shared flight forecast.');
       }
       _clearSharedRoutePending();
     } else if (widget.sharedRoutes.pendingInAppRoute case final route?) {
-      if (widget.rideController.isLocalRideLeader) {
+      if (widget.rideController.hasFlightAuthority) {
         _selectedIndex = 0;
         _changeRouteRequestToken = Object();
         _pendingInAppRoute = route;
       } else {
-        _warnings.add(
-          'Only the pilot or coordinator can replace the crew route.',
-        );
+        _warnings.add('Only the pilot can replace the shared flight forecast.');
       }
       _clearSharedRoutePending();
     }
@@ -1362,10 +1381,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       if (warningAdded) setState(() {});
       return;
     }
-    if (!widget.rideController.isLocalRideLeader) {
-      _warnings.add(
-        'Only the pilot or coordinator can replace the crew route.',
-      );
+    if (!widget.rideController.hasFlightAuthority) {
+      _warnings.add('Only the pilot can replace the shared flight forecast.');
       _clearSharedRoutePending();
       setState(() {});
       return;
@@ -1407,8 +1424,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     var publishStoredLeaderRoute = false;
     if (_isSimulation) {
       try {
-        // The chase crew's road route is the group route, because it is the
-        // one anybody drives. The balloon's air track is not a route at all.
+        // Ride Lab currently replays one local chase road route alongside the
+        // balloon track. Production keeps those route purposes separate.
         const loader = BundledFiestaFlightLoader();
         route = await loader.loadChaseRoute();
         _balloonFlight = await loader.load();
@@ -1441,24 +1458,39 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           _rideRouteStore = await JsonFileRouteStore.openForRide(
             session.rideId,
           ).timeout(_localRouteRestoreTimeout);
-          route = await _rideRouteStore!.loadActiveRoute().timeout(
+          final storedRoute = await _rideRouteStore!.loadActiveRoute().timeout(
             _localRouteRestoreTimeout,
           );
           final authoritative = widget.rideController.authoritativeRouteState;
           _appliedAuthoritativeRouteRevision = authoritative.revisionId;
-          if (authoritative.hasDecision) {
-            route = authoritative.route;
-            if (route == null) {
-              await _rideRouteStore!.clearActiveRoute();
-            } else {
-              await _rideRouteStore!.saveActiveRoute(route);
-            }
-          } else if (!widget.rideController.hasFlightAuthority) {
-            route = null;
-            await _rideRouteStore!.clearActiveRoute();
+          if (session.flightRole.isChasing) {
+            // This store belongs to this device, so on a chaser it contains
+            // road guidance. The relay's authoritative route is the shared
+            // aircraft forecast and must never replace it.
+            _liveRoutes = LiveRouteState(
+              sharedFlightPlan: authoritative.hasDecision
+                  ? authoritative.route
+                  : null,
+              vehicleRoadRoute: storedRoute,
+            );
           } else {
-            publishStoredLeaderRoute = route != null;
+            final sharedPlan = authoritative.hasDecision
+                ? authoritative.route
+                : storedRoute;
+            _liveRoutes = LiveRouteState(sharedFlightPlan: sharedPlan);
+            if (authoritative.hasDecision) {
+              if (sharedPlan == null) {
+                await _rideRouteStore!.clearActiveRoute();
+              } else {
+                await _rideRouteStore!.saveActiveRoute(sharedPlan);
+              }
+            } else {
+              publishStoredLeaderRoute =
+                  widget.rideController.hasFlightAuthority &&
+                  sharedPlan != null;
+            }
           }
+          route = _activeRoute;
         }
       } on Object catch (error) {
         // Never fall back to the legacy app-wide route file. A failed
@@ -1468,11 +1500,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _warnings.add('Route storage could not be opened: $error');
         final authoritative = widget.rideController.authoritativeRouteState;
         _appliedAuthoritativeRouteRevision = authoritative.revisionId;
-        if (authoritative.hasDecision) route = authoritative.route;
+        if (authoritative.hasDecision) {
+          _liveRoutes = _liveRoutes.withSharedFlightPlan(authoritative.route);
+        }
+        route = _activeRoute;
       }
     }
 
-    _activeRoute = route;
+    if (_isSimulation) _activeRoute = route;
     if (!mounted) return;
 
     // The map depends only on its ride-scoped route store. It must not leave a
@@ -1512,7 +1547,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _appliedAuthoritativeRouteRevision =
             widget.rideController.authoritativeRouteState.revisionId;
       } on Object catch (error) {
-        _warnings.add('The stored group route could not be published: $error');
+        _warnings.add(
+          'The stored flight forecast could not be published: $error',
+        );
       }
     }
     if (!mounted) return;
@@ -1772,7 +1809,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   List<HazardReport> get _trafficRerouteHazards {
-    if (!widget.rideController.isLocalRideLeader ||
+    if (widget.rideController.localFlightRole != FlightRole.chaseDriver ||
         !widget.rideController.rideStarted ||
         _activeRoute == null) {
       return const [];
@@ -1861,24 +1898,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           if (preview.trafficDelaySaved > Duration.zero)
             'Estimated live-traffic delay avoided: '
                 '${_trafficDurationLabel(preview.trafficDelaySaved)}.',
-          'The current group route remains authoritative until you confirm.',
+          'This vehicle keeps its current road route until you confirm.',
         ],
       );
       if (action != RouteConfirmationAction.confirm || !mounted) return;
-      final previousRevision =
-          widget.rideController.authoritativeRouteState.revisionNumber;
-      await _handleRouteChanged(preview.route);
-      final published = widget.rideController.authoritativeRouteState;
-      if (published.revisionNumber <= previousRevision ||
-          published.route?.id != preview.route.id) {
-        _activeRoute = route;
-        await _replaceAwarenessController(route);
-        await _rideRouteStore?.saveActiveRoute(route);
-        throw const FormatException(
-          'The traffic alternative could not be published. '
-          'The current route has been restored.',
-        );
-      }
+      _liveRoutes = _liveRoutes.withVehicleRoadRoute(preview.route);
+      await _rideRouteStore?.saveActiveRoute(preview.route);
+      await _replaceAwarenessController(preview.route);
       await _suppressTrafficIncidents(hazards);
       if (mounted) {
         setState(() {
@@ -2022,8 +2048,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   Future<void> _handleRouteChanged(route_domain.ImportedRoute? route) async {
-    if (!_isSimulation && !widget.rideController.isLocalRideLeader) {
-      _warnings.add('A chaser cannot replace the coordinator’s crew route.');
+    if (!_isSimulation && !widget.rideController.hasFlightAuthority) {
+      _warnings.add('Only the pilot can replace the shared flight forecast.');
       await _applyAuthoritativeRouteDecision();
       if (mounted) setState(() {});
       return;
@@ -2065,16 +2091,19 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     }
     _appliedAuthoritativeRouteRevision = state.revisionId;
     final route = state.route;
-    final store = _rideRouteStore;
-    if (store != null) {
-      if (route == null) {
-        await store.clearActiveRoute();
-      } else {
-        await store.saveActiveRoute(route);
+    _liveRoutes = _liveRoutes.withSharedFlightPlan(route);
+    if (!_isChaserPerspective) {
+      final store = _rideRouteStore;
+      if (store != null) {
+        if (route == null) {
+          await store.clearActiveRoute();
+        } else {
+          await store.saveActiveRoute(route);
+        }
       }
+      await _replaceAwarenessController(route);
     }
-    _activeRoute = route;
-    await _replaceAwarenessController(route);
+    _pushRiderTrails();
     if (mounted) setState(() {});
     if (_isChaserPerspective && _chaseGuidanceTarget != null) {
       unawaited(_refreshChaseGuidanceIfNeeded(force: true));
@@ -3039,6 +3068,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               RiderTrailKind.leader => '${trail.displayName} leader trail',
               RiderTrailKind.balloonGroundTrack =>
                 '${trail.displayName} balloon ground track',
+              RiderTrailKind.forecastTrack =>
+                '${trail.displayName} flight forecast',
               RiderTrailKind.rider => '${trail.displayName} trail',
               RiderTrailKind.operationalBoundary =>
                 '${trail.displayName} operational boundary',
@@ -3061,13 +3092,30 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   void _pushRiderTrails() {
     _riderTrails.value = List.unmodifiable([
       for (final trace in _recordedTrailTraces) _simplifiedForDisplay(trace),
+      ..._sharedForecastTraces,
       ..._operationalBoundaryTraces,
     ]);
   }
 
+  List<MapOverlayTrace> get _sharedForecastTraces {
+    final plan = _liveRoutes.sharedFlightPlan;
+    if (_isSimulation || plan == null) return const [];
+    return [
+      for (final (index, path) in plan.paths.indexed)
+        if (path.points.length >= 2)
+          MapOverlayTrace(
+            id: 'shared-flight-forecast-$index',
+            points: _trailSimplifier.simplify(path.points),
+            label: path.name ?? '${plan.name} shared flight forecast',
+            kind: RiderTrailKind.forecastTrack,
+          ),
+    ];
+  }
+
   MapOverlayTrace _simplifiedForDisplay(MapOverlayTrace trace) {
     final simplified =
-        (trace.kind == RiderTrailKind.balloonGroundTrack
+        (trace.kind == RiderTrailKind.balloonGroundTrack ||
+                    trace.kind == RiderTrailKind.forecastTrack
                 ? _balloonTrailSimplifier
                 : _trailSimplifier)
             .simplify(trace.points);
@@ -4305,9 +4353,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         maneuvers: result.maneuvers,
         plannedDuration: result.duration,
       );
-      _activeRoute = route;
+      _liveRoutes = _liveRoutes.withVehicleRoadRoute(route);
       _lastChaseGuidanceRouteAt = now;
       _lastChaseGuidanceTarget = destination.point;
+      await _rideRouteStore?.saveActiveRoute(route);
       await _replaceAwarenessController(route);
       if (mounted) setState(() {});
     } on Object catch (error) {

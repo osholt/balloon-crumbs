@@ -4293,6 +4293,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await _addTrailLayers(controller, RiderTrailKind.leader);
       await _addTrailLayers(controller, RiderTrailKind.balloonGroundTrack);
+      await _addTrailLayers(controller, RiderTrailKind.forecastTrack);
       await _addTrailLayers(controller, RiderTrailKind.rider);
       await _addTrailLayers(controller, RiderTrailKind.operationalBoundary);
       await controller.addGeoJsonSource(
@@ -4490,7 +4491,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
       _riderTrailSource,
       'balloon-crumbs-trail-${kind.name}-line',
       ml.LineLayerProperties(
-        lineColor: kind == RiderTrailKind.balloonGroundTrack
+        lineColor:
+            kind == RiderTrailKind.balloonGroundTrack ||
+                kind == RiderTrailKind.forecastTrack
             ? const ['get', 'color']
             : _hexColor(style.color),
         lineWidth: style.widthPixels,
@@ -4673,7 +4676,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   Iterable<({String id, List<GeoPoint> points, Color color})>
   _renderedTrailParts(MapOverlayTrace trace) sync* {
-    if (trace.kind != RiderTrailKind.balloonGroundTrack) {
+    if (trace.kind != RiderTrailKind.balloonGroundTrack &&
+        trace.kind != RiderTrailKind.forecastTrack) {
       yield (id: trace.id, points: trace.points, color: trace.style.color);
       return;
     }
@@ -4751,6 +4755,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     // direction arrows are the last thing the budget may drop.
     RiderTrailKind.routeStartConnector => 0,
     RiderTrailKind.balloonGroundTrack => 1,
+    RiderTrailKind.forecastTrack => 2,
     RiderTrailKind.leader => 1,
     RiderTrailKind.rider => 3,
     RiderTrailKind.operationalBoundary => 4,

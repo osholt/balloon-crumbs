@@ -20,6 +20,10 @@ enum RiderTrailKind {
   /// underneath a road route or be mistaken for a chase vehicle's path.
   balloonGroundTrack,
 
+  /// The pilot-published future aircraft path. Unlike the ground track this is
+  /// forecast geometry, so it is dashed; altitude samples still colour it.
+  forecastTrack,
+
   /// Pilot-authored advisory geometry. It is shared with the crew but is not a
   /// travelled trail and therefore never receives direction arrows.
   operationalBoundary,
