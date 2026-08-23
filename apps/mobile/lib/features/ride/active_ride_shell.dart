@@ -59,6 +59,7 @@ import '../../relay/sqlite_relay_queue.dart';
 import '../../services/carplay_bridge.dart';
 import '../../services/chase_guidance_target.dart';
 import '../../services/fiesta_flight_loader.dart';
+import '../../services/flight_plan_summary.dart';
 import '../../services/geo_calculations.dart';
 import '../../services/spoken_audio_mode.dart';
 import '../../services/spoken_guidance_schedule.dart';
@@ -425,6 +426,7 @@ presentableQuickMessageAlerts({
 /// discover, while the moving map keeps only its large riding-time controls.
 class _RideActionsPanel extends StatelessWidget {
   const _RideActionsPanel({
+    required this.flightRole,
     required this.canChangeRoute,
     required this.onAlertsAndReports,
     required this.onShareSummary,
@@ -462,6 +464,7 @@ class _RideActionsPanel extends StatelessWidget {
     required this.coordinationMode,
   });
 
+  final FlightRole flightRole;
   final bool canChangeRoute;
   final VoidCallback onAlertsAndReports;
   final VoidCallback onShareSummary;
@@ -508,30 +511,44 @@ class _RideActionsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = switch (flightRole) {
+      FlightRole.pilot => 'Pilot controls',
+      FlightRole.balloonCrew => 'Airborne crew controls',
+      FlightRole.chaseDriver => 'Driver controls',
+      FlightRole.chaseCrew => 'Chase controls',
+      FlightRole.observer => 'Observer controls',
+    };
+    final detail = switch (flightRole) {
+      FlightRole.pilot =>
+        'Flight plan, landing intent, boundaries and crew coordination.',
+      FlightRole.balloonCrew =>
+        'Shared flight information and crew coordination. Pilot decisions are read-only.',
+      FlightRole.chaseDriver =>
+        'Road navigation and essential flight controls for this vehicle.',
+      FlightRole.chaseCrew =>
+        'Chase target, shared flight information and crew coordination.',
+      FlightRole.observer =>
+        'Read-only flight information and personal settings.',
+    };
     return Padding(
       padding: const EdgeInsets.only(top: 22),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Flight actions',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          Text(title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
-          const Text(
-            'Route, crew, sharing and flight controls are all on this page.',
-            style: TextStyle(color: Color(0xFF98A3B1)),
-          ),
+          Text(detail, style: const TextStyle(color: Color(0xFF98A3B1))),
           const SizedBox(height: 8),
-          ListTile(
-            key: const Key('ride-actions-alerts'),
-            leading: const Icon(Icons.warning_amber_outlined),
-            title: const Text('Alerts and reports'),
-            subtitle: const Text('Road alerts and traffic alternatives'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: onAlertsAndReports,
-          ),
+          if (flightRole.isChasing)
+            ListTile(
+              key: const Key('ride-actions-alerts'),
+              leading: const Icon(Icons.warning_amber_outlined),
+              title: const Text('Road alerts and reports'),
+              subtitle: const Text('Road hazards and traffic alternatives'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: onAlertsAndReports,
+            ),
           ListTile(
             key: const Key('ride-actions-share-summary'),
             leading: const Icon(Icons.summarize_outlined),
@@ -540,7 +557,7 @@ class _RideActionsPanel extends StatelessWidget {
             onTap: onShareSummary,
           ),
           const Divider(height: 20),
-          if (maneuverCount > 0)
+          if (flightRole.isChasing && maneuverCount > 0)
             ListTile(
               key: const Key('ride-menu-maneuvers'),
               leading: const Icon(Icons.list_alt),
@@ -2077,6 +2094,21 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         await widget.rideController.clearRoute();
       } else {
         await widget.rideController.publishRoute(route);
+        final plan = FlightPlanSummary.fromRoute(route);
+        final intendedLanding = plan?.intendedLanding;
+        if (intendedLanding != null) {
+          await widget.rideController.setLandingZone(
+            LandingZoneTarget(
+              center: awareness_geo.GeoPoint(
+                latitude: intendedLanding.latitude,
+                longitude: intendedLanding.longitude,
+              ),
+              radiusMeters: _landingRadiusMeters,
+              label: 'Planner intended landing area',
+              updatedAt: DateTime.now(),
+            ),
+          );
+        }
       }
       _appliedAuthoritativeRouteRevision =
           widget.rideController.authoritativeRouteState.revisionId;
@@ -5163,8 +5195,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   Widget _buildRideActions() => _RideActionsPanel(
+    flightRole:
+        widget.rideController.session?.flightRole ?? FlightRole.observer,
     coordinationMode: widget.rideController.coordinationMode,
-    canChangeRoute: _isSimulation || widget.rideController.isLocalRideLeader,
+    canChangeRoute: _isSimulation || widget.rideController.hasFlightAuthority,
     onAlertsAndReports: _openAlertsAndReports,
     onShareSummary: _shareCurrentRideSummary,
     onOpenRoster: _openRoster,
@@ -5172,12 +5206,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     onChangeRoute: _requestRouteChange,
     activeRouteIsForecast: _activeRoute?.isBalloonForecast == true,
     canChangeLandingZone:
-        !_isSimulation && widget.rideController.isLocalRideLeader,
+        !_isSimulation && widget.rideController.hasFlightAuthority,
     landingZoneLabel: widget.rideController.landingZone?.label,
     onChangeLandingZone: () => unawaited(_chooseLandingZoneOnMap()),
     boundaryCount: widget.rideController.operationalBoundaries.length,
     canEditBoundaries:
-        !_isSimulation && widget.rideController.isLocalRideLeader,
+        !_isSimulation && widget.rideController.hasFlightAuthority,
     onOperationalBoundaries: () => unawaited(_openOperationalBoundaries()),
     canChooseChaseGuidance:
         !_isSimulation &&
@@ -5207,7 +5241,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     ownPhoneNumberShared: widget.rideController.hasSharedOwnContactNumber,
     ownPhoneNumberRecipientLabel: _ownContactRecipients.toRideGroup
         ? 'this flight'
-        : 'the coordinator',
+        : 'the pilot',
     onShareOwnPhoneNumber: () => unawaited(_shareOwnPhoneNumber()),
     ridePaused: widget.rideController.ridePaused,
     canToggleRidePause:
@@ -6020,6 +6054,16 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _observerAccessController?.localAssistance != null,
     serviceWarning: _warnings.isEmpty ? null : _warnings.join('\n'),
     connectivity: _connectivitySummary,
+    sharedFlightPlan: _liveRoutes.sharedFlightPlan,
+    vehicleRoadRoute: _liveRoutes.vehicleRoadRoute,
+    navigationPosition: _mapNavigationPosition,
+    windForecast: _windForecastController,
+    chaseGuidanceLabel: _chaseGuidanceRouting
+        ? 'Calculating a road rendezvous…'
+        : _chaseGuidanceTarget?.label,
+    onUpdateFlightPlan: _requestRouteChange,
+    onUpdateLandingArea: () => unawaited(_chooseLandingZoneOnMap()),
+    onChooseChaseGuidance: () => unawaited(_chooseChaseGuidanceTarget()),
   );
 
   Widget _buildSettings() => SafeArea(

@@ -14,6 +14,7 @@ import 'package:balloon_crumbs/controllers/speed_limit_display_controller.dart';
 import 'package:balloon_crumbs/data/in_memory_event_store.dart';
 import 'package:balloon_crumbs/data/in_memory_session_store.dart';
 import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/flight_role.dart';
 import 'package:balloon_crumbs/domain/map_style_mode.dart';
 import 'package:balloon_crumbs/domain/completed_ride_store.dart';
 import 'package:balloon_crumbs/domain/recorded_route_store.dart';
@@ -511,8 +512,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Oliver'), findsOneWidget);
-    expect(find.text('Flight actions'), findsOneWidget);
-    expect(find.text('Alerts and reports'), findsOneWidget);
+    expect(find.text('Pilot flight deck'), findsOneWidget);
+    expect(find.byKey(const Key('airborne-live-telemetry')), findsOneWidget);
+    expect(find.byKey(const Key('role-wind-summary')), findsOneWidget);
+    expect(find.text('Pilot controls'), findsOneWidget);
+    expect(find.text('Road alerts and reports'), findsNothing);
     expect(find.text('Share flight summary'), findsOneWidget);
     expect(find.text('Flight crew'), findsWidgets);
     expect(find.text('Navigation map'), findsNothing);
@@ -544,7 +548,7 @@ void main() {
     controller.dispose();
   });
 
-  testWidgets('alerts are a Ride action rather than a primary destination', (
+  testWidgets('road alerts are hidden from the pilot flight view', (
     tester,
   ) async {
     final controller = await _controller();
@@ -557,19 +561,40 @@ void main() {
     expect(find.text('Alerts'), findsNothing);
     await tester.tap(find.byIcon(Icons.air_outlined));
     await tester.pumpAndSettle();
-    final alerts = find.byKey(const Key('ride-actions-alerts'));
-    await tester.scrollUntilVisible(
-      alerts,
-      260,
-      scrollable: find.byType(Scrollable).first,
+    expect(find.byKey(const Key('ride-actions-alerts')), findsNothing);
+    expect(find.text('Pilot controls'), findsOneWidget);
+  });
+
+  testWidgets('a chase driver gets road controls instead of airborne data', (
+    tester,
+  ) async {
+    final controller = await _controller(
+      rideCodeDirectory: const _SuccessfulRideCodeDirectory(),
     );
-    await tester.tap(alerts);
+    await controller.joinRide(
+      '123456',
+      'Nigel',
+      flightRole: FlightRole.chaseDriver,
+      vehicleLabel: 'Land Rover',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
     await tester.pumpAndSettle();
 
-    expect(find.text('Alerts'), findsOneWidget);
-    expect(find.text('ROAD ALERTS'), findsOneWidget);
-    expect(find.text('EXTERNAL SOURCES'), findsNothing);
-    expect(find.text('RIDER STATUS'), findsNothing);
+    await tester.tap(find.byIcon(Icons.air_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Driver navigation'), findsOneWidget);
+    expect(find.text('Driver controls'), findsOneWidget);
+    expect(find.byKey(const Key('role-chase-target')), findsOneWidget);
+    expect(find.byKey(const Key('role-road-route-summary')), findsOneWidget);
+    expect(find.byKey(const Key('ride-actions-alerts')), findsOneWidget);
+    expect(find.byKey(const Key('airborne-live-telemetry')), findsNothing);
+    expect(find.byKey(const Key('role-wind-summary')), findsNothing);
+    expect(
+      find.byKey(const Key('flight-menu-change-landing-zone')),
+      findsNothing,
+    );
   });
 
   testWidgets('embedded Settings keeps the active ride behind nested editors', (
