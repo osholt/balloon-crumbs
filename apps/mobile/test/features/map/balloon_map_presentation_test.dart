@@ -19,6 +19,33 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test(
+    'forecast context follows the assigned role rather than camera mode',
+    () {
+      expect(
+        rideMapShowsForecastContext(perspective: RideMapPerspective.balloon),
+        isTrue,
+        reason: 'airborne views default to forecast context',
+      );
+      expect(
+        rideMapShowsForecastContext(
+          perspective: RideMapPerspective.chase,
+          explicitPreference: true,
+        ),
+        isTrue,
+        reason: 'chase crew retain wind and airspace in the tactical camera',
+      );
+      expect(
+        rideMapShowsForecastContext(
+          perspective: RideMapPerspective.chase,
+          explicitPreference: false,
+        ),
+        isFalse,
+        reason: 'the driver road view explicitly suppresses forecast controls',
+      );
+    },
+  );
+
   testWidgets(
     'balloon map shows aircraft telemetry and suppresses driving chrome',
     (tester) async {

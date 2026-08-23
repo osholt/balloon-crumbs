@@ -76,6 +76,8 @@ class RouteLineStyle {
 /// | leader trail  | #D3B8FF |      4.22  |        9.78  |    10.53  |
 /// | flight forecast | #00E5FF |    4.77  |       11.06  |    11.91  |
 /// | original envelope | #C69CFF |  3.36  |        7.78  |     8.38  |
+/// | live projection | #64D8FF |      4.48  |       10.38  |    11.18  |
+/// | live envelope | #FFC857 |        4.77  |       11.06  |    11.91  |
 /// | connector     | #00E5FF |      4.77  |       11.06  |    11.91  |
 /// | boundary      | #FF8FA3 |      3.39  |        7.87  |     8.47  |
 ///
@@ -195,6 +197,24 @@ class RouteTrailStyle {
     dashPixels: [18, 10],
   );
 
+  /// A current forecast line. The short dotted pattern makes it visibly less
+  /// certain than the original dashed plan and the solid measured track.
+  static const liveProjectionTrack = RouteLineStyle(
+    color: Color(0xFF64D8FF),
+    widthPixels: 4.25,
+    casingWidthPixels: 8.25,
+    dashPixels: [3, 7],
+  );
+
+  /// Current forecast endpoints. Amber distinguishes it from the immutable
+  /// purple planner envelope and the pilot's green intended area.
+  static const liveLandingEnvelope = RouteLineStyle(
+    color: Color(0xFFFFC857),
+    widthPixels: 2.75,
+    casingWidthPixels: 6.75,
+    dashPixels: [4, 9],
+  );
+
   /// The road route to the start of the planned route (#133), which claimed this
   /// cyan and renders it dashed. Declared here so the palette stays one table and
   /// the widths and dash runs stay distinct from every other line.
@@ -225,6 +245,8 @@ class RouteTrailStyle {
     RiderTrailKind.forecastTrack => forecastTrack,
     RiderTrailKind.operationalBoundary => operationalBoundary,
     RiderTrailKind.originalLandingEnvelope => originalLandingEnvelope,
+    RiderTrailKind.liveProjectionTrack => liveProjectionTrack,
+    RiderTrailKind.liveLandingEnvelope => liveLandingEnvelope,
     RiderTrailKind.routeStartConnector => routeStartConnectorLine,
   };
 
@@ -283,6 +305,8 @@ class RouteTrailStyle {
     'flight forecast': forecastTrack,
     'operational boundary': operationalBoundary,
     'original landing envelope': originalLandingEnvelope,
+    'live projection': liveProjectionTrack,
+    'live landing envelope': liveLandingEnvelope,
     'route start connector': routeStartConnectorLine,
   };
 

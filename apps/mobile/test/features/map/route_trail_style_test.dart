@@ -23,6 +23,8 @@ void main() {
       'flight forecast': (4.77, 11.06, 11.91),
       'operational boundary': (3.39, 7.87, 8.47),
       'original landing envelope': (3.36, 7.78, 8.38),
+      'live projection': (4.48, 10.38, 11.18),
+      'live landing envelope': (4.77, 11.06, 11.91),
       'route start connector': (4.77, 11.06, 11.91),
     };
 

@@ -14,6 +14,7 @@ import '../../domain/quick_message.dart';
 import '../../domain/ride_coordination_mode.dart';
 import '../../domain/ride_event.dart';
 import '../../services/flight_plan_summary.dart';
+import '../../services/live_flight_projection.dart';
 import '../../services/open_meteo_wind.dart';
 import '../../services/ride_connectivity_summary.dart';
 import '../internet/internet_relay_status_card.dart';
@@ -38,6 +39,7 @@ class RideDashboard extends StatelessWidget {
     this.vehicleRoadRoute,
     this.navigationPosition,
     this.windForecast,
+    this.liveFlightProjection,
     this.chaseGuidanceLabel,
     this.onUpdateFlightPlan,
     this.onUpdateLandingArea,
@@ -61,6 +63,7 @@ class RideDashboard extends StatelessWidget {
   final ImportedRoute? vehicleRoadRoute;
   final ValueListenable<MapNavigationPosition?>? navigationPosition;
   final WindForecastController? windForecast;
+  final LiveFlightProjectionAssessment? liveFlightProjection;
   final String? chaseGuidanceLabel;
   final VoidCallback? onUpdateFlightPlan;
   final VoidCallback? onUpdateLandingArea;
@@ -106,6 +109,7 @@ class RideDashboard extends StatelessWidget {
                     vehicleRoadRoute: vehicleRoadRoute,
                     navigationPosition: navigationPosition,
                     windForecast: windForecast,
+                    liveFlightProjection: liveFlightProjection,
                     landingAreaLabel: controller.landingZone?.label,
                     landingAreaUpdatedAt: controller.landingZone?.updatedAt,
                     chaseGuidanceLabel: chaseGuidanceLabel,
@@ -282,6 +286,7 @@ class _RoleLivePanel extends StatelessWidget {
     required this.vehicleRoadRoute,
     required this.navigationPosition,
     required this.windForecast,
+    required this.liveFlightProjection,
     required this.landingAreaLabel,
     required this.landingAreaUpdatedAt,
     required this.chaseGuidanceLabel,
@@ -295,6 +300,7 @@ class _RoleLivePanel extends StatelessWidget {
   final ImportedRoute? vehicleRoadRoute;
   final ValueListenable<MapNavigationPosition?>? navigationPosition;
   final WindForecastController? windForecast;
+  final LiveFlightProjectionAssessment? liveFlightProjection;
   final String? landingAreaLabel;
   final DateTime? landingAreaUpdatedAt;
   final String? chaseGuidanceLabel;
@@ -395,6 +401,8 @@ class _RoleLivePanel extends StatelessWidget {
               const SizedBox(height: 12),
               _WindSummary(wind: wind),
               const SizedBox(height: 12),
+              _LiveProjectionSummary(assessment: liveFlightProjection),
+              const SizedBox(height: 12),
               _FlightPlanOverview(summary: summary),
               const SizedBox(height: 12),
               _LandingIntentRow(
@@ -435,6 +443,8 @@ class _RoleLivePanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _WindSummary(wind: wind),
+                const SizedBox(height: 12),
+                _LiveProjectionSummary(assessment: liveFlightProjection),
               ],
             ] else ...[
               _FlightPlanOverview(summary: summary, reduced: true),
@@ -562,6 +572,35 @@ class _WindSummary extends StatelessWidget {
   }
 }
 
+class _LiveProjectionSummary extends StatelessWidget {
+  const _LiveProjectionSummary({required this.assessment});
+
+  final LiveFlightProjectionAssessment? assessment;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = assessment;
+    final projection = value?.projection;
+    if (projection == null) {
+      return _InformationRow(
+        key: const Key('role-live-flight-projection'),
+        icon: Icons.online_prediction_outlined,
+        title: 'Live projection unavailable',
+        detail:
+            '${value?.message ?? 'Waiting for structured plan, balloon telemetry and fresh wind.'} The original forecast remains unchanged.',
+      );
+    }
+    final landing = projection.computedAt.add(projection.duration);
+    return _InformationRow(
+      key: const Key('role-live-flight-projection'),
+      icon: Icons.online_prediction,
+      title: 'Live projection · landing about ${_formatTime(context, landing)}',
+      detail:
+          '${projection.windSource} · wind valid ${_formatTime(context, projection.windValidAt)} · recalculated ${_compactAge(DateTime.now().difference(projection.computedAt))} ago · ${projection.landingEnvelope.isEmpty ? 'endpoint spread unavailable' : 'possible-landing envelope shown'}. Forecast model only; landing suitability and access are unverified.',
+    );
+  }
+}
+
 class _FlightPlanOverview extends StatelessWidget {
   const _FlightPlanOverview({required this.summary, this.reduced = false});
 
@@ -579,6 +618,16 @@ class _FlightPlanOverview extends StatelessWidget {
         detail: 'The pilot has not shared a timed altitude plan.',
       );
     }
+    final now = DateTime.now();
+    final currentStageIndex =
+        plan.startTime != null &&
+            plan.landingTime != null &&
+            !now.isBefore(plan.startTime!) &&
+            !now.isAfter(plan.landingTime!)
+        ? plan.stages.lastIndexWhere(
+            (stage) => stage.time == null || !stage.time!.isAfter(now),
+          )
+        : -1;
     final times = plan.startTime == null
         ? 'Start time unavailable'
         : plan.landingTime == null
@@ -642,8 +691,12 @@ class _FlightPlanOverview extends StatelessWidget {
             title: Text('${plan.stages.length} altitude and time stages'),
             subtitle: const Text('Launch, climb, descent and landing forecast'),
             children: [
-              for (final stage in plan.stages)
+              for (final (index, stage) in plan.stages.indexed)
                 ListTile(
+                  selected: index == currentStageIndex,
+                  selectedTileColor: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer.withValues(alpha: 0.35),
                   dense: true,
                   contentPadding: const EdgeInsets.only(left: 8, right: 4),
                   leading: Icon(_stageIcon(stage.phase), size: 19),
@@ -651,7 +704,7 @@ class _FlightPlanOverview extends StatelessWidget {
                   subtitle: Text(
                     stage.time == null
                         ? 'Time unavailable'
-                        : _formatTime(context, stage.time!),
+                        : '${_formatTime(context, stage.time!)}${index == currentStageIndex ? ' · Current planned stage' : ''}',
                   ),
                   trailing: Text(
                     stage.altitudeMetersMsl == null

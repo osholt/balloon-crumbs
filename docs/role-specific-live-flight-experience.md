@@ -778,14 +778,14 @@ and a UI rebuild cannot change authority.
 
 ### P0.6 Airborne forecast context
 
-- [ ] Pilot/balloon crew see actual track, original forecast and intended area
+- [x] Pilot/balloon crew see actual track, original forecast and intended area
       with distinct non-colour styles.
-- [ ] Wind defaults to the balloon's altitude and can be changed/hidden.
-- [ ] Wind source, model, fetch/valid time, altitude, units and forecast warning
+- [x] Wind defaults to the balloon's altitude and can be changed/hidden.
+- [x] Wind source, model, fetch/valid time, altitude, units and forecast warning
       remain visible.
-- [ ] Planned altitude stages list time, height and rate and highlights the
+- [x] Planned altitude stages list time, height and rate and highlights the
       current stage without issuing a control command.
-- [ ] OpenAIP is role-gated, attributed and explicitly advisory/unavailable.
+- [x] OpenAIP is role-gated, attributed and explicitly advisory/unavailable.
 
 ### P0.7 Per-vehicle chase guidance
 
@@ -802,7 +802,7 @@ and a UI rebuild cannot change authority.
 ## P1 requirements
 
 - Live projected track and possible-landing envelope from current telemetry and
-  fresh wind, with JavaScript/Dart golden parity.
+  fresh wind are implemented in mobile; JavaScript/Dart golden parity remains.
 - Actual-versus-planned altitude chart and time-by-altitude wind table.
 - Intended-area divergence trend and explicit alternative comparison.
 - Landing inference and declared/inferred state presentation.
@@ -1020,10 +1020,10 @@ re-cutting authority or state ownership:
 
 Implementation can start when:
 
-- [ ] The seven decisions above are accepted or amended.
-- [ ] The role and permission matrix is accepted.
-- [ ] The four view definitions are accepted.
-- [ ] The structured `ForecastPlan` boundary is accepted.
-- [ ] The original/actual/live visual language is accepted.
-- [ ] The per-vehicle target model and initial reroute thresholds are accepted.
-- [ ] The slice order and P0/P1 boundary are accepted.
+- [x] The seven decisions above are accepted or amended.
+- [x] The role and permission matrix is accepted.
+- [x] The four view definitions are accepted.
+- [x] The structured `ForecastPlan` boundary is accepted.
+- [x] The original/actual/live visual language is accepted.
+- [x] The per-vehicle target model and initial reroute thresholds are accepted.
+- [x] The slice order and P0/P1 boundary are accepted.

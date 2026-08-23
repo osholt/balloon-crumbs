@@ -17,6 +17,7 @@ export 'ride_map_feature.dart'
         portraitRideMenuTopOffset,
         portraitBottomChromeKey,
         rideMapPrimaryPanelFill,
+        rideMapShowsForecastContext,
         quickMessageIcon;
 export 'route_trail_style.dart'
     show RouteLineStyle, RouteTrailStyle, contrastRatio, relativeLuminance;

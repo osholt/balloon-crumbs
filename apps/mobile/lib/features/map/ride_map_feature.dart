@@ -116,6 +116,12 @@ enum _ImportedTrackChoice { cancel, followOriginal, generateNavigable }
 /// aviation presentation.
 enum RideMapPerspective { chase, balloon }
 
+@visibleForTesting
+bool rideMapShowsForecastContext({
+  required RideMapPerspective perspective,
+  bool? explicitPreference,
+}) => explicitPreference ?? perspective == RideMapPerspective.balloon;
+
 /// A deliberately approximate area where the balloon intends or is expected
 /// to land.
 ///
@@ -272,6 +278,7 @@ class RideMapFeature extends StatefulWidget {
     this.localDisplayName = 'You',
     this.localBadgeColor = const Color(0xFF2F80ED),
     this.perspective = RideMapPerspective.chase,
+    this.showForecastContext,
     this.aeronauticalChartConfiguration =
         const AeronauticalChartConfiguration(),
     this.windForecastController,
@@ -337,6 +344,7 @@ class RideMapFeature extends StatefulWidget {
     String localDisplayName = 'You',
     Color localBadgeColor = const Color(0xFF2F80ED),
     RideMapPerspective perspective = RideMapPerspective.chase,
+    bool? showForecastContext,
     AeronauticalChartConfiguration? aeronauticalChartConfiguration,
     WindForecastController? windForecastController,
   }) => RideMapFeature(
@@ -400,6 +408,7 @@ class RideMapFeature extends StatefulWidget {
     localDisplayName: localDisplayName,
     localBadgeColor: localBadgeColor,
     perspective: perspective,
+    showForecastContext: showForecastContext,
     aeronauticalChartConfiguration:
         aeronauticalChartConfiguration ??
         AeronauticalChartConfiguration.fromEnvironment(),
@@ -503,6 +512,7 @@ class RideMapFeature extends StatefulWidget {
   final String localDisplayName;
   final Color localBadgeColor;
   final RideMapPerspective perspective;
+  final bool? showForecastContext;
   final AeronauticalChartConfiguration aeronauticalChartConfiguration;
   final WindForecastController? windForecastController;
 
@@ -665,6 +675,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         localDisplayName: widget.localDisplayName,
         localBadgeColor: widget.localBadgeColor,
         perspective: widget.perspective,
+        showForecastContext: widget.showForecastContext,
         aeronauticalChartConfiguration: widget.aeronauticalChartConfiguration,
         windForecastController: widget.windForecastController,
       );
@@ -765,6 +776,7 @@ class RideMapScreen extends StatefulWidget {
     this.localDisplayName = 'You',
     this.localBadgeColor = const Color(0xFF2F80ED),
     this.perspective = RideMapPerspective.chase,
+    this.showForecastContext,
     this.aeronauticalChartConfiguration =
         const AeronauticalChartConfiguration(),
     this.windForecastController,
@@ -889,6 +901,7 @@ class RideMapScreen extends StatefulWidget {
   final String localDisplayName;
   final Color localBadgeColor;
   final RideMapPerspective perspective;
+  final bool? showForecastContext;
   final AeronauticalChartConfiguration aeronauticalChartConfiguration;
   final WindForecastController? windForecastController;
 
@@ -917,16 +930,21 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   bool get _isBalloonView => widget.perspective == RideMapPerspective.balloon;
 
+  bool get _showsForecastContext => rideMapShowsForecastContext(
+    perspective: widget.perspective,
+    explicitPreference: widget.showForecastContext,
+  );
+
   CraftIconStyle get _localCraftStyle =>
       _isBalloonView ? CraftIconStyle.balloon : widget.localMotorcycleStyle;
 
   bool get _showAeronauticalChart =>
-      _isBalloonView &&
+      _showsForecastContext &&
       widget.aeronauticalChartConfiguration.isCurrentAt(DateTime.now());
 
   bool get _showWindForecast {
     final controller = widget.windForecastController;
-    return _isBalloonView &&
+    return _showsForecastContext &&
         controller != null &&
         controller.enabled &&
         controller.field != null;
@@ -1622,8 +1640,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     child: _buildMap(),
                   ),
                 ),
-                if (_isBalloonView &&
-                    (widget.navigationPosition != null ||
+                if (_showsForecastContext &&
+                    ((_isBalloonView && widget.navigationPosition != null) ||
                         widget.windForecastController != null))
                   Positioned(
                     key: const Key('balloon-altitude-position'),
@@ -1643,17 +1661,19 @@ class _RideMapScreenState extends State<RideMapScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (widget.navigationPosition case final position?)
-                            ValueListenableBuilder<MapNavigationPosition?>(
-                              valueListenable: position,
-                              builder: (context, fix, _) =>
-                                  _BalloonAltitudeCard(
-                                    fix: fix,
-                                    onShowMapInformation:
-                                        _showBalloonMapInformation,
-                                  ),
-                            ),
-                          if (widget.navigationPosition != null &&
+                          if (_isBalloonView)
+                            if (widget.navigationPosition case final position?)
+                              ValueListenableBuilder<MapNavigationPosition?>(
+                                valueListenable: position,
+                                builder: (context, fix, _) =>
+                                    _BalloonAltitudeCard(
+                                      fix: fix,
+                                      onShowMapInformation:
+                                          _showBalloonMapInformation,
+                                    ),
+                              ),
+                          if (_isBalloonView &&
+                              widget.navigationPosition != null &&
                               widget.windForecastController != null)
                             const SizedBox(height: 6),
                           if (widget.windForecastController
@@ -4306,6 +4326,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await _addTrailLayers(controller, RiderTrailKind.rider);
       await _addTrailLayers(controller, RiderTrailKind.operationalBoundary);
       await _addTrailLayers(controller, RiderTrailKind.originalLandingEnvelope);
+      await _addTrailLayers(controller, RiderTrailKind.liveProjectionTrack);
+      await _addTrailLayers(controller, RiderTrailKind.liveLandingEnvelope);
       await controller.addGeoJsonSource(
         _remainingRouteSource,
         _remainingRouteGeoJson(),
@@ -4755,7 +4777,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
   Iterable<({String id, List<GeoPoint> points, Color color})>
   _renderedTrailParts(MapOverlayTrace trace) sync* {
     if (trace.kind != RiderTrailKind.balloonGroundTrack &&
-        trace.kind != RiderTrailKind.forecastTrack) {
+        trace.kind != RiderTrailKind.forecastTrack &&
+        trace.kind != RiderTrailKind.liveProjectionTrack) {
       yield (id: trace.id, points: trace.points, color: trace.effectiveColor);
       return;
     }
@@ -4789,7 +4812,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
             .where(
               (trace) =>
                   trace.kind != RiderTrailKind.operationalBoundary &&
-                  trace.kind != RiderTrailKind.originalLandingEnvelope,
+                  trace.kind != RiderTrailKind.originalLandingEnvelope &&
+                  trace.kind != RiderTrailKind.liveProjectionTrack &&
+                  trace.kind != RiderTrailKind.liveLandingEnvelope,
             )
             .toList()
           ..sort(
@@ -4848,6 +4873,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
     RiderTrailKind.rider => 3,
     RiderTrailKind.operationalBoundary => 4,
     RiderTrailKind.originalLandingEnvelope => 4,
+    RiderTrailKind.liveProjectionTrack => 4,
+    RiderTrailKind.liveLandingEnvelope => 4,
   };
 
   Map<String, dynamic> _trailDirectionArrowGeoJson() => MapGeoJson.points(

@@ -33,6 +33,14 @@ enum RiderTrailKind {
   /// not a claim that any point inside it is suitable for landing.
   originalLandingEnvelope,
 
+  /// Recalculated from the latest usable balloon fix and a fresh forecast wind
+  /// field. It is advisory future geometry, never measured track history.
+  liveProjectionTrack,
+
+  /// Feasible forecast endpoints recalculated from the latest usable balloon
+  /// state. Separate from both pilot intent and the original plan envelope.
+  liveLandingEnvelope,
+
   /// The road route from where the rider is to the start of the planned route
   /// (#133). The one kind that is not recorded history: it is where the routing
   /// engine says to go next, which is why it is never produced by
