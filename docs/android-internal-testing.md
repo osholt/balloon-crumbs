@@ -52,13 +52,11 @@ secrets. The repository environment is already restricted to workflow runs from
 | `ANDROID_KEY_ALIAS` | `balloon-crumbs-upload`, or the alias chosen above |
 | `ANDROID_KEY_PASSWORD` | Upload-key password |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Full service-account JSON key |
-| `BALLOON_CRUMBS_OPENAIP_API_KEY` | OpenAIP third-party application key for the advisory airspace layer |
 
 On macOS, `base64 -i balloon-crumbs-upload.jks | pbcopy` copies the first value
 without writing another file. Never commit the keystore, passwords, or JSON.
-The OpenAIP key is compiled into the tester app because OpenAIP's tile API is
-designed for map clients; keep it in Actions secrets so it is absent from the
-repository and can be rotated independently.
+OpenAIP is planner-only and is fetched through the relay's server-side proxy;
+Android tester bundles deliberately contain no OpenAIP credential.
 
 Repository variables:
 

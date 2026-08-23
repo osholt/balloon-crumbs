@@ -114,7 +114,6 @@ jobs:
         env:
           TESTER_NOTES_URL: https://github.com/${{ github.repository }}/blob/${{ github.sha }}/docs/tester-release-notes.md
           BALLOON_CRUMBS_API_BASE_URL: ${{ vars.BALLOON_CRUMBS_API_BASE_URL }}
-          BALLOON_CRUMBS_OPENAIP_API_KEY: ${{ secrets.BALLOON_CRUMBS_OPENAIP_API_KEY }}
           BALLOON_CRUMBS_FIREBASE_API_KEY: ${{ vars.BALLOON_CRUMBS_FIREBASE_API_KEY }}
           BALLOON_CRUMBS_FIREBASE_PROJECT_ID: ${{ vars.BALLOON_CRUMBS_FIREBASE_PROJECT_ID }}
           BALLOON_CRUMBS_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.BALLOON_CRUMBS_FIREBASE_MESSAGING_SENDER_ID }}
@@ -132,10 +131,6 @@ jobs:
               exit 1
               ;;
           esac
-          if test -z "${BALLOON_CRUMBS_OPENAIP_API_KEY:-}"; then
-            echo "::error::Missing BALLOON_CRUMBS_OPENAIP_API_KEY; tester releases must include the selected advisory airspace layer." >&2
-            exit 1
-          fi
           push_enabled=false
           if test -n "${BALLOON_CRUMBS_FIREBASE_API_KEY:-}" \
             && test -n "${BALLOON_CRUMBS_FIREBASE_PROJECT_ID:-}" \
@@ -153,7 +148,6 @@ jobs:
             --dart-define=BALLOON_CRUMBS_BUILD_TIMESTAMP="$BALLOON_CRUMBS_BUILD_TIMESTAMP" \
             --dart-define=BALLOON_CRUMBS_TESTER_NOTES_URL="$TESTER_NOTES_URL" \
             --dart-define=BALLOON_CRUMBS_API_BASE_URL="${BALLOON_CRUMBS_API_BASE_URL:-}" \
-            --dart-define=BALLOON_CRUMBS_OPENAIP_API_KEY="$BALLOON_CRUMBS_OPENAIP_API_KEY" \
             --dart-define=BALLOON_CRUMBS_PUSH_ENABLED="$push_enabled" \
             --dart-define=BALLOON_CRUMBS_FIREBASE_API_KEY="${BALLOON_CRUMBS_FIREBASE_API_KEY:-}" \
             --dart-define=BALLOON_CRUMBS_FIREBASE_PROJECT_ID="${BALLOON_CRUMBS_FIREBASE_PROJECT_ID:-}" \
