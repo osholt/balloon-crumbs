@@ -31,6 +31,14 @@ from .database import (
     initialize_schema,
     session_dependency,
 )
+from .inspire import (
+    LIMITATION as INSPIRE_LIMITATION,
+)
+from .inspire import (
+    InspireReferenceCatalogue,
+    InspireReferenceQuery,
+    InspireReferenceUnavailable,
+)
 from .observer import (
     create_observer_grant,
     get_managed_observer_grant,
@@ -85,6 +93,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     traffic_provider: TrafficIncidentProvider | None = None,
+    inspire_catalogue: InspireReferenceCatalogue | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     engine = create_database_engine(settings)
@@ -149,6 +158,10 @@ def create_app(
         maximum_requests=max(5, settings.traffic_incident_rate_limit_requests // 6),
         window_seconds=settings.traffic_incident_rate_limit_window_seconds,
     )
+    inspire_reference_limiter = SlidingWindowRateLimiter(
+        maximum_requests=settings.inspire_reference_rate_limit_requests,
+        window_seconds=settings.inspire_reference_rate_limit_window_seconds,
+    )
     registry = CollectorRegistry()
     sync_requests = Counter(
         "balloon_crumbs_sync_requests_total",
@@ -179,8 +192,17 @@ def create_app(
         ("outcome",),
         registry=registry,
     )
+    inspire_reference_requests = Counter(
+        "balloon_crumbs_inspire_reference_requests_total",
+        "Bounded HMLR INSPIRE reference lookups",
+        ("outcome",),
+        registry=registry,
+    )
     push_dispatcher = PushDispatcher.from_settings(settings, cipher)
     traffic_provider = traffic_provider or TomTomOrbisTrafficProvider(settings)
+    inspire_catalogue = inspire_catalogue or InspireReferenceCatalogue(
+        settings.inspire_reference_path
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -212,6 +234,7 @@ def create_app(
     app.state.service = service
     app.state.push_dispatcher = push_dispatcher
     app.state.traffic_provider = traffic_provider
+    app.state.inspire_catalogue = inspire_catalogue
 
     def database_session():
         yield from session_dependency(session_factory)
@@ -266,6 +289,57 @@ def create_app(
                 "android": settings.android_update_url,
             },
         )
+
+    @app.get("/api/v1/reference/inspire", include_in_schema=False)
+    def inspire_reference(
+        request: Request,
+        latitude: float = Query(ge=-90, le=90),
+        longitude: float = Query(ge=-180, le=180),
+        radiusMetres: int = Query(default=500, ge=25, le=2000),
+    ) -> Response:
+        client_ip = request.client.host if request.client is not None else "unknown"
+        retry_after = inspire_reference_limiter.check(f"inspire:{client_ip}")
+        if retry_after is not None:
+            inspire_reference_requests.labels(outcome="rate_limited").inc()
+            return JSONResponse(
+                status_code=429,
+                headers={"retry-after": str(min(retry_after, 300))},
+                content={"error": "INSPIRE reference lookup rate limit exceeded"},
+            )
+        try:
+            result = inspire_catalogue.query(
+                InspireReferenceQuery(
+                    latitude=latitude,
+                    longitude=longitude,
+                    radius_metres=radiusMetres,
+                )
+            )
+        except InspireReferenceUnavailable:
+            inspire_reference_requests.labels(outcome="unavailable").inc()
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "inspire_reference_unavailable",
+                    "message": "Indicative registered-property extents are unavailable.",
+                    "limitation": INSPIRE_LIMITATION,
+                },
+            )
+        encoded = json.dumps(result, separators=(",", ":"), allow_nan=False).encode()
+        if len(encoded) > settings.inspire_reference_maximum_response_bytes:
+            inspire_reference_requests.labels(outcome="response_too_large").inc()
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "inspire_reference_response_too_large",
+                    "message": "The bounded reference result could not be displayed safely.",
+                    "limitation": INSPIRE_LIMITATION,
+                },
+            )
+        metadata = result.get("metadata", {})
+        inspire_reference_requests.labels(
+            outcome="available" if metadata.get("available") else "outside_coverage"
+        ).inc()
+        return Response(content=encoded, media_type="application/geo+json")
 
     @app.get("/api/v1/traffic/incidents", include_in_schema=False)
     async def traffic_incidents(

@@ -12,6 +12,7 @@ const worker = await import(
 test("only bounded relay and provider paths are proxied", () => {
   for (const pathname of [
     "/api/v1/plans",
+    "/api/v1/reference/inspire",
     "/health/live",
     "/weather/v1/forecast",
     "/maps/styles/balloon-crumbs.json",

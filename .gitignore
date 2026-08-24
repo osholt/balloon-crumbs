@@ -35,6 +35,10 @@ key.properties
 # Local test output
 test-results/
 
+# Replaceable public reference-map indexes; generated from licensed source data.
+deploy/maps/data/hmlr/*.sqlite
+deploy/maps/data/hmlr/*.tmp
+
 # Regenerable marketing-video production inputs
 marketing/video/*-raw.mp4
 marketing/video/segment-*.mp4

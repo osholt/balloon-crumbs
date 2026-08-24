@@ -39,6 +39,7 @@ import '../../services/enforcement_alert_presentation.dart';
 import '../../services/fixed_speed_camera_catalogue.dart';
 import '../../services/ride_completion_detector.dart';
 import '../../services/gpx_import_source.dart';
+import '../../services/hmlr_inspire_reference.dart';
 import '../../services/group_pip_bridge.dart';
 import '../../services/imported_track_matcher.dart';
 import '../../services/map_geojson.dart';
@@ -289,6 +290,8 @@ class RideMapFeature extends StatefulWidget {
     this.showAeronauticalChart = false,
     this.osFinalApproachMapConfiguration =
         const OsFinalApproachMapConfiguration(),
+    this.hmlrInspireReferenceConfiguration =
+        const HmlrInspireReferenceConfiguration(),
   });
 
   factory RideMapFeature.fromEnvironment({
@@ -358,6 +361,7 @@ class RideMapFeature extends StatefulWidget {
     ValueChanged<MapOrientationMode>? onMapOrientationChanged,
     bool showAeronauticalChart = false,
     OsFinalApproachMapConfiguration? osFinalApproachMapConfiguration,
+    HmlrInspireReferenceConfiguration? hmlrInspireReferenceConfiguration,
   }) => RideMapFeature(
     key: key,
     currentPosition: currentPosition,
@@ -430,6 +434,9 @@ class RideMapFeature extends StatefulWidget {
     osFinalApproachMapConfiguration:
         osFinalApproachMapConfiguration ??
         OsFinalApproachMapConfiguration.fromEnvironment(),
+    hmlrInspireReferenceConfiguration:
+        hmlrInspireReferenceConfiguration ??
+        HmlrInspireReferenceConfiguration.fromEnvironment(),
   );
 
   final ValueListenable<GeoPoint?>? currentPosition;
@@ -536,6 +543,7 @@ class RideMapFeature extends StatefulWidget {
   final ValueChanged<MapOrientationMode>? onMapOrientationChanged;
   final bool showAeronauticalChart;
   final OsFinalApproachMapConfiguration osFinalApproachMapConfiguration;
+  final HmlrInspireReferenceConfiguration hmlrInspireReferenceConfiguration;
 
   @override
   State<RideMapFeature> createState() => _RideMapFeatureState();
@@ -703,6 +711,8 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         onMapOrientationChanged: widget.onMapOrientationChanged,
         showAeronauticalChart: widget.showAeronauticalChart,
         osFinalApproachMapConfiguration: widget.osFinalApproachMapConfiguration,
+        hmlrInspireReferenceConfiguration:
+            widget.hmlrInspireReferenceConfiguration,
       );
     },
   );
@@ -810,6 +820,8 @@ class RideMapScreen extends StatefulWidget {
     this.showAeronauticalChart = false,
     this.osFinalApproachMapConfiguration =
         const OsFinalApproachMapConfiguration(),
+    this.hmlrInspireReferenceConfiguration =
+        const HmlrInspireReferenceConfiguration(),
   });
 
   final RouteStore routeStore;
@@ -938,6 +950,7 @@ class RideMapScreen extends StatefulWidget {
   final ValueChanged<MapOrientationMode>? onMapOrientationChanged;
   final bool showAeronauticalChart;
   final OsFinalApproachMapConfiguration osFinalApproachMapConfiguration;
+  final HmlrInspireReferenceConfiguration hmlrInspireReferenceConfiguration;
 
   @override
   State<RideMapScreen> createState() => _RideMapScreenState();
@@ -962,6 +975,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
       'balloon-crumbs-aeronautical-chart-layer';
   static const _osFinalApproachSource = 'balloon-crumbs-os-final-approach';
   static const _osFinalApproachLayer = 'balloon-crumbs-os-final-approach-layer';
+  static const _hmlrInspireSource = 'balloon-crumbs-hmlr-inspire';
+  static const _hmlrInspireFillLayer = 'balloon-crumbs-hmlr-inspire-fill';
+  static const _hmlrInspireLineLayer = 'balloon-crumbs-hmlr-inspire-line';
   static const _trailDirectionArrowImage =
       'balloon-crumbs-trail-direction-arrow';
 
@@ -996,6 +1012,21 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   bool get _showOsFinalApproach =>
       _osFinalApproachSelected && _osFinalApproachAvailable;
+
+  late final HmlrInspireReferenceProvider _hmlrInspireProvider;
+  HmlrInspireReferenceResult? _hmlrInspireReference;
+  bool _hmlrInspireSelected = false;
+  bool _hmlrInspireLoading = false;
+  bool _hmlrInspireMapLibreLayersAdded = false;
+  int _hmlrInspireRequestGeneration = 0;
+
+  bool get _hmlrInspireAvailable =>
+      !_isBalloonView && widget.hmlrInspireReferenceConfiguration.isConfigured;
+
+  bool get _showHmlrInspireReference =>
+      _hmlrInspireSelected &&
+      _hmlrInspireReference?.available == true &&
+      _hmlrInspireReference != null;
 
   double get _effectiveCameraBearingDegrees =>
       widget.mapOrientation == MapOrientationMode.northUp
@@ -1276,6 +1307,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
     _dismissedEnforcementAlertId = widget.dismissedEnforcementAlertId;
     _routeStartConnector = widget.initialRouteStartConnector;
     _routingClient = http.Client();
+    _hmlrInspireProvider = HmlrInspireReferenceProvider(
+      configuration: widget.hmlrInspireReferenceConfiguration,
+      client: _routingClient,
+    );
     final routingConfiguration = RoutingConfiguration.fromEnvironment();
     // Preferences the OSRM driving profile cannot express are sent to Valhalla
     // by the same rule the web planner uses, so the two surfaces agree about what
@@ -1433,6 +1468,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     if (_ownsSpeedLimitDisplay) _speedLimitDisplay.dispose();
     unawaited(_groupPipBridge.dispose());
     _routingClient.close();
+    _hmlrInspireProvider.close();
     if (widget.disposeOfflineTileCache) widget.offlineTileCache.dispose();
     super.dispose();
   }
@@ -1655,6 +1691,23 @@ class _RideMapScreenState extends State<RideMapScreen> {
                             ),
                             const SizedBox(width: 10),
                             const Expanded(child: Text('Final-approach map…')),
+                          ],
+                        ),
+                      ),
+                    if (!_isBalloonView)
+                      PopupMenuItem(
+                        value: _MapAction.hmlrInspireReference,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _showHmlrInspireReference
+                                  ? Icons.check_box
+                                  : Icons.border_style_outlined,
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text('Registered extent reference…'),
+                            ),
                           ],
                         ),
                       ),
@@ -2756,6 +2809,20 @@ class _RideMapScreenState extends State<RideMapScreen> {
             // road map made the two views look effectively identical.
             tileBuilder: (context, tile, _) => tile,
           ),
+        if (_showHmlrInspireReference)
+          PolygonLayer(
+            key: const Key('hmlr-inspire-reference-layer'),
+            polygons: _hmlrInspireReference!.polygons
+                .map(
+                  (polygon) => Polygon(
+                    points: polygon.map(_latLng).toList(growable: false),
+                    color: const Color(0x1429B6F6),
+                    borderColor: const Color(0xFF64D8FF),
+                    borderStrokeWidth: 2,
+                  ),
+                )
+                .toList(growable: false),
+          ),
         if (_showWindForecast)
           MarkerLayer(
             key: const Key('wind-forecast-layer'),
@@ -3646,6 +3713,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
         controller.setGeoJsonSource(_landingZoneSource, _landingZoneGeoJson()),
       );
     }
+    if (_hmlrInspireSelected) {
+      unawaited(_refreshHmlrInspireReference(quietly: true));
+    }
     _scheduleCameraFramingRefresh();
   }
 
@@ -4347,6 +4417,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     final controller = _mapLibreController;
     if (controller == null) return;
     _mapLibreStyleReady = false;
+    _hmlrInspireMapLibreLayersAdded = false;
     try {
       await _registerMarkerImages(controller);
       if (_showOsFinalApproach) {
@@ -4398,6 +4469,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
         ),
         enableInteraction: false,
       );
+      if (_showHmlrInspireReference) {
+        await _addHmlrInspireMapLibreLayers(
+          controller,
+          belowLayerId: _windForecastLayer,
+        );
+      }
       await controller.addGeoJsonSource(
         _landingZoneSource,
         _landingZoneGeoJson(),
@@ -5815,6 +5892,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
         }
       case _MapAction.osFinalApproachMap:
         await _showOsFinalApproachSettings();
+      case _MapAction.hmlrInspireReference:
+        await _showHmlrInspireSettings();
       case _MapAction.maneuverList:
         await _showManeuverList();
       case _MapAction.groupPip:
@@ -5868,6 +5947,153 @@ class _RideMapScreenState extends State<RideMapScreen> {
     );
     if (selected == null || !mounted) return;
     await _setOsFinalApproachSelected(selected);
+  }
+
+  Future<void> _showHmlrInspireSettings() async {
+    final selected = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) => _HmlrInspireReferenceSheet(
+        configured: _hmlrInspireAvailable,
+        selected: _showHmlrInspireReference,
+        loading: _hmlrInspireLoading,
+        result: _hmlrInspireReference,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    await _setHmlrInspireSelected(selected);
+  }
+
+  Future<void> _setHmlrInspireSelected(bool selected) async {
+    if (!selected) {
+      _hmlrInspireRequestGeneration += 1;
+      if (mounted) {
+        setState(() {
+          _hmlrInspireSelected = false;
+          _hmlrInspireLoading = false;
+        });
+      }
+      await _removeHmlrInspireMapLibreLayers();
+      return;
+    }
+    if (!_hmlrInspireAvailable) {
+      _showMessage(
+        'Registered-property reference data is not installed on this build.',
+      );
+      return;
+    }
+    await _refreshHmlrInspireReference();
+  }
+
+  Future<void> _refreshHmlrInspireReference({bool quietly = false}) async {
+    final target = _landingZone?.center ?? _effectivePosition;
+    if (target == null) {
+      if (!quietly) {
+        _showMessage(
+          'Set a landing zone or wait for a location fix before loading extents.',
+        );
+      }
+      return;
+    }
+    final generation = ++_hmlrInspireRequestGeneration;
+    if (mounted) setState(() => _hmlrInspireLoading = true);
+    try {
+      final result = await _hmlrInspireProvider.lookup(
+        target,
+        radiusMetres: 1500,
+      );
+      if (!mounted || generation != _hmlrInspireRequestGeneration) return;
+      setState(() {
+        _hmlrInspireReference = result;
+        _hmlrInspireSelected = result.available;
+        _hmlrInspireLoading = false;
+      });
+      if (!result.available) {
+        await _removeHmlrInspireMapLibreLayers();
+        _showMessage(result.limitation);
+        return;
+      }
+      final controller = _mapLibreController;
+      if (_mapLibreStyleReady && controller != null) {
+        if (_hmlrInspireMapLibreLayersAdded) {
+          await controller.setGeoJsonSource(_hmlrInspireSource, result.geoJson);
+        } else {
+          await _addHmlrInspireMapLibreLayers(
+            controller,
+            belowLayerId: _windForecastLayer,
+          );
+        }
+      }
+      if (!quietly && result.polygons.isEmpty) {
+        _showMessage(
+          'No registered freehold extents were returned nearby. That does not '
+          'show that land is unregistered or available.',
+        );
+      }
+    } on Object catch (error) {
+      if (!mounted || generation != _hmlrInspireRequestGeneration) return;
+      setState(() {
+        _hmlrInspireSelected = false;
+        _hmlrInspireLoading = false;
+        _hmlrInspireReference = null;
+      });
+      await _removeHmlrInspireMapLibreLayers();
+      _showMessage(
+        'Registered-property extents are unavailable. The road map and private '
+        'access notes are unaffected.',
+      );
+      debugPrint('Could not load HMLR INSPIRE reference: $error');
+    }
+  }
+
+  Future<void> _addHmlrInspireMapLibreLayers(
+    ml.MapLibreMapController controller, {
+    String? belowLayerId,
+  }) async {
+    final reference = _hmlrInspireReference;
+    if (reference == null || !reference.available) return;
+    await controller.addGeoJsonSource(_hmlrInspireSource, reference.geoJson);
+    await controller.addFillLayer(
+      _hmlrInspireSource,
+      _hmlrInspireFillLayer,
+      const ml.FillLayerProperties(fillColor: '#29B6F6', fillOpacity: 0.08),
+      belowLayerId: belowLayerId,
+      enableInteraction: false,
+    );
+    await controller.addLineLayer(
+      _hmlrInspireSource,
+      _hmlrInspireLineLayer,
+      const ml.LineLayerProperties(
+        lineColor: '#64D8FF',
+        lineWidth: 2,
+        lineOpacity: 0.9,
+      ),
+      belowLayerId: belowLayerId,
+      enableInteraction: false,
+    );
+    _hmlrInspireMapLibreLayersAdded = true;
+  }
+
+  Future<void> _removeHmlrInspireMapLibreLayers() async {
+    final controller = _mapLibreController;
+    if (!_mapLibreStyleReady || controller == null) {
+      _hmlrInspireMapLibreLayersAdded = false;
+      return;
+    }
+    for (final layer in [_hmlrInspireLineLayer, _hmlrInspireFillLayer]) {
+      try {
+        await controller.removeLayer(layer);
+      } on Object {
+        // A style reload or partial add can legitimately leave this absent.
+      }
+    }
+    try {
+      await controller.removeSource(_hmlrInspireSource);
+    } on Object {
+      // See above: removal is intentionally idempotent.
+    }
+    _hmlrInspireMapLibreLayersAdded = false;
   }
 
   Future<void> _setOsFinalApproachSelected(bool selected) async {
@@ -6400,6 +6626,7 @@ enum _MapAction {
   loadDemo,
   speedLimitDisplay,
   osFinalApproachMap,
+  hmlrInspireReference,
   maneuverList,
   groupPip,
   downloadOffline,
@@ -9121,6 +9348,138 @@ class _OsFinalApproachMapSheet extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _HmlrInspireReferenceSheet extends StatelessWidget {
+  const _HmlrInspireReferenceSheet({
+    required this.configured,
+    required this.selected,
+    required this.loading,
+    required this.result,
+  });
+
+  final bool configured;
+  final bool selected;
+  final bool loading;
+  final HmlrInspireReferenceResult? result;
+
+  @override
+  Widget build(BuildContext context) {
+    final reference = result;
+    final datasetDate = reference?.datasetDate
+        ?.toIso8601String()
+        .split('T')
+        .first;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        child: Column(
+          key: const Key('hmlr-inspire-reference-sheet'),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Indicative registered-property extents',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'A neutral reference outline near the landing zone, using HM '
+              'Land Registry INSPIRE Index Polygons for England and Wales.',
+            ),
+            const SizedBox(height: 14),
+            ListTile(
+              key: const Key('hide-hmlr-inspire-reference'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.layers_clear_outlined),
+              title: const Text('Hide reference outlines'),
+              trailing: selected ? null : const Icon(Icons.check),
+              onTap: loading ? null : () => Navigator.of(context).pop(false),
+            ),
+            ListTile(
+              key: const Key('show-hmlr-inspire-reference'),
+              contentPadding: EdgeInsets.zero,
+              enabled: configured && !loading,
+              leading: loading
+                  ? const SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.border_style_outlined),
+              title: const Text('Show near landing zone'),
+              subtitle: Text(
+                configured
+                    ? 'Online lookup; falls back to the current crew location '
+                          'when no landing zone is set.'
+                    : 'Reference data is not installed on this build.',
+              ),
+              trailing: selected ? const Icon(Icons.check) : null,
+              onTap: configured && !loading
+                  ? () => Navigator.of(context).pop(true)
+                  : null,
+            ),
+            if (reference != null) ...[
+              const Divider(height: 28),
+              Text(
+                reference.available
+                    ? '${reference.polygons.length} outline(s) loaded'
+                    : 'Not available here',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (reference.source.isNotEmpty) Text(reference.source),
+              if (datasetDate != null) Text('Dataset date: $datasetDate'),
+              if (reference.coverage.isNotEmpty) Text(reference.coverage),
+              if (reference.truncated)
+                const Text(
+                  'The nearby result was capped. Zooming or moving the landing '
+                  'zone does not turn it into a complete title search.',
+                ),
+            ],
+            const Divider(height: 28),
+            Text(
+              reference?.limitation ??
+                  'Indicative registered freehold extents only. Coverage is '
+                      'England and Wales and may be incomplete.',
+              key: const Key('hmlr-inspire-limitation'),
+              style: const TextStyle(color: Color(0xFFFFC857)),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'This is not an exact title boundary, a cadastral map, an owner '
+              'directory, proof that an omitted parcel is unregistered, or '
+              'permission to enter. Confirm ownership, access and consent '
+              'locally before taking a recovery vehicle onto land.',
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Public outlines are always neutral blue. Cooperative or '
+              'uncooperative outcomes come only from the crew’s separate '
+              'private access notes and never from this dataset.',
+            ),
+            if (reference?.attribution.isNotEmpty == true) ...[
+              const Divider(height: 28),
+              for (final attribution in reference!.attribution) ...[
+                Text(attribution, style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 6),
+              ],
+            ],
+            if (Uri.tryParse(reference?.conditionsUrl ?? '') case final uri?
+                when uri.hasScheme) ...[
+              const SizedBox(height: 4),
+              TextButton.icon(
+                key: const Key('hmlr-inspire-conditions-link'),
+                onPressed: () => unawaited(
+                  launchUrl(uri, mode: LaunchMode.externalApplication),
+                ),
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Dataset conditions'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _BalloonMapInformationSheet extends StatelessWidget {

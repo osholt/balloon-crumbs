@@ -24,6 +24,7 @@ import 'package:balloon_crumbs/services/enforcement_alert_detector.dart';
 import 'package:balloon_crumbs/services/enforcement_alert_presentation.dart';
 import 'package:balloon_crumbs/services/ride_completion_detector.dart';
 import 'package:balloon_crumbs/services/gpx_import_source.dart';
+import 'package:balloon_crumbs/services/hmlr_inspire_reference.dart';
 import 'package:balloon_crumbs/services/imported_track_matcher.dart';
 import 'package:balloon_crumbs/services/map_style_repository.dart';
 import 'package:balloon_crumbs/services/navigation_camera.dart';
@@ -169,6 +170,61 @@ void main() {
         find.byKey(const Key('os-final-approach-attribution')),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'chase map keeps public HMLR extents neutral and separate from access notes',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync(
+        'hmlr-reference-sheet',
+      );
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final cache = OfflineTileCache(
+        rootDirectory: directory,
+        configuration: const BasemapConfiguration(),
+        httpClient: MockClient((_) async => http.Response('', 404)),
+      );
+      addTearDown(cache.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(useMaterial3: true),
+          home: RideMapScreen(
+            routeStore: _RecordingRouteStore(),
+            routeImporter: RouteImporter(source: const _NoFileSource()),
+            offlineTileCache: cache,
+            hmlrInspireReferenceConfiguration:
+                const HmlrInspireReferenceConfiguration(
+                  enabled: true,
+                  endpoint:
+                      'https://balloon-crumbs.pages.dev/api/v1/reference/inspire',
+                ),
+            rideStarted: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('map-layer-actions')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Registered extent reference…'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('hmlr-inspire-reference-sheet')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('not an exact title boundary'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('always neutral blue'), findsOneWidget);
+      expect(
+        find.textContaining('separate private access notes'),
+        findsOneWidget,
+      );
+      expect(find.text('Show near landing zone'), findsOneWidget);
     },
   );
 

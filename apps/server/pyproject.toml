@@ -28,6 +28,7 @@ dev = [
 [project.scripts]
 balloon-crumbs-server = "balloon_crumbs_server.__main__:main"
 balloon-crumbs-cleanup = "balloon_crumbs_server.cleanup:main"
+balloon-crumbs-build-inspire = "balloon_crumbs_server.inspire:main"
 
 [build-system]
 requires = ["hatchling>=1.27"]
