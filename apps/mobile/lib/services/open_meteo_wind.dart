@@ -28,6 +28,8 @@ const openMeteoWindAltitudeLevels = <int>[
 
 enum WindForecastOrigin { openMeteoUkmo, bundledFallback }
 
+enum WindForecastFreshness { currentForecast, staleForecast, bundledReference }
+
 class WindForecastVector {
   const WindForecastVector({
     required this.altitudeMetersMsl,
@@ -80,11 +82,17 @@ class WindForecastColumn {
     required this.position,
     required this.vectors,
     this.groundElevationMetersMsl,
+    this.surfaceGustKmh,
   });
 
   final GeoPoint position;
   final List<WindForecastVector> vectors;
   final double? groundElevationMetersMsl;
+
+  /// Maximum forecast gust at 10 m above ground for the selected model hour.
+  /// It is deliberately not attached to an MSL wind vector: Open-Meteo/UKMO
+  /// does not supply gusts for those height levels.
+  final double? surfaceGustKmh;
 
   WindForecastVector? atAltitude(double altitudeMetersMsl) {
     if (vectors.isEmpty) return null;
@@ -125,10 +133,15 @@ class WindForecastColumn {
 }
 
 class WindForecastSample {
-  const WindForecastSample({required this.position, required this.vector});
+  const WindForecastSample({
+    required this.position,
+    required this.vector,
+    this.surfaceGustKmh,
+  });
 
   final GeoPoint position;
   final WindForecastVector vector;
+  final double? surfaceGustKmh;
 }
 
 class WindForecastField {
@@ -147,6 +160,34 @@ class WindForecastField {
   final String sourceLabel;
 
   bool get isLiveForecast => origin == WindForecastOrigin.openMeteoUkmo;
+
+  static const maximumFetchedAge = Duration(hours: 2);
+  static const maximumValidTimeOffset = Duration(minutes: 90);
+
+  WindForecastFreshness freshnessAt(DateTime now) {
+    if (!isLiveForecast) return WindForecastFreshness.bundledReference;
+    final utcNow = now.toUtc();
+    if (utcNow.difference(fetchedAt.toUtc()).abs() > maximumFetchedAge ||
+        utcNow.difference(validAt.toUtc()).abs() > maximumValidTimeOffset) {
+      return WindForecastFreshness.staleForecast;
+    }
+    return WindForecastFreshness.currentForecast;
+  }
+
+  Duration fetchedAgeAt(DateTime now) {
+    final age = now.toUtc().difference(fetchedAt.toUtc());
+    return age.isNegative ? Duration.zero : age;
+  }
+
+  ({double minimum, double maximum})? get surfaceGustRangeKmh {
+    final values = columns
+        .map((column) => column.surfaceGustKmh)
+        .whereType<double>()
+        .where((value) => value.isFinite && value >= 0)
+        .toList(growable: false);
+    if (values.isEmpty) return null;
+    return (minimum: values.reduce(math.min), maximum: values.reduce(math.max));
+  }
 
   WindForecastVector? at(GeoPoint position, double altitudeMetersMsl) {
     if (columns.isEmpty) return null;
@@ -180,7 +221,11 @@ class WindForecastField {
       List.unmodifiable([
         for (final column in columns)
           if (column.atAltitude(altitudeMetersMsl) case final vector?)
-            WindForecastSample(position: column.position, vector: vector),
+            WindForecastSample(
+              position: column.position,
+              vector: vector,
+              surfaceGustKmh: column.surfaceGustKmh,
+            ),
       ]);
 }
 
@@ -224,6 +269,7 @@ class OpenMeteoWindProvider implements WindForecastProvider {
     }
     final requestedPoints = windForecastGrid(center);
     final variables = <String>[
+      'wind_gusts_10m',
       for (final altitude in openMeteoWindAltitudeLevels) ...[
         'wind_speed_${altitude}m',
         'wind_direction_${altitude}m',
@@ -285,6 +331,11 @@ class OpenMeteoWindProvider implements WindForecastProvider {
       }
       final validAt = parsedTimes[timeIndex];
       commonValidAt ??= validAt;
+      final surfaceGusts = hourly['wind_gusts_10m'];
+      final surfaceGust =
+          surfaceGusts is List && timeIndex < surfaceGusts.length
+          ? (surfaceGusts[timeIndex] as num?)?.toDouble()
+          : null;
       final vectors = <WindForecastVector>[];
       for (final altitude in openMeteoWindAltitudeLevels) {
         final speeds = hourly['wind_speed_${altitude}m'];
@@ -312,6 +363,9 @@ class OpenMeteoWindProvider implements WindForecastProvider {
             vectors: List.unmodifiable(vectors),
             groundElevationMetersMsl: groundElevation?.isFinite == true
                 ? groundElevation
+                : null,
+            surfaceGustKmh: surfaceGust?.isFinite == true && surfaceGust! >= 0
+                ? surfaceGust
                 : null,
           ),
         );
@@ -377,6 +431,7 @@ class WindForecastController extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
   int get selectedAltitudeMetersMsl => _selectedAltitudeMetersMsl;
+  WindForecastFreshness? get freshness => _field?.freshnessAt(_clock().toUtc());
 
   void setEnabled(bool value) {
     if (_enabled == value) return;

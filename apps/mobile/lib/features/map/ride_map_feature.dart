@@ -4265,36 +4265,43 @@ class _RideMapScreenState extends State<RideMapScreen> {
       Marker(
         point: LatLng(sample.position.latitude, sample.position.longitude),
         width: 52,
-        height: 48,
+        height: 56,
         child: Semantics(
           label:
-              'Forecast wind from ${sample.vector.fromDegrees.round()} degrees '
-              'at ${sample.vector.speedKmh.round()} kilometres per hour',
+              '${_windForecastSemanticPrefix()} from '
+              '${sample.vector.fromDegrees.round()} degrees at '
+              '${sample.vector.speedKmh.round()} kilometres per hour'
+              '${sample.surfaceGustKmh == null ? '' : ', with a 10 metre above ground gust of ${sample.surfaceGustKmh!.round()} kilometres per hour'}',
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Transform.rotate(
                 angle: sample.vector.towardDegrees * math.pi / 180,
-                child: const Icon(
+                child: Icon(
                   Icons.navigation_rounded,
-                  color: Color(0xFF64D8FF),
+                  color: _windForecastColor(),
                   size: 25,
-                  shadows: [Shadow(color: Color(0xFF07131C), blurRadius: 5)],
+                  shadows: const [
+                    Shadow(color: Color(0xFF07131C), blurRadius: 5),
+                  ],
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
                 decoration: BoxDecoration(
-                  color: const Color(0xD907131C),
+                  color: _windForecastColor().withValues(alpha: 0.88),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  '${sample.vector.speedKmh.round()}',
+                  '${sample.vector.speedKmh.round()}'
+                  '${sample.surfaceGustKmh == null ? '' : ' G${sample.surfaceGustKmh!.round()}'}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
                   ),
+                  maxLines: 1,
+                  softWrap: false,
                 ),
               ),
             ],
@@ -4302,6 +4309,31 @@ class _RideMapScreenState extends State<RideMapScreen> {
         ),
       ),
   ];
+
+  Color _windForecastColor() =>
+      switch (widget.windForecastController?.freshness) {
+        WindForecastFreshness.currentForecast => const Color(0xFF168FC2),
+        WindForecastFreshness.staleForecast => const Color(0xFFC67C00),
+        WindForecastFreshness.bundledReference => const Color(0xFF766790),
+        null => const Color(0xFF52606D),
+      };
+
+  String _windForecastColorHex() =>
+      '#${(_windForecastColor().toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+
+  String _windForecastSemanticPrefix() {
+    final controller = widget.windForecastController;
+    final field = controller?.field;
+    if (controller == null || field == null) return 'Unavailable forecast wind';
+    final state = switch (controller.freshness) {
+      WindForecastFreshness.currentForecast => 'Current forecast wind',
+      WindForecastFreshness.staleForecast => 'Stale forecast wind',
+      WindForecastFreshness.bundledReference => 'Bundled reference wind',
+      null => 'Unavailable forecast wind',
+    };
+    return '$state, ${field.sourceLabel}, valid '
+        '${field.validAt.toLocal().toIso8601String()}';
+  }
 
   Widget _overlayMarkerChild(MapOverlayMarker overlay) {
     final hazard = overlay.hazardSymbol;
@@ -4449,7 +4481,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         _windForecastLayer,
         const ml.SymbolLayerProperties(
           iconImage: _windForecastImage,
-          iconColor: '#64D8FF',
+          iconColor: ['get', 'color'],
           iconHaloColor: '#07131C',
           iconHaloWidth: 2,
           iconSize: 0.17,
@@ -5160,7 +5192,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
             'toward': sample.vector.towardDegrees,
             'from': sample.vector.fromDegrees,
             'speedKmh': sample.vector.speedKmh,
-            'speedLabel': '${sample.vector.speedKmh.round()}',
+            if (sample.surfaceGustKmh != null)
+              'surfaceGustKmh': sample.surfaceGustKmh,
+            'speedLabel':
+                '${sample.vector.speedKmh.round()}'
+                '${sample.surfaceGustKmh == null ? '' : ' G${sample.surfaceGustKmh!.round()}'}',
+            'color': _windForecastColorHex(),
           },
           'geometry': {
             'type': 'Point',
@@ -9057,11 +9094,25 @@ class _WindForecastChip extends StatelessWidget {
     animation: controller,
     builder: (context, _) {
       final field = controller.field;
+      final localizations = MaterialLocalizations.of(context);
+      final validAt = field?.validAt.toLocal();
+      final validLabel = validAt == null
+          ? null
+          : '${localizations.formatShortDate(validAt)} '
+                '${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(validAt))}';
       final status = field == null
           ? controller.loading
                 ? 'Loading forecast…'
                 : 'Forecast unavailable'
-          : field.sourceLabel;
+          : switch (controller.freshness) {
+              WindForecastFreshness.currentForecast =>
+                'CURRENT · valid $validLabel · UKMO/Open-Meteo',
+              WindForecastFreshness.staleForecast =>
+                'STALE · valid $validLabel · UKMO/Open-Meteo',
+              WindForecastFreshness.bundledReference =>
+                'REFERENCE · $validLabel · bundled model',
+              null => 'Forecast unavailable',
+            };
       return Card(
         key: const Key('wind-forecast-chip'),
         margin: EdgeInsets.zero,
@@ -9141,13 +9192,27 @@ class _WindForecastControl extends StatelessWidget {
           ? null
           : '${localizations.formatShortDate(validAt)} '
                 '${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(validAt))}';
+      final freshness = controller.freshness;
+      final fetchedAge = field?.fetchedAgeAt(DateTime.now());
+      final fetchedAgeLabel = fetchedAge == null
+          ? null
+          : fetchedAge.inMinutes < 60
+          ? '${fetchedAge.inMinutes} min old'
+          : '${fetchedAge.inHours} h old';
       final status = field == null
           ? controller.loading
                 ? 'Loading latest forecast…'
                 : 'Forecast unavailable'
-          : field.isLiveForecast
-          ? '${field.sourceLabel} · valid $validTime'
-          : '${field.sourceLabel} · reference $validTime';
+          : switch (freshness) {
+              WindForecastFreshness.currentForecast =>
+                'CURRENT FORECAST · ${field.sourceLabel} · valid $validTime · fetched $fetchedAgeLabel',
+              WindForecastFreshness.staleForecast =>
+                'STALE FORECAST · ${field.sourceLabel} · valid $validTime · fetched $fetchedAgeLabel',
+              WindForecastFreshness.bundledReference =>
+                'BUNDLED REFERENCE · ${field.sourceLabel} · reference $validTime',
+              null => 'Forecast unavailable',
+            };
+      final gustRange = field?.surfaceGustRangeKmh;
       return Card(
         key: const Key('wind-forecast-control'),
         margin: EdgeInsets.zero,
@@ -9182,8 +9247,11 @@ class _WindForecastControl extends StatelessWidget {
                           status,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFB7C4D1),
+                          style: TextStyle(
+                            color:
+                                freshness == WindForecastFreshness.staleForecast
+                                ? const Color(0xFFFFC857)
+                                : const Color(0xFFB7C4D1),
                             fontSize: 10,
                           ),
                         ),
@@ -9237,13 +9305,44 @@ class _WindForecastControl extends StatelessWidget {
                     SizedBox(width: 5),
                     Expanded(
                       child: Text(
-                        'Arrow points downwind · number is km/h · forecast '
-                        'model only, not an aviation briefing',
+                        'Arrow points downwind · number is km/h · G is the '
+                        'forecast gust at 10 m AGL, not at the selected MSL '
+                        'layer · model only, not an aviation briefing',
                         style: TextStyle(color: Color(0xFFB7C4D1), fontSize: 9),
                       ),
                     ),
                   ],
                 ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: Text(
+                      gustRange == null
+                          ? '10 m AGL gust unavailable for this forecast or reference fixture.'
+                          : '10 m AGL forecast gust across this grid: '
+                                '${gustRange.minimum.round()}–${gustRange.maximum.round()} km/h.',
+                      key: const Key('wind-surface-gust-summary'),
+                      style: const TextStyle(
+                        color: Color(0xFFB7C4D1),
+                        fontSize: 9,
+                      ),
+                    ),
+                  ),
+                ),
+                if (controller.error != null)
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 5),
+                      child: Text(
+                        'The latest refresh failed. The labelled prior field '
+                        'remains reference-only; chase tracking is unaffected.',
+                        key: Key('wind-refresh-failed'),
+                        style: TextStyle(color: Color(0xFFFFC857), fontSize: 9),
+                      ),
+                    ),
+                  ),
                 if (field?.origin == WindForecastOrigin.openMeteoUkmo)
                   Align(
                     alignment: Alignment.centerLeft,
