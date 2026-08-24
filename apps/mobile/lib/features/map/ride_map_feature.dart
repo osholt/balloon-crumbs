@@ -9172,7 +9172,8 @@ class _HmlrInspireReferenceSheet extends StatelessWidget {
             const SizedBox(height: 8),
             const Text(
               'A neutral reference outline near the landing zone, using HM '
-              'Land Registry INSPIRE Index Polygons for England and Wales.',
+              'Land Registry INSPIRE Index Polygons where a current relay '
+              'dataset is installed.',
             ),
             const SizedBox(height: 14),
             ListTile(
@@ -9226,7 +9227,8 @@ class _HmlrInspireReferenceSheet extends StatelessWidget {
             Text(
               reference?.limitation ??
                   'Indicative registered freehold extents only. Coverage is '
-                      'England and Wales and may be incomplete.',
+                      'reported by the installed relay dataset and may be '
+                      'incomplete.',
               key: const Key('hmlr-inspire-limitation'),
               style: const TextStyle(color: Color(0xFFFFC857)),
             ),
