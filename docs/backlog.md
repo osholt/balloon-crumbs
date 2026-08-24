@@ -35,7 +35,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 12 | P0 | Security, privacy, retention, and field-test gates | WP12 | 3–11 |
 | 12a | P0 | Multiple operational boundaries and altitude bands: draw, name, share and update more than one line/area in the web planner or app; alert on crossing with source, age and hysteresis; support configurable high/low altitude alerts | WP10b | 5, 6, 12 |
 | 13 | P1 | ~~Carry balloon altitude through GPX export and import (#16)~~ **done** | WP5 | 2 |
-| 14 | P1 | Retarget speed limits, camera and enforcement alerts at the chase driver | WP7 | 3 |
+| 14 | P1 | Retarget posted speed limits at the chase driver; remove inherited camera/enforcement alerts | WP7 | 3 |
 | 15 | P1 | Pilot aeronautical context: airspace, notices, restrictions | WP10b | 5 |
 | 16 | P1 | Flight plan / notification: research the UK position, then attach or generate | WP10b | 15 |
 | 17 | P1 | Evaluate and integrate weather and wind context | WP11 | 5 |

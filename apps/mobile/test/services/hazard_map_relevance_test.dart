@@ -9,8 +9,8 @@ void main() {
 
   HazardReport report({
     required GeoPoint position,
-    String id = 'camera',
-    HazardType type = HazardType.speedCamera,
+    String id = 'road-condition',
+    HazardType type = HazardType.roadworks,
     DateTime? expiresAt,
   }) => HazardReport(
     id: id,
@@ -307,9 +307,7 @@ void main() {
     ]);
   });
 
-  test('a road defect is judged the same way as enforcement', () {
-    // The map draws every kind of report, so the relevance rule cannot be an
-    // enforcement-only special case.
+  test('every road condition uses the same relevance rule', () {
     expect(
       visibilityOf(
         report(position: at(north: -600), type: HazardType.pothole),

@@ -19,9 +19,8 @@ import {
 } from "./planner-core.mjs";
 import { applyThemePaint, themeStyle } from "./planner-theme.mjs";
 
-// Keep the installed-app hand-off on its already-shipped associated domain.
-// The planner itself is hosted at balloon-crumbs.pages.dev/planner.html.
-const APP_LINK_ORIGIN = "https://balloon-crumbs.tailendcharlie.app";
+// Keep web planning and the installed-app hand-off on the same product origin.
+const APP_LINK_ORIGIN = "https://balloon-crumbs.pages.dev";
 const FORECAST_AREA_RADIUS_METRES = 750;
 const INTENDED_AREA_RADIUS_METRES = 400;
 const WIND_MARKER_SPACING_PIXELS = 150;

@@ -822,16 +822,16 @@ void main() {
       (_) {},
     );
 
-    await report({'type': 'speedCamera'});
-    await report({'type': 'policeActivity'});
+    await report({'type': 'roadworks'});
+    await report({'type': 'flooding'});
     await report({'type': 'other'});
     await report({'type': 'notARealHazard'});
     await report({'type': 42});
     await report('pothole');
 
     expect(reports, [
-      HazardType.speedCamera,
-      HazardType.policeActivity,
+      HazardType.roadworks,
+      HazardType.flooding,
       HazardType.other,
     ]);
   });

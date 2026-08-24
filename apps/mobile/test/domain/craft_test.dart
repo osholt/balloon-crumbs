@@ -157,9 +157,8 @@ void main() {
     });
 
     test('only the driver sees road furniture', () {
-      // Speed limits, cameras and enforcement alerts are kept for the chase
-      // driver and must not reach the basket: a camera warning is attention
-      // taken from flying.
+      // Posted speed limits stay with the chase driver and never reach the
+      // basket, where they would take attention from flying.
       for (final role in FlightRole.values) {
         expect(
           role.seesRoadFurniture,

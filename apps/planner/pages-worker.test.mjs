@@ -235,7 +235,7 @@ test("mobile association files are served as uncached JSON", async () => {
     "/.well-known/assetlinks.json",
   ]) {
     const response = await worker.default.fetch(
-      new Request(`https://balloon-crumbs.tailendcharlie.app${path}`),
+      new Request(`https://balloon-crumbs.pages.dev${path}`),
       {
         ASSETS: {
           async fetch() {

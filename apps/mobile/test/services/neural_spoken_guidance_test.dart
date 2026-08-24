@@ -58,7 +58,7 @@ void main() {
 
       await engine.configure();
       await engine.warmUp();
-      await engine.speak('Speed camera, in 150 yards.');
+      await engine.speak('Road blocked, in 150 yards.');
 
       expect(neural.prepareCalls, greaterThanOrEqualTo(2));
       expect(neural.preparedBeforeFirstPhrase, isTrue);

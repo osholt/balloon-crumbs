@@ -215,13 +215,10 @@ while Apple had already taken 23.
 
 ## Universal links
 
-Invitation and planner links use `balloon-crumbs.tailendcharlie.app` — a
-subdomain of a domain that already exists rather than one bought for this app.
-Deliberately temporary: that zone is already on Cloudflare and already serves
-Tail End Charlie's own association file, so standing this one up is a DNS record
-and a static file rather than a certificate and a server. Moving to a Balloon
-Crumbs domain later is one line in `lib/domain/app_links.dart` plus the two
-files that have to agree with it.
+Invitation and planner links use `balloon-crumbs.pages.dev`, the same product
+origin that hosts the planner and both platform association files. The Dart,
+Swift, Kotlin, platform entitlements/manifests and hosted JSON files must stay in
+lockstep; `test/domain/app_links_test.dart` enforces that checked-in contract.
 
 The Dart parser, native bridges, platform declarations and hosted association
 files must name the same host. A test enforces the checked-in copies
@@ -247,8 +244,8 @@ both platform association files are reachable directly over HTTPS with no
 redirect:
 
 ```bash
-curl -sSI https://balloon-crumbs.tailendcharlie.app/.well-known/apple-app-site-association
-curl -sSI https://balloon-crumbs.tailendcharlie.app/.well-known/assetlinks.json
+curl -sSI https://balloon-crumbs.pages.dev/.well-known/apple-app-site-association
+curl -sSI https://balloon-crumbs.pages.dev/.well-known/assetlinks.json
 ```
 
 Ship a replacement build after changing an entitlement, manifest, native link

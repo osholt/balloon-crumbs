@@ -20,7 +20,7 @@ void main() {
       expect(request.url.queryParameters['overview'], 'full');
       expect(request.url.queryParameters['steps'], 'true');
       expect(request.url.queryParameters['bearings'], isNull);
-      expect(request.headers['User-Agent'], contains('TailEndCharlie'));
+      expect(request.headers['User-Agent'], contains('BalloonCrumbs'));
       return http.Response(
         jsonEncode({
           'code': 'Ok',

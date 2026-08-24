@@ -6,12 +6,7 @@ import 'package:flutter/material.dart';
 import '../../domain/hazard.dart';
 import 'route_trail_style.dart';
 
-/// Which shape a report is drawn as. The shape, not the colour, is what carries
-/// the family: this map already uses circles for people (rider badges and the
-/// "you are here" badge), so enforcement - a fixed thing at the
-/// roadside - gets a sign plate instead, and a rider glancing at it can tell the
-/// two apart without reading either (#135).
-enum HazardMapBadgeShape { circle, plate }
+enum HazardMapBadgeShape { circle }
 
 /// The symbol drawn inside the badge, which says which kind of report it is.
 ///
@@ -22,16 +17,11 @@ enum HazardMapBadgeShape { circle, plate }
 /// guarantee that. And `flutter test` ships no fonts, so a glyph-based symbol
 /// renders as a filled box in exactly the harness that exists to look at it.
 ///
-/// Only the kinds the data model actually carries. [HazardType.speedCamera] is
-/// one type - there is no fixed-versus-mobile flag on a report - so there is one
-/// camera symbol.
-enum HazardMapGlyph { camera, police, roadDefect }
+enum HazardMapGlyph { roadDefect }
 
 /// How much of a report's trusted life has run.
 ///
-/// Rider-raised enforcement expires fast because a van moves on: #112 set two
-/// hours for a camera and one for a police sighting. A sighting an hour and a
-/// half old must not read like one from two minutes ago.
+/// Reports become less prominent as their declared lifetime runs out.
 enum HazardMapFreshness { fresh, ageing, fading }
 
 extension HazardMapFreshnessLabel on HazardMapFreshness {
@@ -83,8 +73,6 @@ class HazardMapSymbol {
   /// colours cannot all be separated by luminance, so each also gets a pattern.
   final List<double>? ringDashPixels;
 
-  bool get isEnforcement => shape == HazardMapBadgeShape.plate;
-
   /// A stable name for the MapLibre image registered from this symbol.
   String get imageName =>
       'hazard-symbol-${glyph.name}-${_fillKey(fill)}-${freshness.name}';
@@ -122,19 +110,6 @@ abstract final class HazardMapSymbols {
   /// fading one comes from the artwork, identically in both renderers.
   static const extentPixels = 44.0;
 
-  /// Enforcement badges are the same near-white plate whatever the kind, and the
-  /// glyph says camera or police.
-  ///
-  /// A single family colour rather than one per kind, because the badge palette
-  /// is already crowded - #133 lists sixteen fills, covering every rider colour,
-  /// every role and all four hazard severities - and a seventeenth and
-  /// eighteenth hue would have to be told apart from all of them at 40 pixels
-  /// through a visor. Near-white is the one value nothing else on this map uses.
-  /// It is also the strongest thing available: 17.04:1 against the casing ring
-  /// that outlines it, which is what keeps it findable on the light basemap where
-  /// the road fills are white and the ring is all that defines a badge.
-  static const enforcementFill = Color(0xFFF4F7FA);
-
   /// What an ageing badge blends toward.
   ///
   /// A stale rider marker demotes toward `#6B7684`, and matching it would have
@@ -163,19 +138,15 @@ abstract final class HazardMapSymbols {
   static Color fadedFill(Color base, HazardMapFreshness freshness) =>
       Color.lerp(base, stalenessBlend, _fadeFractions[freshness]!) ?? base;
 
-  static HazardMapGlyph glyphFor(HazardType type) => switch (type) {
-    HazardType.speedCamera => HazardMapGlyph.camera,
-    HazardType.policeActivity => HazardMapGlyph.police,
-    _ => HazardMapGlyph.roadDefect,
-  };
+  static HazardMapGlyph glyphFor(HazardType type) => HazardMapGlyph.roadDefect;
 
   /// How far through its trusted life [report] is, from 0 to 1.
   ///
   /// Measured from [HazardReport.updatedAt] rather than [HazardReport.reportedAt]
   /// so a re-confirmed sighting reads as fresh again - which it is: somebody has
   /// just seen it. The denominator is the window the report itself declares, so a
-  /// camera's two hours and a police sighting's one are each judged against their
-  /// own expiry rather than a number restated here.
+  /// each report is judged against its own expiry rather than a number restated
+  /// here.
   static double lifeFraction(HazardReport report, DateTime now) {
     final window = report.expiresAt.difference(report.updatedAt);
     if (window.inMilliseconds <= 0) return 1;
@@ -184,10 +155,6 @@ abstract final class HazardMapSymbols {
   }
 
   static HazardMapFreshness freshnessFor(HazardReport report, DateTime now) {
-    // A permanent camera has no life to run down. Without this it would draw
-    // full size on the day it was read and shrink into a dashed, dulled badge
-    // weeks later, telling a rider a fixed camera was about to stop existing.
-    if (report.isStandingRecord) return HazardMapFreshness.fresh;
     final fraction = lifeFraction(report, now);
     if (fraction < 0.5) return HazardMapFreshness.fresh;
     if (fraction < 0.8) return HazardMapFreshness.ageing;
@@ -209,8 +176,7 @@ abstract final class HazardMapSymbols {
     required HazardSeverity severity,
     required HazardMapFreshness freshness,
   }) {
-    final enforcement = glyph != HazardMapGlyph.roadDefect;
-    final base = enforcement ? enforcementFill : severityFill(severity);
+    final base = severityFill(severity);
     // Ageing shrinks the badge as well as dulling it and breaking its ring. Three
     // cues rather than one, because a single cue is a single point of failure at
     // ride zoom in sunlight.
@@ -219,16 +185,14 @@ abstract final class HazardMapSymbols {
       HazardMapFreshness.ageing => 0.92,
       HazardMapFreshness.fading => 0.84,
     };
-    final diameter = (enforcement ? 40.0 : 34.0) * scale;
+    final diameter = 34.0 * scale;
     return HazardMapSymbol(
       glyph: glyph,
-      shape: enforcement
-          ? HazardMapBadgeShape.plate
-          : HazardMapBadgeShape.circle,
+      shape: HazardMapBadgeShape.circle,
       fill: fadedFill(base, freshness),
       freshness: freshness,
       diameterPixels: diameter,
-      ringWidthPixels: enforcement ? 3.0 : 2.0,
+      ringWidthPixels: 2.0,
       // Few, long dashes. Short ones were tried first and the render harness
       // showed why they cannot be used: at this size a dozen 6-pixel runs read as
       // teeth around the badge, like a cog or a torn stamp, rather than as a
@@ -250,11 +214,6 @@ abstract final class HazardMapSymbols {
     final reporter = report.source == HazardSource.rider
         ? (report.reporterName ?? 'a crew member')
         : (report.reporterName ?? report.providerId ?? 'a feed');
-    // "just now" on a standing record would read as a live sighting. What a
-    // rider needs to know instead is that it is fixed, and who says so.
-    if (report.isStandingRecord) {
-      return '${report.type.label} · fixed · $reporter';
-    }
     final age = _relativeAge(now.difference(report.updatedAt));
     final confirmations = report.confirmations > 1
         ? ' · ${report.confirmations} crew'
@@ -273,13 +232,7 @@ abstract final class HazardMapSymbols {
     final symbols = <String, HazardMapSymbol>{};
     for (final glyph in HazardMapGlyph.values) {
       for (final freshness in HazardMapFreshness.values) {
-        // Severity only reaches the fill of a road-defect badge; enforcement is
-        // one family colour, so iterating severities for it would just produce
-        // the same symbol four times.
-        final severities = glyph == HazardMapGlyph.roadDefect
-            ? HazardSeverity.values
-            : const [HazardSeverity.serious];
-        for (final severity in severities) {
+        for (final severity in HazardSeverity.values) {
           final symbol = symbolFor(
             glyph: glyph,
             severity: severity,
@@ -352,102 +305,15 @@ class HazardMapSymbolPainter extends CustomPainter {
   }
 
   Path _badgePath(Rect bounds) {
-    switch (symbol.shape) {
-      case HazardMapBadgeShape.circle:
-        return Path()..addOval(bounds);
-      case HazardMapBadgeShape.plate:
-        return Path()..addRRect(
-          RRect.fromRectAndRadius(bounds, Radius.circular(bounds.width * 0.26)),
-        );
-    }
+    return Path()..addOval(bounds);
   }
 
   /// The glyph, drawn inside the badge with room for the ring.
   void _paintGlyph(Canvas canvas, Rect badge) {
-    final inset =
-        badge.width * (symbol.shape == HazardMapBadgeShape.plate ? 0.24 : 0.26);
+    final inset = badge.width * 0.26;
     final box = badge.deflate(inset);
     final ink = Paint()..color = RouteTrailStyle.markerGlyph;
-    switch (symbol.glyph) {
-      case HazardMapGlyph.camera:
-        _paintCamera(canvas, box, ink);
-      case HazardMapGlyph.police:
-        _paintPolice(canvas, box, ink);
-      case HazardMapGlyph.roadDefect:
-        _paintRoadDefect(canvas, box, ink);
-    }
-  }
-
-  /// A camera seen front-on: a body with a lens punched out of it.
-  ///
-  /// Drawn from the front, not from the side. A side-on box-on-a-post was tried
-  /// first, and the render harness showed it reading as a hammer - a rectangle
-  /// with a stubby handle under it and a bump on one side. Punching the lens out
-  /// rather than drawing it solid is what makes this read at forty pixels: the
-  /// hole puts the badge fill back inside the glyph, so there is contrast within
-  /// the symbol instead of one dark blob.
-  void _paintCamera(Canvas canvas, Rect box, Paint ink) {
-    double x(double fraction) => box.left + box.width * fraction;
-    double y(double fraction) => box.top + box.height * fraction;
-
-    final body = Path()
-      ..addRRect(
-        RRect.fromLTRBR(
-          x(0),
-          y(0.16),
-          x(1.0),
-          y(0.94),
-          Radius.circular(box.width * 0.14),
-        ),
-      )
-      // The viewfinder hump, which is what says "camera" rather than "box".
-      ..addRRect(
-        RRect.fromLTRBR(
-          x(0.12),
-          y(0),
-          x(0.46),
-          y(0.22),
-          Radius.circular(box.width * 0.06),
-        ),
-      );
-    final holes = Path()
-      ..addOval(
-        Rect.fromCircle(
-          center: Offset(x(0.50), y(0.56)),
-          radius: box.width * 0.25,
-        ),
-      )
-      ..addOval(
-        Rect.fromCircle(
-          center: Offset(x(0.84), y(0.32)),
-          radius: box.width * 0.07,
-        ),
-      );
-    canvas.drawPath(Path.combine(PathOperation.difference, body, holes), ink);
-  }
-
-  /// A shield. Nothing else on this map is a shield, and at forty pixels a
-  /// silhouette is all that survives - a chequered band or a helmet outline turns
-  /// to mush, which the render harness is there to show.
-  void _paintPolice(Canvas canvas, Rect box, Paint ink) {
-    double x(double fraction) => box.left + box.width * fraction;
-    double y(double fraction) => box.top + box.height * fraction;
-
-    final shield = Path()
-      ..moveTo(x(0.10), y(0.10))
-      ..quadraticBezierTo(x(0.10), y(0.03), x(0.18), y(0.03))
-      ..lineTo(x(0.82), y(0.03))
-      ..quadraticBezierTo(x(0.90), y(0.03), x(0.90), y(0.10))
-      ..lineTo(x(0.90), y(0.44))
-      ..cubicTo(x(0.90), y(0.74), x(0.72), y(0.90), x(0.50), y(1.0))
-      ..cubicTo(x(0.28), y(0.90), x(0.10), y(0.74), x(0.10), y(0.44))
-      ..close();
-    // Plain, deliberately. A two-cell chequered band - the UK cue - was punched
-    // across it and the render harness showed the cells cutting the outline in
-    // half, leaving a bar over a spike joined by a thin neck: it read as an
-    // anchor, not a shield. The silhouette is what carries a symbol at forty
-    // pixels, so nothing is allowed to interrupt it.
-    canvas.drawPath(shield, ink);
+    _paintRoadDefect(canvas, box, ink);
   }
 
   /// The warning triangle the map already used for a road defect, drawn rather

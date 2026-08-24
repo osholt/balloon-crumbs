@@ -7,12 +7,8 @@
 /// changing it, which is the reason for a constant rather than a careful
 /// find-and-replace.
 ///
-/// A subdomain of an existing domain rather than one bought for this app, which
-/// is deliberate and temporary. It is a Cloudflare zone that already serves
-/// Tail End Charlie's own Apple App Site Association file, so standing this one
-/// up is a DNS record and a static file rather than a certificate and a server.
-/// Moving to a Balloon Crumbs domain later is a change to this one line, plus
-/// the native declarations and hosted association files that have to agree.
+/// The Cloudflare Pages product origin serves the planner and both association
+/// files, so a browser hand-off never depends on an inherited product domain.
 ///
 /// **Every link layer must name this host, and nothing enforces it but a test.**
 ///
@@ -27,7 +23,7 @@
 library;
 
 /// The host that serves this app's association file.
-const appLinkHost = 'balloon-crumbs.tailendcharlie.app';
+const appLinkHost = 'balloon-crumbs.pages.dev';
 
 /// A private flight invitation. The join code and its capability token travel in
 /// the URL *fragment*, which browsers never send to a server, so the host can

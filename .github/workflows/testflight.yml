@@ -243,7 +243,7 @@ jobs:
           # lose: a profile without Associated Domains strips the entitlement
           # and universal links stop working, with nothing failing until a link
           # is tapped on a phone.
-          if ! grep -q 'applinks:balloon-crumbs.tailendcharlie.app' <<<"$entitlements"; then
+          if ! grep -q 'applinks:balloon-crumbs.pages.dev' <<<"$entitlements"; then
             echo "::error::The IPA has no applinks entitlement. Does the provisioning profile include Associated Domains?" >&2
             exit 1
           fi

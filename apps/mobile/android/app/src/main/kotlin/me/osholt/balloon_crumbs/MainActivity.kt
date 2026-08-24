@@ -248,17 +248,17 @@ class MainActivity : FlutterActivity() {
             listOf(
                 NotificationChannel(
                     "ride_safety_alerts",
-                    "Urgent ride alerts",
+                    "Urgent flight alerts",
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
-                    description = "Safety and assistance alerts for the active ride"
+                    description = "Safety and assistance alerts for the active flight"
                 },
                 NotificationChannel(
                     "ride_updates",
-                    "Ride updates",
+                    "Flight updates",
                     NotificationManager.IMPORTANCE_DEFAULT,
                 ).apply {
-                    description = "Marker, status and administrative ride updates"
+                    description = "Position, status and administrative flight updates"
                 },
             ),
         )
@@ -293,7 +293,7 @@ class MainActivity : FlutterActivity() {
         val uri = intent.data ?: return
         if (
             uri.scheme != "https" ||
-            !uri.host.equals("balloon-crumbs.tailendcharlie.app", ignoreCase = true) ||
+            !uri.host.equals("balloon-crumbs.pages.dev", ignoreCase = true) ||
             uri.toString().length > 2048
         ) {
             return

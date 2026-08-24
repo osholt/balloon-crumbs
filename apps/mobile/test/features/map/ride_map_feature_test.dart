@@ -20,8 +20,6 @@ import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/features/map/hazard_map_symbol.dart';
 import 'package:balloon_crumbs/features/map/ride_map.dart';
 import 'package:balloon_crumbs/services/basemap_configuration.dart';
-import 'package:balloon_crumbs/services/enforcement_alert_detector.dart';
-import 'package:balloon_crumbs/services/enforcement_alert_presentation.dart';
 import 'package:balloon_crumbs/services/ride_completion_detector.dart';
 import 'package:balloon_crumbs/services/gpx_import_source.dart';
 import 'package:balloon_crumbs/services/hmlr_inspire_reference.dart';
@@ -382,7 +380,6 @@ void main() {
           rideStarted: false,
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -394,7 +391,6 @@ void main() {
       'route-start-guidance-banner',
       'emergency-alert-button',
       'leave-ride-button',
-      'report-sighting-button',
       'navigation-follow-button',
       'posted-speed-limit-position',
       'ride-compass-position',
@@ -528,9 +524,7 @@ void main() {
     expect(find.text('3 CREW'), findsOneWidget);
   });
 
-  testWidgets('a reported camera and police sighting draw their symbols', (
-    tester,
-  ) async {
+  testWidgets('reported road conditions draw their symbols', (tester) async {
     // Issue #135, and the wiring #141 warns about: the decision travels on the
     // marker, so the renderer that runs in tests has to be drawing the same
     // symbol the native one is handed an image of.
@@ -556,28 +550,28 @@ void main() {
           reporterName: 'Alex',
           source: HazardSource.rider,
         );
-    final camera = HazardMapSymbols.forReport(
-      report(id: 'camera', type: HazardType.speedCamera),
+    final roadworks = HazardMapSymbols.forReport(
+      report(id: 'roadworks', type: HazardType.roadworks),
       now: reportedAt,
     );
-    final police = HazardMapSymbols.forReport(
-      report(id: 'police', type: HazardType.policeActivity),
+    final flooding = HazardMapSymbols.forReport(
+      report(id: 'flooding', type: HazardType.flooding),
       now: reportedAt.add(const Duration(minutes: 75)),
     );
     final overlays = ValueNotifier<List<MapOverlayMarker>>([
       MapOverlayMarker(
-        id: 'hazard-camera',
+        id: 'hazard-roadworks',
         point: const GeoPoint(latitude: 53.34, longitude: -1.78),
-        label: 'Speed camera · Alex just now',
-        color: camera.fill,
-        hazardSymbol: camera,
+        label: 'Roadworks · Alex just now',
+        color: roadworks.fill,
+        hazardSymbol: roadworks,
       ),
       MapOverlayMarker(
-        id: 'hazard-police',
+        id: 'hazard-flooding',
         point: const GeoPoint(latitude: 53.35, longitude: -1.79),
-        label: 'Police activity · Alex 1 h ago · ageing',
-        color: police.fill,
-        hazardSymbol: police,
+        label: 'Flooding · Alex 1 h ago · ageing',
+        color: flooding.fill,
+        hazardSymbol: flooding,
       ),
       // No symbol: the older generic badge, still drawn the way it always was.
       const MapOverlayMarker(
@@ -611,16 +605,16 @@ void main() {
         .toList();
     expect(badges, hasLength(2));
     expect(badges.map((badge) => badge.symbol.glyph), [
-      HazardMapGlyph.camera,
-      HazardMapGlyph.police,
+      HazardMapGlyph.roadDefect,
+      HazardMapGlyph.roadDefect,
     ]);
-    // A fresh camera and an ageing police sighting must not look the same.
+    // A fresh report and an ageing report must not look the same.
     expect(badges.first.symbol.freshness, HazardMapFreshness.fresh);
     expect(badges.last.symbol.freshness, HazardMapFreshness.ageing);
     expect(badges.first.symbol.fill, isNot(badges.last.symbol.fill));
     // And the marker with no symbol keeps the generic icon badge.
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
-    expect(find.byTooltip('Speed camera · Alex just now'), findsOneWidget);
+    expect(find.byTooltip('Roadworks · Alex just now'), findsOneWidget);
   });
 
   testWidgets(
@@ -1422,444 +1416,6 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('reports a gloved enforcement sighting from the map', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync('map-report');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-    final reported = <HazardType>[];
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          onReportHazard: (type) async => reported.add(type),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final button = find.byKey(const Key('report-sighting-button'));
-    expect(button, findsOneWidget);
-    // Comfortably past the 48dp minimum target, for gloves at speed.
-    expect(tester.getSize(button).shortestSide, greaterThanOrEqualTo(56));
-    // The default test window is landscape, where #125 moves REPORT down into
-    // the bottom-left rail with the other actions and pushes the speed sign into
-    // the right-hand rail, clear of the centre column.
-    final size = tester.view.physicalSize / tester.view.devicePixelRatio;
-    final reportRect = tester.getRect(button);
-    final speedRect = tester.getRect(
-      find.byKey(const Key('posted-speed-limit-position')),
-    );
-    expect(reportRect.left, lessThanOrEqualTo(size.width * 0.1));
-    expect(reportRect.bottom, greaterThanOrEqualTo(size.height * 0.8));
-    expect(speedRect.left, greaterThanOrEqualTo(size.width * 0.55));
-    expect(speedRect.right, closeTo(size.width - 10, 1));
-
-    await tester.tap(button);
-    await tester.pumpAndSettle();
-    final option = find.byKey(const Key('report-speed-camera-option'));
-    expect(option, findsOneWidget);
-    expect(tester.getSize(option).height, greaterThanOrEqualTo(72));
-
-    // Both targets are reachable without scrolling (#133). Stacked, the second
-    // one fell below a sheet the framework caps at nine sixteenths of a landscape
-    // screen, so reporting police needed a scroll.
-    final police = find.byKey(const Key('report-police-option'));
-    expect(
-      find.byKey(const Key('report-options-side-by-side')),
-      findsOneWidget,
-    );
-    for (final target in [option, police]) {
-      final rect = tester.getRect(target);
-      expect(rect.height, greaterThanOrEqualTo(72));
-      expect(rect.width, greaterThanOrEqualTo(160));
-      expect(
-        rect.bottom,
-        lessThanOrEqualTo(size.height),
-        reason: 'a report target must not fall below the fold',
-      );
-      expect(rect.top, greaterThanOrEqualTo(0));
-    }
-    // Side by side, not overlapping, and both above the control that opened them
-    // so a second stray tap cannot land on one.
-    final cameraRect = tester.getRect(option);
-    final policeRect = tester.getRect(police);
-    expect(policeRect.left, greaterThanOrEqualTo(cameraRect.right));
-    expect(cameraRect.top, closeTo(policeRect.top, 1));
-    expect(cameraRect.bottom, lessThanOrEqualTo(reportRect.top));
-
-    await tester.tap(option);
-    await tester.pumpAndSettle();
-
-    expect(reported, [HazardType.speedCamera]);
-    expect(find.textContaining('Speed camera reported'), findsOneWidget);
-  });
-
-  testWidgets('the report sheet stacks rather than shrink a target', (
-    tester,
-  ) async {
-    // The other half of #133's report fix. Side by side is only right while each
-    // half can still hold a full-size target: a portrait phone is too narrow, and
-    // so is a landscape one once the text is large enough, because the width one
-    // option needs scales with its label. The answer in both cases is to stack and
-    // let the sheet grow - never to shrink a target a gloved hand has to hit.
-    // Portrait is the case a rider meets every ride.
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final directory = Directory.systemTemp.createTempSync('map-report-narrow');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          onReportHazard: (_) async {},
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('report-sighting-button')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('report-options-side-by-side')), findsNothing);
-    final size = tester.view.physicalSize / tester.view.devicePixelRatio;
-    final camera = tester.getRect(
-      find.byKey(const Key('report-speed-camera-option')),
-    );
-    final police = tester.getRect(
-      find.byKey(const Key('report-police-option')),
-    );
-    expect(camera.bottom, lessThanOrEqualTo(police.top));
-    for (final rect in [camera, police]) {
-      expect(rect.height, greaterThanOrEqualTo(72), reason: 'a target shrank');
-      expect(rect.top, greaterThanOrEqualTo(0));
-      // Still reachable without scrolling: stacking is only acceptable because
-      // the sheet is now free to grow to the height it needs (#133).
-      expect(rect.bottom, lessThanOrEqualTo(size.height));
-    }
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-  });
-
-  testWidgets('the map has no report control outside a ride', (tester) async {
-    final directory = Directory.systemTemp.createTempSync('map-no-report');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('report-sighting-button')), findsNothing);
-  });
-
-  testWidgets('an approaching speed camera warns without taking the map', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync('map-enforcement');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-    final now = DateTime.utc(2026, 7, 25, 12);
-    final alert = ValueNotifier<EnforcementAlert?>(null);
-    addTearDown(alert.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          distanceUnit: DistanceUnit.miles,
-          enforcementAlert: alert,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('enforcement-alert-overlay')), findsNothing);
-
-    alert.value = EnforcementAlert(
-      hazard: HazardReport(
-        id: 'tomtom-camera-1',
-        rideId: 'ride-1',
-        type: HazardType.speedCamera,
-        severity: HazardSeverity.serious,
-        position: const awareness_geo.GeoPoint(
-          latitude: 51.5,
-          longitude: -3.18,
-        ),
-        reportedAt: now,
-        updatedAt: now,
-        expiresAt: now.add(const Duration(minutes: 10)),
-        reporterId: 'relay-traffic',
-        source: HazardSource.externalProvider,
-        providerId: 'relay-traffic',
-        details: 'Mobile speed camera · TomTom · updated just now',
-      ),
-      distanceMeters: 1207,
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('enforcement-alert-overlay')), findsOneWidget);
-    expect(find.text('SPEED CAMERA'), findsOneWidget);
-    expect(
-      tester
-          .widget<Text>(find.byKey(const Key('enforcement-alert-distance')))
-          .data,
-      '0.7 mi',
-    );
-
-    // #418: the warning arms a mile out, so a full-screen one took the map away
-    // for the whole approach — and the only way back was a hand off the bars.
-    // It is bounded now, and the map is behind it.
-    final overlay = tester.getRect(
-      find.byKey(const Key('enforcement-alert-overlay')),
-    );
-    final screen = tester.getRect(find.byType(RideMapScreen));
-    // 0.75 was too generous and the first fix passed it while still covering
-    // over 80% of an iPhone screen in the field — the bound has to be one a
-    // rider would recognise as "part of the screen".
-    expect(
-      overlay.height,
-      lessThan(screen.height * 0.4),
-      reason: 'the warning must leave the map usable, not merely visible',
-    );
-
-    // A dismiss tap still works; it is no longer the only way out. The detector
-    // already returns null once the hazard is behind the rider
-    // (`enforcement_alert_detector.dart`), so passing the camera clears it.
-    await tester.tap(find.byKey(const Key('enforcement-alert-overlay')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('enforcement-alert-overlay')), findsNothing);
-  });
-
-  testWidgets('the camera warning is a top bubble clear of the rider marker, '
-      'then a border alone (#446)', (tester) async {
-    // Third time on this. #418's first fix still covered over 80% of a phone
-    // screen; its second reached about a third of a landscape one. Each round
-    // traded size for the same argument, so this measures the two things that
-    // actually matter: where the bubble is, and that it goes away.
-    tester.view.physicalSize = const Size(2400, 1080);
-    tester.view.devicePixelRatio = 3;
-    addTearDown(tester.view.reset);
-
-    final directory = Directory.systemTemp.createTempSync('camera-bubble-test');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-    final now = DateTime.now();
-    final alert = ValueNotifier<EnforcementAlert?>(null);
-    addTearDown(alert.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          distanceUnit: DistanceUnit.miles,
-          enforcementAlert: alert,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('enforcement-alert-border')), findsNothing);
-
-    alert.value = EnforcementAlert(
-      hazard: HazardReport(
-        id: 'tomtom-camera-2',
-        rideId: 'ride-1',
-        type: HazardType.speedCamera,
-        severity: HazardSeverity.serious,
-        position: const awareness_geo.GeoPoint(
-          latitude: 51.5,
-          longitude: -3.18,
-        ),
-        reportedAt: now,
-        updatedAt: now,
-        expiresAt: now.add(const Duration(minutes: 10)),
-        reporterId: 'relay-traffic',
-        source: HazardSource.externalProvider,
-        providerId: 'relay-traffic',
-        details: 'Fixed speed camera · 40 mph · TomTom',
-      ),
-      distanceMeters: 1207,
-    );
-    await tester.pump();
-
-    final bubble = tester.getRect(
-      find.byKey(const Key('enforcement-alert-overlay')),
-    );
-    final screen = tester.getRect(find.byType(RideMapScreen));
-
-    // The rider marker is forward-biased around the map centre. The field report
-    // asked for this transient announcement at the top instead.
-    expect(
-      bubble.bottom,
-      lessThan(screen.center.dy),
-      reason: 'the bubble must stay clear of the rider marker',
-    );
-    expect(
-      bubble.width,
-      lessThanOrEqualTo(enforcementBubbleMaxWidth),
-      reason: 'a notification, not a band across a landscape screen',
-    );
-    // Kept from #418 as a floor, not a ceiling: this should now be far under it.
-    expect(bubble.height, lessThan(screen.height * 0.4));
-
-    // The border is up from the moment the warning arms and is what carries the
-    // alarm once the bubble has gone. Its *decoration* is asserted, not merely
-    // its presence: with only a findsOneWidget here, deleting the border from the
-    // decoration left the keyed box in place and the test passed. Found by
-    // mutation, which is the whole reason for running them.
-    expectRedBorder(tester);
-
-    // Ten seconds, fixed. Distance keeps changing on an approach; the life does
-    // not depend on it.
-    alert.value = EnforcementAlert(
-      hazard: alert.value!.hazard,
-      distanceMeters: 400,
-    );
-    await tester.pump(enforcementBubbleLife + const Duration(seconds: 1));
-
-    expect(
-      find.byKey(const Key('enforcement-alert-overlay')),
-      findsNothing,
-      reason: 'the announcement is finished after ten seconds',
-    );
-    expectRedBorder(
-      tester,
-      reason: 'the border holds for the rest of approach',
-    );
-
-    // Passing the camera clears both, because the detector stops returning it.
-    alert.value = null;
-    await tester.pump();
-    expect(find.byKey(const Key('enforcement-alert-border')), findsNothing);
-  });
-
-  testWidgets('the speed sign is enlarged on a camera approach (#446)', (
-    tester,
-  ) async {
-    final directory = Directory.systemTemp.createTempSync('camera-sign-test');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final cache = OfflineTileCache(
-      rootDirectory: directory,
-      configuration: const BasemapConfiguration(),
-      httpClient: MockClient((_) async => http.Response('', 404)),
-    );
-    final speedLimitDisplay = SpeedLimitDisplayController.inMemory(
-      provider: _WidgetSpeedLimitProvider(),
-      enabled: true,
-    );
-    addTearDown(speedLimitDisplay.dispose);
-    final now = DateTime.now();
-    final alert = ValueNotifier<EnforcementAlert?>(null);
-    addTearDown(alert.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: RideMapScreen(
-          routeStore: InMemoryRouteStore(),
-          routeImporter: RouteImporter(source: const _NoFileSource()),
-          offlineTileCache: cache,
-          speedLimitDisplay: speedLimitDisplay,
-          enforcementAlert: alert,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final ordinary = tester
-        .getRect(find.byKey(const Key('posted-speed-limit-badge')))
-        .width;
-
-    alert.value = EnforcementAlert(
-      hazard: HazardReport(
-        id: 'tomtom-camera-3',
-        rideId: 'ride-1',
-        type: HazardType.speedCamera,
-        severity: HazardSeverity.serious,
-        position: const awareness_geo.GeoPoint(
-          latitude: 51.5,
-          longitude: -3.18,
-        ),
-        reportedAt: now,
-        updatedAt: now,
-        expiresAt: now.add(const Duration(minutes: 10)),
-        reporterId: 'relay-traffic',
-        source: HazardSource.externalProvider,
-        providerId: 'relay-traffic',
-        details: 'Fixed speed camera · 40 mph · TomTom',
-      ),
-      distanceMeters: 900,
-    );
-    await tester.pump();
-
-    final onApproach = tester
-        .getRect(find.byKey(const Key('posted-speed-limit-badge')))
-        .width;
-
-    // Reported as "I didn't notice a larger speed limit sign and speed on the
-    // approach", so the assertion is that it is measurably larger rather than
-    // merely different.
-    expect(
-      onApproach,
-      greaterThan(ordinary * 1.3),
-      reason: 'the enlargement has to be noticeable at a glance',
-    );
-
-    // And it lasts past the bubble: the rider looks down after the
-    // announcement, not during it.
-    await tester.pump(enforcementBubbleLife + const Duration(seconds: 1));
-    expect(
-      tester.getRect(find.byKey(const Key('posted-speed-limit-badge'))).width,
-      onApproach,
-    );
-  });
-
   testWidgets('offers file import and loads bundled demo route offline', (
     tester,
   ) async {
@@ -1911,7 +1467,7 @@ void main() {
 
     expect(find.text('Use this route?'), findsOneWidget);
     expect(
-      find.text("King's Oak Academy to Cross Hands Hotel"),
+      find.text('Demo chase route: Kingswood to Old Sodbury'),
       findsOneWidget,
     );
     await tester.scrollUntilVisible(
@@ -3171,7 +2727,6 @@ void main() {
       'ride-menu-button',
       'emergency-alert-button',
       'leave-ride-button',
-      'report-sighting-button',
       'posted-speed-limit-position',
       'ride-compass-position',
     ];
@@ -3243,7 +2798,6 @@ void main() {
           'ride-menu-button',
           'emergency-alert-button',
           'leave-ride-button',
-          'report-sighting-button',
         ]) {
           expect(
             rects[key]!.right,
@@ -3302,17 +2856,13 @@ void main() {
         );
         final sos = rects['emergency-alert-button']!;
         final leave = rects['leave-ride-button']!;
-        final report = rects['report-sighting-button']!;
         expect(sos.bottom, lessThanOrEqualTo(leave.top));
-        expect(leave.bottom, lessThanOrEqualTo(report.top));
         expect(sos.left, closeTo(leave.left, 1));
-        expect(leave.left, closeTo(report.left, 1));
       } else {
         // SOS above LEAVE (#133), not shoulder to shoulder: a mis-hit reaching
         // for SOS used to land on LEAVE and drop the rider out of the ride.
         final sos = rects['emergency-alert-button']!;
         final leave = rects['leave-ride-button']!;
-        final report = rects['report-sighting-button']!;
         expect(
           sos.bottom,
           lessThanOrEqualTo(leave.top),
@@ -3323,13 +2873,9 @@ void main() {
           closeTo(leave.left, 1),
           reason: 'the safety stack must be one column in $size',
         );
-        // REPORT keeps its place beside the pair (#125) rather than adding a run.
-        expect(report.left, greaterThanOrEqualTo(sos.right));
-        expect(report.top, greaterThanOrEqualTo(sos.top));
-        expect(report.bottom, lessThanOrEqualTo(leave.bottom + 1));
         // Every target stays glove-sized: stacking must not have shrunk one to
         // buy the height back.
-        for (final target in [sos, leave, report]) {
+        for (final target in [sos, leave]) {
           expect(target.height, greaterThanOrEqualTo(48));
           expect(target.width, greaterThanOrEqualTo(48));
         }
@@ -3341,7 +2887,7 @@ void main() {
         expect(compass.right, closeTo(speedLimit.left - 8, 1));
         expect(compass.top, closeTo(speedLimit.top, 1));
         expect(compass.width, closeTo(58, 0.1));
-        for (final target in [sos, leave, report]) {
+        for (final target in [sos, leave]) {
           expect(
             speedLimit.left,
             greaterThanOrEqualTo(target.right),
@@ -3361,7 +2907,6 @@ void main() {
         const targetKeys = {
           'emergency-alert-button',
           'leave-ride-button',
-          'report-sighting-button',
           'posted-speed-limit-position',
           'ride-compass-position',
         };
@@ -3418,7 +2963,6 @@ void main() {
           onOpenRideMenu: () async {},
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -3480,7 +3024,6 @@ void main() {
           onOpenRideMenu: () async {},
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -3655,7 +3198,6 @@ void main() {
           onOpenRideMenu: () async {},
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -3753,7 +3295,6 @@ void main() {
           onOpenRideMenu: () async {},
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
           onNavigationViewportChanged: (viewport) {
             projectedViewport = viewport;
           },
@@ -3850,7 +3391,6 @@ void main() {
           onEmergencyAlert: () async => alerts += 1,
           onLeaveRide: () async => leaves += 1,
           onOpenRideMenu: () async => menus += 1,
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -3860,7 +3400,6 @@ void main() {
     // there, and so is the paused-ride state.
     expect(find.byKey(const Key('emergency-alert-button')), findsOneWidget);
     expect(find.byKey(const Key('leave-ride-button')), findsOneWidget);
-    expect(find.byKey(const Key('report-sighting-button')), findsOneWidget);
     expect(find.text('GROUP FLIGHT PAUSED'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('leave-ride-button')));
@@ -4195,11 +3734,7 @@ void main() {
       httpClient: MockClient((_) async => http.Response('', 404)),
     );
 
-    const actionKeys = [
-      'emergency-alert-button',
-      'leave-ride-button',
-      'report-sighting-button',
-    ];
+    const actionKeys = ['emergency-alert-button', 'leave-ride-button'];
 
     Map<String, Rect> measure() => {
       for (final key in actionKeys) key: tester.getRect(find.byKey(Key(key))),
@@ -4225,7 +3760,6 @@ void main() {
             onEmergencyAlert: () => sending.future,
             onLeaveRide: () async {},
             onOpenRideMenu: () async {},
-            onReportHazard: (_) async {},
           ),
         ),
       );
@@ -4240,50 +3774,21 @@ void main() {
       // The arrangement itself, which is the property the `Wrap` gave up: one
       // shape per orientation, and the same shape in every state.
       //
-      // Portrait stacks SOS over LEAVE with REPORT alongside. Landscape stacks
-      // all three vertically to keep the map clear across its lower edge.
+      // Both orientations stack SOS over LEAVE and keep the same shape in every
+      // state.
       void expectArrangement(Map<String, Rect> rects, String state) {
         final sos = rects['emergency-alert-button']!;
         final leave = rects['leave-ride-button']!;
-        final report = rects['report-sighting-button']!;
-        if (landscape) {
-          expect(
-            sos.bottom,
-            lessThanOrEqualTo(leave.top),
-            reason: 'ALERT must sit above LEAVE in landscape/$state',
-          );
-          expect(
-            leave.bottom,
-            lessThanOrEqualTo(report.top),
-            reason: 'LEAVE must sit above REPORT in landscape/$state',
-          );
-          expect(
-            leave.left,
-            closeTo(sos.left, 0.01),
-            reason: 'landscape controls must share one left edge in $state',
-          );
-          expect(
-            report.left,
-            closeTo(sos.left, 0.01),
-            reason: 'REPORT must stay in the landscape stack in $state',
-          );
-        } else {
-          expect(
-            sos.bottom,
-            lessThanOrEqualTo(leave.top),
-            reason: 'SOS must stay above LEAVE in portrait/$state',
-          );
-          expect(
-            report.left,
-            greaterThanOrEqualTo(sos.right),
-            reason: 'REPORT must stay beside the pair in portrait/$state',
-          );
-          expect(
-            report.bottom,
-            closeTo(leave.bottom, 0.01),
-            reason: 'REPORT must share the run in portrait/$state',
-          );
-        }
+        expect(
+          sos.bottom,
+          lessThanOrEqualTo(leave.top),
+          reason: 'ALERT must sit above LEAVE in $orientation/$state',
+        );
+        expect(
+          leave.left,
+          closeTo(sos.left, 0.01),
+          reason: 'controls must share one left edge in $orientation/$state',
+        );
         // Glove-sized in every state and both orientations, whatever the labels
         // had to give up to fit (#142).
         for (final entry in rects.entries) {
@@ -4368,7 +3873,6 @@ void main() {
         ridePaused: paused,
         onEmergencyAlert: () async {},
         onLeaveRide: () async {},
-        onReportHazard: (_) async {},
       ),
     );
 
@@ -4377,11 +3881,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     final running = {
-      for (final key in const [
-        'emergency-alert-button',
-        'leave-ride-button',
-        'report-sighting-button',
-      ])
+      for (final key in const ['emergency-alert-button', 'leave-ride-button'])
         key: tester.getRect(find.byKey(Key(key))),
     };
 
@@ -4390,11 +3890,7 @@ void main() {
     expect(find.text('GROUP FLIGHT PAUSED'), findsOneWidget);
     expect(
       {
-        for (final key in const [
-          'emergency-alert-button',
-          'leave-ride-button',
-          'report-sighting-button',
-        ])
+        for (final key in const ['emergency-alert-button', 'leave-ride-button'])
           key: tester.getRect(find.byKey(Key(key))),
       },
       running,
@@ -4518,7 +4014,6 @@ void main() {
               acknowledged.add(message.eventId),
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -4588,7 +4083,6 @@ void main() {
           onAcknowledgeQuickMessage: (_) async {},
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -4635,7 +4129,6 @@ void main() {
           onAcknowledgeQuickMessage: (_) async {},
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -4690,7 +4183,6 @@ void main() {
           onAcknowledgeQuickMessage: (_) async {},
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -4748,7 +4240,6 @@ void main() {
           onAcknowledgeQuickMessage: (_) async {},
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -4810,7 +4301,6 @@ void main() {
           onAcknowledgeQuickMessage: (_) async {},
           onEmergencyAlert: () async {},
           onLeaveRide: () async {},
-          onReportHazard: (_) async {},
         ),
       ),
     );
@@ -4900,14 +4390,12 @@ void main() {
         onOpenRideMenu: () async {},
         onEmergencyAlert: () async {},
         onLeaveRide: () async {},
-        onReportHazard: (_) async {},
       ),
     );
 
     const actionKeys = [
       'emergency-alert-button',
       'leave-ride-button',
-      'report-sighting-button',
       'posted-speed-limit-position',
     ];
     Map<String, Rect> measureActions() => {
@@ -5182,23 +4670,3 @@ ImportedRoute _testRoute({
   waypoints: const [],
   maneuvers: maneuvers,
 );
-
-/// Asserts a real red border, not merely a box that once had one.
-///
-/// The border *is* the whole warning after ten seconds, so "the keyed widget
-/// exists" is not enough: a `DecoratedBox` with `border: null` satisfies that and
-/// shows nothing. Mutation testing caught exactly that.
-void expectRedBorder(WidgetTester tester, {String? reason}) {
-  final finder = find.byKey(const Key('enforcement-alert-border'));
-  expect(finder, findsOneWidget, reason: reason);
-  final decoration =
-      tester.widget<DecoratedBox>(finder).decoration as BoxDecoration;
-  expect(decoration.border, isNotNull, reason: reason);
-  expect(decoration.border!.top.width, enforcementBorderWidth, reason: reason);
-  expect(decoration.border!.top.color, const Color(0xFFFF3B30), reason: reason);
-  expect(
-    decoration.borderRadius,
-    BorderRadius.circular(enforcementBorderRadius),
-    reason: reason,
-  );
-}

@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-deploy_script="${RELAY_DEPLOY_REPO:-/opt/tailendcharlie}/deploy/relay-deploy.sh"
+deploy_script="${RELAY_DEPLOY_REPO:-/opt/balloon-crumbs}/deploy/relay-deploy.sh"
 request="${SSH_ORIGINAL_COMMAND:-}"
 
 if ! [[ "$request" =~ ^(staging|production)([[:space:]]+[0-9a-f]{40})?$ ]]; then
@@ -42,7 +42,7 @@ fi
 # that works, and it carries the same ancestor guard the script does: this key
 # must not be able to check out something that is not on main.
 if ! test -x "$deploy_script"; then
-  repo="${RELAY_DEPLOY_REPO:-/opt/tailendcharlie}"
+  repo="${RELAY_DEPLOY_REPO:-/opt/balloon-crumbs}"
   echo "relay-deploy: $deploy_script is missing; bootstrapping the checkout" >&2
   cd "$repo"
   git fetch --quiet origin

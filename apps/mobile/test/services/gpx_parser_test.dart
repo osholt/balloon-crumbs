@@ -55,7 +55,7 @@ void main() {
       _bytes('''
         <gpx version="1.1"
              xmlns="http://www.topografix.com/GPX/1/1"
-             xmlns:bc="https://balloon-crumbs.tailendcharlie.app/gpx/1">
+             xmlns:bc="https://balloon-crumbs.pages.dev/gpx/1">
           <trk><trkseg>
             <trkpt lat="51.45" lon="-2.59">
               <ele>123.4</ele>
@@ -114,7 +114,7 @@ void main() {
     final route = parser.parse(
       _bytes('''
         <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"
-             xmlns:bc="https://balloon-crumbs.tailendcharlie.app/gpx/1">
+             xmlns:bc="https://balloon-crumbs.pages.dev/gpx/1">
           <trk><trkseg><trkpt lat="51.45" lon="-2.59">
             <ele>123.4</ele>
             <extensions><bc:altitude source="future-sensor"
@@ -310,7 +310,7 @@ void main() {
       importedAt: DateTime.utc(2026),
     );
 
-    expect(route.name, "King's Oak Academy to Cross Hands Hotel");
+    expect(route.name, 'Demo chase route: Kingswood to Old Sodbury');
     expect(route.pathPointCount, greaterThan(450));
     expect(route.waypoints, hasLength(3));
     expect(route.paths.single.kind.name, 'track');

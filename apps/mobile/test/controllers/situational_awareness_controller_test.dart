@@ -303,23 +303,6 @@ void main() {
     },
   );
 
-  test('riders can report enforcement sightings to the group', () async {
-    for (final type in [HazardType.policeActivity, HazardType.speedCamera]) {
-      final report = await controller.reportHazard(
-        type: type,
-        severity: HazardSeverity.serious,
-        position: const GeoPoint(latitude: 51, longitude: -1),
-      );
-
-      expect(report, isNotNull);
-      expect(report!.type, type);
-      expect(report.source, HazardSource.rider);
-    }
-
-    expect(controller.activeHazards, hasLength(2));
-    expect(await store.eventsForRide(_session.rideId), hasLength(2));
-  });
-
   test('event replay restores active hazards', () async {
     final hazard = await controller.reportHazard(
       type: HazardType.roadworks,

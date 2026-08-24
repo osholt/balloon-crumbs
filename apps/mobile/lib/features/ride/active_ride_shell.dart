@@ -73,8 +73,6 @@ import '../../services/test_control_registry.dart';
 import '../../services/basemap_configuration.dart';
 import '../../services/device_location_source.dart';
 import '../../services/external_hazard_provider.dart';
-import '../../services/fixed_speed_camera_catalogue.dart';
-import '../../services/fixed_speed_camera_provider.dart';
 import '../../services/gpx_import_source.dart';
 import '../../services/measurement_formatter.dart';
 import '../../services/live_flight_projection.dart';
@@ -95,7 +93,6 @@ import '../../services/ride_diagnostics_log_writer.dart';
 import '../../services/ride_diagnostics_recorder.dart';
 import '../../services/ride_diagnostics_transition.dart';
 import '../../services/ride_summary_exporter.dart';
-import '../../services/enforcement_alert_detector.dart';
 import '../../services/hazard_map_relevance.dart';
 import '../../services/relay_traffic_hazard_provider.dart';
 import '../../services/relay_traffic_reroute_provider.dart';
@@ -1303,7 +1300,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   final _balloonTrailSimplifier = const TrailDisplaySimplifier(
     preserveAltitudeProfile: true,
   );
-  final _enforcementAlert = ValueNotifier<EnforcementAlert?>(null);
 
   /// The arrival being offered to the rider, or null when there is nothing to
   /// offer. Replaces the modal that used to cover the map at the one moment a
@@ -1326,10 +1322,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   // The active-ride tabs are a `switch` on the selected index, not an
   // IndexedStack, so moving to Ride details and back disposes and rebuilds the
   // map. Anything the rider has decided that lives in the map's own State is
-  // therefore undone by a tab change - which is what a tester hit: cleared
-  // enforcement alerts coming back, and an accepted route-start leg having to be
-  // accepted again (#282). These live here because this shell outlives the tabs.
-  String? _dismissedEnforcementAlertId;
+  // therefore undone by a tab change. Route-start acceptance lives here because
+  // this shell outlives the tabs.
   route_domain.ImportedRoute? _routeStartConnector;
 
   /// The voice for turn prompts.
@@ -1400,11 +1394,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
   SituationalAwarenessController? _awarenessController;
 
-  /// The bundled fixed-camera layer, read once and kept for the life of the
-  /// shell. A missing or unreadable asset leaves this an empty catalogue rather
-  /// than failing the ride: no camera warnings is a degraded ride, no ride is
-  /// not.
-  FixedSpeedCameraCatalogue? _fixedSpeedCameras;
   CarPlayBridge? _carPlayBridge;
   String? _carPlayMapStyleJson;
   late final http.Client _carPlayRoutingClient;
@@ -1619,7 +1608,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _carPlayBridge = CarPlayBridge(
       onEmergencyTriggered: _sendEmergencyMapAlert,
       onLeaveRequested: _leaveRide,
-      onHazardReported: _reportHazardFromMap,
+      onHazardReported: _reportRoadConditionFromCarPlay,
       onRideStartRequested: _startPreparedRideFromCarPlay,
       onDestinationSearch: _searchCarPlayDestinations,
       onDestinationSelected: _planCarPlayDestination,
@@ -2088,6 +2077,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   bool get _isChaserPerspective =>
       widget.rideController.session?.flightRole.isChasing == true;
 
+  Future<void> _reportRoadConditionFromCarPlay(HazardType type) async {
+    final awareness = _awarenessController;
+    if (awareness == null) {
+      throw const FormatException('This flight is not tracking hazards yet.');
+    }
+    await awareness.reportHazard(type: type, severity: HazardSeverity.serious);
+  }
+
   Future<void> _initializeChaseGuidanceTarget() async {
     if (!_isChaserPerspective) return;
     final flightLanding = widget.rideController.flightLanding.landing;
@@ -2109,19 +2106,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     }
   }
 
-  /// Publishes a rider's own enforcement sighting to the group.
-  ///
-  /// Reported as [HazardSeverity.serious] so it reaches the same advance
-  /// warning the provider feed drives; the shorter enforcement expiry in
-  /// [HazardExpiryPolicy] keeps a moved-on van from warning riders all day.
-  Future<void> _reportHazardFromMap(HazardType type) async {
-    final awareness = _awarenessController;
-    if (awareness == null) {
-      throw const FormatException('This flight is not tracking hazards yet.');
-    }
-    await awareness.reportHazard(type: type, severity: HazardSeverity.serious);
-  }
-
   List<HazardReport> get _trafficRerouteHazards {
     if (widget.rideController.localFlightRole != FlightRole.chaseDriver ||
         !widget.rideController.rideStarted ||
@@ -2136,10 +2120,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               (hazard) =>
                   hazard.source == HazardSource.externalProvider &&
                   hazard.providerId == 'tomtom-traffic' &&
-                  // Enforcement is warned about, never routed around: a camera
-                  // is not an obstruction and the group's route is not the
-                  // place to act on one.
-                  !enforcementHazardTypes.contains(hazard.type) &&
                   hazard.severity.index >= HazardSeverity.serious.index,
             )
             .take(10)
@@ -2296,23 +2276,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         RelayTrafficHazardProvider(
           configuration: InternetRelayConfiguration.fromEnvironment(),
         ),
-      // Lead-gated for the same reason the relay feed is: a provider hazard
-      // becomes a ride event that reaches the whole group, and every rider
-      // deriving the same cameras from the same bundled asset would write the
-      // same event once each. The ids are derived from the OpenStreetMap node
-      // so they merge into one hazard either way, but there is no reason to
-      // pay for it six times over.
-      // Fixed cameras come from a bundled OpenStreetMap extract, so unlike the
-      // relay feed they cost nothing to consult and work with no signal.
-      //
-      // Lead-gated for the same reason the relay feed is: a provider hazard
-      // becomes a ride event that reaches the whole group, and every rider
-      // deriving the same cameras from the same bundled asset would write the
-      // same event once each. The ids are derived from the OpenStreetMap node
-      // so they merge into one hazard either way, but there is no reason to pay
-      // for it six times over.
-      if (session.flightRole == FlightRole.chaseDriver)
-        FixedSpeedCameraProvider(readCatalogue: _loadFixedSpeedCameras),
     ];
     final controller = SituationalAwarenessController(
       awarenessEventStore,
@@ -2982,23 +2945,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           }),
     ];
     _mapOverlays.value = List.unmodifiable(overlays);
-    final previousEnforcementAlert = _enforcementAlert.value;
-    _enforcementAlert.value = const EnforcementAlertDetector().detect(
-      position: localLocation?.sample.position,
-      headingDegrees: localLocation?.sample.headingDegrees,
-      speedMetersPerSecond: localLocation?.sample.speedMetersPerSecond,
-      activeHazardId: previousEnforcementAlert?.hazard.id,
-      route: awareness.route,
-      hazards: awareness.activeHazards,
-      now: now,
-    );
-    // #418 asks whether the warning clears itself on passing. That is a
-    // transition, not a state, so both edges are recorded.
-    _recordEnforcementTransition(
-      previous: previousEnforcementAlert,
-      current: _enforcementAlert.value,
-    );
-    _speakEnforcementWarning(previousEnforcementAlert, _enforcementAlert.value);
     _publishCarPlaySnapshot(
       awareness: awareness,
       visibleRiderLocations: visibleRiderLocations,
@@ -3015,23 +2961,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// not blur them into a missing row. [_leaderStatus] then adds the gap and
   /// the trend, and is null for everyone who is not the leader — that means
   /// this device has no gap to show, never that there is no TEC.
-  /// Reads the bundled fixed-camera layer.
-  ///
-  /// Never throws at the caller. A build with the asset stripped, or a file
-  /// that fails to parse, yields an empty catalogue: the provider then reports
-  /// itself unavailable and the ride carries on with rider sightings alone.
-  Future<FixedSpeedCameraCatalogue> _loadFixedSpeedCameras() async {
-    final cached = _fixedSpeedCameras;
-    if (cached != null) return cached;
-    try {
-      return _fixedSpeedCameras = await FixedSpeedCameraCatalogue.load();
-    } on Object catch (error, stackTrace) {
-      debugPrint('Fixed camera catalogue unavailable: $error');
-      debugPrintStack(stackTrace: stackTrace);
-      return _fixedSpeedCameras = FixedSpeedCameraCatalogue.empty;
-    }
-  }
-
   void _publishCarPlaySnapshot({
     required SituationalAwarenessController awareness,
     required List<RiderLocation> visibleRiderLocations,
@@ -4652,7 +4581,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       onOpenRoster: _openRoster,
       // Deliberately not `onOpenRideMenu`. The control that reaches the other
       // tabs is rendered by this shell instead — see _openRideMenu and #404.
-      enforcementAlert: isDriverView ? _enforcementAlert : null,
       rideCompletionSuggestion: _rideCompletionSuggestion,
       onEndRideForEveryone: _endRideFromCompletionSuggestion,
       onDismissRideCompletion: _dismissRideCompletionSuggestion,
@@ -4662,14 +4590,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       dismissedQuickMessageReceiptIds: _dismissedQuickMessageReceiptIds,
       onDismissQuickMessageInterrupt: _dismissedQuickMessageInterruptIds.add,
       onDismissQuickMessageReceipt: _dismissedQuickMessageReceiptIds.add,
-      dismissedEnforcementAlertId: _dismissedEnforcementAlertId,
-      onDismissEnforcementAlert: (id) => _dismissedEnforcementAlertId = id,
       initialRouteStartConnector: _routeStartConnector,
       onRouteStartConnectorChanged: (connector) =>
           _routeStartConnector = connector,
-      onReportHazard: isDriverView && _awarenessController != null
-          ? _reportHazardFromMap
-          : null,
       emergencyContacts: _emergencyContacts,
       onEmergencyAlert: _sendEmergencyMapAlert,
       onEmergencyIssue: _sendEmergencyMapIssue,
@@ -5385,81 +5308,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// across two merged steps rather than from the entry manoeuvre's own
   /// `bearingAfter` (#360), and an instrument that disagrees with the app it
   /// measures is worse than none.
-  /// Records an enforcement warning appearing or going away (#418).
-  ///
-  /// The report the ride was filed against says the warning "requires touching
-  /// the screen to cancel", so what has to be distinguishable in the log is a
-  /// warning the rider dismissed from one that cleared itself on passing. The
-  /// clearing edge does not know which happened, so it says only that it
-  /// cleared and leaves the distinction to the timing beside it.
-  void _recordEnforcementTransition({
-    required EnforcementAlert? previous,
-    required EnforcementAlert? current,
-  }) {
-    final diagnostics = _diagnostics;
-    if (diagnostics == null) return;
-    if (previous?.hazard.id == current?.hazard.id) return;
-    if (previous != null) {
-      diagnostics.recordEnforcementWarning(
-        hazardType: previous.hazard.type.name,
-        distanceMeters: previous.distanceMeters,
-        armed: false,
-        clearedBy: _dismissedEnforcementAlertId == previous.hazard.id
-            ? 'crew tap'
-            : 'no longer detected',
-      );
-    }
-    if (current != null) {
-      diagnostics.recordEnforcementWarning(
-        hazardType: current.hazard.type.name,
-        distanceMeters: current.distanceMeters,
-        armed: true,
-        clearedBy: null,
-      );
-    }
-  }
-
-  /// Says a camera or police warning out loud (#430).
-  ///
-  /// It was never wired: `_speakGuidance` was the only path to the speech engine
-  /// and it speaks turns. A rider looking at the road ahead — which is the point
-  /// of the warning — got nothing.
-  ///
-  /// Spoken as `SpokenAudioClass.safety`, so #415's alerts-only mode keeps it when
-  /// turn-by-turn goes quiet. Once, on the arming edge: the warning holds from a
-  /// mile out and repeating it for a mile would be worse than silence.
-  void _speakEnforcementWarning(
-    EnforcementAlert? previous,
-    EnforcementAlert? current,
-  ) {
-    final speaker = _spokenGuidance;
-    if (speaker == null || current == null) return;
-    if (previous?.hazard.id == current.hazard.id) return;
-    final controller = widget.rideController;
-    final camera = current.hazard.type == HazardType.speedCamera;
-    final distance = MeasurementFormatter(
-      widget.distanceUnits.value,
-    ).distance(current.distanceMeters);
-    // The enforced limit where the catalogue tags one, in the same words the
-    // panel shows (#418) — a rider should not hear one number and read another.
-    final limit = enforcementLimitLabel(current.hazard.details);
-    unawaited(
-      speaker.speakAlert(
-        key: 'enforcement:${current.hazard.id}',
-        phrase: [
-          camera ? 'Speed camera' : 'Police',
-          'in $distance',
-          ?limit,
-        ].join(', '),
-        enabled: spokenAudioAllows(_spokenAudioMode, SpokenAudioClass.safety),
-        rideActive:
-            controller.rideStarted &&
-            !controller.rideEnded &&
-            !controller.ridePaused,
-      ),
-    );
-  }
-
   /// The audio mode in force: what the rider chose, quietened while off route.
   ///
   /// Off route, turn-by-turn names junctions that are not coming, so it drops to
@@ -7388,7 +7236,6 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _mapOverlays.dispose();
     _riderTrails.dispose();
     _quickMessageAlerts.dispose();
-    _enforcementAlert.dispose();
     _rideCompletionSuggestion.dispose();
     unawaited(_carPlayBridge?.dispose());
     _carPlayRoutingClient.close();

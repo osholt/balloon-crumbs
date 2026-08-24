@@ -14,7 +14,7 @@ Measured on `apps/mobile/lib` (~80,000 lines of Dart):
 | Road hazards | 702 | 36 | repurpose as ground notes |
 | Rejoin routing | 466 | 26 | delete, replaced by rendezvous |
 | Junction logic | 240 | 34 | delete with the marker system |
-| Speed-camera / enforcement alerts | 183 | 15 | keep, retarget at the chase driver |
+| Speed-camera / enforcement alerts | 183 | 15 | delete; retain posted speed limits |
 | Speed-limit display | 17 | 9 | keep, retarget at the chase driver |
 | Road ratings ("twisty road" scoring) | 12 | 8 | delete |
 | Personal ride heatmap | 81 | 2 | delete |
@@ -182,17 +182,14 @@ Genuinely valuable, domain-neutral, and expensive to rebuild:
   more important in an aviation-adjacent context than they were for riding.
 - **Observer sharing** — a bounded read-only link is exactly what a balloon
   operation wants for family watching from home.
-- **Speed-limit display, speed-camera and enforcement alerts** — kept and
-  retargeted at the chase driver, who is doing exactly the road driving these
-  were built for. They must appear only in the chase-driver view: a pilot has no
-  use for a camera warning and showing one in the basket is noise.
-- **CarPlay and Android Auto** — kept for the chase driver, who is a better fit
-  for a head unit than a motorcyclist ever was. Currently inert: the entitlements
-  and the scene declaration were removed so the app could be signed and installed
-  without an Apple-approved CarPlay profile. Restoring it means re-adding both
-  entitlement keys, the `CPTemplateApplicationSceneSessionRoleApplication` scene
-  declaration, and a matching console profile — all three together, or the app
-  crashes on device while working in the simulator.
+- **Speed-limit display** — retained for the chase driver. The inherited fixed
+  camera catalogue, camera/police reporting and enforcement warnings are
+  removed from every role.
+- **CarPlay and Android Auto** — kept for the chase driver. The CarPlay recovery
+  scene and declarations are implemented; Apple entitlement approval, the
+  matching distribution profile and physical-head-unit validation remain hard
+  release gates. Android Auto uses a Balloon Crumbs service and copy, with
+  physical projected-car validation tracked separately.
 - The **hazard machinery, repurposed**: the ability to drop a categorised,
   relayed, expiring point on a map is precisely what ground notes need (locked
   gate, impassable track, power lines, landowner contacted, crop in field). This
@@ -664,11 +661,11 @@ representation without colour, mixed-device field matrix.
 
 ## Decisions taken
 
-1. **Speed limits, camera and enforcement alerts — kept**, retargeted at the
-   chase driver and confined to the chase-driver view.
-2. **CarPlay / Android Auto — kept** for the chase driver. Inert until the
-   entitlement is restored; see "What gets kept" for the three things that have
-   to go back together.
+1. **Posted speed limits — kept for the chase driver. Camera and enforcement
+   alerts — removed.**
+2. **CarPlay / Android Auto — kept** for the chase driver. CarPlay implementation
+   is present but cannot ship until Apple grants the maps entitlement and a
+   matching profile passes physical-head-unit validation.
 3. **Multiple balloons — backlogged** (items 22, 23) but constraining WP3 now.
 4. **Landing intent — three separate things**, with the chase crew depending on
    the inferred landing rather than the pilot's button. See WP6.

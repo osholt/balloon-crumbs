@@ -4,7 +4,7 @@
          simply not found and spoken guidance fails silently, which is the worst
          outcome available: the switch is on, nothing is said, and nothing
          explains why (#286). -->
-    <!-- Scanning a ride invitation, which is the only join path that works with
+    <!-- Scanning a flight invitation, which is the only join path that works with
          no signal (#279). Requested at the point of scanning, and every other way
          in keeps working if it is refused. -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -30,7 +30,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!--
-      A ride keeps recording while the phone is in a pocket or showing another
+      A flight keeps recording while the phone is in a pocket or showing another
       navigation app, which on Android means a foreground service typed for
       location (#205). geolocator_android already declares
       GeolocatorLocationService with android:foregroundServiceType="location";
@@ -65,7 +65,7 @@
             android:name="androidx.car.app.minCarApiLevel"
             android:value="1" />
         <service
-            android:name=".TailEndCharlieCarAppService"
+            android:name=".BalloonCrumbsCarAppService"
             android:exported="true"
             android:label="Balloon Crumbs"
             android:icon="@mipmap/ic_launcher">
@@ -111,7 +111,7 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data
                     android:scheme="https"
-                    android:host="balloon-crumbs.tailendcharlie.app"
+                    android:host="balloon-crumbs.pages.dev"
                     android:path="/planner.html" />
             </intent-filter>
             <intent-filter android:autoVerify="true">
@@ -120,7 +120,7 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data
                     android:scheme="https"
-                    android:host="balloon-crumbs.tailendcharlie.app"
+                    android:host="balloon-crumbs.pages.dev"
                     android:path="/join.html" />
             </intent-filter>
             <!-- Opening a .gpx file (Files, a browser download, Mail) with a

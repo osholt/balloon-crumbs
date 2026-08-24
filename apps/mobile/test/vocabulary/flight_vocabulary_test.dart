@@ -29,6 +29,51 @@ void main() {
       );
     }
   });
+
+  test('native product copy uses flight and crew vocabulary', () {
+    final violations = <String>[];
+    for (final root in [
+      Directory('android/app/src/main'),
+      Directory('ios/Runner'),
+    ]) {
+      for (final file
+          in root
+              .listSync(recursive: true)
+              .whereType<File>()
+              .where(
+                (file) => const [
+                  '.kt',
+                  '.swift',
+                  '.xml',
+                  '.plist',
+                ].any(file.path.endsWith),
+              )) {
+        final lines = file.readAsLinesSync();
+        for (var index = 0; index < lines.length; index += 1) {
+          final line = lines[index];
+          if (line.trimLeft().startsWith('//')) continue;
+          for (final match in RegExp(r'"((?:\\.|[^"\\])*)"').allMatches(line)) {
+            final literal = match.group(1)!;
+            final copy = literal
+                .replaceAll(RegExp(r'\$\{[^}]*\}'), 'value')
+                .replaceAll(RegExp(r'\$[A-Za-z_][A-Za-z0-9_.]*'), 'value')
+                .replaceAll(RegExp(r'\\\([^)]*\)'), 'value');
+            if (!_forbidden.hasMatch(copy)) continue;
+            if (_isDocumentedTechnicalLiteral(literal)) continue;
+            violations.add('${file.path}:${index + 1}: $literal');
+          }
+        }
+      }
+    }
+
+    if (violations.isNotEmpty) {
+      fail(
+        'Native product copy must use flight, crew member, pilot, balloon or '
+        'chase vehicle terminology. Lower-case protocol keys and channel IDs '
+        'remain compatibility identifiers.\n\n${violations.join('\n')}',
+      );
+    }
+  });
 }
 
 final _forbidden = RegExp(

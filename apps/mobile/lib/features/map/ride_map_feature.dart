@@ -20,7 +20,6 @@ import '../../data/json_file_route_store.dart';
 import '../../domain/completed_ride_store.dart';
 import '../../domain/altitude.dart';
 import '../../domain/distance_unit.dart';
-import '../../domain/hazard.dart';
 import '../../domain/imported_route.dart';
 import '../../domain/map_orientation.dart';
 import '../../domain/quick_message.dart';
@@ -33,10 +32,7 @@ import '../../services/basemap_configuration.dart';
 import '../../services/aeronautical_chart_configuration.dart';
 import '../../services/basemap_status.dart';
 import '../../services/demo_route_loader.dart';
-import '../../services/enforcement_alert_detector.dart';
 import 'ride_clock.dart';
-import '../../services/enforcement_alert_presentation.dart';
-import '../../services/fixed_speed_camera_catalogue.dart';
 import '../../services/ride_completion_detector.dart';
 import '../../services/gpx_import_source.dart';
 import '../../services/hmlr_inspire_reference.dart';
@@ -230,7 +226,6 @@ class RideMapFeature extends StatefulWidget {
     this.onMapTap,
     this.groupRiderCount,
     this.onOpenRoster,
-    this.enforcementAlert,
     this.rideCompletionSuggestion,
     this.onEndRideForEveryone,
     this.onDismissRideCompletion,
@@ -240,11 +235,8 @@ class RideMapFeature extends StatefulWidget {
     this.dismissedQuickMessageReceiptIds = const {},
     this.onDismissQuickMessageInterrupt,
     this.onDismissQuickMessageReceipt,
-    this.dismissedEnforcementAlertId,
-    this.onDismissEnforcementAlert,
     this.initialRouteStartConnector,
     this.onRouteStartConnectorChanged,
-    this.onReportHazard,
     this.emergencyContacts = const [],
     this.onEmergencyAlert,
     this.onEmergencyIssue,
@@ -305,7 +297,6 @@ class RideMapFeature extends StatefulWidget {
     ValueChanged<GeoPoint>? onMapTap,
     int? groupRiderCount,
     VoidCallback? onOpenRoster,
-    ValueListenable<EnforcementAlert?>? enforcementAlert,
     ValueListenable<RideCompletionAssessment?>? rideCompletionSuggestion,
     VoidCallback? onEndRideForEveryone,
     VoidCallback? onDismissRideCompletion,
@@ -316,11 +307,8 @@ class RideMapFeature extends StatefulWidget {
     Set<String> dismissedQuickMessageReceiptIds = const {},
     ValueChanged<String>? onDismissQuickMessageInterrupt,
     ValueChanged<String>? onDismissQuickMessageReceipt,
-    String? dismissedEnforcementAlertId,
-    ValueChanged<String>? onDismissEnforcementAlert,
     ImportedRoute? initialRouteStartConnector,
     ValueChanged<ImportedRoute?>? onRouteStartConnectorChanged,
-    Future<void> Function(HazardType type)? onReportHazard,
     List<MapEmergencyContact> emergencyContacts = const [],
     Future<void> Function()? onEmergencyAlert,
     Future<void> Function(QuickMessage message)? onEmergencyIssue,
@@ -373,7 +361,6 @@ class RideMapFeature extends StatefulWidget {
     onMapTap: onMapTap,
     groupRiderCount: groupRiderCount,
     onOpenRoster: onOpenRoster,
-    enforcementAlert: enforcementAlert,
     rideCompletionSuggestion: rideCompletionSuggestion,
     onEndRideForEveryone: onEndRideForEveryone,
     onDismissRideCompletion: onDismissRideCompletion,
@@ -381,13 +368,10 @@ class RideMapFeature extends StatefulWidget {
     onAcknowledgeQuickMessage: onAcknowledgeQuickMessage,
     dismissedQuickMessageInterruptIds: dismissedQuickMessageInterruptIds,
     dismissedQuickMessageReceiptIds: dismissedQuickMessageReceiptIds,
-    dismissedEnforcementAlertId: dismissedEnforcementAlertId,
-    onDismissEnforcementAlert: onDismissEnforcementAlert,
     initialRouteStartConnector: initialRouteStartConnector,
     onRouteStartConnectorChanged: onRouteStartConnectorChanged,
     onDismissQuickMessageInterrupt: onDismissQuickMessageInterrupt,
     onDismissQuickMessageReceipt: onDismissQuickMessageReceipt,
-    onReportHazard: onReportHazard,
     emergencyContacts: emergencyContacts,
     onEmergencyAlert: onEmergencyAlert,
     onEmergencyIssue: onEmergencyIssue,
@@ -451,7 +435,6 @@ class RideMapFeature extends StatefulWidget {
   /// tracked, in which case the gap card shows the distance alone.
   final int? groupRiderCount;
   final VoidCallback? onOpenRoster;
-  final ValueListenable<EnforcementAlert?>? enforcementAlert;
 
   /// The arrival the group has reached, offered rather than imposed (#380).
   ///
@@ -477,24 +460,10 @@ class RideMapFeature extends StatefulWidget {
   final ValueChanged<String>? onDismissQuickMessageInterrupt;
   final ValueChanged<String>? onDismissQuickMessageReceipt;
 
-  /// Held by the ride shell, not by this widget, because the shell outlives a
-  /// tab change and this widget does not (#282).
-  ///
-  /// The active-ride tabs are a `switch` on the selected index rather than an
-  /// IndexedStack - deliberately, so a MapLibre view is not left composing
-  /// behind another tab - so moving to Ride details and back **disposes and
-  /// rebuilds this widget**. Anything a rider has decided that lives in local
-  /// `State` is therefore silently undone by a tab change, which is what a
-  /// tester hit: cleared alerts returning, and an accepted route-start leg
-  /// having to be accepted again.
-  final String? dismissedEnforcementAlertId;
-  final ValueChanged<String>? onDismissEnforcementAlert;
-
   /// The routed "navigate to start" leg the rider has already accepted (#262),
   /// seeded from the shell so accepting it survives a tab change.
   final ImportedRoute? initialRouteStartConnector;
   final ValueChanged<ImportedRoute?>? onRouteStartConnectorChanged;
-  final Future<void> Function(HazardType type)? onReportHazard;
   final List<MapEmergencyContact> emergencyContacts;
   final Future<void> Function()? onEmergencyAlert;
   final Future<void> Function(QuickMessage message)? onEmergencyIssue;
@@ -659,7 +628,6 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         onMapTap: widget.onMapTap,
         groupRiderCount: widget.groupRiderCount,
         onOpenRoster: widget.onOpenRoster,
-        enforcementAlert: widget.enforcementAlert,
         rideCompletionSuggestion: widget.rideCompletionSuggestion,
         onEndRideForEveryone: widget.onEndRideForEveryone,
         onDismissRideCompletion: widget.onDismissRideCompletion,
@@ -668,13 +636,10 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         dismissedQuickMessageInterruptIds:
             widget.dismissedQuickMessageInterruptIds,
         dismissedQuickMessageReceiptIds: widget.dismissedQuickMessageReceiptIds,
-        dismissedEnforcementAlertId: widget.dismissedEnforcementAlertId,
-        onDismissEnforcementAlert: widget.onDismissEnforcementAlert,
         initialRouteStartConnector: widget.initialRouteStartConnector,
         onRouteStartConnectorChanged: widget.onRouteStartConnectorChanged,
         onDismissQuickMessageInterrupt: widget.onDismissQuickMessageInterrupt,
         onDismissQuickMessageReceipt: widget.onDismissQuickMessageReceipt,
-        onReportHazard: widget.onReportHazard,
         emergencyContacts: widget.emergencyContacts,
         onEmergencyAlert: widget.onEmergencyAlert,
         onEmergencyIssue: widget.onEmergencyIssue,
@@ -755,7 +720,6 @@ class RideMapScreen extends StatefulWidget {
     this.onMapTap,
     this.groupRiderCount,
     this.onOpenRoster,
-    this.enforcementAlert,
     this.rideCompletionSuggestion,
     this.onEndRideForEveryone,
     this.onDismissRideCompletion,
@@ -763,13 +727,10 @@ class RideMapScreen extends StatefulWidget {
     this.onAcknowledgeQuickMessage,
     this.dismissedQuickMessageInterruptIds = const {},
     this.dismissedQuickMessageReceiptIds = const {},
-    this.dismissedEnforcementAlertId,
-    this.onDismissEnforcementAlert,
     this.initialRouteStartConnector,
     this.onRouteStartConnectorChanged,
     this.onDismissQuickMessageInterrupt,
     this.onDismissQuickMessageReceipt,
-    this.onReportHazard,
     this.emergencyContacts = const [],
     this.onEmergencyAlert,
     this.onEmergencyIssue,
@@ -853,7 +814,6 @@ class RideMapScreen extends StatefulWidget {
   /// tracked, in which case the gap card shows the distance alone.
   final int? groupRiderCount;
   final VoidCallback? onOpenRoster;
-  final ValueListenable<EnforcementAlert?>? enforcementAlert;
 
   /// The arrival the group has reached, offered rather than imposed (#380).
   ///
@@ -877,15 +837,10 @@ class RideMapScreen extends StatefulWidget {
   final Set<String> dismissedQuickMessageInterruptIds;
   final Set<String> dismissedQuickMessageReceiptIds;
 
-  /// Held by the ride shell rather than by this widget, because a tab change
-  /// disposes this widget and the shell survives it (#282).
-  final String? dismissedEnforcementAlertId;
-  final ValueChanged<String>? onDismissEnforcementAlert;
   final ImportedRoute? initialRouteStartConnector;
   final ValueChanged<ImportedRoute?>? onRouteStartConnectorChanged;
   final ValueChanged<String>? onDismissQuickMessageInterrupt;
   final ValueChanged<String>? onDismissQuickMessageReceipt;
-  final Future<void> Function(HazardType type)? onReportHazard;
   final List<MapEmergencyContact> emergencyContacts;
   final Future<void> Function()? onEmergencyAlert;
   final Future<void> Function(QuickMessage message)? onEmergencyIssue;
@@ -1156,7 +1111,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
   double _lastHeadingDegrees = 0;
   // Dismissal is per hazard, so passing this one and approaching the next
   // still raises a fresh warning.
-  String? _dismissedEnforcementAlertId;
 
   /// Assigns the accepted route-start leg **and** tells the shell, so the two
   /// cannot drift. Every assignment goes through here for that reason.
@@ -1304,7 +1258,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
     super.initState();
     // Restored from the shell, which outlives a tab change: see the field
     // comments on RideMapFeature (#282).
-    _dismissedEnforcementAlertId = widget.dismissedEnforcementAlertId;
     _routeStartConnector = widget.initialRouteStartConnector;
     _routingClient = http.Client();
     _hmlrInspireProvider = HmlrInspireReferenceProvider(
@@ -1871,43 +1824,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
                             onDismiss: _continueWithoutRoute,
                           ),
                   ),
-                // An approaching camera or police report, in two parts: a bubble
-                // that announces it and a border that holds for the rest of the
-                // approach (#446). The announcement sits at the top-centre,
-                // clear of the rider marker and the bottom navigation rails.
-                if (!_isBalloonView && widget.enforcementAlert != null)
-                  Positioned.fill(
-                    child: ValueListenableBuilder<EnforcementAlert?>(
-                      valueListenable: widget.enforcementAlert!,
-                      builder: (context, alert, _) {
-                        if (alert == null ||
-                            alert.hazard.id == _dismissedEnforcementAlertId) {
-                          return const SizedBox.shrink();
-                        }
-                        return _EnforcementAlertLayer(
-                          // A new hazard gets a new State, so its ten seconds
-                          // start again rather than inheriting the last one's.
-                          key: ValueKey(alert.hazard.id),
-                          alert: alert,
-                          distanceUnit: widget.distanceUnit,
-                          topInset: overlayTop,
-                          onDismiss: () {
-                            setState(
-                              () => _dismissedEnforcementAlertId =
-                                  alert.hazard.id,
-                            );
-                            // Reported up so the decision survives this widget
-                            // being rebuilt by a tab change (#282).
-                            widget.onDismissEnforcementAlert?.call(
-                              alert.hazard.id,
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                // Above even that: a rider asking the group for help outranks a
-                // speed camera. Critical only - "Need fuel" must not blank the
+                // A critical crew request may briefly interrupt the map. Lower
+                // priority messages remain in the persistent bottom band.
+                // Critical only - "Need fuel" must not blank the
                 // map at 60 mph (#151) - and transient, so it never becomes a
                 // permanent surface anywhere, let alone in the upper band
                 // (#104). The persistent row in the bottom band is what survives
@@ -2247,30 +2166,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
               ),
             )
           : null;
-      // Reporting a camera or a patrol car is a ride action, not a route action,
-      // and it earns a place beside them (#125).
-      final reportButton = !widget.rideStarted || widget.onReportHazard == null
-          ? null
-          : _ReportSightingButton(onPressed: _reportEnforcementSighting);
-      final hasActions =
-          sosButton != null || leaveButton != null || reportButton != null;
-      // One arrangement per orientation, fixed for every state (#142). #139 used
-      // a `Wrap` in landscape, and a `Wrap` decides its runs from its children's
-      // measured widths - so the moment SOS said "ALERT SENT" the rail could no
-      // longer hold the row and REPORT reflowed onto a run of its own, at the
-      // exact moment the rider had just raised an alert. Neither arrangement here
-      // is a `Wrap`, so no label can change the shape of the cluster.
-      //
-      // Portrait stacks SOS over LEAVE with REPORT alongside (#133). Landscape
-      // stacks all three vertically so the controls do not form a wide barrier
-      // across the map (#533).
+      final hasActions = sosButton != null || leaveButton != null;
+      // Portrait and landscape keep the emergency actions in a stable cluster.
       final sosSubtree = sosButton == null || actionTargetHeight == null
           ? sosButton
           : SizedBox(height: actionTargetHeight, child: sosButton);
       final leaveSubtree = leaveButton == null || actionTargetHeight == null
           ? leaveButton
           : SizedBox(height: actionTargetHeight, child: leaveButton);
-      final reportSubtree = reportButton;
       final safetyCluster = !hasActions
           ? null
           : landscape
@@ -2283,10 +2186,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
                 if (sosSubtree != null && leaveSubtree != null)
                   const SizedBox(height: 8),
                 ?leaveSubtree,
-                if (reportSubtree != null) ...[
-                  const SizedBox(height: 8),
-                  reportSubtree,
-                ],
               ],
             )
           : Row(
@@ -2306,10 +2205,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
                       ?leaveSubtree,
                     ],
                   ),
-                if (reportSubtree != null) ...[
-                  const SizedBox(width: 10),
-                  reportSubtree,
-                ],
               ],
             );
       // The speed sign owns its own slot at the edge of the band, clear of the
@@ -2325,17 +2220,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     ? ValueListenableBuilder<({double value, bool ageing})?>(
                         valueListenable: _riderSpeed,
                         builder: (context, riderSpeed, _) =>
-                            _EnforcementEmphasis(
-                              alert: widget.enforcementAlert,
-                              dismissedHazardId: _dismissedEnforcementAlertId,
-                              builder: (emphasised) => _PostedSpeedLimitBadge(
-                                status: _speedLimitDisplay.status,
-                                outcome: _speedLimitDisplay.lastOutcome,
-                                limit: _speedLimitDisplay.limit,
-                                riderSpeedMetersPerSecond: riderSpeed?.value,
-                                riderSpeedIsAgeing: riderSpeed?.ageing ?? false,
-                                emphasised: emphasised,
-                              ),
+                            _PostedSpeedLimitBadge(
+                              status: _speedLimitDisplay.status,
+                              outcome: _speedLimitDisplay.lastOutcome,
+                              limit: _speedLimitDisplay.limit,
+                              riderSpeedMetersPerSecond: riderSpeed?.value,
+                              riderSpeedIsAgeing: riderSpeed?.ageing ?? false,
                             ),
                       )
                     : _SpeedLimitOptInChip(
@@ -4667,9 +4557,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       // badge behind a fixed-white glyph reads clearly regardless of what's
       // underneath, and matches the "you are here" marker's badge look.
       //
-      // Riders only. A reported hazard brings its own complete badge as one
-      // image, so a circle drawn under it would show through the corners of the
-      // enforcement plate.
+      // Craft only. A reported road condition brings its own complete badge.
       await controller.addCircleLayer(
         _overlaySource,
         'balloon-crumbs-overlay-badges',
@@ -4696,10 +4584,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
         ),
         filter: _riderOverlayFilter,
       );
-      // Reported cameras, police sightings and road defects (#135). One layer,
-      // one constant size, no paint properties: everything that distinguishes a
-      // fresh camera from a fading police sighting is in the image, drawn by the
-      // painter the fallback renderer also uses.
+      // Crew-reported road conditions. One layer and one constant size: the
+      // symbol image carries category, severity and freshness consistently with
+      // the fallback renderer.
       await controller.addSymbolLayer(
         _overlaySource,
         _hazardSymbolLayer,
@@ -6338,63 +6225,6 @@ class _RideMapScreenState extends State<RideMapScreen> {
       // alert state: off-course alerting went with the motorcycle domain.
       alert: overlays.any((marker) => marker.craftStyle == null),
     );
-  }
-
-  Future<void> _reportEnforcementSighting() async {
-    final report = widget.onReportHazard;
-    if (report == null) return;
-    final type = await showModalBottomSheet<HazardType>(
-      context: context,
-      backgroundColor: const Color(0xFF161D26),
-      showDragHandle: true,
-      // Without this the sheet is capped at nine sixteenths of the screen - 219
-      // pixels on a 390 pixel landscape phone - and two glove-sized targets plus
-      // a title and a cancel do not fit, so the second one fell below the fold
-      // and selecting police needed a scroll (#133). The sheet takes the height
-      // it needs instead of the targets being shrunk to fit a cap.
-      isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 14),
-                child: Text(
-                  'Tell the group',
-                  style: TextStyle(
-                    color: Color(0xFFE4E9EF),
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              _ReportSightingOptions(
-                onSpeedCamera: () =>
-                    Navigator.of(sheetContext).pop(HazardType.speedCamera),
-                onPolice: () =>
-                    Navigator.of(sheetContext).pop(HazardType.policeActivity),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(sheetContext).pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (type == null || !mounted) return;
-    try {
-      await report(type);
-      _showMessage('${type.label} reported to the group.');
-    } on FormatException catch (error) {
-      _showMessage('Report not sent. ${error.message}');
-    } on Object {
-      _showMessage('Report not sent. Try again in a moment.');
-    }
   }
 
   Future<void> _confirmEnableSpeedLimitDisplay() async {
@@ -8577,425 +8407,6 @@ class _ActionLabel extends StatelessWidget {
   }
 }
 
-/// Compact map control that opens the enforcement sighting picker.
-///
-/// Deliberately small: it sits over the map for a whole ride, so it earns only
-/// as much space as a gloved thumb needs. The targets it opens are the large
-/// ones.
-class _ReportSightingButton extends StatelessWidget {
-  const _ReportSightingButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  /// The square the target occupies, in every state and both orientations. #142
-  /// takes the width a narrow landscape rail needs out of the two labels, never
-  /// out of this: 62 px is a deliberate glove size, well past the 48 px minimum.
-  static const double side = 62;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: 'Report a camera or police to the group',
-    child: Material(
-      color: const Color(0xF21C2530),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: Color(0xFF5A6878)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: const Key('report-sighting-button'),
-        onTap: onPressed,
-        child: SizedBox(
-          width: side,
-          height: side,
-          child: const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add_alert_rounded, size: 26, color: Color(0xFFFFD24A)),
-              SizedBox(height: 2),
-              // The target keeps its 62 pixels at every text size, so the caption
-              // is what gives way rather than the box overflowing: the icon is
-              // what a rider aims at, and the word underneath only names it.
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'REPORT',
-                    style: TextStyle(
-                      color: Color(0xFFE4E9EF),
-                      fontSize: 9,
-                      height: 1,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-/// The two report targets, side by side wherever both fit.
-///
-/// Stacked, they needed 176 pixels of a sheet the framework caps at 219 on a
-/// landscape phone, so police fell below the fold and could only be reached by
-/// scrolling - unusable on a bike, and it defeated the two-tap design, which
-/// exists so a stray map tap cannot broadcast a warning to the whole group
-/// (#133). Neither target is shrunk to achieve it: the pair goes side by side
-/// when each half can still hold a full-size target, and stacks otherwise, which
-/// is what keeps the largest accessibility text sizes honest.
-class _ReportSightingOptions extends StatelessWidget {
-  const _ReportSightingOptions({
-    required this.onSpeedCamera,
-    required this.onPolice,
-  });
-
-  final VoidCallback onSpeedCamera;
-  final VoidCallback onPolice;
-
-  /// Width one option needs for its icon, its label at the current text scale,
-  /// and the padding a gloved hand needs around them.
-  static double _minimumOptionWidth(BuildContext context) =>
-      34 + 24 + MediaQuery.textScalerOf(context).scale(22) * 7.2;
-
-  @override
-  Widget build(BuildContext context) {
-    final camera = _ReportSightingOption(
-      optionKey: const Key('report-speed-camera-option'),
-      label: 'SPEED CAMERA',
-      icon: Icons.speed_rounded,
-      color: const Color(0xFF9B1B23),
-      onPressed: onSpeedCamera,
-    );
-    final police = _ReportSightingOption(
-      optionKey: const Key('report-police-option'),
-      label: 'POLICE',
-      icon: Icons.local_police_rounded,
-      color: const Color(0xFF17497F),
-      onPressed: onPolice,
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final available = constraints.maxWidth;
-        final sideBySide =
-            available.isFinite &&
-            (available - 12) / 2 >= _minimumOptionWidth(context);
-        if (!sideBySide) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [camera, police],
-          );
-        }
-        return Row(
-          key: const Key('report-options-side-by-side'),
-          // Each option carries its own height, so the row must not try to
-          // stretch to a parent that has none to give.
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: camera),
-            const SizedBox(width: 12),
-            Expanded(child: police),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// One report target, sized for a rider wearing gloves, on a moving bike.
-class _ReportSightingOption extends StatelessWidget {
-  const _ReportSightingOption({
-    required this.optionKey,
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onPressed,
-  });
-
-  final Key optionKey;
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: SizedBox(
-      // Both options must be reachable on a landscape phone without scrolling;
-      // the sheet scrolls as a backstop, but a rider should never have to reach
-      // for it. This height is never traded away to make them fit - see
-      // [_ReportSightingOptions], which changes the arrangement instead.
-      height: 76,
-      child: FilledButton.icon(
-        key: optionKey,
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-        ),
-        icon: Icon(icon, size: 34),
-        label: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-/// The two-part enforcement warning: a bubble, then a border (#446).
-///
-/// See `enforcement_alert_presentation.dart` for why it is two parts and not one
-/// panel. In short: announcing a camera is an event and being on the approach is a
-/// state, and the panel was doing both badly because a surface loud enough to
-/// announce is too big to hold for a mile.
-class _EnforcementAlertLayer extends StatefulWidget {
-  const _EnforcementAlertLayer({
-    super.key,
-    required this.alert,
-    required this.distanceUnit,
-    required this.topInset,
-    required this.onDismiss,
-  });
-
-  final EnforcementAlert alert;
-  final DistanceUnit distanceUnit;
-
-  /// Safe-area inset, so the bubble follows a notch or Dynamic Island.
-  final double topInset;
-
-  final VoidCallback onDismiss;
-
-  @override
-  State<_EnforcementAlertLayer> createState() => _EnforcementAlertLayerState();
-}
-
-class _EnforcementAlertLayerState extends State<_EnforcementAlertLayer> {
-  Timer? _bubbleTimer;
-  bool _announced = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Fixed, and not restarted when the distance changes. The distance updates
-    // several times a second on an approach, and a life tied to it would never
-    // end — which is how the panel came to own the screen for a whole mile.
-    _bubbleTimer = Timer(enforcementBubbleLife, () {
-      if (mounted) setState(() => _announced = true);
-    });
-  }
-
-  @override
-  void dispose() {
-    _bubbleTimer?.cancel();
-    super.dispose();
-  }
-
-  EnforcementAlertStage get _stage => enforcementAlertStage(
-    armed: true,
-    dismissed: false,
-    // The widget is rebuilt from scratch for a new hazard, so elapsed time is
-    // carried by the timer rather than measured against a stored clock.
-    sinceArmed: _announced ? enforcementBubbleLife : Duration.zero,
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final camera = widget.alert.hazard.type == HazardType.speedCamera;
-    final stage = _stage;
-    return Stack(
-      children: [
-        // The border holds for the whole approach and is the entire warning once
-        // the bubble has gone. IgnorePointer because it covers the map: a warning
-        // that swallowed a pan would be the full-screen problem again in a
-        // thinner disguise.
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              key: const Key('enforcement-alert-border'),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(enforcementBorderRadius),
-                border: Border.all(
-                  color: camera
-                      ? const Color(0xFFFF3B30)
-                      : const Color(0xFF4C9AFF),
-                  width: enforcementBorderWidth,
-                ),
-              ),
-            ),
-          ),
-        ),
-        if (stage == EnforcementAlertStage.announcing)
-          Positioned(
-            left: 0,
-            right: 0,
-            top: widget.topInset + 12,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: _EnforcementAlertBubble(
-                alert: widget.alert,
-                distanceUnit: widget.distanceUnit,
-                onDismiss: widget.onDismiss,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// The announcement itself: compact, loud, and clear of the rider marker.
-///
-/// Top-centre keeps it away from the forward-biased current position and the
-/// bottom navigation rails. [enforcementBubbleMaxWidth] keeps a landscape phone
-/// to a notification rather than a band across the screen.
-class _EnforcementAlertBubble extends StatelessWidget {
-  const _EnforcementAlertBubble({
-    required this.alert,
-    required this.distanceUnit,
-    required this.onDismiss,
-  });
-
-  final EnforcementAlert alert;
-  final DistanceUnit distanceUnit;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    final camera = alert.hazard.type == HazardType.speedCamera;
-    final title = camera ? 'SPEED CAMERA' : 'POLICE';
-    final distance = MeasurementFormatter(
-      distanceUnit,
-    ).distance(alert.distanceMeters);
-    final enforcedLimit = enforcementLimitLabel(alert.hazard.details);
-    return Semantics(
-      key: const Key('enforcement-alert-overlay'),
-      container: true,
-      liveRegion: true,
-      label: '$title ahead in $distance.',
-      button: true,
-      onTapHint: 'Dismiss',
-      child: GestureDetector(
-        onTap: onDismiss,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          constraints: const BoxConstraints(
-            maxWidth: enforcementBubbleMaxWidth,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            // Opaque: anything showing through the words competes with them at
-            // the moment the rider has least attention to spare (#107).
-            color: camera ? const Color(0xFF6E1015) : const Color(0xFF0F3560),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: camera ? const Color(0xFFFF3B30) : const Color(0xFF4C9AFF),
-              width: 3,
-            ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x99000000),
-                blurRadius: 12,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-          // A row, not a column. The stacked column is what made every previous
-          // version tall, and height is the only dimension that competes with the
-          // map.
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                camera ? Icons.speed_rounded : Icons.local_police_rounded,
-                size: 30,
-                color: Colors.white,
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        height: 1.1,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    Text(
-                      key: const Key('enforcement-alert-distance'),
-                      distance,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        height: 1.15,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (enforcedLimit != null) ...[
-                const SizedBox(width: 12),
-                // The limit is the one number that matters at a camera, so it
-                // gets the sign shape rather than a line of text. `VARIABLE` and
-                // the rest of the wording come from #418's own label.
-                Container(
-                  key: const Key('enforcement-alert-limit'),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFD71920),
-                      width: 4,
-                    ),
-                  ),
-                  child: Text(
-                    enforcedLimit,
-                    maxLines: 1,
-                    style: const TextStyle(
-                      color: Color(0xFF111111),
-                      fontSize: 18,
-                      height: 1,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // The badge sits directly on the map without a panel behind it, so every label
 // outside the white sign face carries its own shadow for legibility.
 const _mapOverlayTextShadows = [
@@ -9037,40 +8448,6 @@ class _MapOverlayLabel extends StatelessWidget {
       Text(text, key: fillKey, style: style),
     ],
   );
-}
-
-/// Tells its child whether an enforcement warning is live (#446).
-///
-/// A wrapper rather than a flag threaded down, because the alert is a listenable
-/// the badge has no business subscribing to itself, and the badge is rebuilt often
-/// enough already.
-class _EnforcementEmphasis extends StatelessWidget {
-  const _EnforcementEmphasis({
-    required this.alert,
-    required this.dismissedHazardId,
-    required this.builder,
-  });
-
-  final ValueListenable<EnforcementAlert?>? alert;
-  final String? dismissedHazardId;
-  final Widget Function(bool emphasised) builder;
-
-  @override
-  Widget build(BuildContext context) {
-    final listenable = alert;
-    // No detector configured at all — most tests, and any build without the
-    // provider. Emphasis is then never applied rather than defaulted on.
-    if (listenable == null) return builder(false);
-    return ValueListenableBuilder<EnforcementAlert?>(
-      valueListenable: listenable,
-      builder: (context, value, _) => builder(
-        enforcementEmphasisApplies(
-          armed: value != null,
-          dismissed: value != null && value.hazard.id == dismissedHazardId,
-        ),
-      ),
-    );
-  }
 }
 
 /// Compact, always-available wind state for the balloon map.
@@ -10062,18 +9439,7 @@ class _PostedSpeedLimitBadge extends StatelessWidget {
     required this.limit,
     required this.riderSpeedMetersPerSecond,
     this.riderSpeedIsAgeing = false,
-    this.emphasised = false,
   });
-
-  /// Enlarged for the approach to a speed camera (#446).
-  ///
-  /// This is the one thing allowed to change the surface's width, and it is worth
-  /// naming why: #142 fixed the *content* moving the width — a three-digit speed
-  /// widening the sign and shoving its left edge across the map — by making the
-  /// number give way inside a fixed 58px. That contract still holds. This is a
-  /// deliberate, bounded, whole-surface change with a reason a rider can see, not
-  /// a length of text leaking into a layout.
-  final bool emphasised;
 
   final SpeedLimitDisplayStatus status;
   final SpeedLimitLookupOutcome? outcome;
@@ -10087,10 +9453,7 @@ class _PostedSpeedLimitBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Half again on a camera approach, and exactly 1 otherwise, so an ordinary
-    // ride gets byte-identical geometry to before (#446, #142).
-    final scale = emphasised ? enforcementEmphasisScale : 1.0;
-    final signDiameter = 58 * scale;
+    const signDiameter = 58.0;
     final reading = limit;
     final known = status == SpeedLimitDisplayStatus.known && reading != null;
     final value = known
@@ -10179,7 +9542,7 @@ class _PostedSpeedLimitBadge extends StatelessWidget {
                     color: known
                         ? const Color(0xFFD71920)
                         : const Color(0xFF8993A0),
-                    width: 6 * scale,
+                    width: 6,
                   ),
                   boxShadow: const [
                     BoxShadow(
@@ -10201,7 +9564,7 @@ class _PostedSpeedLimitBadge extends StatelessWidget {
                         value,
                         style: TextStyle(
                           color: const Color(0xFF111111),
-                          fontSize: 26 * scale,
+                          fontSize: 26,
                           height: 1,
                           fontWeight: FontWeight.w900,
                         ),
@@ -10224,7 +9587,7 @@ class _PostedSpeedLimitBadge extends StatelessWidget {
                   // the report asked to be readable on the approach, and a
                   // large limit beside a small speed invites reading one for
                   // the other.
-                  fontSize: 26 * scale,
+                  fontSize: 26,
                   height: 1,
                   fontWeight: FontWeight.w900,
                   shadows: _mapOverlayTextShadows,
@@ -10958,7 +10321,7 @@ class _QuickMessageInterruptOverlay extends StatelessWidget {
         onTap: onDismiss,
         behavior: HitTestBehavior.opaque,
         child: ColoredBox(
-          // Fully opaque, like the enforcement warning: anything showing through
+          // Fully opaque: anything showing through
           // competes with the alert at the moment the rider has least attention
           // to spare.
           color: const Color(0xFF7A0E1E),
@@ -10998,7 +10361,7 @@ class _QuickMessageInterruptOverlay extends StatelessWidget {
                         origin.toUpperCase(),
                         key: const Key('quick-message-interrupt-origin'),
                         style: const TextStyle(
-                          // Secondary to the headline, unlike the enforcement
+                          // Secondary to the headline
                           // warning where the distance *is* the actionable number.
                           // Here who and what outrank how far.
                           color: Color(0xF2FFFFFF),

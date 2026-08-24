@@ -73,20 +73,20 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Balloon Crumbs uses nearby connections to exchange ride safety updates when mobile coverage is unavailable.</string>
+	<string>Balloon Crumbs uses nearby connections to exchange flight safety updates when mobile coverage is unavailable.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_90AAE9C4995F._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Balloon Crumbs uses nearby devices and local networks to keep your ride group coordinated.</string>
+	<string>Balloon Crumbs uses nearby devices and local networks to keep your flight crew coordinated.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Balloon Crumbs uses your location during an active flight to share your position with your crew and provide navigation. You can pause or stop location sharing at any time.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Balloon Crumbs uses your location during an active flight to show your position to the crew and keep them informed of where you are. It keeps doing this while you use another navigation app or the screen is off, and stops as soon as the flight ends.</string>
 	<!--
 	  Location is a background mode because the group has to be able to see a
-	  rider whose phone is in a pocket or showing another navigation app. Without
+	  crew member whose phone is in a pocket or showing another navigation app. Without
 	  it iOS stops delivering fixes the moment the app leaves the foreground, and
 	  a recorded trail becomes a straight line between the last fix before that
 	  and the first one after (#205).
@@ -94,14 +94,14 @@
 	  The app asks for Always access from the explicit start/share action because
 	  physical testing showed While Using did not reliably survive another
 	  navigation app taking the foreground. It still only holds a location
-	  session during an active ride and shows the blue background indicator.
+	  session during an active flight and shows the blue background indicator.
 	-->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Scanning a ride invitation code lets you join a group ride with no mobile signal. The camera is used only while that scanner is open, and no image is stored or sent anywhere.</string>
+	<string>Scanning a flight invitation code lets you join a flight crew with no mobile signal. The camera is used only while that scanner is open, and no image is stored or sent anywhere.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIApplicationSceneManifest</key>

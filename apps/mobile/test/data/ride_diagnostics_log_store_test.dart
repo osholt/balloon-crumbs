@@ -47,7 +47,7 @@ void main() {
       // Read rather than stored alongside, so there is no second copy to fall out
       // of step with the file a rider actually holds.
       expect(log?.rideCode, 'ABCD');
-      expect(log?.fileName, 'tail-end-charlie-diagnostics-ABCD.txt');
+      expect(log?.fileName, 'balloon-crumbs-diagnostics-ABCD.txt');
     });
 
     test('a log with no ride code is still offered', () async {

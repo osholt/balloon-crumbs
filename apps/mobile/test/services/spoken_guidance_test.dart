@@ -102,13 +102,13 @@ void main() {
       expect(warmable.warmCalls, 1);
 
       await warmSpeaker.speakAlert(
-        key: 'camera-1',
-        phrase: 'Speed camera, in 151 yd',
+        key: 'road-blocked-1',
+        phrase: 'Road blocked, in 151 yd',
         enabled: true,
         rideActive: true,
       );
       expect(warmable.configureCalls, 1);
-      expect(warmable.spoken, ['Speed camera, in 151 yards']);
+      expect(warmable.spoken, ['Road blocked, in 151 yards']);
     },
   );
 
