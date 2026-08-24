@@ -7,7 +7,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../controllers/chase_vehicle_controller.dart';
-import '../../domain/chase_vehicle.dart';
 import '../../controllers/distance_unit_controller.dart';
 import '../../controllers/foreground_location_controller.dart';
 import '../../controllers/internet_relay_controller.dart';
@@ -50,6 +49,7 @@ import '../../domain/ride_role.dart';
 import '../../domain/ride_session.dart';
 import '../../domain/rider_location.dart';
 import '../../domain/rider_color.dart';
+import '../../domain/route_preferences.dart';
 import '../../domain/route_store.dart';
 import '../../internet/internet_relay_client.dart';
 import '../../internet/internet_relay_worker.dart';
@@ -62,6 +62,7 @@ import '../../relay/relay_engine.dart';
 import '../../relay/sqlite_relay_queue.dart';
 import '../../services/carplay_bridge.dart';
 import '../../services/chase_guidance_target.dart';
+import '../../services/chase_rendezvous_planner.dart';
 import '../../services/craft_roster.dart';
 import '../../services/craft_track_reducer.dart';
 import '../../services/fiesta_flight_loader.dart';
@@ -1461,7 +1462,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   String? _carPlayMapStyleJson;
   late final http.Client _carPlayRoutingClient;
   late final http.Client _windForecastClient;
-  late final RoadRoutingService _simulationRoutingService;
+  late final RoadRoutingService _roadRoutingService;
+  late final ChaseRendezvousPlanner _chaseRendezvousPlanner;
   late final DestinationRoutePlanner _carPlayDestinationPlanner;
   ForegroundLocationController? _locationController;
   NearbyRelayController? _relayController;
@@ -1491,6 +1493,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   String? _observedLandingGuidanceRevision;
   String? _observedFlightLandingEventId;
   bool _chaseGuidanceRouting = false;
+  bool _chaseGuidanceHadUsableTarget = false;
+  String? _chaseGuidanceStatus;
+  ChaseRendezvousSelection? _activeChaseRendezvous;
+  ChaseGuidanceTarget? _lastChaseGuidanceKind;
   DateTime? _lastChaseGuidanceRouteAt;
   awareness_geo.GeoPoint? _lastChaseGuidanceTarget;
   int _chaseGuidanceRouteSequence = 0;
@@ -1626,7 +1632,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final carPlayRouting = RoutingConfiguration.fromEnvironment();
     _carPlayRoutingClient = http.Client();
     _windForecastClient = http.Client();
-    _simulationRoutingService = PreferenceAwareRoadRoutingService(
+    _roadRoutingService = PreferenceAwareRoadRoutingService(
       osrm: OsrmRoadRoutingService(
         client: _carPlayRoutingClient,
         baseUrl: carPlayRouting.routingBaseUrl,
@@ -1636,12 +1642,19 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         routeUrl: carPlayRouting.valhallaRoutingUrl,
       ),
     );
+    _chaseRendezvousPlanner = ChaseRendezvousPlanner(
+      routingService: _roadRoutingService,
+      // The bundled OSRM and Valhalla endpoints are public fair-use services.
+      // Candidate requests stay below their documented one-request-per-second
+      // limit; a configured private endpoint safely receives the same bound.
+      requestSpacing: const Duration(milliseconds: 1100),
+    );
     _carPlayDestinationPlanner = DestinationRoutePlanner(
       searchService: NominatimDestinationSearchService(
         client: _carPlayRoutingClient,
         baseUrl: carPlayRouting.geocodingBaseUrl,
       ),
-      routingService: _simulationRoutingService,
+      routingService: _roadRoutingService,
     );
     widget.rideController.addListener(_onRideControllerChanged);
     _syncSharedLandingZone();
@@ -2625,23 +2638,38 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _lastSimulationRerouteElapsed = simulation.simulatedElapsed;
     _lastSimulationRerouteLanding = landing;
     try {
-      final result = await _simulationRoutingService.routeThrough([
-        route_domain.GeoPoint(
+      final destination = _chaseGuidanceResolver.resolve(
+        target: ChaseGuidanceTarget.landingArea,
+        now: DateTime.now(),
+        landingZone: LandingZoneTarget(
+          center: landing,
+          radiusMeters: 300,
+          label: 'Forecast landing area',
+          updatedAt: DateTime.now(),
+        ),
+      )!;
+      final rendezvous = await _chaseRendezvousPlanner.plan(
+        origin: route_domain.GeoPoint(
           latitude: chase.position.latitude,
           longitude: chase.position.longitude,
         ),
-        route_domain.GeoPoint(
-          latitude: landing.latitude,
-          longitude: landing.longitude,
+        destination: destination,
+        preferences: RoutePreferences(
+          vehicle: widget.chaseVehicle?.vehicle ?? ChaseVehicle.unspecified,
         ),
-      ], originBearingDegrees: chase.headingDegrees);
+        previousEndpoint: _routeDestination(_simulationChaseRoute),
+        originBearingDegrees: chase.headingDegrees,
+      );
       if (!mounted || _simulationController != simulation) return;
+      final result = rendezvous.routeResult;
       final route = route_domain.ImportedRoute(
         id: 'live-chase-route-${_simulationRerouteSequence++}',
         name: 'Live chase route to forecast landing area',
         description:
-            'Recalculated from the Land Rover position to a road-accessible '
-            'point serving the forecast landing area.',
+            'Recalculated from the Land Rover position to the best of '
+            '${rendezvous.candidatesAccepted} provider-routed road candidates '
+            'serving the forecast landing area. '
+            '${rendezvous.accessConfidence.limitation}',
         importedAt: DateTime.now(),
         sourceFileName: 'live-open-meteo-chase-route',
         paths: [
@@ -2650,8 +2678,17 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             points: result.points,
           ),
         ],
-        waypoints: const [],
+        waypoints: [
+          route_domain.RouteWaypoint(
+            point: rendezvous.roadEndpoint,
+            name: 'Road rendezvous',
+            description:
+                'Forecast-area endpoint; mapped access only. Verify permission and safe stopping.',
+            symbol: 'Flag, Red',
+          ),
+        ],
         maneuvers: result.maneuvers,
+        plannedDuration: result.duration,
       );
       await _simulationRouteStore?.saveActiveRoute(route);
       if (!mounted || _simulationController != simulation) return;
@@ -2665,6 +2702,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               ),
             )
             .toList(growable: false),
+        plannedDuration: result.duration,
       );
       setState(() {});
     } on Object catch (error) {
@@ -5189,6 +5227,23 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
   }
 
+  String? get _chaseGuidanceDisplayLabel {
+    final target = _chaseGuidanceTarget;
+    if (_chaseGuidanceRouting) return 'Calculating road rendezvous candidates…';
+    if (target == null) return null;
+    final destination = _currentChaseGuidanceDestination();
+    final evidenceLabel = destination == null
+        ? target.label
+        : '${destination.label} · candidate area ±${MeasurementFormatter(widget.distanceUnits.value).distance(destination.uncertaintyRadiusMeters)}';
+    return [evidenceLabel, ?_chaseGuidanceStatus].join(' · ');
+  }
+
+  void _setChaseGuidanceStatus(String status) {
+    if (_chaseGuidanceStatus == status) return;
+    _chaseGuidanceStatus = status;
+    if (mounted) setState(() {});
+  }
+
   Future<void> _chooseChaseGuidanceTarget() async {
     final role = widget.rideController.session?.flightRole;
     if (role == null ||
@@ -5295,6 +5350,16 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final destination = _currentChaseGuidanceDestination();
     final origin = _mapPosition.value;
     if (selected == null || destination == null || origin == null) {
+      if (destination == null) _chaseGuidanceHadUsableTarget = false;
+      _setChaseGuidanceStatus(
+        selected == null
+            ? 'choose a chase target'
+            : origin == null
+            ? 'last route held · this vehicle fix unavailable'
+            : selected == ChaseGuidanceTarget.balloon
+            ? 'last route held · fresh balloon fix unavailable'
+            : 'last route held · intended area unavailable',
+      );
       if (force && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -5309,12 +5374,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return;
     }
     final now = DateTime.now();
+    final recoveredUsableTarget = !_chaseGuidanceHadUsableTarget;
+    _chaseGuidanceHadUsableTarget = true;
     if (!_chaseGuidanceReroutePolicy.shouldReroute(
       now: now,
       target: destination.point,
       lastRoutedAt: _lastChaseGuidanceRouteAt,
       lastTarget: _lastChaseGuidanceTarget,
-      force: force,
+      force: force || recoveredUsableTarget,
     )) {
       return;
     }
@@ -5322,36 +5389,32 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     _chaseGuidanceRouting = true;
     if (mounted) setState(() {});
     try {
-      final result = await _simulationRoutingService.routeThrough([
-        origin,
-        route_domain.GeoPoint(
-          latitude: destination.point.latitude,
-          longitude: destination.point.longitude,
+      final rendezvous = await _chaseRendezvousPlanner.plan(
+        origin: origin,
+        destination: destination,
+        preferences: RoutePreferences(
+          vehicle: widget.chaseVehicle?.vehicle ?? ChaseVehicle.unspecified,
         ),
-      ], originBearingDegrees: _mapNavigationPosition.value?.headingDegrees);
+        previousEndpoint: _lastChaseGuidanceKind == destination.kind
+            ? _activeChaseRendezvous?.roadEndpoint
+            : null,
+        originBearingDegrees: _mapNavigationPosition.value?.headingDegrees,
+      );
       if (!mounted) return;
-      final roadEndpoint = awareness_geo.GeoPoint(
-        latitude: result.points.last.latitude,
-        longitude: result.points.last.longitude,
-      );
-      if (!destination.acceptsRoadEndpoint(roadEndpoint)) {
-        _warnings.add(
-          'No sufficiently close road rendezvous was found for ${selected.label.toLowerCase()}. The previous route is still in use.',
-        );
-        setState(() {});
-        return;
-      }
-      final separation = GeoCalculations.distanceMeters(
-        roadEndpoint,
-        destination.point,
-      );
+      final result = rendezvous.routeResult;
+      final separation = rendezvous.targetSeparationMeters;
       final route = route_domain.ImportedRoute(
         id: 'personal-chase-${_chaseGuidanceRouteSequence++}',
         name: selected.label,
         description:
-            'Road guidance for this chase vehicle. The road endpoint is '
+            'Provider-routed guidance for this chase vehicle. The selected '
+            'road endpoint is '
             '${MeasurementFormatter(widget.distanceUnits.value).distance(separation)} '
-            'from ${selected == ChaseGuidanceTarget.balloon ? 'the latest balloon fix' : 'the centre of the intended area'}. Access and stopping suitability remain unverified.',
+            'from ${selected == ChaseGuidanceTarget.balloon ? 'the bounded balloon motion estimate' : 'the centre of the intended area'}. '
+            '${destination.limitations} '
+            '${rendezvous.accessConfidence.limitation} '
+            '${rendezvous.candidatesAccepted} of ${rendezvous.candidatesAttempted} candidates were usable; '
+            '${rendezvous.retainedPreviousEndpoint ? 'the previous endpoint was retained by the 90-second stability threshold' : 'the lowest fresh provider travel-time score was selected'}.',
         importedAt: now,
         sourceFileName: 'balloon-crumbs-personal-chase-route',
         paths: [
@@ -5368,10 +5431,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             symbol: 'Flag, Blue',
           ),
           route_domain.RouteWaypoint(
-            point: result.points.last,
-            name: selected.label,
+            point: rendezvous.roadEndpoint,
+            name: 'Road rendezvous',
             description:
-                'Road-accessible routing endpoint; target remains approximate.',
+                '${selected.label}; mapped access only. Check local signs, permission and safe stopping.',
             symbol: 'Flag, Red',
           ),
         ],
@@ -5379,13 +5442,19 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         plannedDuration: result.duration,
       );
       _liveRoutes = _liveRoutes.withVehicleRoadRoute(route);
+      _activeChaseRendezvous = rendezvous;
+      _lastChaseGuidanceKind = destination.kind;
       _lastChaseGuidanceRouteAt = now;
       _lastChaseGuidanceTarget = destination.point;
+      _chaseGuidanceStatus = rendezvous.retainedPreviousEndpoint
+          ? 'stable road endpoint retained · mapped access only'
+          : 'road endpoint updated · mapped access only';
       await _rideRouteStore?.saveActiveRoute(route);
       await _replaceAwarenessController(route);
       if (mounted) setState(() {});
     } on Object catch (error) {
       if (mounted) {
+        _chaseGuidanceStatus = 'last route held · no validated road candidate';
         _warnings.add(
           'Personal chase guidance is unavailable; the previous road route is still in use. $error',
         );
@@ -6258,11 +6327,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           navigation: _mapNavigationPosition.value,
           now: DateTime.now(),
         ),
-    chaseGuidanceLabel: _chaseGuidanceRouting
-        ? 'Calculating a road rendezvous…'
-        : _chaseGuidanceTarget == null
+    chaseGuidanceLabel: _chaseGuidanceDisplayLabel == null
         ? null
-        : '${_chaseGuidanceTarget!.label} · shared in this vehicle',
+        : '${_chaseGuidanceDisplayLabel!} · shared in this vehicle',
     onChooseChaseGuidance: () => unawaited(_chooseChaseGuidanceTarget()),
     maneuverCount: const NavigationGuidancePlanner()
         .instructions(_activeRoute)
@@ -7136,14 +7203,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       navigationPosition: _mapNavigationPosition,
       windForecast: _windForecastController,
       liveFlightProjection: _liveFlightProjection,
-      chaseGuidanceLabel: _chaseGuidanceRouting
-          ? 'Calculating a road rendezvous…'
-          : role == FlightRole.chaseDriver && !canChangeChaseTarget
-          ? [
-              if (_chaseGuidanceTarget != null) _chaseGuidanceTarget!.label,
-              'stop to change target',
-            ].join(' · ')
-          : _chaseGuidanceTarget?.label,
+      chaseGuidanceLabel:
+          role == FlightRole.chaseDriver && !canChangeChaseTarget
+          ? [?_chaseGuidanceDisplayLabel, 'stop to change target'].join(' · ')
+          : _chaseGuidanceDisplayLabel,
       onUpdateFlightPlan: _requestRouteChange,
       onUpdateLandingArea: () => unawaited(_chooseLandingZoneOnMap()),
       onChooseChaseGuidance: canChangeChaseTarget

@@ -44,6 +44,53 @@ void main() {
     expect(target, isNull);
   });
 
+  test(
+    'fresh moving fixes produce a bounded estimate ahead of the balloon',
+    () {
+      final target = resolver.resolve(
+        target: ChaseGuidanceTarget.balloon,
+        now: now,
+        balloonFix: LocationSample(
+          position: const GeoPoint(latitude: 51.45, longitude: -2.61),
+          recordedAt: now.subtract(const Duration(seconds: 5)),
+          accuracyMeters: 6,
+          speedMetersPerSecond: 5,
+          headingDegrees: 0,
+        ),
+      );
+
+      expect(target, isNotNull);
+      expect(
+        target!.point.latitude,
+        greaterThan(target.evidencePoint.latitude),
+      );
+      expect(
+        target.point.longitude,
+        closeTo(target.evidencePoint.longitude, 1e-5),
+      );
+      expect(target.preferredBearingDegrees, 0);
+      expect(target.uncertaintyRadiusMeters, greaterThanOrEqualTo(150));
+      expect(target.limitations, contains('constant-motion'));
+    },
+  );
+
+  test('stationary fixes remain evidence without inventing a direction', () {
+    final target = resolver.resolve(
+      target: ChaseGuidanceTarget.balloon,
+      now: now,
+      balloonFix: LocationSample(
+        position: const GeoPoint(latitude: 51.45, longitude: -2.61),
+        recordedAt: now,
+        accuracyMeters: 6,
+        speedMetersPerSecond: 0,
+      ),
+    );
+
+    expect(target?.point, target?.evidencePoint);
+    expect(target?.preferredBearingDegrees, isNull);
+    expect(target?.limitations, contains('No usable direction'));
+  });
+
   test('balloon guidance rejects a road endpoint too far from the craft', () {
     final target = resolver.resolve(
       target: ChaseGuidanceTarget.balloon,
@@ -105,6 +152,16 @@ void main() {
         lastTarget: previous,
       ),
       isTrue,
+    );
+    expect(
+      policy.shouldReroute(
+        now: now,
+        target: previous,
+        lastRoutedAt: now.subtract(const Duration(minutes: 11)),
+        lastTarget: previous,
+      ),
+      isTrue,
+      reason: 'an old route is refreshed even when the target is stationary',
     );
   });
 

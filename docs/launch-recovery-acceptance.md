@@ -61,6 +61,25 @@ whole-crew view reuses the bounded Mercator framing used by the live mini-map.
 | Live, relayed, stale and unknown never collapse into live | `live_presence_test.dart`, `craft_roster_test.dart`, `ride_membership_live_presence_test.dart`; freshness and source remain in each inspectable marker label |
 | Small phone, landscape and large text | `role_specific_map_responsive_test.dart` renders pilot, airborne crew, chase driver, chase crew and observer at 320×568, 667×375 and 390×844 with 200% text; it also caught and closes the basemap badge overflow |
 
+## Safe moving-rendezvous closure
+
+The chase route ends at a provider-routed road candidate around flight
+evidence, never at the raw airborne coordinate. A fresh moving fix produces a
+bounded 60-second constant-motion estimate; a stationary fix produces a
+surrounding search without inventing direction; a fix over 45 seconds old
+cannot create a target. Four deterministic surrounding candidates are scored by
+fresh provider travel time and endpoint separation. The previous endpoint is
+also rescored and retained unless another saves at least 90 seconds.
+
+| Criterion | Evidence |
+| --- | --- |
+| Raw balloon coordinate is never a driving endpoint | `chase_rendezvous_planner_test.dart::raw flight evidence is never submitted as a driving endpoint` |
+| Mapped restrictions and unverified access stay distinct | Provider-rejected candidates are skipped in `chase_rendezvous_planner_test.dart`; route descriptions and the role dashboard say “mapped access only”; `docs/routing-provider-policy.md` records source terms and limitations |
+| Missing/stale evidence freezes rather than invents | `chase_guidance_target_test.dart::stale balloon fixes cannot become a live navigation target`; the live shell retains the prior route and labels why |
+| Movement, time, age and score hysteresis are explicit | `ChaseGuidanceReroutePolicy` uses 2 minutes, 300 m and a 10-minute maximum age; `ChaseRendezvousPlanner` uses a 90-second minimum score improvement |
+| Replay is deterministic and failures are bounded | `chase_rendezvous_planner_test.dart` covers crossings, reversals, stationary fixes, rejected candidates, all-unreachable candidates and identical replay results |
+| Provider use is within current terms | `docs/routing-provider-policy.md`; candidate calls are sequential at 1.1 seconds and identify Balloon Crumbs through `User-Agent` and `X-Client-Id` |
+
 ## Balloon telemetry closure
 
 Balloon Crumbs stores telemetry internally in metres and converts only at the

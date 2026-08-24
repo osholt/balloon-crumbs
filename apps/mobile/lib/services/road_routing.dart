@@ -1394,6 +1394,9 @@ bool _isRoundaboutManeuver(String type) => const {
 const _requestHeaders = {
   'Accept': 'application/json',
   'User-Agent': 'BalloonCrumbs/1.0 (https://github.com/osholt/balloon-crumbs)',
+  // Requested by the public Valhalla service for end-user applications. Other
+  // routing engines ignore this identifying header.
+  'X-Client-Id': 'balloon-crumbs',
 };
 
 String _basePath(Uri base) {

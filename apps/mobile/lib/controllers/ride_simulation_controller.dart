@@ -130,6 +130,7 @@ class RideSimulationController extends ChangeNotifier {
   Duration _simulatedElapsed = Duration.zero;
   double _timeScale = 8;
   double _baseSpeedMetersPerSecond = 13.4;
+  double? _routedRoadSpeedMetersPerSecond;
   bool _backRiderDelayed = false;
   bool _emitting = false;
   bool _disposed = false;
@@ -476,10 +477,16 @@ class RideSimulationController extends ChangeNotifier {
 
   /// Replaces only the road journey. Balloon time, altitude, position and both
   /// travelled trails continue uninterrupted.
-  void replaceChaseRoute(List<GeoPoint> route) {
+  void replaceChaseRoute(List<GeoPoint> route, {Duration? plannedDuration}) {
     if (route.length < 2) return;
     final next = _RouteSampler(route);
+    final durationSeconds = plannedDuration == null
+        ? 0.0
+        : plannedDuration.inMicroseconds / Duration.microsecondsPerSecond;
     _routeSampler = next;
+    _routedRoadSpeedMetersPerSecond = durationSeconds > 0
+        ? next.totalDistanceMeters / durationSeconds
+        : null;
     for (final agent in _agents.where((agent) => agent.role != RideRole.lead)) {
       agent.progressMeters = 0;
     }
@@ -845,7 +852,15 @@ class RideSimulationController extends ChangeNotifier {
       return 0;
     }
     if (agent.id == backRiderId && _backRiderDelayed) {
-      return _baseSpeedMetersPerSecond * 0.45;
+      return (_routedRoadSpeedMetersPerSecond ?? _baseSpeedMetersPerSecond) *
+          0.45;
+    }
+    final routedRoadSpeed = _routedRoadSpeedMetersPerSecond;
+    if (routedRoadSpeed != null) {
+      // OSRM/Valhalla journey duration already reflects the mapped road class,
+      // legal restrictions and profile speeds. Preserve that timing instead of
+      // replaying provider geometry at the demo's old fixed 30 mph speed.
+      return routedRoadSpeed * agent.speedFactor;
     }
     final elapsedSeconds =
         _simulatedElapsed.inMicroseconds / Duration.microsecondsPerSecond;

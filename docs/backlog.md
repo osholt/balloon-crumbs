@@ -25,7 +25,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 5 | P0 | ~~Altitude-coloured ground track and telemetry card~~ **done** | WP5 | 2, 3 |
 | 6 | P0 | Pilot view, drawn landing area, and inferred landing phase | WP6 | 3, 5 |
 | 7 | P0 | ~~Multiple chase vehicles and vehicle assignment~~ **done**; rendezvous remains in 7a | WP7 | 3, 5 |
-| 7a | P0 | Chaser-selectable road guidance to the balloon or intended landing area, with safe road rendezvous and balloon-divergence checks | WP7 | 6, 7 |
+| 7a | P0 | ~~Chaser-selectable road guidance to the balloon or intended landing area, with bounded road-candidate selection, access uncertainty and reroute hysteresis~~ **done** | WP7 | 6, 7 |
 | 7b | P0 | ~~Mini-map and local viewpoint switching as the chase decision surface (balloon, track, area, vehicles)~~ **done** | WP7 | 7a |
 | 8 | P0 | Voice-first chase guidance for a moving target | WP8 | 7 |
 | 9 | P0 | Ground notes and the retrieve | WP9 | 3 |
