@@ -79,6 +79,7 @@ void main() {
       'label': 'Home contact',
       'durationMinutes': 240,
       'consentConfirmed': true,
+      'precision': 'reduced',
     });
     expect(shareUri.query, isEmpty);
     expect(shareUri.fragment, '${credentials.grant.id}.$observerToken');
@@ -114,7 +115,11 @@ void main() {
       client: MockClient((request) async {
         captured = request;
         return http.Response(
-          jsonEncode({..._grantJson(includeTokens: true), 'scope': 'group'}),
+          jsonEncode({
+            ..._grantJson(includeTokens: true),
+            'scope': 'group',
+            'precision': 'exact',
+          }),
           201,
           headers: {'content-type': 'application/json'},
         );
@@ -126,16 +131,33 @@ void main() {
       label: 'Ride watcher',
       duration: const Duration(hours: 1),
       scope: ObserverAccessScope.group,
+      precision: ObserverPositionPrecision.exact,
+      pilotAuthorization: const ObserverPilotAuthorization(
+        deviceId: 'pilot-device',
+        devicePublicKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        signedAtMilliseconds: 1234,
+        signature:
+            'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      ),
     );
 
     expect(jsonDecode(captured.body), {
       'label': 'Ride watcher',
       'durationMinutes': 60,
       'consentConfirmed': true,
+      'precision': 'exact',
       'scope': 'group',
       'groupDisclosureConfirmed': true,
+      'pilotAuthorization': {
+        'deviceId': 'pilot-device',
+        'devicePublicKey': 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        'signedAtMilliseconds': 1234,
+        'signature':
+            'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      },
     });
     expect(credentials.grant.scope, ObserverAccessScope.group);
+    expect(credentials.grant.precision, ObserverPositionPrecision.exact);
   });
 
   test('uses a different credential for inspect, publish and revoke', () async {

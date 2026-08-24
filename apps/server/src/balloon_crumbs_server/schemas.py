@@ -574,6 +574,15 @@ class GetPlanResponse(BaseModel):
     expiresAt: str
 
 
+class ObserverPilotAuthorization(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deviceId: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    devicePublicKey: str = Field(pattern=r"^[A-Za-z0-9_-]{43}$")
+    signedAtMilliseconds: int
+    signature: str = Field(pattern=r"^[A-Za-z0-9_-]{86}$")
+
+
 class CreateObserverGrantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -581,14 +590,20 @@ class CreateObserverGrantRequest(BaseModel):
     durationMinutes: int = Field(ge=30, le=24 * 60)
     consentConfirmed: Literal[True]
     scope: Literal["rider", "group"] = "rider"
+    precision: Literal["reduced", "exact"] = "reduced"
     groupDisclosureConfirmed: Literal[True] | None = None
+    pilotAuthorization: ObserverPilotAuthorization | None = None
 
     @model_validator(mode="after")
     def group_scope_requires_disclosure(self) -> CreateObserverGrantRequest:
         if self.scope == "group" and self.groupDisclosureConfirmed is not True:
             raise ValueError("Group observer access requires group disclosure")
+        if self.scope == "group" and self.pilotAuthorization is None:
+            raise ValueError("Group observer access requires pilot authorization")
         if self.scope == "rider" and self.groupDisclosureConfirmed is not None:
             raise ValueError("Personal observer access has no group disclosure")
+        if self.scope == "rider" and self.pilotAuthorization is not None:
+            raise ValueError("Personal observer access has no pilot authorization")
         return self
 
 
@@ -598,6 +613,7 @@ class ObserverGrantResponse(BaseModel):
     id: str
     label: str
     scope: Literal["rider", "group"] = "rider"
+    precision: Literal["reduced", "exact"] = "reduced"
     createdAt: datetime
     expiresAt: datetime
     revokedAt: datetime | None
@@ -614,7 +630,7 @@ class ObserverPosition(BaseModel):
 
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
-    accuracyMeters: float = Field(ge=0, le=500)
+    accuracyMeters: float = Field(ge=0, le=5_000)
     recordedAt: datetime
 
     @field_validator("recordedAt")
@@ -707,6 +723,7 @@ class ObserverSnapshotResponse(BaseModel):
 
     protocolVersion: Literal[1, 2] = 1
     scope: Literal["rider", "group"] = "rider"
+    precision: Literal["reduced", "exact"] = "reduced"
     label: str
     subjectName: str | None
     rideStatus: Literal["waiting", "active", "paused", "ended"]

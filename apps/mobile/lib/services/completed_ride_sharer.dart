@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../domain/completed_ride.dart';
 import '../domain/distance_unit.dart';
 import '../domain/ride_role.dart';
+import 'flight_data_exporter.dart';
 import 'gpx_exporter.dart';
 import 'measurement_formatter.dart';
 
@@ -17,13 +18,20 @@ abstract interface class CompletedRideSharer {
     Rect? sharePositionOrigin,
   });
 
-  Future<void> exportGpx(CompletedRide ride, {Rect? sharePositionOrigin});
+  Future<void> exportFlightData(
+    CompletedRide ride, {
+    Rect? sharePositionOrigin,
+  });
 }
 
 class SystemCompletedRideSharer implements CompletedRideSharer {
-  const SystemCompletedRideSharer({this.gpxExporter = const GpxExporter()});
+  const SystemCompletedRideSharer({
+    this.gpxExporter = const GpxExporter(),
+    this.flightDataExporter = const FlightDataExporter(),
+  });
 
   final GpxExporter gpxExporter;
+  final FlightDataExporter flightDataExporter;
 
   @override
   Future<void> shareSummary(
@@ -54,7 +62,7 @@ class SystemCompletedRideSharer implements CompletedRideSharer {
   }
 
   @override
-  Future<void> exportGpx(
+  Future<void> exportFlightData(
     CompletedRide ride, {
     Rect? sharePositionOrigin,
   }) async {
@@ -62,22 +70,49 @@ class SystemCompletedRideSharer implements CompletedRideSharer {
     if (route == null) {
       throw StateError('This flight has no recorded local trail to export.');
     }
-    final fileName = gpxExporter.fileName(route);
-    final bytes = Uint8List.fromList(utf8.encode(gpxExporter.export(route)));
+    final gpxFileName = gpxExporter.fileName(route);
+    final csvFileName = flightDataExporter.csvFileName(ride.rideCode);
+    final kmlFileName = flightDataExporter.kmlFileName(ride.rideCode);
     await SharePlus.instance.share(
       ShareParams(
         title: 'Export ${ride.title}',
-        subject: 'Balloon Crumbs GPX: ${ride.title}',
+        subject: 'Balloon Crumbs flight data: ${ride.title}',
         text:
-            'Choose Files, Downloads or a GPX-compatible app in the share sheet.',
+            'Exact recorded positions, timestamps and altitude are attached. '
+            'The CSV labels measured, calculated, missing and rejected data.',
         files: [
           XFile.fromData(
-            bytes,
+            Uint8List.fromList(utf8.encode(gpxExporter.export(route))),
             mimeType: 'application/gpx+xml',
-            name: fileName,
+            name: gpxFileName,
+          ),
+          XFile.fromData(
+            Uint8List.fromList(
+              utf8.encode(
+                flightDataExporter.archivedTelemetryCsv(
+                  traveledRoute: route,
+                  plannedRoute: ride.plannedRoute,
+                ),
+              ),
+            ),
+            mimeType: 'text/csv',
+            name: csvFileName,
+          ),
+          XFile.fromData(
+            Uint8List.fromList(
+              utf8.encode(
+                flightDataExporter.kml(
+                  name: ride.title,
+                  traveledRoute: route,
+                  plannedRoute: ride.plannedRoute,
+                ),
+              ),
+            ),
+            mimeType: 'application/vnd.google-earth.kml+xml',
+            name: kmlFileName,
           ),
         ],
-        fileNameOverrides: [fileName],
+        fileNameOverrides: [gpxFileName, csvFileName, kmlFileName],
         sharePositionOrigin: sharePositionOrigin,
       ),
     );

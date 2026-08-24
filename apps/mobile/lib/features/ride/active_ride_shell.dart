@@ -118,6 +118,7 @@ import '../situational_awareness/situational_awareness_screen.dart';
 import '../simulation/ride_simulation_screen.dart';
 import 'end_ride_confirmation.dart';
 import 'ended_ride_screen.dart';
+import 'flight_export_consent.dart';
 import 'observer_access_sheet.dart';
 import 'ride_dashboard.dart';
 import 'ride_roster_sheet.dart';
@@ -2080,6 +2081,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               client: http.Client(),
             ),
             const SecureObserverGrantStore(),
+            groupAuthorizer: widget.rideController.authorizeGroupObserver,
           );
           await _observerAccessController!.attach(session);
           if (_observerAccessController!.hasActiveGrants) {
@@ -7349,6 +7351,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   Future<void> _shareCurrentRideSummary() async {
     final session = widget.rideController.session;
     if (session == null) return;
+    final choice = await chooseFlightSummaryShare(context);
+    if (choice == null || !mounted) return;
     try {
       final renderObject = context.findRenderObject();
       final origin = renderObject is RenderBox && renderObject.hasSize
@@ -7362,6 +7366,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         // Attached only when an instrumented build was recording, and only ever
         // to a recipient the rider picks in the share sheet (#419).
         diagnostics: _renderedDiagnostics,
+        includeExactTrack: choice == FlightSummaryShareChoice.exactFlightData,
       );
     } on Object catch (error) {
       if (!mounted) return;

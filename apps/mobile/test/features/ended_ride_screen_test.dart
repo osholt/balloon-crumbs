@@ -16,10 +16,13 @@ import 'package:balloon_crumbs/controllers/ride_controller.dart';
 import 'package:balloon_crumbs/data/in_memory_event_store.dart';
 import 'package:balloon_crumbs/data/in_memory_session_store.dart';
 import 'package:balloon_crumbs/domain/completed_ride_store.dart';
+import 'package:balloon_crumbs/domain/distance_unit.dart';
+import 'package:balloon_crumbs/domain/ride_event.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
 import 'package:balloon_crumbs/features/ride/ended_ride_screen.dart';
 import 'package:balloon_crumbs/internet/internet_relay_client.dart';
 import 'package:balloon_crumbs/services/nearby_bridge.dart';
+import 'package:balloon_crumbs/services/ride_summary_exporter.dart';
 
 void main() {
   late InMemoryEventStore events;
@@ -81,6 +84,35 @@ void main() {
       reason: 'the ride is archived, so nothing may describe it as destroyed',
     );
     expect(find.text('Finish and file in Previous flights'), findsOneWidget);
+  });
+
+  testWidgets('precise track attachments follow the explicit share choice', (
+    tester,
+  ) async {
+    final sharer = _RecordingSummarySharer();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EndedRideScreen(
+          controller: controller,
+          distanceUnits: DistanceUnitController.forLocale(
+            const Locale('en', 'GB'),
+          ),
+          summarySharer: sharer,
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('Share flight summary'));
+    await tester.tap(find.text('Share flight summary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('share-summary-without-track')));
+    await tester.pumpAndSettle();
+    expect(sharer.exactChoices, [false]);
+
+    await tester.tap(find.text('Share flight summary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('share-exact-flight-data')));
+    await tester.pumpAndSettle();
+    expect(sharer.exactChoices, [false, true]);
   });
 
   // #206/#207: the tester was stranded here by an automatic end she did not
@@ -206,4 +238,20 @@ class _OfflineRideCodeDirectory implements RideCodeDirectory {
 
   @override
   void close() {}
+}
+
+class _RecordingSummarySharer implements RideSummarySharer {
+  final exactChoices = <bool>[];
+
+  @override
+  Future<void> share(
+    RideSession session,
+    Iterable<RideEvent> events, {
+    DistanceUnit distanceUnit = DistanceUnit.kilometres,
+    Rect? sharePositionOrigin,
+    String? diagnostics,
+    bool includeExactTrack = false,
+  }) async {
+    exactChoices.add(includeExactTrack);
+  }
 }

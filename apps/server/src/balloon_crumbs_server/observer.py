@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import hmac
+import json
 import re
 import secrets
 import threading
@@ -9,12 +11,14 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from .config import Settings
 from .crypto import DataCipher, base64url, token_hash
-from .models import ObserverGrant, Ride
+from .models import ObserverGrant, Ride, StoredEvent
 from .schemas import CreateObserverGrantRequest, PublishObserverSnapshotRequest
 from .service import RelayServiceError
 
@@ -30,6 +34,7 @@ def create_observer_grant(
     session: Session,
     *,
     settings: Settings,
+    cipher: DataCipher,
     ride_id: str,
     bearer_token: str,
     request: CreateObserverGrantRequest,
@@ -48,6 +53,14 @@ def create_observer_grant(
                 bearer_token,
                 lock_for_update=True,
             )
+            if request.scope == "group":
+                _verify_group_pilot_authorization(
+                    session,
+                    cipher=cipher,
+                    ride=ride,
+                    request=request,
+                    now=now,
+                )
             active_count = (
                 session.scalar(
                     select(func.count(ObserverGrant.id)).where(
@@ -72,6 +85,7 @@ def create_observer_grant(
                 ride_id=ride_id,
                 label=label,
                 scope=request.scope,
+                precision=request.precision,
                 management_token_hash=token_hash(management_token),
                 publisher_token_hash=token_hash(publisher_token),
                 observer_token_hash=token_hash(observer_token),
@@ -197,6 +211,8 @@ def publish_observer_snapshot(
             current = decrypted
 
         incoming = request.model_dump(mode="json")
+        if grant.precision == "reduced":
+            incoming = _reduce_snapshot_precision(incoming)
         merged = {
             "scope": grant.scope,
             "subjectName": incoming["subjectName"],
@@ -356,6 +372,7 @@ def observer_snapshot(
         return {
             "protocolVersion": 2 if scope == "group" else 1,
             "scope": scope,
+            "precision": grant.precision if grant.precision in {"reduced", "exact"} else "reduced",
             "label": grant.label,
             "subjectName": snapshot.get("subjectName"),
             "rideStatus": snapshot.get("rideStatus", "waiting"),
@@ -375,6 +392,7 @@ def grant_json(grant: ObserverGrant) -> dict[str, Any]:
         "id": grant.id,
         "label": grant.label,
         "scope": grant.scope if grant.scope in {"rider", "group"} else "rider",
+        "precision": grant.precision if grant.precision in {"reduced", "exact"} else "reduced",
         "createdAt": _as_utc(grant.created_at),
         "expiresAt": _as_utc(grant.expires_at),
         "revokedAt": _as_utc(grant.revoked_at) if grant.revoked_at else None,
@@ -401,6 +419,302 @@ def _authenticated_ride(
     if not hmac.compare_digest(ride.token_hash, token_hash(bearer_token)):
         raise RelayServiceError(403, "Ride credential rejected")
     return ride
+
+
+def _verify_group_pilot_authorization(
+    session: Session,
+    *,
+    cipher: DataCipher,
+    ride: Ride,
+    request: CreateObserverGrantRequest,
+    now: datetime,
+) -> None:
+    proof = request.pilotAuthorization
+    if proof is None or ride.authority_root_public_key is None:
+        raise RelayServiceError(403, "Pilot authorization is required")
+    signed_at = datetime.fromtimestamp(proof.signedAtMilliseconds / 1000, tz=UTC)
+    if signed_at < now - timedelta(minutes=5) or signed_at > now + timedelta(minutes=2):
+        raise RelayServiceError(400, "Pilot authorization is outside its time window")
+    pilot = _current_pilot_authority(
+        session,
+        cipher=cipher,
+        ride_id=ride.id,
+        root_public_key=ride.authority_root_public_key,
+    )
+    if pilot != (proof.deviceId, proof.devicePublicKey):
+        raise RelayServiceError(403, "Pilot authorization was rejected")
+    challenge = _group_grant_challenge(
+        ride_id=ride.id,
+        device_id=proof.deviceId,
+        public_key=proof.devicePublicKey,
+        signed_at_milliseconds=proof.signedAtMilliseconds,
+        label=" ".join(request.label.split()),
+        duration_minutes=request.durationMinutes,
+        precision=request.precision,
+    )
+    if not _verify_signature(proof.devicePublicKey, proof.signature, challenge):
+        raise RelayServiceError(403, "Pilot authorization was rejected")
+
+
+def _current_pilot_authority(
+    session: Session,
+    *,
+    cipher: DataCipher,
+    ride_id: str,
+    root_public_key: str,
+) -> tuple[str, str] | None:
+    rows = session.scalars(
+        select(StoredEvent)
+        .where(
+            StoredEvent.ride_id == ride_id,
+            StoredEvent.event_type.in_(
+                [
+                    "rideCreated",
+                    "riderJoined",
+                    "pilotHandoverOffered",
+                    "pilotHandoverAccepted",
+                    "deviceAuthorityRotated",
+                    "deviceAuthorityRevoked",
+                ]
+            ),
+        )
+        .order_by(StoredEvent.sequence)
+    ).all()
+    device_keys: dict[str, str] = {}
+    revoked: set[str] = set()
+    pilot_device_id: str | None = None
+    offers: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        try:
+            body = cipher.decrypt_json(
+                row.body_ciphertext,
+                associated_data=f"event:{ride_id}:{row.event_id}".encode(),
+            )
+        except ValueError:
+            continue
+        if not isinstance(body, dict) or body.get("schemaVersion") != 2:
+            continue
+        device_id = body.get("deviceId")
+        public_key = body.get("devicePublicKey")
+        event_type = body.get("type")
+        payload = body.get("payload")
+        if (
+            not isinstance(device_id, str)
+            or not isinstance(public_key, str)
+            or not isinstance(payload, dict)
+            or not _verify_event_signature(body)
+        ):
+            continue
+        known_key = device_keys.get(device_id)
+        if event_type in {"rideCreated", "riderJoined"}:
+            if known_key is not None or not _device_id_matches(ride_id, device_id, public_key):
+                continue
+            if event_type == "rideCreated":
+                if (
+                    pilot_device_id is not None
+                    or public_key != root_public_key
+                    or payload.get("flightRole") != "pilot"
+                ):
+                    continue
+                pilot_device_id = device_id
+            elif payload.get("flightRole") in {"pilot", "observer"}:
+                continue
+            device_keys[device_id] = public_key
+            continue
+        if known_key != public_key or device_id in revoked:
+            continue
+        if event_type == "deviceAuthorityRotated":
+            new_key = payload.get("newPublicKey")
+            new_signature = payload.get("newDeviceSignature")
+            challenge = (
+                "balloon-crumbs-device-rotation-v1\n"
+                f"{ride_id}\n{device_id}\n{public_key}\n{new_key}"
+            )
+            if (
+                isinstance(new_key, str)
+                and isinstance(new_signature, str)
+                and _verify_signature(new_key, new_signature, challenge)
+            ):
+                device_keys[device_id] = new_key
+            continue
+        if event_type == "deviceAuthorityRevoked" and device_id == pilot_device_id:
+            target = payload.get("targetDeviceId")
+            if isinstance(target, str) and target != pilot_device_id:
+                revoked.add(target)
+            continue
+        if event_type == "pilotHandoverOffered" and device_id == pilot_device_id:
+            transfer_id = payload.get("transferId")
+            from_device_id = payload.get("fromDeviceId")
+            to_device_id = payload.get("toDeviceId")
+            offered_at = _event_time(body.get("createdAt"))
+            expires_at = _event_time(payload.get("expiresAt"))
+            if (
+                isinstance(transfer_id, str)
+                and transfer_id
+                and from_device_id == pilot_device_id
+                and isinstance(to_device_id, str)
+                and to_device_id != pilot_device_id
+                and offered_at is not None
+                and expires_at is not None
+                and expires_at > offered_at
+            ):
+                offers[transfer_id] = {
+                    **payload,
+                    "offeredAt": offered_at,
+                    "expiresAtParsed": expires_at,
+                }
+            continue
+        if event_type == "pilotHandoverAccepted":
+            transfer_id = payload.get("transferId")
+            offer = offers.get(transfer_id) if isinstance(transfer_id, str) else None
+            accepted_at = _event_time(body.get("createdAt"))
+            if (
+                offer is not None
+                and accepted_at is not None
+                and offer.get("fromDeviceId") == pilot_device_id
+                and offer.get("toDeviceId") == device_id
+                and payload.get("fromDeviceId") == pilot_device_id
+                and payload.get("toDeviceId") == device_id
+                and accepted_at <= offer["expiresAtParsed"]
+                and accepted_at >= offer["offeredAt"] - timedelta(minutes=2)
+            ):
+                pilot_device_id = device_id
+    if pilot_device_id is None or pilot_device_id in revoked:
+        return None
+    pilot_key = device_keys.get(pilot_device_id)
+    return (pilot_device_id, pilot_key) if pilot_key is not None else None
+
+
+def _verify_event_signature(body: dict[str, Any]) -> bool:
+    signature = body.get("deviceSignature")
+    public_key = body.get("devicePublicKey")
+    if not isinstance(signature, str) or not isinstance(public_key, str):
+        return False
+    signed = {
+        key: body.get(key)
+        for key in (
+            "schemaVersion",
+            "id",
+            "rideId",
+            "deviceId",
+            "type",
+            "priority",
+            "createdAt",
+            "expiresAt",
+            "payload",
+            "devicePublicKey",
+        )
+    }
+    canonical = json.dumps(
+        signed,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+    return _verify_signature(public_key, signature, canonical)
+
+
+def _event_time(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(UTC)
+
+
+def _verify_signature(public_key: str, signature: str, challenge: str) -> bool:
+    try:
+        key_bytes = base64.urlsafe_b64decode(public_key + "=")
+        signature_bytes = base64.urlsafe_b64decode(signature + "==")
+        if len(key_bytes) != 32 or len(signature_bytes) != 64:
+            return False
+        Ed25519PublicKey.from_public_bytes(key_bytes).verify(
+            signature_bytes,
+            challenge.encode(),
+        )
+        return True
+    except (InvalidSignature, ValueError):
+        return False
+
+
+def _device_id_matches(ride_id: str, device_id: str, public_key: str) -> bool:
+    import hashlib
+
+    digest = hashlib.sha256(
+        f"balloon-crumbs-device-id-v1\n{ride_id}\n{public_key}".encode()
+    ).digest()
+    expected = f"bcd1_{base64.urlsafe_b64encode(digest).decode().rstrip('=')}"
+    return hmac.compare_digest(device_id, expected)
+
+
+def _group_grant_challenge(
+    *,
+    ride_id: str,
+    device_id: str,
+    public_key: str,
+    signed_at_milliseconds: int,
+    label: str,
+    duration_minutes: int,
+    precision: str,
+) -> str:
+    body = {
+        "deviceId": device_id,
+        "devicePublicKey": public_key,
+        "durationMinutes": duration_minutes,
+        "label": label,
+        "precision": precision,
+        "rideId": ride_id,
+        "scope": "group",
+        "signedAtMilliseconds": signed_at_milliseconds,
+    }
+    return "balloon-crumbs-observer-group-grant-v1\n" + json.dumps(
+        body,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def _reduce_snapshot_precision(snapshot: dict[str, Any]) -> dict[str, Any]:
+    def reduce_position(value: Any, *, include_accuracy: bool = True) -> Any:
+        if not isinstance(value, dict):
+            return value
+        reduced = dict(value)
+        latitude = reduced.get("latitude")
+        longitude = reduced.get("longitude")
+        if isinstance(latitude, int | float) and isinstance(longitude, int | float):
+            reduced["latitude"] = round(latitude, 2)
+            reduced["longitude"] = round(longitude, 2)
+            if include_accuracy:
+                reduced["accuracyMeters"] = max(
+                    float(reduced.get("accuracyMeters", 0)),
+                    1500.0,
+                )
+        return reduced
+
+    result = dict(snapshot)
+    result["position"] = reduce_position(result.get("position"))
+    participants = result.get("participants")
+    if isinstance(participants, list):
+        result["participants"] = [
+            {**participant, "position": reduce_position(participant.get("position"))}
+            if isinstance(participant, dict)
+            else participant
+            for participant in participants
+        ]
+    route = result.get("route")
+    if isinstance(route, dict) and isinstance(route.get("points"), list):
+        result["route"] = {
+            **route,
+            "points": [reduce_position(point, include_accuracy=False) for point in route["points"]],
+        }
+    return result
 
 
 def _authorized_grant(

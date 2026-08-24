@@ -36,6 +36,10 @@ class Ride(Base):
         nullable=False,
         default=True,
     )
+    # Public, operation-scoped Ed25519 root. It is not a join credential; it
+    # binds authority-only relay actions to the creator instead of the shared
+    # ride bearer that every crew member holds.
+    authority_root_public_key: Mapped[str | None] = mapped_column(String(43))
 
     events: Mapped[list[StoredEvent]] = relationship(
         back_populates="ride",
@@ -335,6 +339,12 @@ class ObserverGrant(Base):
         nullable=False,
         default="rider",
         server_default="rider",
+    )
+    precision: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="reduced",
+        server_default="reduced",
     )
     management_token_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
     publisher_token_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)

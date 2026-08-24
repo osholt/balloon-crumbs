@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,11 +15,162 @@ from sqlalchemy.orm import Session
 from balloon_crumbs_server.app import create_app
 from balloon_crumbs_server.models import ObserverGrant
 from balloon_crumbs_server.observer import get_managed_observer_grant
-from balloon_crumbs_server.service import RelayServiceError
+from balloon_crumbs_server.service import RelayServiceError, purge_expired
 
 from .conftest import event, ride_token, sync_request
 
 SECRET = "observer-test-secret-0123456789"
+PILOT_SEED = bytes(range(32))
+
+
+def _b64(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode().rstrip("=")
+
+
+def _identity(
+    ride_id: str,
+    seed: bytes,
+) -> tuple[Ed25519PrivateKey, str, str]:
+    private_key = Ed25519PrivateKey.from_private_bytes(seed)
+    public_key = _b64(private_key.public_key().public_bytes_raw())
+    device_digest = hashlib.sha256(
+        f"balloon-crumbs-device-id-v1\n{ride_id}\n{public_key}".encode()
+    ).digest()
+    device_id = f"bcd1_{_b64(device_digest)}"
+    return private_key, public_key, device_id
+
+
+def _signed_event(
+    *,
+    ride_id: str,
+    event_id: str,
+    event_type: str,
+    payload: dict,
+    private_key: Ed25519PrivateKey,
+    public_key: str,
+    device_id: str,
+    created_at: datetime,
+) -> dict:
+    value = {
+        "schemaVersion": 2,
+        "id": event_id,
+        "rideId": ride_id,
+        "deviceId": device_id,
+        "type": event_type,
+        "priority": "routine",
+        "createdAt": created_at.isoformat().replace("+00:00", "Z"),
+        "expiresAt": None,
+        "payload": payload,
+        "signature": "a" * 64,
+        "devicePublicKey": public_key,
+        "acknowledged": False,
+    }
+    canonical_event = {
+        key: value[key]
+        for key in (
+            "schemaVersion",
+            "id",
+            "rideId",
+            "deviceId",
+            "type",
+            "priority",
+            "createdAt",
+            "expiresAt",
+            "payload",
+            "devicePublicKey",
+        )
+    }
+    value["deviceSignature"] = _b64(
+        private_key.sign(
+            json.dumps(
+                canonical_event,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode()
+        )
+    )
+    return value
+
+
+def _group_authorization(
+    *,
+    ride_id: str,
+    private_key: Ed25519PrivateKey,
+    public_key: str,
+    device_id: str,
+    precision: str,
+    signed_at: datetime | None = None,
+) -> dict[str, object]:
+    signed_at_milliseconds = int((signed_at or datetime.now(UTC)).timestamp() * 1000)
+    challenge_body = {
+        "deviceId": device_id,
+        "devicePublicKey": public_key,
+        "durationMinutes": 60,
+        "label": "Home contact",
+        "precision": precision,
+        "rideId": ride_id,
+        "scope": "group",
+        "signedAtMilliseconds": signed_at_milliseconds,
+    }
+    challenge = "balloon-crumbs-observer-group-grant-v1\n" + json.dumps(
+        challenge_body,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+    return {
+        "deviceId": device_id,
+        "devicePublicKey": public_key,
+        "signedAtMilliseconds": signed_at_milliseconds,
+        "signature": _b64(private_key.sign(challenge.encode())),
+    }
+
+
+def _pilot_authority(client, ride_id: str, *, precision: str) -> dict[str, object]:
+    private_key, public_key, device_id = _identity(ride_id, PILOT_SEED)
+    authority_event = _signed_event(
+        ride_id=ride_id,
+        event_id="pilot-authority",
+        event_type="rideCreated",
+        payload={
+            "displayName": "Pilot",
+            "role": "lead",
+            "flightRole": "pilot",
+        },
+        private_key=private_key,
+        public_key=public_key,
+        device_id=device_id,
+        created_at=datetime.now(UTC),
+    )
+    synchronized = sync_request(
+        client,
+        ride_id=ride_id,
+        secret=SECRET,
+        device_id=device_id,
+        events=[authority_event],
+    )
+    assert synchronized.status_code == 200
+    registered = client.put(
+        "/api/v1/join-codes/987654",
+        json={
+            "rideId": ride_id,
+            "inviteSecret": SECRET,
+            "resolveToken": "observer-authority-token",
+            "authorityRootPublicKey": public_key,
+        },
+        headers={"authorization": f"Bearer {ride_token(ride_id, SECRET)}"},
+    )
+    assert registered.status_code == 204
+    return _group_authorization(
+        ride_id=ride_id,
+        private_key=private_key,
+        public_key=public_key,
+        device_id=device_id,
+        precision=precision,
+    )
 
 
 def _create_ride(client, ride_id: str, events: list[dict] | None = None) -> None:
@@ -34,7 +189,11 @@ def _create_grant(
     device_header: str = "rider-a",
     *,
     scope: str = "rider",
+    precision: str = "exact",
 ):
+    pilot_authorization = (
+        _pilot_authority(client, ride_id, precision=precision) if scope == "group" else None
+    )
     return client.post(
         f"/api/v1/rides/{ride_id}/observer-grants",
         headers={
@@ -48,7 +207,13 @@ def _create_grant(
             "durationMinutes": 60,
             "consentConfirmed": True,
             "scope": scope,
+            "precision": precision,
             **({"groupDisclosureConfirmed": True} if scope == "group" else {}),
+            **(
+                {"pilotAuthorization": pilot_authorization}
+                if pilot_authorization is not None
+                else {}
+            ),
         },
     )
 
@@ -208,6 +373,42 @@ def test_independent_publisher_supplies_only_the_minimized_snapshot(client) -> N
     assert ride_id not in observed.text
 
 
+def test_reduced_precision_is_the_default_and_is_applied_by_the_relay(client) -> None:
+    ride_id = "ride-observer-reduced-default"
+    now = datetime.now(UTC)
+    _create_ride(client, ride_id)
+    created = client.post(
+        f"/api/v1/rides/{ride_id}/observer-grants",
+        headers={"authorization": f"Bearer {ride_token(ride_id, SECRET)}"},
+        json={
+            "label": "Home contact",
+            "durationMinutes": 60,
+            "consentConfirmed": True,
+        },
+    )
+    assert created.status_code == 201
+    grant = created.json()
+    assert grant["precision"] == "reduced"
+
+    published = client.put(
+        f"/api/v1/observer-grants/{grant['id']}/snapshot",
+        headers=_authorization(grant["publisherToken"]),
+        json=_snapshot(now),
+    )
+    assert published.status_code == 204
+    body = client.get(
+        f"/api/v1/observer-grants/{grant['id']}",
+        headers=_authorization(grant["observerToken"]),
+    ).json()
+    assert body["precision"] == "reduced"
+    assert body["position"] == {
+        "latitude": 51.51,
+        "longitude": -0.13,
+        "accuracyMeters": 1500.0,
+        "recordedAt": now.isoformat().replace("+00:00", "Z"),
+    }
+
+
 def test_group_grant_publishes_a_bounded_read_only_group_snapshot(client) -> None:
     ride_id = "ride-observer-group"
     now = datetime.now(UTC)
@@ -244,6 +445,153 @@ def test_group_grant_publishes_a_bounded_read_only_group_snapshot(client) -> Non
     assert body["assistance"] is None
     assert ride_id not in observed.text
     assert SECRET not in observed.text
+
+
+def test_group_reduced_precision_covers_participants_and_route_points(client) -> None:
+    ride_id = "ride-observer-group-reduced"
+    now = datetime.now(UTC)
+    _create_ride(client, ride_id)
+    grant = _create_grant(
+        client,
+        ride_id,
+        scope="group",
+        precision="reduced",
+    ).json()
+    assert (
+        client.put(
+            f"/api/v1/observer-grants/{grant['id']}/snapshot",
+            headers=_authorization(grant["publisherToken"]),
+            json=_group_snapshot(now),
+        ).status_code
+        == 204
+    )
+    body = client.get(
+        f"/api/v1/observer-grants/{grant['id']}",
+        headers=_authorization(grant["observerToken"]),
+    ).json()
+    assert body["precision"] == "reduced"
+    assert body["participants"][0]["position"]["latitude"] == 51.51
+    assert body["participants"][0]["position"]["accuracyMeters"] == 1500
+    assert body["route"]["points"][0] == {
+        "latitude": 51.51,
+        "longitude": -0.13,
+    }
+
+
+def test_group_observer_authority_follows_an_accepted_pilot_handover(client) -> None:
+    ride_id = "ride-observer-pilot-handover"
+    _create_ride(client, ride_id)
+    old_pilot_proof = _pilot_authority(client, ride_id, precision="exact")
+    pilot_key, pilot_public_key, pilot_id = _identity(ride_id, PILOT_SEED)
+    crew_key, crew_public_key, crew_id = _identity(ride_id, bytes(range(31, -1, -1)))
+    now = datetime.now(UTC)
+    joined = _signed_event(
+        ride_id=ride_id,
+        event_id="crew-authority",
+        event_type="riderJoined",
+        payload={
+            "displayName": "Balloon crew",
+            "role": "rider",
+            "flightRole": "balloonCrew",
+        },
+        private_key=crew_key,
+        public_key=crew_public_key,
+        device_id=crew_id,
+        created_at=now,
+    )
+    offered = _signed_event(
+        ride_id=ride_id,
+        event_id="handover-offered",
+        event_type="pilotHandoverOffered",
+        payload={
+            "transferId": "transfer-1",
+            "fromDeviceId": pilot_id,
+            "toDeviceId": crew_id,
+            "expiresAt": (now + timedelta(minutes=10)).isoformat(),
+        },
+        private_key=pilot_key,
+        public_key=pilot_public_key,
+        device_id=pilot_id,
+        created_at=now + timedelta(seconds=1),
+    )
+    accepted = _signed_event(
+        ride_id=ride_id,
+        event_id="handover-accepted",
+        event_type="pilotHandoverAccepted",
+        payload={
+            "transferId": "transfer-1",
+            "fromDeviceId": pilot_id,
+            "toDeviceId": crew_id,
+        },
+        private_key=crew_key,
+        public_key=crew_public_key,
+        device_id=crew_id,
+        created_at=now + timedelta(seconds=2),
+    )
+    for device_id, event_body in (
+        (crew_id, joined),
+        (pilot_id, offered),
+        (crew_id, accepted),
+    ):
+        synchronized = sync_request(
+            client,
+            ride_id=ride_id,
+            secret=SECRET,
+            device_id=device_id,
+            events=[event_body],
+        )
+        assert synchronized.status_code == 200
+
+    def create(proof: dict[str, object]):
+        return client.post(
+            f"/api/v1/rides/{ride_id}/observer-grants",
+            headers={"authorization": f"Bearer {ride_token(ride_id, SECRET)}"},
+            json={
+                "label": "Home contact",
+                "durationMinutes": 60,
+                "consentConfirmed": True,
+                "scope": "group",
+                "precision": "exact",
+                "groupDisclosureConfirmed": True,
+                "pilotAuthorization": proof,
+            },
+        )
+
+    assert create(old_pilot_proof).status_code == 403
+    new_pilot_proof = _group_authorization(
+        ride_id=ride_id,
+        private_key=crew_key,
+        public_key=crew_public_key,
+        device_id=crew_id,
+        precision="exact",
+    )
+    assert create(new_pilot_proof).status_code == 201
+
+
+def test_shared_ride_bearer_cannot_forge_group_observer_authority(client) -> None:
+    ride_id = "ride-observer-forged-group"
+    _create_ride(client, ride_id)
+    response = client.post(
+        f"/api/v1/rides/{ride_id}/observer-grants",
+        headers={"authorization": f"Bearer {ride_token(ride_id, SECRET)}"},
+        json={
+            "label": "Home contact",
+            "durationMinutes": 60,
+            "consentConfirmed": True,
+            "scope": "group",
+            "precision": "reduced",
+            "groupDisclosureConfirmed": True,
+            "pilotAuthorization": {
+                "deviceId": "spoofed-crew-device",
+                "devicePublicKey": "A" * 43,
+                "signedAtMilliseconds": int(datetime.now(UTC).timestamp() * 1000),
+                "signature": "A" * 86,
+            },
+        },
+    )
+    assert response.status_code == 403
+    with Session(client.app.state.engine) as session:
+        assert session.scalar(select(ObserverGrant)) is None
 
 
 def test_observer_grant_scope_cannot_be_changed_by_its_publisher(client) -> None:
@@ -517,6 +865,23 @@ def test_expired_grant_denies_all_roles(client) -> None:
         ).status_code
         == 404
     )
+
+
+def test_expired_grant_is_deleted_by_bounded_retention_cleanup(client) -> None:
+    ride_id = "ride-observer-retention-cleanup"
+    _create_ride(client, ride_id)
+    grant = _create_grant(client, ride_id).json()
+    now = datetime.now(UTC)
+    with Session(client.app.state.engine) as session, session.begin():
+        stored = session.get(ObserverGrant, grant["id"])
+        assert stored is not None
+        stored.expires_at = now - timedelta(seconds=1)
+
+    with Session(client.app.state.engine) as session:
+        counts = purge_expired(session, now=now)
+    assert counts[5] == 1
+    with Session(client.app.state.engine) as session:
+        assert session.get(ObserverGrant, grant["id"]) is None
 
 
 def test_new_status_cannot_roll_back_an_existing_position(client) -> None:

@@ -44,6 +44,7 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
   final _labelController = TextEditingController(text: 'Safety contact');
   Duration _duration = const Duration(hours: 4);
   ObserverAccessScope _scope = ObserverAccessScope.rider;
+  ObserverPositionPrecision _precision = ObserverPositionPrecision.reduced;
   bool _consent = false;
 
   @override
@@ -185,6 +186,35 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
                   ? null
                   : (value) => setState(() => _duration = value ?? _duration),
             ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<ObserverPositionPrecision>(
+              key: const Key('observer-precision'),
+              initialValue: _precision,
+              decoration: const InputDecoration(labelText: 'Position detail'),
+              items: const [
+                DropdownMenuItem(
+                  value: ObserverPositionPrecision.reduced,
+                  child: Text('Approximate area (recommended)'),
+                ),
+                DropdownMenuItem(
+                  value: ObserverPositionPrecision.exact,
+                  child: Text('Exact last-known position'),
+                ),
+              ],
+              onChanged: widget.controller.busy
+                  ? null
+                  : (value) => setState(() {
+                      _precision = value ?? _precision;
+                      _consent = false;
+                    }),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _precision == ObserverPositionPrecision.reduced
+                  ? 'Coordinates are rounded to an area about 1 km across before the watcher can read them.'
+                  : 'Exact coordinates can reveal the field, property or road you are on. Trails and altitude still remain private.',
+              style: const TextStyle(color: Color(0xFFA9B4C2)),
+            ),
             CheckboxListTile(
               key: const Key('observer-consent'),
               value: _consent,
@@ -192,9 +222,9 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
               title: Text(
                 _scope == ObserverAccessScope.group
                     ? 'I have told the group and choose to share this '
-                          'read-only group view for the selected time.'
-                    : 'I choose to share this information for the selected '
-                          'time.',
+                          '${_precision == ObserverPositionPrecision.exact ? 'exact' : 'approximate'} read-only group view for the selected time.'
+                    : 'I choose to share this '
+                          '${_precision == ObserverPositionPrecision.exact ? 'exact' : 'approximate'} information for the selected time.',
               ),
               onChanged: widget.controller.busy
                   ? null
@@ -208,6 +238,7 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
                       label: _labelController.text,
                       duration: _duration,
                       scope: _scope,
+                      precision: _precision,
                     ),
               icon: widget.controller.busy
                   ? const SizedBox.square(
@@ -275,7 +306,9 @@ class _ObserverAccessSheetState extends State<ObserverAccessSheet> {
                       : Icons.visibility_off_outlined,
                 ),
                 title: Text(grant.label),
-                subtitle: Text('${grant.scope.label} · ${_grantStatus(grant)}'),
+                subtitle: Text(
+                  '${grant.scope.label} · ${grant.precision.label} · ${_grantStatus(grant)}',
+                ),
                 trailing: grant.isActiveAt(DateTime.now())
                     ? TextButton(
                         onPressed: widget.controller.busy

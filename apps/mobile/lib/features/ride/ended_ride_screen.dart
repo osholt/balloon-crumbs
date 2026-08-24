@@ -8,6 +8,7 @@ import '../../services/basemap_configuration.dart';
 import '../../services/ride_summary_exporter.dart';
 import '../internet/internet_relay_status_card.dart';
 import '../nearby/relay_status_card.dart';
+import 'flight_export_consent.dart';
 import 'ride_recap_screen.dart';
 
 class EndedRideScreen extends StatefulWidget {
@@ -324,6 +325,8 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
   );
 
   Future<void> _shareSummary(BuildContext context) async {
+    final choice = await chooseFlightSummaryShare(context);
+    if (choice == null || !context.mounted) return;
     final renderObject = context.findRenderObject();
     final origin = renderObject is RenderBox && renderObject.hasSize
         ? renderObject.localToGlobal(Offset.zero) & renderObject.size
@@ -338,6 +341,7 @@ class _EndedRideScreenState extends State<EndedRideScreen> {
         diagnostics: diagnostics == null || diagnostics.isEmpty
             ? null
             : diagnostics,
+        includeExactTrack: choice == FlightSummaryShareChoice.exactFlightData,
       );
     } on Object catch (error) {
       if (!context.mounted) return;

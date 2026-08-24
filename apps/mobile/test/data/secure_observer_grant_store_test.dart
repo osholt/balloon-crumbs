@@ -12,6 +12,7 @@ void main() {
       grant: ObserverGrant(
         id: 'grant-a',
         label: 'Home',
+        precision: ObserverPositionPrecision.exact,
         createdAt: DateTime.utc(2026, 7, 24, 12),
         expiresAt: DateTime.utc(2026, 7, 24, 16),
       ),
@@ -26,6 +27,7 @@ void main() {
     expect(reloaded.single.managementToken, credentials.managementToken);
     expect(reloaded.single.publisherToken, credentials.publisherToken);
     expect(reloaded.single.observerToken, credentials.observerToken);
+    expect(reloaded.single.grant.precision, ObserverPositionPrecision.exact);
     await store.delete('ride-a');
     expect(await store.load('ride-a'), isEmpty);
   });

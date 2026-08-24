@@ -7,18 +7,25 @@ import '../domain/ride_session.dart';
 import '../internet/internet_relay_client.dart';
 import '../internet/observer_access_client.dart';
 
+typedef ObserverGroupAuthorizer =
+    Future<ObserverPilotAuthorization> Function(
+      ObserverGroupAuthorizationRequest request,
+    );
+
 class ObserverAccessController extends ChangeNotifier {
   ObserverAccessController(
     this._api,
     this._store, {
     DateTime Function()? clock,
     this.publishInterval = const Duration(seconds: 10),
+    this.groupAuthorizer,
   }) : _clock = clock ?? DateTime.now;
 
   final ObserverAccessApi _api;
   final ObserverGrantStore _store;
   final DateTime Function() _clock;
   final Duration publishInterval;
+  final ObserverGroupAuthorizer? groupAuthorizer;
   RideSession? _session;
   List<ObserverGrantCredentials> _credentials = const [];
   ObserverInvite? _latestInvite;
@@ -125,15 +132,26 @@ class ObserverAccessController extends ChangeNotifier {
     required String label,
     required Duration duration,
     ObserverAccessScope scope = ObserverAccessScope.rider,
+    ObserverPositionPrecision precision = ObserverPositionPrecision.reduced,
   }) async {
     final session = _session;
     if (session == null || _busy) return;
     await _run(() async {
+      final pilotAuthorization = scope == ObserverAccessScope.group
+          ? await _groupAuthorization(
+              session,
+              label: label,
+              duration: duration,
+              precision: precision,
+            )
+          : null;
       final credentials = await _api.create(
         session,
         label: label,
         duration: duration,
         scope: scope,
+        precision: precision,
+        pilotAuthorization: pilotAuthorization,
       );
       try {
         await _serializeGrantMutation(() async {
@@ -167,6 +185,28 @@ class ObserverAccessController extends ChangeNotifier {
         shareUri: _api.shareUri(credentials),
       );
     });
+  }
+
+  Future<ObserverPilotAuthorization> _groupAuthorization(
+    RideSession session, {
+    required String label,
+    required Duration duration,
+    required ObserverPositionPrecision precision,
+  }) {
+    final authorizer = groupAuthorizer;
+    if (authorizer == null) {
+      throw const InternetRelayException(
+        'Only the current pilot can create a whole-group watcher link.',
+      );
+    }
+    return authorizer(
+      ObserverGroupAuthorizationRequest(
+        session: session,
+        label: label,
+        duration: duration,
+        precision: precision,
+      ),
+    );
   }
 
   Future<void> revoke(String grantId) async {
