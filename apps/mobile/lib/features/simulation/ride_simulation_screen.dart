@@ -270,7 +270,7 @@ class _FleetCard extends StatelessWidget {
                 CraftIcon(
                   style: rider.role == RideRole.lead
                       ? CraftIconStyle.balloon
-                      : rider.motorcycleStyle,
+                      : rider.craftStyle,
                   color: rider.isOffRoute
                       ? const Color(0xFFFF4FA3)
                       : const Color(0xFF6ED89A),

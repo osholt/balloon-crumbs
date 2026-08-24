@@ -54,7 +54,7 @@ void main() {
 
     await profile.completeOnboarding(
       displayName: '  Oliver  ',
-      motorcycleStyle: CraftIconStyle.van,
+      craftStyle: CraftIconStyle.van,
       riderSymbol: const RiderSymbol.emoji('🦊'),
       riderColor: RiderColor.cyan,
       educationSkipped: false,
@@ -66,9 +66,19 @@ void main() {
     expect(profile.takePendingRideChoice(), isNull);
     expect(reloaded.onboardingCompleted, isTrue);
     expect(reloaded.displayName, 'Oliver');
-    expect(reloaded.motorcycleStyle, CraftIconStyle.van);
+    expect(reloaded.craftStyle, CraftIconStyle.van);
     expect(reloaded.riderSymbol, const RiderSymbol.emoji('🦊'));
     expect(reloaded.riderColor, RiderColor.cyan);
+  });
+
+  test('legacy motorcycle marker preference migrates to craft style', () async {
+    SharedPreferences.setMockInitialValues({
+      'rider_profile_motorcycle_style': 'pickup',
+    });
+
+    final profile = await RiderProfileController.load();
+
+    expect(profile.craftStyle, CraftIconStyle.pickup);
   });
 
   test(
@@ -82,7 +92,7 @@ void main() {
 
       await profile.save(
         displayName: 'Hot Pursuit',
-        motorcycleStyle: CraftIconStyle.pickup,
+        craftStyle: CraftIconStyle.pickup,
         riderSymbol: symbol,
         riderColor: RiderColor.purple,
       );
@@ -97,7 +107,7 @@ void main() {
     final profile = await RiderProfileController.load();
     await profile.completeOnboarding(
       displayName: 'Oliver',
-      motorcycleStyle: CraftIconStyle.trailer,
+      craftStyle: CraftIconStyle.trailer,
       riderColor: RiderColor.orange,
       educationSkipped: true,
       rideChoice: OnboardingRideChoice.create,
@@ -117,7 +127,7 @@ void main() {
     await expectLater(
       profile.completeOnboarding(
         displayName: '   ',
-        motorcycleStyle: CraftIconStyle.fourByFour,
+        craftStyle: CraftIconStyle.fourByFour,
         riderColor: RiderColor.green,
         educationSkipped: false,
         rideChoice: OnboardingRideChoice.create,

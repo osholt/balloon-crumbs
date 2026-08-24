@@ -22,6 +22,29 @@ void main() {
     expect(RideSession.fromJson(session.toJson()).isSimulation, isTrue);
   });
 
+  test('craft style storage is additive and legacy sessions still restore', () {
+    final stored = RideSession(
+      rideId: 'craft-style',
+      rideCode: 'CRAFT1',
+      inviteSecret: 'secret',
+      joinToken: 'aTokenWithPlentyOfEntropy',
+      localRiderId: 'crew',
+      displayName: 'Alex',
+      role: RideRole.rider,
+      joinedAt: DateTime.utc(2026, 8, 24),
+      craftStyle: CraftIconStyle.trailer,
+    ).toJson();
+
+    expect(stored[craftStyleWireKey], 'trailer');
+    expect(stored[legacyCraftStyleWireKey], 'trailer');
+    expect(RideSession.fromJson(stored).craftStyle, CraftIconStyle.trailer);
+
+    final legacy = Map<String, Object?>.from(stored)
+      ..remove(craftStyleWireKey)
+      ..[legacyCraftStyleWireKey] = 'van';
+    expect(RideSession.fromJson(legacy).craftStyle, CraftIconStyle.van);
+  });
+
   test('flight role and craft assignment survive session persistence', () {
     final assigned = RideSession(
       rideId: 'flight',
@@ -111,7 +134,7 @@ void main() {
   });
 
   test(
-    'rider symbol survives session persistence and old sessions use a bike',
+    'crew symbol survives session persistence and old sessions use a craft',
     () {
       final custom = RideSession(
         rideId: 'ride',

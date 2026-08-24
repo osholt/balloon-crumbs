@@ -60,7 +60,7 @@ void main() {
     joinedAt: now,
     lastSeenAt: now,
     state: state,
-    motorcycleStyle: CraftIconStyle.fourByFour,
+    craftStyle: CraftIconStyle.fourByFour,
     riderSymbol: riderSymbolDefault,
     riderColor: RiderColor.green,
     transportEvidence: const {RideTransportEvidence.internetRelay},

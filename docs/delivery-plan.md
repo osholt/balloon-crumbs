@@ -231,9 +231,9 @@ into the shape WP3 established rather than twice.
 Acceptance:
 - [x] No `marker`, `rejoin`, `road rating` or `heatmap` code remains
 - [x] Deviation detection and off-route alerting are gone with them
-- [ ] No user-facing string says rider, bike or ride — **deferred by design**, see
-      "the craft model has no creation path" below: the rename waits for the
-      surfaces to move onto crafts so it happens once
+- [x] No production user-facing string says rider, bike or ride; the vocabulary
+      contract scans the shipped Dart copy and keeps compatibility identifiers
+      out of the UI
 - [x] Test count drops honestly — deleted features lose their tests, nothing else does
 
 #### Landed: the marker system, route planning and rejoin routing are deleted
@@ -429,55 +429,23 @@ only mode before the choice existed. The fallback is now `keepTogether`, not
 `solo` — falling back to solo would silently strip a stored flight of its join
 code and its crew. `ride_coordination_mode_test.dart` holds it shut.
 
-#### Measured: the craft model has no creation path, so the surfaces cannot move yet
+#### Landed: production craft registration and craft-owned map styles
 
-The intention was to rewrite the surfaces onto crafts inside the WP4 cut, so they
-were rewritten once rather than twice. That is the right instinct and it is still
-the right sequencing, but it cannot happen yet, and the reason is worth recording
-because it moves work between packages.
+WP6/WP7 now create and attach the balloon and chase vehicles in production, and
+the live surfaces render one elected position per craft. Issue #18 completed the
+identity cut: `CraftIconStyle` is a domain value on `Craft`, checked against
+`CraftKind`; `craftRegistered` carries the chosen balloon, four-by-four, pickup,
+van or towing silhouette; and an old event without the additive field degrades
+to the correct kind default. Several phones in the basket therefore still
+produce one balloon marker, while independent vehicles retain both tint and
+silhouette distinctions.
 
-**Nothing in production ever creates a craft.** `registerCraft`,
-`attachLocalDeviceToCraft` and `nominateCraftPrimaryDevice` are called only from
-`ride_controller_craft_test.dart` and `craft_roster_test.dart`. `FlightRole` is
-read only by `ride_controller.dart`. Grepped after the WP4 cut landed: no file
-under `lib/features/**` mentions `CraftRoster`, `CraftState` or `FlightRole` at
-all.
-
-So `resolveCraftRoster()` returns an empty roster for every real flight, and will
-until something offers the pilot a way to say "this is the balloon" and a chase
-crew a way to say "this is our vehicle, and we are chasing that balloon". A
-surface rewritten onto crafts today would render an empty map.
-
-That flow is not a WP4 refactor. Registering the balloon is pilot authority
-(WP6); a vehicle registering itself and choosing its target is vehicle assignment
-(WP7). The read model was deliberately built ahead of them — WP3's point was to
-get the shape right before anything depended on it — but the surfaces have to
-follow the flow, not lead it.
-
-Revised sequencing:
-
-1. **WP6/WP7 build craft registration**, because they own the authority rules
-   that decide who may register what.
-2. **The surfaces move onto crafts as part of that**, not before it. `RideRole`
-   (`lead` / `rider`) keeps driving them until then.
-3. **The vocabulary rename comes last**, so `rider` → `crew` happens once against
-   craft-based surfaces rather than twice. This is the same argument
-   `docs/backlog.md` already makes for WP3 before WP4; it extends to the
-   surfaces, not just the model.
-
-Issue #18 (craft map icons) sits with step 2 rather than step 1: keying a marker
-to `CraftKind` is only meaningful once a craft exists to key it to.
-
-**Decided for #18 when it happens:** the icon keys on `CraftKind` alone — one
-balloon silhouette, one vehicle silhouette — with no sub-type field on `Craft`
-and no change to the `craftRegistered` payload. The four vehicle sub-types #18
-proposes would be four identical placeholders until the artwork exists, which is
-an invisible and untestable distinction; per-craft tinting already carries the
-"Vehicle 2 from Vehicle 3" legibility the issue asks to keep; "who has the
-trailer" can live in the craft label until there is an icon for it; and adding
-`vehicleType` later is an additive payload field, which this migration has done
-cleanly several times. The point is not to design a journalled field around
-artwork nobody has seen.
+Persisted sessions, journal membership, live presence and CarPlay now use
+separate canonical `craftStyle` and `riderSymbol` fields. During tester version
+skew they also accept and emit the legacy combined `motorcycleStyle` key, so an
+already-installed build degrades to its known marker instead of losing the
+participant or failing a flight replay. The relay normalises either request
+shape to both style response keys.
 
 ### WP5 — Altitude, the ground track, and the crumb trail
 

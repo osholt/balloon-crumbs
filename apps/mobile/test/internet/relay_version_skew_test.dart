@@ -512,7 +512,7 @@ Map<String, Object?> _rawPosition(
   'riderId': riderId,
   'displayName': displayName,
   'role': 'rider',
-  'motorcycleStyle': 'adventure',
+  'motorcycleStyle': 'van',
   'riderColor': 'blue',
   'sample': {
     'position': {'latitude': 51.2, 'longitude': -2.4},

@@ -54,14 +54,12 @@ craft model rather than twice. **WP4 early**, because the motorcycle domain is
 currently the larger half of the app and anything built on top of it costs more
 to unpick later.
 
-**The vocabulary rename moved behind items 6 and 7, for the same reason it was
-put behind WP3.** WP3 built the craft read model but nothing creates a craft
-outside tests, so no surface can move onto crafts until WP6 and WP7 build
-registration — pilot authority for the balloon, vehicle assignment for the chase.
-Renaming `rider` → `crew` against rider-based surfaces would mean renaming twice.
-Item 4a (#18) moved with it: a marker keyed to `CraftKind` needs a craft to exist.
-Measured and reasoned in delivery-plan.md under "the craft model has no creation
-path".
+**The craft and vocabulary dependency is now landed.** WP6/WP7 create and attach
+crafts in production; live surfaces project one marker per craft; and #18 stores
+the selected silhouette on `Craft`, keyed to `CraftKind`. Canonical
+`craftStyle` payloads retain an additive legacy-key bridge for installed tester
+builds. The completed reasoning and compatibility boundary are recorded in
+`delivery-plan.md`.
 
 **Items 22 and 23 are deliberately last but constrain item 3 now.** Multiple
 balloons with a shared vehicle pool, where a vehicle switches target mid-flight

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import '../domain/craft.dart' show CraftKind;
 import '../domain/geo_point.dart';
 import '../domain/hazard.dart';
 import '../domain/ride_event.dart';
@@ -32,7 +33,7 @@ class SimulatedRiderSnapshot {
     required this.headingDegrees,
     required this.offRouteTrail,
     required this.travelTrail,
-    required this.motorcycleStyle,
+    required this.craftStyle,
     required this.riderColor,
     this.altitudeMeters,
     this.verticalSpeedMetersPerSecond,
@@ -48,7 +49,7 @@ class SimulatedRiderSnapshot {
   final bool isOffRoute;
   final GeoPoint position;
   final double headingDegrees;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final double? altitudeMeters;
@@ -188,7 +189,7 @@ class RideSimulationController extends ChangeNotifier {
         headingDegrees: sampled.headingDegrees,
         offRouteTrail: List.unmodifiable(agent.offRouteTrail),
         travelTrail: List.unmodifiable(_displayTrailFor(agent)),
-        motorcycleStyle: agent.motorcycleStyle,
+        craftStyle: agent.craftStyle,
         riderSymbol: agent.riderSymbol,
         riderColor: agent.riderColor,
         altitudeMeters: flight?.altitudeMeters,
@@ -212,8 +213,16 @@ class RideSimulationController extends ChangeNotifier {
         speedFactor: 1,
         trafficPhaseSeconds: isLocal ? 3 : 17,
         isLocal: isLocal,
-        motorcycleStyle: CraftIconStyle.fourByFour,
-        riderSymbol: isLocal ? _session.riderSymbol : riderSymbolDefault,
+        craftStyle: role == RideRole.lead
+            ? CraftIconStyle.balloon
+            : isLocal && _session.craftStyle.kind == CraftKind.vehicle
+            ? _session.craftStyle
+            : craftIconStyleDefault,
+        riderSymbol: role == RideRole.lead
+            ? riderSymbolDefault
+            : isLocal
+            ? _session.riderSymbol
+            : riderSymbolDefault,
         riderColor: isLocal ? _session.riderColor : RiderColor.green,
       );
       return [
@@ -243,7 +252,7 @@ class RideSimulationController extends ChangeNotifier {
     // choices. Lead/TEC roles still override to their reserved colour when
     // rendered, so this only ever shows for plain riders.
     CraftIconStyle demoStyleFor(int index) =>
-        CraftIconStyle.values[(index + 1) % CraftIconStyle.values.length];
+        vehicleCraftIconStyles[index % vehicleCraftIconStyles.length];
     RiderColor demoColorFor(int index) =>
         RiderColor.values[(index + 1) % RiderColor.values.length];
     _SimulatedAgent rider({
@@ -260,8 +269,16 @@ class RideSimulationController extends ChangeNotifier {
       speedFactor: 1 - (0.2 * index / (riderCount - 1)),
       trafficPhaseSeconds: (3 + index * 12) % 58,
       isLocal: isLocal,
-      motorcycleStyle: isLocal ? _session.motorcycleStyle : demoStyleFor(index),
-      riderSymbol: isLocal ? _session.riderSymbol : riderSymbolDefault,
+      craftStyle: role == RideRole.lead
+          ? CraftIconStyle.balloon
+          : isLocal && _session.craftStyle.kind == CraftKind.vehicle
+          ? _session.craftStyle
+          : demoStyleFor(index),
+      riderSymbol: role == RideRole.lead
+          ? riderSymbolDefault
+          : isLocal
+          ? _session.riderSymbol
+          : riderSymbolDefault,
       riderColor: isLocal ? _session.riderColor : demoColorFor(index),
     );
 
@@ -563,7 +580,7 @@ class RideSimulationController extends ChangeNotifier {
       role: agent.role,
       joinedAt: _session.joinedAt,
       isSimulation: true,
-      motorcycleStyle: agent.motorcycleStyle,
+      craftStyle: agent.craftStyle,
       riderSymbol: agent.riderSymbol,
       riderColor: agent.riderColor,
     );
@@ -573,7 +590,7 @@ class RideSimulationController extends ChangeNotifier {
       role: agent.role,
       sample: sample,
       receivedAt: recordedAt,
-      motorcycleStyle: agent.motorcycleStyle,
+      craftStyle: agent.craftStyle,
       riderSymbol: agent.riderSymbol,
       riderColor: agent.riderColor,
     );
@@ -925,6 +942,20 @@ class RideSimulationController extends ChangeNotifier {
           ? 'Land Rover'
           : 'Balloon';
     }
+    for (final agent in _agents) {
+      agent.craftStyle = agent.role == RideRole.lead
+          ? CraftIconStyle.balloon
+          : agent.isLocal && _session.craftStyle.kind == CraftKind.vehicle
+          ? _session.craftStyle
+          : agent.craftStyle.kind == CraftKind.vehicle
+          ? agent.craftStyle
+          : craftIconStyleDefault;
+      agent.riderSymbol = agent.role == RideRole.lead
+          ? riderSymbolDefault
+          : agent.isLocal
+          ? _session.riderSymbol
+          : riderSymbolDefault;
+    }
   }
 
   static const _followerGapMeters = 180.0;
@@ -980,7 +1011,7 @@ class _SimulatedAgent {
     required this.progressMeters,
     required this.speedFactor,
     required this.trafficPhaseSeconds,
-    required this.motorcycleStyle,
+    required this.craftStyle,
     required this.riderColor,
     this.isLocal = false,
     this.riderSymbol = riderSymbolDefault,
@@ -992,8 +1023,8 @@ class _SimulatedAgent {
   double progressMeters;
   final double speedFactor;
   final double trafficPhaseSeconds;
-  final CraftIconStyle motorcycleStyle;
-  final RiderSymbol riderSymbol;
+  CraftIconStyle craftStyle;
+  RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final bool isLocal;
   bool isOffRoute = false;

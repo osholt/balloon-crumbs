@@ -150,28 +150,41 @@ void main() {
     expect(riderEmojiChoices, containsAll(const ['🧭', '🍩', '🦅', '🥷']));
   });
 
-  test('live location carries a custom symbol through the existing field', () {
-    final location = RiderLocation(
-      riderId: 'keith',
-      displayName: 'Keith Simmonds',
-      role: RideRole.rider,
-      sample: LocationSample(
-        position: const GeoPoint(latitude: 51.5, longitude: -2.5),
-        recordedAt: DateTime.utc(2026, 7, 29),
-        accuracyMeters: 4,
-      ),
-      receivedAt: DateTime.utc(2026, 7, 29),
-      motorcycleStyle: CraftIconStyle.van,
-      riderSymbol: const RiderSymbol.emoji('😈'),
-    );
+  test(
+    'live location carries a custom symbol through both version-skew fields',
+    () {
+      final location = RiderLocation(
+        riderId: 'keith',
+        displayName: 'Keith Simmonds',
+        role: RideRole.rider,
+        sample: LocationSample(
+          position: const GeoPoint(latitude: 51.5, longitude: -2.5),
+          recordedAt: DateTime.utc(2026, 7, 29),
+          accuracyMeters: 4,
+        ),
+        receivedAt: DateTime.utc(2026, 7, 29),
+        craftStyle: CraftIconStyle.van,
+        riderSymbol: const RiderSymbol.emoji('😈'),
+      );
 
-    final json = location.toJson();
-    expect(json['motorcycleStyle'], 'emoji:😈');
-    expect(
-      RiderLocation.fromJson(json).riderSymbol,
-      const RiderSymbol.emoji('😈'),
-    );
-  });
+      final json = location.toJson();
+      expect(json['craftStyle'], 'van');
+      expect(json['riderSymbol'], 'emoji:😈');
+      expect(json['motorcycleStyle'], 'emoji:😈');
+      expect(
+        RiderLocation.fromJson(json).riderSymbol,
+        const RiderSymbol.emoji('😈'),
+      );
+
+      final legacy = Map<String, Object?>.from(json)
+        ..remove('craftStyle')
+        ..remove('riderSymbol');
+      expect(
+        RiderLocation.fromJson(legacy).riderSymbol,
+        const RiderSymbol.emoji('😈'),
+      );
+    },
+  );
 
   testWidgets('picker switches between initials and a chosen emoji', (
     tester,
@@ -190,13 +203,12 @@ void main() {
                 child: RiderSymbolPicker(
                   displayName: 'Keith Simmonds',
                   selectedSymbol: symbol,
-                  motorcycleStyle: style,
+                  craftStyle: style,
                   badgeColor: Colors.teal,
                   keyPrefix: 'test-symbol',
-                  bikeKeyPrefix: 'test-bike',
+                  craftKeyPrefix: 'test-craft',
                   onSymbolChanged: (value) => update(() => symbol = value),
-                  onMotorcycleStyleChanged: (value) =>
-                      update(() => style = value),
+                  onCraftStyleChanged: (value) => update(() => style = value),
                 ),
               );
             },
@@ -236,12 +248,12 @@ void main() {
               child: RiderSymbolPicker(
                 displayName: 'Oliver Holt',
                 selectedSymbol: symbol,
-                motorcycleStyle: CraftIconStyle.van,
+                craftStyle: CraftIconStyle.van,
                 badgeColor: RiderColor.white.color,
                 keyPrefix: 'custom-symbol',
-                bikeKeyPrefix: 'custom-bike',
+                craftKeyPrefix: 'custom-craft',
                 onSymbolChanged: (value) => setState(() => symbol = value),
-                onMotorcycleStyleChanged: (_) {},
+                onCraftStyleChanged: (_) {},
               ),
             ),
           ),
@@ -292,7 +304,7 @@ void main() {
     final result = await rasterizeRiderSymbolPng(
       symbol: const RiderSymbol.initials(),
       displayName: 'Keith Simmonds',
-      motorcycleStyle: CraftIconStyle.van,
+      craftStyle: CraftIconStyle.van,
       size: 128,
     );
     final codec = await ui.instantiateImageCodec(result.bytes);
@@ -327,7 +339,7 @@ void main() {
     final result = await rasterizeRiderSymbolPng(
       symbol: symbol,
       displayName: 'Ignored Name',
-      motorcycleStyle: CraftIconStyle.van,
+      craftStyle: CraftIconStyle.van,
     );
     final frame = await (await ui.instantiateImageCodec(
       result.bytes,
@@ -416,7 +428,7 @@ void main() {
       final result = await rasterizeRiderSymbolPng(
         symbol: const RiderSymbol.initials(),
         displayName: 'Keith Simmonds',
-        motorcycleStyle: CraftIconStyle.van,
+        craftStyle: CraftIconStyle.van,
       );
       final frame = await (await ui.instantiateImageCodec(
         result.bytes,

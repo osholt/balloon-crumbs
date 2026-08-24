@@ -38,7 +38,7 @@ void main() {
     localDisplayName: 'Lead',
     localRole: RideRole.lead,
     localJoinedAt: startedAt,
-    localMotorcycleStyle: craftIconStyleDefault,
+    localCraftStyle: craftIconStyleDefault,
     localRiderColor: riderColorDefault,
     rideStartedAt: startedAt,
     livePresence: livePresence,

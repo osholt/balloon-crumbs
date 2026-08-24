@@ -41,7 +41,7 @@ void main() {
                 'riderId': 'local',
                 'displayName': 'Oliver',
                 'role': 'lead',
-                'motorcycleStyle': 'adventure',
+                'craftStyle': 'adventure',
                 'riderColor': 'blue',
                 'sample': {
                   'position': {'latitude': 51.2, 'longitude': -2.4},
@@ -102,6 +102,10 @@ void main() {
       expect(presenceRequest.url.path, '/api/v1/rides/ride/presence:sync');
       expect(body, isNot(contains('events')));
       expect(body['position'], isA<Map>());
+      final publishedPosition = body['position']! as Map;
+      expect(publishedPosition['craftStyle'], 'fourByFour');
+      expect(publishedPosition['riderSymbol'], 'craft');
+      expect(publishedPosition['motorcycleStyle'], 'fourByFour');
       expect(result.locations.single.riderId, 'local');
       expect(result.ttl, const Duration(seconds: 45));
     },

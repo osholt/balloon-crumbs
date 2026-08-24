@@ -237,10 +237,16 @@ class CraftRosterReducer {
     if (id is! String || id.isEmpty) return null;
     final kind = craftKindFromName(payload['kind']);
     final chasing = payload['chasing'];
+    final requestedStyle = craftIconStyleFromName(
+      payload['craftStyle'] as String?,
+    );
     return Craft(
       id: id,
       kind: kind,
       label: payload['label'] as String? ?? id,
+      iconStyle: requestedStyle.kind == kind
+          ? requestedStyle
+          : defaultCraftIconStyleFor(kind),
       chasing: kind == CraftKind.vehicle && chasing is String ? chasing : null,
     );
   }

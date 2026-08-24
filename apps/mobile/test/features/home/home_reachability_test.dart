@@ -124,7 +124,7 @@ void main() {
   ) async {
     await riderProfile.save(
       displayName: 'Oliver',
-      motorcycleStyle: CraftIconStyle.van,
+      craftStyle: CraftIconStyle.van,
       riderSymbol: const RiderSymbol.emoji('🦊'),
       riderColor: RiderColor.cyan,
     );

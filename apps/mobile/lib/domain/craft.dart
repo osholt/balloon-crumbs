@@ -13,6 +13,38 @@ enum CraftKind {
   vehicle,
 }
 
+/// The small set of operationally meaningful silhouettes used for a craft.
+///
+/// This belongs in the domain because it is a property of the balloon or chase
+/// vehicle, not of each phone aboard it. Rendering metadata remains in the map
+/// feature.
+enum CraftIconStyle { balloon, fourByFour, pickup, van, trailer }
+
+const vehicleCraftIconStyles = <CraftIconStyle>[
+  CraftIconStyle.fourByFour,
+  CraftIconStyle.pickup,
+  CraftIconStyle.van,
+  CraftIconStyle.trailer,
+];
+
+extension CraftIconStyleKind on CraftIconStyle {
+  CraftKind get kind =>
+      this == CraftIconStyle.balloon ? CraftKind.balloon : CraftKind.vehicle;
+
+  bool get isBalloon => kind == CraftKind.balloon;
+}
+
+const craftIconStyleDefault = CraftIconStyle.fourByFour;
+
+CraftIconStyle craftIconStyleFromName(String? name) =>
+    CraftIconStyle.values.firstWhere(
+      (style) => style.name == name,
+      orElse: () => craftIconStyleDefault,
+    );
+
+CraftIconStyle defaultCraftIconStyleFor(CraftKind kind) =>
+    kind == CraftKind.balloon ? CraftIconStyle.balloon : craftIconStyleDefault;
+
 /// One balloon or vehicle in a flight, however many phones are aboard it.
 ///
 /// This is the unit every surface should reason about. The inherited model gave
@@ -24,10 +56,23 @@ class Craft {
     required this.id,
     required this.kind,
     required this.label,
+    CraftIconStyle? iconStyle,
     this.chasing,
-  }) : assert(
+  }) : iconStyle =
+           iconStyle ??
+           (kind == CraftKind.balloon
+               ? CraftIconStyle.balloon
+               : craftIconStyleDefault),
+       assert(
          kind == CraftKind.vehicle || chasing == null,
          'Only a vehicle chases another craft.',
+       ),
+       assert(
+         iconStyle == null ||
+             (kind == CraftKind.balloon
+                 ? iconStyle == CraftIconStyle.balloon
+                 : iconStyle != CraftIconStyle.balloon),
+         'A craft icon must match the craft kind.',
        ),
        assert(chasing != id, 'A craft cannot chase itself.');
 
@@ -36,6 +81,7 @@ class Craft {
 
   /// What the crew calls it: "Balloon", "Land Rover", "Vehicle 2".
   final String label;
+  final CraftIconStyle iconStyle;
 
   /// For a vehicle, the craft it is currently chasing.
   ///
@@ -50,18 +96,24 @@ class Craft {
 
   bool get isBalloon => kind == CraftKind.balloon;
 
-  Craft copyWith({String? label, String? chasing, bool clearChasing = false}) =>
-      Craft(
-        id: id,
-        kind: kind,
-        label: label ?? this.label,
-        chasing: clearChasing ? null : (chasing ?? this.chasing),
-      );
+  Craft copyWith({
+    String? label,
+    CraftIconStyle? iconStyle,
+    String? chasing,
+    bool clearChasing = false,
+  }) => Craft(
+    id: id,
+    kind: kind,
+    label: label ?? this.label,
+    iconStyle: iconStyle ?? this.iconStyle,
+    chasing: clearChasing ? null : (chasing ?? this.chasing),
+  );
 
   Map<String, Object?> toJson() => {
     'id': id,
     'kind': kind.name,
     'label': label,
+    'craftStyle': iconStyle.name,
     'chasing': ?chasing,
   };
 
@@ -71,6 +123,7 @@ class Craft {
       id: json['id']! as String,
       kind: kind,
       label: json['label']! as String,
+      iconStyle: _iconStyleForKind(kind, json['craftStyle']),
       // Defensive rather than trusting: a vehicle-only field arriving on a
       // balloon would trip the constructor assertion, and a malformed peer
       // payload should degrade rather than crash a whole flight's read model.
@@ -84,10 +137,16 @@ class Craft {
       other.id == id &&
       other.kind == kind &&
       other.label == label &&
+      other.iconStyle == iconStyle &&
       other.chasing == chasing;
 
   @override
-  int get hashCode => Object.hash(id, kind, label, chasing);
+  int get hashCode => Object.hash(id, kind, label, iconStyle, chasing);
+}
+
+CraftIconStyle _iconStyleForKind(CraftKind kind, Object? value) {
+  final parsed = craftIconStyleFromName(value is String ? value : null);
+  return parsed.kind == kind ? parsed : defaultCraftIconStyleFor(kind);
 }
 
 /// Reads a craft kind that another build may have written.

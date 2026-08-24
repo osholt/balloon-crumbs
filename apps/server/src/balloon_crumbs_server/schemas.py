@@ -52,9 +52,22 @@ class PresencePositionRequest(BaseModel):
 
     displayName: str = Field(min_length=1, max_length=80)
     role: Literal["lead", "rider", "tailEndCharlie"]
-    motorcycleStyle: str = Field(min_length=1, max_length=40)
+    craftStyle: str | None = Field(default=None, min_length=1, max_length=40)
+    riderSymbol: str | None = Field(default=None, min_length=1, max_length=40)
+    motorcycleStyle: str | None = Field(default=None, min_length=1, max_length=40)
     riderColor: str = Field(min_length=1, max_length=40)
     sample: PresenceLocationSample
+
+    @model_validator(mode="after")
+    def normalize_craft_style(self) -> PresencePositionRequest:
+        """Accept either key and echo both during the mixed-build migration."""
+
+        style = self.craftStyle or self.motorcycleStyle
+        if style is None:
+            raise ValueError("A presence position requires a craft style")
+        self.craftStyle = style
+        self.motorcycleStyle = style
+        return self
 
 
 class PresenceSyncRequest(BaseModel):

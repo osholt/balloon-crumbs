@@ -26,7 +26,7 @@ class RideSession {
     this.requiresFlightAssignment = false,
     this.isSimulation = false,
     this.simulationRiderCount = defaultSimulationRiderCount,
-    this.motorcycleStyle = craftIconStyleDefault,
+    this.craftStyle = craftIconStyleDefault,
     this.riderSymbol = riderSymbolDefault,
     this.riderColor = riderColorDefault,
     this.coordinationMode = RideCoordinationMode.keepTogether,
@@ -71,7 +71,7 @@ class RideSession {
   final DateTime joinedAt;
   final bool isSimulation;
   final int simulationRiderCount;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final RideCoordinationMode coordinationMode;
@@ -90,6 +90,7 @@ class RideSession {
     bool? requiresFlightAssignment,
     String? rideCode,
     int? simulationRiderCount,
+    CraftIconStyle? craftStyle,
     RideCoordinationMode? coordinationMode,
     String? crewRoomId,
   }) => RideSession(
@@ -107,7 +108,7 @@ class RideSession {
     joinedAt: joinedAt,
     isSimulation: isSimulation,
     simulationRiderCount: simulationRiderCount ?? this.simulationRiderCount,
-    motorcycleStyle: motorcycleStyle,
+    craftStyle: craftStyle ?? this.craftStyle,
     riderSymbol: riderSymbol,
     riderColor: riderColor,
     coordinationMode: coordinationMode ?? this.coordinationMode,
@@ -129,7 +130,8 @@ class RideSession {
     'joinedAt': joinedAt.toUtc().toIso8601String(),
     if (isSimulation) 'isSimulation': true,
     if (isSimulation) 'simulationRiderCount': simulationRiderCount,
-    'motorcycleStyle': motorcycleStyle.name,
+    craftStyleWireKey: craftStyle.name,
+    legacyCraftStyleWireKey: craftStyle.name,
     'riderSymbol': riderSymbol.storageValue,
     'riderColor': riderColor.name,
     'coordinationMode': coordinationMode.name,
@@ -159,9 +161,7 @@ class RideSession {
       joinedAt: DateTime.parse(json['joinedAt']! as String).toLocal(),
       isSimulation: json['isSimulation'] as bool? ?? false,
       simulationRiderCount: _simulationRiderCount(json['simulationRiderCount']),
-      motorcycleStyle: craftIconStyleFromName(
-        json['motorcycleStyle'] as String?,
-      ),
+      craftStyle: craftIconStyleFromName(craftStyleNameFromPayload(json)),
       riderSymbol: RiderSymbol.fromStorageValue(json['riderSymbol'] as String?),
       riderColor: riderColorFromName(json['riderColor'] as String?),
       coordinationMode: RideCoordinationMode.fromName(

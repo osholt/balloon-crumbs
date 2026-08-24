@@ -121,12 +121,14 @@ void main() {
         craftId: 'v1',
         kind: CraftKind.vehicle,
         label: 'Land Rover',
+        craftStyle: CraftIconStyle.van,
       );
 
       expect(controller.localCraft?.id, controller.localCraftId);
 
       await controller.attachLocalDeviceToCraft('v1');
       expect(controller.localCraft?.id, 'v1');
+      expect(controller.localCraft?.craft.iconStyle, CraftIconStyle.van);
       expect(
         controller.resolveCraftRoster().balloon!.crewCount,
         0,

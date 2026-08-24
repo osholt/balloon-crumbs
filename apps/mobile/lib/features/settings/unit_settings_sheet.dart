@@ -161,7 +161,7 @@ class UnitSettingsSheet extends StatelessWidget {
                   : riderProfile.displayName,
             ),
             subtitle: Text(
-              '${riderProfile.riderSymbol.label(riderProfile.displayName, riderProfile.motorcycleStyle)} · ${riderProfile.riderColor.label}',
+              '${riderProfile.riderSymbol.label(riderProfile.displayName, riderProfile.craftStyle)} · ${riderProfile.riderColor.label}',
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
