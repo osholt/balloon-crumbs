@@ -21,8 +21,9 @@ class SituationalAwarenessController extends ChangeNotifier {
     List<ExternalHazardProvider> externalProviders = const [],
     SituationClock? clock,
     SituationIdFactory? idFactory,
-    this.rideStarted = true,
-    this.rideStartedAt,
+    bool rideStarted = true,
+    DateTime? rideStartedAt,
+    bool rideEnded = false,
     this.expiryPolicy = const HazardExpiryPolicy(),
     this.deduplicator = const HazardDeduplicator(),
     this.freshnessPolicy = const PresenceFreshnessPolicy(),
@@ -31,6 +32,9 @@ class SituationalAwarenessController extends ChangeNotifier {
        _externalProviders = List.unmodifiable(externalProviders),
        _clock = clock ?? DateTime.now,
        _idFactory = idFactory ?? const Uuid().v7 {
+    _rideStarted = rideStarted;
+    _rideStartedAt = rideStartedAt;
+    _rideEnded = rideEnded;
     _eventFactory = SituationEventFactory(
       session: _session,
       clock: _clock,
@@ -44,8 +48,12 @@ class SituationalAwarenessController extends ChangeNotifier {
   final List<ExternalHazardProvider> _externalProviders;
   final SituationClock _clock;
   final SituationIdFactory _idFactory;
-  final bool rideStarted;
-  final DateTime? rideStartedAt;
+  late bool _rideStarted;
+  late DateTime? _rideStartedAt;
+  late bool _rideEnded;
+  bool get rideStarted => _rideStarted;
+  DateTime? get rideStartedAt => _rideStartedAt;
+  bool get rideEnded => _rideEnded;
   final HazardExpiryPolicy expiryPolicy;
   final HazardDeduplicator deduplicator;
 
@@ -161,6 +169,21 @@ class SituationalAwarenessController extends ChangeNotifier {
     );
   }
 
+  /// Keeps the durable position journal aligned with the shared flight phase.
+  ///
+  /// The native location stream is stopped when a flight ends, but a fix may
+  /// already be queued. Gating again at the journal boundary prevents that late
+  /// callback from creating post-flight location history.
+  void updateFlightLifecycle({
+    required bool started,
+    required bool ended,
+    DateTime? startedAt,
+  }) {
+    _rideStarted = started;
+    _rideEnded = ended;
+    _rideStartedAt = startedAt;
+  }
+
   Future<void> initialize({Iterable<RideEvent>? restoredEvents}) async {
     if (_disposed) return;
     final events =
@@ -183,8 +206,10 @@ class SituationalAwarenessController extends ChangeNotifier {
   }
 
   Future<void> recordLocalLocation(LocationSample sample) async {
-    if (!rideStarted ||
-        (rideStartedAt != null && sample.recordedAt.isBefore(rideStartedAt!))) {
+    if (!_rideStarted ||
+        _rideEnded ||
+        (_rideStartedAt != null &&
+            sample.recordedAt.isBefore(_rideStartedAt!))) {
       return;
     }
     final location = RiderLocation(

@@ -236,6 +236,22 @@ void main() {
   );
 
   test(
+    'the durable journal rejects a location fix queued after flight end',
+    () async {
+      controller.updateFlightLifecycle(
+        started: true,
+        ended: true,
+        startedAt: now.subtract(const Duration(minutes: 5)),
+      );
+
+      await controller.recordLocalLocation(_sample(latitude: 51.002, at: now));
+
+      expect(controller.riderLocations, isEmpty);
+      expect(await store.eventsForRide(_session.rideId), isEmpty);
+    },
+  );
+
+  test(
     'activity replay rejects fixes recorded before the start anchor',
     () async {
       final startedAt = now.add(const Duration(minutes: 1));

@@ -1875,6 +1875,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       final locationController = ForegroundLocationController(
         DeviceLocationSource(),
         (sample) async {
+          if (widget.rideController.rideEnded) return;
           _latestObserverLocationSample = sample;
           _publishObserverSnapshot();
           // One decision, taken once, for both halves of reporting: distance
@@ -3935,6 +3936,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final session = widget.rideController.session;
     final rideStarted =
         widget.rideController.rideStarted && !widget.rideController.rideEnded;
+    _awarenessController?.updateFlightLifecycle(
+      started: widget.rideController.rideStarted,
+      ended: widget.rideController.rideEnded,
+      startedAt: widget.rideController.rideStartedAt,
+    );
     final rideJustStarted = rideStarted && !_observedRideStarted;
     _observedRideStarted = rideStarted;
     // The journal only accepts fixes from the start onwards, so the first fix
