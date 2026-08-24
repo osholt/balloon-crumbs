@@ -465,6 +465,31 @@ bool roleShowsLiveRecoveryProjection(FlightRole? role) =>
     role == FlightRole.chaseDriver ||
     role == FlightRole.chaseCrew;
 
+@immutable
+class RecoveryMapRoleExperience {
+  const RecoveryMapRoleExperience({
+    required this.perspective,
+    required this.showForecastContext,
+    required this.showRoadGuidance,
+  });
+
+  factory RecoveryMapRoleExperience.forRole(FlightRole? role) =>
+      RecoveryMapRoleExperience(
+        perspective: role?.isAboardBalloon == true
+            ? RideMapPerspective.balloon
+            : RideMapPerspective.chase,
+        showForecastContext:
+            role == FlightRole.pilot ||
+            role == FlightRole.balloonCrew ||
+            role == FlightRole.chaseCrew,
+        showRoadGuidance: role == FlightRole.chaseDriver,
+      );
+
+  final RideMapPerspective perspective;
+  final bool showForecastContext;
+  final bool showRoadGuidance;
+}
+
 /// What the ride map should present of the quick messages in the journal, and
 /// the most urgent one per sender so their marker can say what they raised.
 ///
@@ -4631,8 +4656,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     }
     final session = widget.rideController.session;
     final flightRole = session?.flightRole;
-    final isBalloonView = session?.flightRole.isAboardBalloon == true;
-    final isDriverView = flightRole == FlightRole.chaseDriver;
+    final roleExperience = RecoveryMapRoleExperience.forRole(flightRole);
+    final isBalloonView =
+        roleExperience.perspective == RideMapPerspective.balloon;
+    final isDriverView = roleExperience.showRoadGuidance;
     final landingZoneUpdates = _isSimulation
         ? _simulationLandingZone
         : _sharedLandingZone;
@@ -4739,13 +4766,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           widget.rideController.session?.riderSymbol ?? riderSymbolDefault,
       localDisplayName: widget.rideController.session?.displayName ?? 'You',
       localBadgeColor: _localBadgeColor,
-      perspective: isBalloonView
-          ? RideMapPerspective.balloon
-          : RideMapPerspective.chase,
-      showForecastContext:
-          flightRole == FlightRole.pilot ||
-          flightRole == FlightRole.balloonCrew ||
-          flightRole == FlightRole.chaseCrew,
+      perspective: roleExperience.perspective,
+      showForecastContext: roleExperience.showForecastContext,
       mapOrientation: _mapOrientationMode,
       onMapOrientationChanged: (mode) => unawaited(_setMapOrientation(mode)),
     );

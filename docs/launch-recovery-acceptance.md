@@ -33,7 +33,7 @@ criteria without putting a pre-launch action back on the pilot:
 | Criterion | Evidence |
 | --- | --- |
 | Five devices gather before launch without duplicate membership | `test_pre_start_presence.py::test_five_devices_survive_a_45_minute_pre_launch_without_ghosts` |
-| Multiple independent chasers and role-specific viewpoints | `launch_recovery_acceptance_fixture_test.dart`, `ride_controller_craft_test.dart`, `flight_role_experience_test.dart` |
+| Multiple independent chasers and role-specific viewpoints | `launch_recovery_acceptance_fixture_test.dart`, `ride_controller_craft_test.dart`, `craft_roster_test.dart`, `role_specific_map_responsive_test.dart` |
 | Restart preserves operation, role, device and craft identity | `shared_preferences_session_store_test.dart`, `live_presence_two_device_test.dart::a rider who restarts the app rejoins without re-opting in`, `ride_controller_craft_test.dart::the roster survives a journal replay` |
 | Only the current pilot can end the flight or transfer pilot authority | `ride_controller_test.dart::pilot handover is offered, accepted and applied on both devices`, `pilot_handover_test.dart` and the authority tests in `ride_controller_test.dart` |
 | Release can be marked by the pilot or chase roles, never an observer or forged balloon role | `ride_controller_test.dart::chase crew can start live tracking at balloon release` and `balloon device cannot forge a chase role to start tracking` |
@@ -43,6 +43,23 @@ criteria without putting a pre-launch action back on the pilot:
 
 The bounded CI set is deliberately virtual-time driven. It does not sleep for
 45 minutes and it never publishes synthetic positions to a live relay.
+
+## Role-specific viewpoint closure
+
+Issue #7 keeps the shared operation model independent from the camera a crew
+member chooses. The View control changes only local map framing between this
+craft, the balloon and the whole crew; it cannot publish a role, authority or
+guidance-target event. Balloon focus follows fresh craft updates, while the
+whole-crew view reuses the bounded Mercator framing used by the live mini-map.
+
+| Criterion | Evidence |
+| --- | --- |
+| At least three independently moving chase vehicles stay identifiable | `craft_roster_test.dart::four vehicles stay individually identifiable and addressable`; `ride_map_feature_test.dart::recovery viewpoints frame craft without treating hazards as crew` also keeps equal display labels separate by craft ID |
+| Balloon, current-craft and whole-crew views switch locally | `role_specific_map_responsive_test.dart` opens the View control and selects Balloon; `recoveryMapViewpointPoints` accepts no ride controller or shared-state writer |
+| Mini-map includes relevant craft with bounded framing | `group_mini_map_framing_test.dart` covers local groups, missing fixes and the 300 km outlier; `role_specific_map_responsive_test.dart` verifies every ground role retains the live overview |
+| Pilot/airborne crew suppress road UI while driver prioritises it | `RecoveryMapRoleExperience` is exercised for all five roles in `role_specific_map_responsive_test.dart`; `balloon_map_presentation_test.dart` and `active_ride_navigation_escape_test.dart` cover map controls and moving pilot chrome |
+| Live, relayed, stale and unknown never collapse into live | `live_presence_test.dart`, `craft_roster_test.dart`, `ride_membership_live_presence_test.dart`; freshness and source remain in each inspectable marker label |
+| Small phone, landscape and large text | `role_specific_map_responsive_test.dart` renders pilot, airborne crew, chase driver, chase crew and observer at 320×568, 667×375 and 390×844 with 200% text; it also caught and closes the basemap badge overflow |
 
 ## Balloon telemetry closure
 

@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as ml;
 import 'package:balloon_crumbs/controllers/speed_limit_display_controller.dart';
+import 'package:balloon_crumbs/domain/craft.dart';
 import 'package:balloon_crumbs/domain/distance_unit.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart' as awareness_geo;
 import 'package:balloon_crumbs/domain/hazard.dart';
@@ -34,6 +35,105 @@ import 'package:balloon_crumbs/services/road_routing.dart';
 import 'package:balloon_crumbs/services/speed_limit.dart';
 
 void main() {
+  test('recovery viewpoints frame craft without treating hazards as crew', () {
+    const local = GeoPoint(latitude: 51.45, longitude: -2.59);
+    const balloon = MapOverlayMarker(
+      id: 'balloon',
+      point: GeoPoint(latitude: 51.46, longitude: -2.58),
+      label: 'Balloon',
+      craftStyle: CraftIconStyle.balloon,
+    );
+    const rover = MapOverlayMarker(
+      id: 'rover',
+      point: GeoPoint(latitude: 51.44, longitude: -2.60),
+      label: 'Recovery 1',
+      craftStyle: CraftIconStyle.fourByFour,
+    );
+    const roverWithSameName = MapOverlayMarker(
+      id: 'rover-2',
+      point: GeoPoint(latitude: 51.42, longitude: -2.62),
+      label: 'Recovery 1',
+      craftStyle: CraftIconStyle.fourByFour,
+    );
+    const hazard = MapOverlayMarker(
+      id: 'gate',
+      point: GeoPoint(latitude: 51.43, longitude: -2.61),
+      label: 'Locked gate',
+    );
+    const markers = [balloon, rover, roverWithSameName, hazard];
+
+    expect(
+      recoveryMapViewpointPoints(
+        viewpoint: RecoveryMapViewpoint.ownCraft,
+        currentPosition: local,
+        localCraftStyle: CraftIconStyle.fourByFour,
+        markers: markers,
+      ),
+      [local],
+    );
+    expect(
+      recoveryMapViewpointPoints(
+        viewpoint: RecoveryMapViewpoint.balloon,
+        currentPosition: local,
+        localCraftStyle: CraftIconStyle.fourByFour,
+        markers: markers,
+      ),
+      [balloon.point],
+    );
+    expect(
+      recoveryMapViewpointPoints(
+        viewpoint: RecoveryMapViewpoint.wholeCrew,
+        currentPosition: local,
+        localCraftStyle: CraftIconStyle.fourByFour,
+        markers: markers,
+      ),
+      [local, balloon.point, rover.point, roverWithSameName.point],
+    );
+    expect(
+      recoveryMapViewpointPoints(
+        viewpoint: RecoveryMapViewpoint.balloon,
+        currentPosition: local,
+        localCraftStyle: CraftIconStyle.balloon,
+        markers: const [],
+      ),
+      [local],
+      reason: 'the pilot phone is itself the balloon marker',
+    );
+  });
+
+  test('the mini-map accepts production craft IDs and legacy rider IDs', () {
+    const markers = [
+      MapOverlayMarker(
+        id: 'craft-balloon',
+        point: GeoPoint(latitude: 51.46, longitude: -2.58),
+        label: 'Balloon',
+        craftStyle: CraftIconStyle.balloon,
+      ),
+      MapOverlayMarker(
+        id: 'rider-legacy-rover',
+        point: GeoPoint(latitude: 51.44, longitude: -2.60),
+        label: 'Recovery 1',
+        craftStyle: CraftIconStyle.fourByFour,
+      ),
+      MapOverlayMarker(
+        id: 'confirmed-flight-landing-event-1',
+        point: GeoPoint(latitude: 51.43, longitude: -2.61),
+        label: 'LANDED',
+        craftStyle: CraftIconStyle.balloon,
+      ),
+      MapOverlayMarker(
+        id: 'hazard-gate',
+        point: GeoPoint(latitude: 51.42, longitude: -2.62),
+        label: 'Locked gate',
+      ),
+    ];
+
+    expect(groupMiniMapCraftMarkers(markers).map((marker) => marker.id), [
+      'craft-balloon',
+      'rider-legacy-rover',
+    ]);
+  });
+
   test('a chase craft trace can retain its identity colour', () {
     const identity = Color(0xFF5AC8FA);
     const trace = MapOverlayTrace(
