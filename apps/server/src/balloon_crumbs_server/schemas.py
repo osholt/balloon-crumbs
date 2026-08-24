@@ -454,9 +454,23 @@ class ForecastPlanBoundary(BaseModel):
     points: list[ForecastPlanPoint] = Field(default_factory=list, max_length=512)
     source: str = Field(min_length=1, max_length=160)
     updatedAt: datetime
+    enabled: bool = True
+    warningDirection: Literal["entering", "leaving", "either"] = "either"
+    effectiveFrom: datetime | None = None
+    validUntil: datetime | None = None
+    limitations: str = Field(
+        default="Advisory only; verify against current official information.",
+        min_length=1,
+        max_length=500,
+    )
     lowerAltitudeMeters: float | None = Field(default=None, ge=-500, le=20_000)
     upperAltitudeMeters: float | None = Field(default=None, ge=-500, le=20_000)
     altitudeDatum: str = Field(min_length=1, max_length=64)
+    altitudeUnit: Literal["metres", "feet"] = "metres"
+    acceptedAltitudeSources: list[Literal["gnss", "barometric"]] = Field(
+        default_factory=lambda: ["gnss", "barometric"],
+        max_length=2,
+    )
 
     @model_validator(mode="after")
     def geometry_matches_kind(self) -> ForecastPlanBoundary:
@@ -466,6 +480,23 @@ class ForecastPlanBoundary(BaseModel):
             raise ValueError("A boundary area needs three points")
         if self.kind == "altitudeBand" and self.points:
             raise ValueError("An altitude band cannot contain points")
+        if (
+            self.kind == "altitudeBand"
+            and self.lowerAltitudeMeters is None
+            and self.upperAltitudeMeters is None
+        ):
+            raise ValueError("An altitude band needs at least one altitude limit")
+        if self.kind == "altitudeBand" and self.warningDirection != "either":
+            raise ValueError("An altitude band must warn at either limit")
+        if (
+            self.kind == "altitudeBand"
+            or self.lowerAltitudeMeters is not None
+            or self.upperAltitudeMeters is not None
+        ) and not self.acceptedAltitudeSources:
+            raise ValueError("An altitude boundary needs an accepted altitude source")
+        effective = self.effectiveFrom or self.updatedAt
+        if self.validUntil is not None and self.validUntil <= effective:
+            raise ValueError("Boundary expiry must follow its effective time")
         if (
             self.lowerAltitudeMeters is not None
             and self.upperAltitudeMeters is not None

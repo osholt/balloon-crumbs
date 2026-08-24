@@ -131,6 +131,11 @@ enum RideEventType {
   /// the old key and carries a proof made by the replacement key, preventing a
   /// relay or another invite holder from substituting a key of their own.
   deviceAuthorityRotated,
+
+  /// A balloon-side device records a boundary warning and the quality of the
+  /// fix that produced it. Chasers replay the shared warning rather than
+  /// evaluating the vehicle's road position against a balloon boundary.
+  operationalBoundaryAlerted,
 }
 
 enum EventPriority { routine, important, critical }

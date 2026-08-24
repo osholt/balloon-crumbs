@@ -32,6 +32,7 @@ class FlightReplayArchiver {
     final builders = <String, _TrackBuilder>{};
     final wind = <FlightReplayWindContext>[];
     final landingAreas = <FlightReplayLandingArea>[];
+    final boundaryAlerts = <FlightReplayBoundaryAlert>[];
 
     for (final event in ordered) {
       if (event.createdAt.isBefore(startedAt) ||
@@ -107,6 +108,9 @@ class FlightReplayArchiver {
         case RideEventType.landingAreaNoted:
           final area = _landingArea(event);
           if (area != null) landingAreas.add(area);
+        case RideEventType.operationalBoundaryAlerted:
+          final alert = _boundaryAlert(event);
+          if (alert != null) boundaryAlerts.add(alert);
         case RideEventType.rideCreated:
         case RideEventType.riderJoined:
         case RideEventType.riderLeft:
@@ -173,6 +177,7 @@ class FlightReplayArchiver {
       tracks: List.unmodifiable(tracks),
       windContexts: List.unmodifiable(wind),
       landingAreas: List.unmodifiable(landingAreas),
+      boundaryAlerts: List.unmodifiable(boundaryAlerts),
       peerTracksIncluded: includePeerTracks,
     );
   }
@@ -247,6 +252,46 @@ class FlightReplayArchiver {
       ),
       radiusMeters: radius.toDouble(),
       label: label,
+    );
+  }
+
+  static FlightReplayBoundaryAlert? _boundaryAlert(RideEvent event) {
+    final payload = event.payload;
+    final boundaryId = payload['boundaryId'];
+    final boundaryLabel = payload['boundaryLabel'];
+    final kind = payload['kind'];
+    final assessment = payload['assessment'];
+    final confirmed = payload['confirmed'];
+    final message = payload['message'];
+    if (boundaryId is! String ||
+        boundaryLabel is! String ||
+        kind is! String ||
+        assessment is! String ||
+        confirmed is! bool ||
+        message is! String) {
+      return null;
+    }
+    final observedAtValue = payload['observedAt'];
+    final observedAt = observedAtValue is String
+        ? DateTime.tryParse(observedAtValue)?.toUtc()
+        : null;
+    final latitude = payload['latitude'];
+    final longitude = payload['longitude'];
+    return FlightReplayBoundaryAlert(
+      recordedAt: observedAt ?? event.createdAt,
+      boundaryId: boundaryId,
+      boundaryLabel: boundaryLabel,
+      kind: kind,
+      assessment: assessment,
+      confirmed: confirmed,
+      message: message,
+      position: latitude is num && longitude is num
+          ? GeoPoint(
+              latitude: latitude.toDouble(),
+              longitude: longitude.toDouble(),
+            )
+          : null,
+      altitudeMeters: (payload['altitudeMeters'] as num?)?.toDouble(),
     );
   }
 }

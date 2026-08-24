@@ -143,4 +143,64 @@ void main() {
     ]);
     expect(policy.revokedDeviceIds, contains(crew.deviceId));
   });
+
+  test('only a balloon-side identity can publish a boundary warning', () async {
+    final policy = DeviceAuthorityPolicy(session);
+    expect(
+      policy.accept(
+        await signed(
+          identity: root,
+          type: RideEventType.rideCreated,
+          payload: const {'role': 'lead', 'flightRole': 'pilot'},
+          minute: 0,
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      policy.accept(
+        await signed(
+          identity: crew,
+          type: RideEventType.riderJoined,
+          payload: const {
+            'displayName': 'Chaser',
+            'role': 'rider',
+            'flightRole': 'chaseCrew',
+          },
+          minute: 1,
+        ),
+      ),
+      isTrue,
+    );
+    const warning = {
+      'boundaryId': 'edge',
+      'boundaryLabel': 'Restricted edge',
+      'kind': 'lineCrossed',
+      'assessment': 'usable',
+      'confirmed': true,
+      'message': 'Restricted edge boundary crossed',
+    };
+    expect(
+      policy.accept(
+        await signed(
+          identity: crew,
+          type: RideEventType.operationalBoundaryAlerted,
+          payload: warning,
+          minute: 2,
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      policy.accept(
+        await signed(
+          identity: root,
+          type: RideEventType.operationalBoundaryAlerted,
+          payload: warning,
+          minute: 3,
+        ),
+      ),
+      isTrue,
+    );
+  });
 }

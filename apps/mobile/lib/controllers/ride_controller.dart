@@ -39,6 +39,7 @@ import '../domain/session_store.dart';
 import '../features/map/craft_icon.dart';
 import '../relay/live_presence.dart';
 import '../services/nearby_bridge.dart';
+import '../services/operational_boundary_monitor.dart';
 import '../services/pilot_handover.dart';
 import '../services/presence_authenticator.dart';
 import '../services/completed_ride_archiver.dart';
@@ -2357,6 +2358,49 @@ class RideController extends ChangeNotifier {
         payload: {
           'leaderRiderId': session.localRiderId,
           'boundaryId': boundaryId,
+        },
+      );
+    });
+  }
+
+  Future<void> recordOperationalBoundaryAlert(
+    OperationalBoundaryAlert alert, {
+    double? horizontalAccuracyMeters,
+    AltitudeSource altitudeSource = AltitudeSource.unknown,
+    AltitudeDatum altitudeDatum = AltitudeDatum.unknown,
+    double? altitudeAccuracyMeters,
+  }) async {
+    await _run(() async {
+      final session = _requireSession();
+      if (!session.flightRole.isAboardBalloon) {
+        throw const FormatException(
+          'Only a device aboard the balloon can record this warning.',
+        );
+      }
+      await _record(
+        type: RideEventType.operationalBoundaryAlerted,
+        priority: alert.confirmed
+            ? EventPriority.critical
+            : EventPriority.important,
+        payload: {
+          'boundaryId': alert.boundary.id,
+          'boundaryRevision': alert.boundary.updatedAt
+              .toUtc()
+              .toIso8601String(),
+          'boundaryLabel': alert.boundary.label,
+          'kind': alert.kind.name,
+          'assessment': alert.assessment.name,
+          'confirmed': alert.confirmed,
+          'message': alert.message,
+          'observedAt': alert.observedAt.toUtc().toIso8601String(),
+          'latitude': ?alert.position?.latitude,
+          'longitude': ?alert.position?.longitude,
+          'horizontalAccuracyMeters': ?horizontalAccuracyMeters,
+          'altitudeMeters': ?alert.altitudeMeters,
+          'altitudeSource': altitudeSource.name,
+          'altitudeDatum': altitudeDatum.name,
+          'altitudeAccuracyMeters': ?altitudeAccuracyMeters,
+          'limitations': alert.boundary.limitations,
         },
       );
     });

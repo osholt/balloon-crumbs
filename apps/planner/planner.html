@@ -164,6 +164,10 @@
             </div>
           </div>
           <div class="field-grid compact-fields">
+            <label class="field checkbox-field">
+              <span>Enabled</span>
+              <input type="checkbox" id="boundary-enabled" checked />
+            </label>
             <label class="field">
               <span>Name</span>
               <input type="text" id="boundary-name" maxlength="96" value="Advisory boundary" />
@@ -172,21 +176,50 @@
               <span>Source or briefing reference</span>
               <input type="text" id="boundary-source" maxlength="160" value="Pilot-entered advisory" />
             </label>
+            <label class="field">
+              <span>Warn when</span>
+              <select id="boundary-warning-direction">
+                <option value="either">Entering or leaving</option>
+                <option value="entering">Entering only</option>
+                <option value="leaving">Leaving only</option>
+              </select>
+            </label>
+            <label class="field full-width-field">
+              <span>Limitations</span>
+              <textarea id="boundary-limitations" maxlength="500" rows="2">Advisory only; verify against current official information.</textarea>
+            </label>
+            <label class="field">
+              <span>Effective from (optional)</span>
+              <input type="datetime-local" id="boundary-effective-from" />
+            </label>
+            <label class="field">
+              <span>Valid until (optional)</span>
+              <input type="datetime-local" id="boundary-valid-until" />
+            </label>
           </div>
           <div class="button-row">
             <button type="button" id="draw-boundary-line">Draw line</button>
             <button type="button" id="draw-boundary-area">Draw area</button>
             <button type="button" id="finish-boundary" disabled>Finish area</button>
             <button type="button" id="cancel-boundary" disabled>Cancel drawing</button>
+            <button type="button" id="save-boundary-details" disabled>Save edited details</button>
+            <button type="button" id="cancel-boundary-edit" disabled>Cancel edit</button>
           </div>
           <div class="field-grid compact-fields altitude-boundary-fields">
             <label class="field">
+              <span>Altitude units</span>
+              <select id="boundary-altitude-unit">
+                <option value="metres">Metres</option>
+                <option value="feet">Feet</option>
+              </select>
+            </label>
+            <label class="field">
               <span>Minimum altitude (optional)</span>
-              <span class="input-with-unit"><input type="number" id="boundary-lower-altitude" step="10" /><i>m</i></span>
+              <span class="input-with-unit"><input type="number" id="boundary-lower-altitude" step="10" /><i id="boundary-lower-unit">m</i></span>
             </label>
             <label class="field">
               <span>Maximum altitude (optional)</span>
-              <span class="input-with-unit"><input type="number" id="boundary-upper-altitude" step="10" /><i>m</i></span>
+              <span class="input-with-unit"><input type="number" id="boundary-upper-altitude" step="10" /><i id="boundary-upper-unit">m</i></span>
             </label>
             <label class="field">
               <span>Altitude reference</span>
@@ -196,11 +229,16 @@
                 <option value="relativeToLaunch">Relative to launch</option>
               </select>
             </label>
+            <label class="field checkbox-field">
+              <span>Accepted altitude sources</span>
+              <span><input type="checkbox" id="boundary-source-gnss" checked /> GNSS</span>
+              <span><input type="checkbox" id="boundary-source-barometric" checked /> Barometric</span>
+            </label>
             <button type="button" id="add-altitude-boundary">Add altitude limits</button>
           </div>
           <p class="status" id="boundary-status" role="status">Boundaries are saved in this browser. Confirm every source before flight.</p>
           <ul class="boundary-list" id="boundary-list" aria-label="Operational boundaries"></ul>
-          <p class="small muted">Planner boundaries are advisory planning aids and currently stay in this browser. Recreate or update them in the live flight so every crew device receives the alert definition.</p>
+          <p class="small muted">Boundaries stay in this browser until you generate a plan code. Importing that plan as the balloon pilot publishes them to the flight; review and update them live before takeoff.</p>
         </section>
 
         <details class="panel-section generate-section share-disclosure">

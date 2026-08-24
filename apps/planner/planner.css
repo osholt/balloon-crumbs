@@ -109,6 +109,7 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 .boundary-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; border: 1px solid var(--line); border-radius: 0.65rem; padding: 0.55rem 0.65rem; background: var(--panel-raised); }
 .boundary-list strong, .boundary-list small { display: block; }
 .boundary-list small { margin-top: 0.12rem; color: var(--muted); font-size: 0.68rem; }
+.boundary-list li > div:last-child { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: end; }
 .boundary-list button { padding: 0.35rem 0.5rem; font-size: 0.7rem; }
 .place-search { display: grid; gap: 0.36rem; margin-bottom: 0.2rem; }
 .place-search > label { color: var(--muted); font-size: 0.78rem; font-weight: 700; }
@@ -130,11 +131,14 @@ button.primary:hover:not(:disabled) { background: #8be4f2; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
 .compact-fields { margin-top: 0.1rem; }
 .compact-fields .field { margin-top: 0.65rem; }
+.full-width-field { grid-column: 1 / -1; }
+.checkbox-field { align-content: center; }
+.checkbox-field > span { display: flex; align-items: center; gap: 0.35rem; }
 .ceiling-field { margin-top: 0.7rem; padding-top: 0.65rem; border-top: 1px solid var(--line); }
 .vertical-rate-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
 .vertical-rate-fields .range-field > span { display: grid; gap: 0.08rem; }
 .vertical-rate-fields .range-field strong { font-variant-numeric: tabular-nums; }
-input[type="text"], input[type="search"], input[type="number"], input[type="date"], select {
+input[type="text"], input[type="search"], input[type="number"], input[type="date"], input[type="datetime-local"], select, textarea {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--line);
@@ -143,6 +147,7 @@ input[type="text"], input[type="search"], input[type="number"], input[type="date
   background: #11151c;
   color: var(--ink);
 }
+textarea { resize: vertical; font: inherit; }
 .input-with-unit { display: grid; grid-template-columns: 1fr auto; align-items: center; border: 1px solid var(--line); border-radius: 0.6rem; background: #11151c; }
 .input-with-unit input { border: 0; background: transparent; }
 .input-with-unit i { font-style: normal; padding-right: 0.7rem; color: #8e97a7; font-weight: 650; white-space: nowrap; }
