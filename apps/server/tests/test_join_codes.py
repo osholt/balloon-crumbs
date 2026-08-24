@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from balloon_crumbs_server.app import create_app
-from balloon_crumbs_server.models import RideJoinCode
+from balloon_crumbs_server.models import Ride, RideJoinCode
 
 from .conftest import ride_token
 
@@ -65,6 +65,26 @@ def test_join_code_round_trips_the_device_authority_root(client) -> None:
 
     assert resolved.status_code == 200
     assert resolved.json()["authorityRootPublicKey"] == ROOT_KEY
+    with client.app.state.session_factory() as session:
+        assert session.get(Ride, "ride-device-authority").authority_root_public_key == ROOT_KEY
+
+
+def test_registered_device_authority_root_cannot_be_replaced(client) -> None:
+    body = {
+        "rideId": "ride-device-authority-lock",
+        "inviteSecret": SECRET,
+        "resolveToken": RESOLVE_TOKEN,
+        "authorityRootPublicKey": ROOT_KEY,
+    }
+    headers = {"authorization": f"Bearer {ride_token('ride-device-authority-lock', SECRET)}"}
+    assert client.put("/api/v1/join-codes/123456", json=body, headers=headers).status_code == 204
+
+    rejected = client.put(
+        "/api/v1/join-codes/123456",
+        json={**body, "authorityRootPublicKey": "B" * 43},
+        headers=headers,
+    )
+    assert rejected.status_code == 409
 
 
 def test_resolve_with_correct_token_succeeds(client) -> None:

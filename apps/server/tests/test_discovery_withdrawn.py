@@ -78,7 +78,8 @@ def test_the_migration_chain_stays_linear() -> None:
 
     assert revisions["0011"] == "0010"
     assert revisions["0012"] == "0011"
+    assert revisions["0013"] == "0012"
     parents = [parent for parent in revisions.values() if parent is not None]
     assert len(parents) == len(set(parents)), "a revision is claimed as parent twice"
     heads = set(revisions) - set(parents)
-    assert heads == {"0012"}, heads
+    assert heads == {"0013"}, heads

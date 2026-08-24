@@ -22,6 +22,56 @@ enum ObserverAccessScope {
       : ObserverAccessScope.rider;
 }
 
+enum ObserverPositionPrecision {
+  reduced,
+  exact;
+
+  String get label => switch (this) {
+    ObserverPositionPrecision.reduced => 'Approximate area',
+    ObserverPositionPrecision.exact => 'Exact position',
+  };
+
+  static ObserverPositionPrecision fromName(Object? name) =>
+      name == ObserverPositionPrecision.exact.name
+      ? ObserverPositionPrecision.exact
+      : ObserverPositionPrecision.reduced;
+}
+
+class ObserverGroupAuthorizationRequest {
+  const ObserverGroupAuthorizationRequest({
+    required this.session,
+    required this.label,
+    required this.duration,
+    required this.precision,
+  });
+
+  final RideSession session;
+  final String label;
+  final Duration duration;
+  final ObserverPositionPrecision precision;
+}
+
+class ObserverPilotAuthorization {
+  const ObserverPilotAuthorization({
+    required this.deviceId,
+    required this.devicePublicKey,
+    required this.signedAtMilliseconds,
+    required this.signature,
+  });
+
+  final String deviceId;
+  final String devicePublicKey;
+  final int signedAtMilliseconds;
+  final String signature;
+
+  Map<String, Object?> toJson() => {
+    'deviceId': deviceId,
+    'devicePublicKey': devicePublicKey,
+    'signedAtMilliseconds': signedAtMilliseconds,
+    'signature': signature,
+  };
+}
+
 class ObserverAccessConfiguration {
   const ObserverAccessConfiguration({
     required this.relay,
@@ -72,12 +122,14 @@ class ObserverGrant {
     required this.createdAt,
     required this.expiresAt,
     this.scope = ObserverAccessScope.rider,
+    this.precision = ObserverPositionPrecision.reduced,
     this.revokedAt,
   });
 
   final String id;
   final String label;
   final ObserverAccessScope scope;
+  final ObserverPositionPrecision precision;
   final DateTime createdAt;
   final DateTime expiresAt;
   final DateTime? revokedAt;
@@ -88,6 +140,7 @@ class ObserverGrant {
     'id': id,
     'label': label,
     'scope': scope.name,
+    'precision': precision.name,
     'createdAt': createdAt.toUtc().toIso8601String(),
     'expiresAt': expiresAt.toUtc().toIso8601String(),
     'revokedAt': revokedAt?.toUtc().toIso8601String(),
@@ -97,6 +150,7 @@ class ObserverGrant {
     id: json['id']! as String,
     label: json['label']! as String,
     scope: ObserverAccessScope.fromName(json['scope']),
+    precision: ObserverPositionPrecision.fromName(json['precision']),
     createdAt: DateTime.parse(json['createdAt']! as String).toLocal(),
     expiresAt: DateTime.parse(json['expiresAt']! as String).toLocal(),
     revokedAt: switch (json['revokedAt']) {
@@ -324,6 +378,8 @@ abstract interface class ObserverAccessApi {
     required String label,
     required Duration duration,
     ObserverAccessScope scope = ObserverAccessScope.rider,
+    ObserverPositionPrecision precision = ObserverPositionPrecision.reduced,
+    ObserverPilotAuthorization? pilotAuthorization,
   });
 
   Future<ObserverGrant> inspect(ObserverGrantCredentials credentials);
@@ -358,6 +414,8 @@ class HttpObserverAccessClient implements ObserverAccessApi {
     required String label,
     required Duration duration,
     ObserverAccessScope scope = ObserverAccessScope.rider,
+    ObserverPositionPrecision precision = ObserverPositionPrecision.reduced,
+    ObserverPilotAuthorization? pilotAuthorization,
   }) async {
     final minutes = duration.inMinutes;
     if (label.trim().isEmpty || label.trim().length > 80) {
@@ -370,15 +428,22 @@ class HttpObserverAccessClient implements ObserverAccessApi {
         'Observer access must last between 30 minutes and 24 hours.',
       );
     }
+    if (scope == ObserverAccessScope.group && pilotAuthorization == null) {
+      throw const InternetRelayException(
+        'Only the current pilot can authorize a whole-group watcher link.',
+      );
+    }
     final request = http.Request('POST', _rideGrantsUri(session.rideId))
       ..headers['content-type'] = 'application/json'
       ..body = jsonEncode({
         'label': label.trim(),
         'durationMinutes': minutes,
         'consentConfirmed': true,
+        'precision': precision.name,
         if (scope == ObserverAccessScope.group) ...{
           'scope': scope.name,
           'groupDisclosureConfirmed': true,
+          'pilotAuthorization': pilotAuthorization!.toJson(),
         },
       });
     final response = await _send(request, bearer: _rideBearer(session));

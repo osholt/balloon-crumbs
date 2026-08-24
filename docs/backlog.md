@@ -42,7 +42,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 18 | P1 | Decide airspace, NOTAM, landing-note, and access data sources (#13) | WP11 | 5 |
 | 19 | P1 | Evaluate aeronautical chart layers as flight context (#17) | WP11 | 18 |
 | 20 | P1 | Restore CarPlay / Android Auto for the chase driver | — | 8 |
-| 21 | P1 | Revocable observer sharing and balloon-specific exports | — | 3, 5 |
+| 21 | P1 | ~~Revocable observer sharing and balloon-specific exports (#14)~~ **done** | — | 3, 5 |
 | 22 | P2 | Multiple balloons in one event, with a shared vehicle pool | — | 3, 7 |
 | 23 | P2 | Dynamic chase reassignment across balloons by distance and wind | — | 22, 17 |
 | 24 | P1 | Saved launch/landing-area catalogue and time-by-altitude weather scan informed by the Ballooning Maps review | WP11 | 17, 18 |

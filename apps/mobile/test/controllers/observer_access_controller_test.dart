@@ -32,6 +32,36 @@ void main() {
   });
 
   test(
+    'expired credentials are removed from local retention on attach',
+    () async {
+      final store = _MemoryObserverGrantStore();
+      store.saved[_session.rideId] = [
+        ObserverGrantCredentials(
+          grant: ObserverGrant(
+            id: 'expired-grant',
+            label: 'Expired contact',
+            createdAt: _clock().subtract(const Duration(hours: 2)),
+            expiresAt: _clock().subtract(const Duration(minutes: 1)),
+          ),
+          managementToken: 'om1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          publisherToken: 'op1_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+          observerToken: 'ro1_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC',
+        ),
+      ];
+      final controller = ObserverAccessController(
+        _FakeObserverApi(),
+        store,
+        clock: _clock,
+      );
+
+      await controller.attach(_session);
+
+      expect(controller.grants, isEmpty);
+      expect(store.saved[_session.rideId] ?? const [], isEmpty);
+    },
+  );
+
+  test(
     'rapid locations coalesce to one in-flight and one latest snapshot',
     () async {
       final store = _MemoryObserverGrantStore();
@@ -211,6 +241,7 @@ void main() {
         _MemoryObserverGrantStore(),
         clock: _clock,
         publishInterval: Duration.zero,
+        groupAuthorizer: _authorizeGroup,
       );
       await controller.attach(_session);
       await controller.create(
@@ -248,6 +279,16 @@ void main() {
     },
   );
 }
+
+Future<ObserverPilotAuthorization> _authorizeGroup(
+  ObserverGroupAuthorizationRequest request,
+) async => const ObserverPilotAuthorization(
+  deviceId: 'pilot-device',
+  devicePublicKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  signedAtMilliseconds: 1,
+  signature:
+      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+);
 
 DateTime _clock() => DateTime.utc(2026, 7, 24, 13);
 
@@ -347,6 +388,8 @@ class _FakeObserverApi implements ObserverAccessApi {
     required String label,
     required Duration duration,
     ObserverAccessScope scope = ObserverAccessScope.rider,
+    ObserverPositionPrecision precision = ObserverPositionPrecision.reduced,
+    ObserverPilotAuthorization? pilotAuthorization,
   }) async {
     _nextGrant += 1;
     return ObserverGrantCredentials(
@@ -356,6 +399,7 @@ class _FakeObserverApi implements ObserverAccessApi {
         createdAt: _clock(),
         expiresAt: _clock().add(duration),
         scope: scope,
+        precision: precision,
       ),
       managementToken: 'om1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
       publisherToken: 'op1_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',

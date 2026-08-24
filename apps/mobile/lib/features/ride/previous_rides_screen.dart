@@ -24,6 +24,7 @@ import '../map/resolved_route_map_preview.dart'
     show embeddedMapGestureRecognizers;
 import '../map/stored_route_picker.dart';
 import '../replay/flight_replay_screen.dart';
+import 'flight_export_consent.dart';
 import 'ride_recap_screen.dart';
 
 class PreviousRidesScreen extends StatelessWidget {
@@ -151,10 +152,10 @@ class _RideTile extends StatelessWidget {
       subtitle: Text(
         '${_date(ride.startedAt)} · $distance · ${ride.riderCount} crew\n'
         '${ride.traveledRoute == null
-            ? 'No GPX trail recorded'
+            ? 'No flight trail recorded'
             : ride.hasRecordingGaps
             ? 'Recorded trail has location gaps'
-            : 'GPX ready'}',
+            : 'Flight data ready'}',
       ),
       isThreeLine: true,
       trailing: const Icon(Icons.chevron_right),
@@ -291,12 +292,12 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
             key: const Key('archived-ride-export-gpx'),
             onPressed: _sharing || ride.traveledRoute == null
                 ? null
-                : _exportGpx,
+                : _exportFlightData,
             icon: const Icon(Icons.file_upload_outlined),
             label: Text(
               ride.traveledRoute == null
-                  ? 'No recorded GPX trail'
-                  : 'Export GPX',
+                  ? 'No recorded flight trail'
+                  : 'Export flight data',
             ),
           ),
           const SizedBox(height: 10),
@@ -309,7 +310,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
           const Text(
             'Flight history is stored locally on this phone. Balloon Crumbs '
             'does not upload a permanent copy. The native share destination '
-            'determines where an exported GPX is saved.',
+            'determines where exported GPX, KML and CSV files are saved.',
             style: TextStyle(color: Color(0xFF8994A2), fontSize: 12),
           ),
         ],
@@ -414,12 +415,15 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
     }
   }
 
-  Future<void> _exportGpx() => _runShare(
-    () => widget.sharer.exportGpx(
-      widget.ride,
-      sharePositionOrigin: _shareOrigin(),
-    ),
-  );
+  Future<void> _exportFlightData() async {
+    if (!await confirmExactFlightDataExport(context) || !mounted) return;
+    await _runShare(
+      () => widget.sharer.exportFlightData(
+        widget.ride,
+        sharePositionOrigin: _shareOrigin(),
+      ),
+    );
+  }
 
   Future<void> _runShare(Future<void> Function() action) async {
     setState(() => _sharing = true);

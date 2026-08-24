@@ -622,6 +622,16 @@ class RelayService:
         )
         with session.begin():
             session.execute(delete(RideJoinCode).where(RideJoinCode.expires_at <= now))
+            ride = self._get_or_claim_ride(session, ride_id, bearer_token, now)
+            if not hmac.compare_digest(ride.token_hash, credential_hash):
+                raise RelayServiceError(403, "Ride credential rejected")
+            if authority_root_public_key is not None:
+                if (
+                    ride.authority_root_public_key is not None
+                    and ride.authority_root_public_key != authority_root_public_key
+                ):
+                    raise RelayServiceError(409, "Ride authority is already registered")
+                ride.authority_root_public_key = authority_root_public_key
             existing = session.get(RideJoinCode, ride_code)
             if existing is not None:
                 same_ride = existing.ride_id == ride_id

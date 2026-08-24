@@ -855,6 +855,7 @@ def create_app(
         grant, management_token, publisher_token, observer_token = create_observer_grant(
             session,
             settings=settings,
+            cipher=cipher,
             ride_id=ride_id,
             bearer_token=bearer_token,
             request=payload,

@@ -40,6 +40,7 @@ import '../features/map/craft_icon.dart';
 import '../relay/live_presence.dart';
 import '../services/nearby_bridge.dart';
 import '../services/operational_boundary_monitor.dart';
+import '../services/observer_group_authorization.dart';
 import '../services/pilot_handover.dart';
 import '../services/presence_authenticator.dart';
 import '../services/completed_ride_archiver.dart';
@@ -51,6 +52,7 @@ import '../services/received_quick_message.dart';
 import '../services/ride_route_reducer.dart';
 import '../services/rider_contact_share.dart';
 import '../internet/internet_relay_client.dart';
+import '../internet/observer_access_client.dart';
 import '../internet/crew_room_directory.dart';
 import '../relay/relay_presence.dart';
 
@@ -1408,6 +1410,36 @@ class RideController extends ChangeNotifier {
         payload: {'role': role.name},
       );
     });
+  }
+
+  Future<ObserverPilotAuthorization> authorizeGroupObserver(
+    ObserverGroupAuthorizationRequest request,
+  ) async {
+    final session = _requireSession();
+    final manager = _deviceIdentityManager;
+    if (request.session.rideId != session.rideId ||
+        !session.usesDeviceAuthority ||
+        manager == null ||
+        !hasFlightAuthority ||
+        pilotAuthority.pilotDeviceId != session.localRiderId) {
+      throw const FormatException(
+        'Only the current pilot can authorize a whole-group watcher link.',
+      );
+    }
+    final identity = (await manager.loadOrCreate(
+      session.rideId,
+    )).boundToDeviceId(session.localRiderId);
+    if (identity.publicKey != session.localDevicePublicKey) {
+      throw StateError('This device no longer holds the pilot signing key.');
+    }
+    return ObserverGroupAuthorization.sign(
+      session: session,
+      identity: identity,
+      label: request.label,
+      duration: request.duration,
+      precision: request.precision,
+      signedAt: _clock(),
+    );
   }
 
   /// Changes this device's non-authority role without moving it to another

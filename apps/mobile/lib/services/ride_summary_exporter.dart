@@ -11,9 +11,11 @@ import '../domain/imported_route.dart';
 import '../domain/ride_event.dart';
 import '../domain/ride_session.dart';
 import 'geo_calculations.dart';
+import 'flight_data_exporter.dart';
 import 'gpx_exporter.dart';
 import 'measurement_formatter.dart';
 import 'ride_lifecycle.dart';
+import 'ride_route_reducer.dart';
 
 typedef _TrailPoint = ({
   double latitude,
@@ -240,13 +242,26 @@ class RideSummaryExporter {
     if (position is! Map) return null;
     final latitude = position['latitude'];
     final longitude = position['longitude'];
-    if (latitude is! num || longitude is! num) return null;
+    if (latitude is! num ||
+        !latitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude is! num ||
+        !longitude.isFinite ||
+        longitude < -180 ||
+        longitude > 180) {
+      return null;
+    }
     final recordedAt = sample['recordedAt'];
     // Read defensively like the rest of this walk: a relayed fix is untrusted,
     // and a malformed altitude must cost that point its height rather than the
     // whole export.
     final altitude = sample['altitudeMeters'];
-    final hasAltitude = altitude is num && altitude.isFinite;
+    final hasAltitude =
+        altitude is num &&
+        altitude.isFinite &&
+        altitude >= -1000 &&
+        altitude <= 30000;
     final altitudeAccuracy = sample['altitudeAccuracyMeters'];
     return (
       latitude: latitude.toDouble(),
@@ -273,7 +288,8 @@ class RideSummaryExporter {
           hasAltitude &&
               altitudeAccuracy is num &&
               altitudeAccuracy.isFinite &&
-              altitudeAccuracy >= 0
+              altitudeAccuracy >= 0 &&
+              altitudeAccuracy <= 10000
           ? altitudeAccuracy.toDouble()
           : null,
     );
@@ -313,7 +329,7 @@ class RideSummaryExporter {
     ];
     for (final point in trail.skip(1)) {
       final gap = point.recordedAt.difference(segments.last.last.recordedAt);
-      if (gap > maximumContinuousTrailGap) {
+      if (gap > maximumContinuousTrailGap || gap.isNegative) {
         segments.add(<_TrailPoint>[]);
       }
       segments.last.add(point);
@@ -346,6 +362,7 @@ abstract interface class RideSummarySharer {
     DistanceUnit distanceUnit = DistanceUnit.kilometres,
     Rect? sharePositionOrigin,
     String? diagnostics,
+    bool includeExactTrack = false,
   });
 }
 
@@ -364,20 +381,32 @@ class SystemRideSummarySharer implements RideSummarySharer {
     // attachment on the share a rider already does, rather than a second flow
     // and a second decision at the end of a ride.
     String? diagnostics,
+    bool includeExactTrack = false,
   }) async {
+    final exportedEvents = events.toList(growable: false);
     final generatedAt = DateTime.now();
     final summary = exporter.summarize(
       session,
-      events,
+      exportedEvents,
       generatedAt: generatedAt,
     );
     final route = exporter.traveledRoute(
       session,
-      events,
+      exportedEvents,
       generatedAt: generatedAt,
     );
+    final plannedRoute = const RideRouteReducer()
+        .fromEvents(
+          rideId: session.rideId,
+          inviteSecret: session.inviteSecret,
+          events: exportedEvents,
+        )
+        .route;
+    const flightDataExporter = FlightDataExporter();
     final csvFileName = exporter.fileName(summary);
     final gpxFileName = exporter.trailFileName(summary);
+    final telemetryFileName = flightDataExporter.csvFileName(summary.rideCode);
+    final kmlFileName = flightDataExporter.kmlFileName(summary.rideCode);
     final diagnosticsFileName =
         'balloon-crumbs-diagnostics-'
         '${summary.rideCode}.txt';
@@ -392,7 +421,7 @@ class SystemRideSummarySharer implements RideSummarySharer {
             mimeType: 'text/csv',
             name: csvFileName,
           ),
-          if (route != null)
+          if (includeExactTrack && route != null) ...[
             XFile.fromData(
               Uint8List.fromList(
                 utf8.encode(const GpxExporter().export(route)),
@@ -400,7 +429,34 @@ class SystemRideSummarySharer implements RideSummarySharer {
               mimeType: 'application/gpx+xml',
               name: gpxFileName,
             ),
-          if (diagnostics != null)
+            XFile.fromData(
+              Uint8List.fromList(
+                utf8.encode(
+                  flightDataExporter.telemetryCsv(
+                    session: session,
+                    events: exportedEvents,
+                    plannedRoute: plannedRoute,
+                  ),
+                ),
+              ),
+              mimeType: 'text/csv',
+              name: telemetryFileName,
+            ),
+            XFile.fromData(
+              Uint8List.fromList(
+                utf8.encode(
+                  flightDataExporter.kml(
+                    name: session.rideName ?? 'Flight ${session.rideCode}',
+                    traveledRoute: route,
+                    plannedRoute: plannedRoute,
+                  ),
+                ),
+              ),
+              mimeType: 'application/vnd.google-earth.kml+xml',
+              name: kmlFileName,
+            ),
+          ],
+          if (includeExactTrack && diagnostics != null)
             XFile.fromData(
               Uint8List.fromList(utf8.encode(diagnostics)),
               mimeType: 'text/plain',
@@ -409,8 +465,12 @@ class SystemRideSummarySharer implements RideSummarySharer {
         ],
         fileNameOverrides: [
           csvFileName,
-          if (route != null) gpxFileName,
-          if (diagnostics != null) diagnosticsFileName,
+          if (includeExactTrack && route != null) ...[
+            gpxFileName,
+            telemetryFileName,
+            kmlFileName,
+          ],
+          if (includeExactTrack && diagnostics != null) diagnosticsFileName,
         ],
         sharePositionOrigin: sharePositionOrigin,
       ),

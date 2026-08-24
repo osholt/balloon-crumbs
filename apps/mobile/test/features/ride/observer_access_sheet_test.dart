@@ -13,7 +13,11 @@ void main() {
     tester,
   ) async {
     final api = _FakeObserverApi();
-    final controller = ObserverAccessController(api, _MemoryStore());
+    final controller = ObserverAccessController(
+      api,
+      _MemoryStore(),
+      groupAuthorizer: _authorizeGroup,
+    );
     await controller.attach(_session);
     addTearDown(controller.dispose);
 
@@ -55,7 +59,11 @@ void main() {
     tester,
   ) async {
     final api = _FakeObserverApi();
-    final controller = ObserverAccessController(api, _MemoryStore());
+    final controller = ObserverAccessController(
+      api,
+      _MemoryStore(),
+      groupAuthorizer: _authorizeGroup,
+    );
     await controller.attach(_session);
     addTearDown(controller.dispose);
 
@@ -88,6 +96,44 @@ void main() {
     expect(find.text('Share group watcher link'), findsOneWidget);
     expect(find.textContaining('Whole group ·'), findsOneWidget);
   });
+
+  testWidgets(
+    'exact position needs renewed consent and is labelled on the grant',
+    (tester) async {
+      final api = _FakeObserverApi();
+      final controller = ObserverAccessController(api, _MemoryStore());
+      await controller.attach(_session);
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(body: ObserverAccessSheet(controller: controller)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('observer-consent')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('observer-precision')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Exact last-known position').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('reveal the field'), findsOneWidget);
+      FilledButton createButton = tester.widget(
+        find.byKey(const Key('create-observer-link')),
+      );
+      expect(createButton.onPressed, isNull);
+
+      await tester.tap(find.byKey(const Key('observer-consent')));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('create-observer-link')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('create-observer-link')));
+      await tester.pumpAndSettle();
+      expect(api.lastPrecision, ObserverPositionPrecision.exact);
+      expect(find.textContaining('Exact position'), findsOneWidget);
+    },
+  );
 
   // A rider reported being unable to leave this screen after sharing a link, at
   // the kerbside while trying to set off (#304). The body is a scroll view, which
@@ -182,6 +228,7 @@ final _session = RideSession(
 class _FakeObserverApi implements ObserverAccessApi {
   int createCount = 0;
   ObserverAccessScope? lastScope;
+  ObserverPositionPrecision? lastPrecision;
 
   @override
   final configuration = ObserverAccessConfiguration(
@@ -197,9 +244,12 @@ class _FakeObserverApi implements ObserverAccessApi {
     required String label,
     required Duration duration,
     ObserverAccessScope scope = ObserverAccessScope.rider,
+    ObserverPositionPrecision precision = ObserverPositionPrecision.reduced,
+    ObserverPilotAuthorization? pilotAuthorization,
   }) async {
     createCount += 1;
     lastScope = scope;
+    lastPrecision = precision;
     return ObserverGrantCredentials(
       grant: ObserverGrant(
         id: 'grant-a',
@@ -207,6 +257,7 @@ class _FakeObserverApi implements ObserverAccessApi {
         createdAt: DateTime.now(),
         expiresAt: DateTime.now().add(duration),
         scope: scope,
+        precision: precision,
       ),
       managementToken: 'om1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
       publisherToken: 'op1_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
@@ -236,6 +287,16 @@ class _FakeObserverApi implements ObserverAccessApi {
   @override
   void close() {}
 }
+
+Future<ObserverPilotAuthorization> _authorizeGroup(
+  ObserverGroupAuthorizationRequest request,
+) async => const ObserverPilotAuthorization(
+  deviceId: 'pilot-device',
+  devicePublicKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  signedAtMilliseconds: 1,
+  signature:
+      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+);
 
 class _MemoryStore implements ObserverGrantStore {
   List<ObserverGrantCredentials> values = const [];
