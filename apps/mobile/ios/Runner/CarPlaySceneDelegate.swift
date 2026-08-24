@@ -54,6 +54,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   private var canPlanRoute = false
   private var canFreeRoam = false
   private var mapOrientation = "directionUp"
+  private var voiceMuted = true
   private var submittedSearchText = ""
   private weak var interfaceController: CPInterfaceController?
   private var sceneLifecycle = CarPlaySceneLifecycle()
@@ -428,6 +429,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     mapOrientation = snapshot["mapOrientation"] as? String == "northUp"
       ? "northUp"
       : "directionUp"
+    voiceMuted = (snapshot["voiceMuted"] as? NSNumber)?.boolValue ?? true
     guard let mapTemplate else { return }
 
     // Active-ride actions are app-owned buttons on the map canvas, matching the
@@ -437,6 +439,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var buttons: [CPMapButton] = []
     if surfaceMode == "activeRide" {
       buttons.append(mapOrientationButton())
+      buttons.append(voiceMuteButton())
     } else {
       if canPlanRoute { buttons.append(planRouteButton()) }
       if canFreeRoam { buttons.append(freeRoamButton()) }
@@ -455,6 +458,20 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       accessibilityLabel: northUp
         ? "North-up map. Switch to direction-up"
         : "Direction-up map. Switch to north-up"
+    )
+    return button
+  }
+
+  private func voiceMuteButton() -> CPMapButton {
+    let button = CPMapButton { _ in
+      (UIApplication.shared.delegate as? AppDelegate)?.toggleCarPlayVoiceMute()
+    }
+    button.image = mapButtonImage(
+      named: voiceMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+      color: CarPlayPalette.actionInk,
+      accessibilityLabel: voiceMuted
+        ? "Voice muted. Turn voice on"
+        : "Voice on. Mute and stop voice"
     )
     return button
   }

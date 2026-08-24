@@ -27,7 +27,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 7 | P0 | ~~Multiple chase vehicles and vehicle assignment~~ **done**; rendezvous remains in 7a | WP7 | 3, 5 |
 | 7a | P0 | ~~Chaser-selectable road guidance to the balloon or intended landing area, with bounded road-candidate selection, access uncertainty and reroute hysteresis~~ **done** | WP7 | 6, 7 |
 | 7b | P0 | ~~Mini-map and local viewpoint switching as the chase decision surface (balloon, track, area, vehicles)~~ **done** | WP7 | 7a |
-| 8 | P0 | Voice-first chase guidance for a moving target | WP8 | 7 |
+| 8 | P0 | Voice-first chase guidance for a moving target — automated policy and phone/CarPlay controls done; physical audio matrix remains | WP8 | 7 |
 | 9 | P0 | Ground notes and the retrieve | WP9 | 3 |
 | 10 | P0 | Landing-phase basemap (OS topographic / aerial) | WP6b | 6 |
 | 11 | P0 | Balloon/chase simulator and replay matrix | WP10 | 3–9 |

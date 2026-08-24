@@ -13,6 +13,13 @@ void main() {
   ).readAsStringSync();
 
   group('the speed pair stays trailing while recovery status stays left', () {
+    test('active recovery exposes one-tap map and voice controls', () {
+      expect(source, contains('buttons.append(mapOrientationButton())'));
+      expect(source, contains('buttons.append(voiceMuteButton())'));
+      expect(source, contains('toggleCarPlayVoiceMute()'));
+      expect(source, contains('Mute and stop voice'));
+    });
+
     test('the recovery overview is not displaced by inherited branding', () {
       expect(source, isNot(contains('tecBadge')));
       expect(source, isNot(contains('CarPlayTecBadge')));

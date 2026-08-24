@@ -806,6 +806,19 @@ and a UI rebuild cannot change authority.
       preserve the last valid route on failure.
 - [x] Target selection, road endpoint, target age and reroute reason are visible.
 
+### P0.8 Voice-first chase guidance
+
+- [x] The first route prompt explains that guidance ends at a road rendezvous,
+      not the airborne balloon coordinate.
+- [x] Manoeuvre, target-change, recalculation, stale/recovered-fix,
+      route-failure and arrival phrases have explicit priorities and semantic
+      deduplication.
+- [x] Churn replay does not repeat or conflict with a higher-priority message.
+- [x] Phone and CarPlay expose one-tap mute-and-stop controls backed by the same
+      persisted phone preference.
+- [ ] Bluetooth, interruption, screen-off, app-background and physical CarPlay
+      evidence is recorded in `docs/spoken-recovery-guidance.md`.
+
 ## P1 requirements
 
 - Live projected track and possible-landing envelope from current telemetry and

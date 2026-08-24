@@ -122,6 +122,40 @@ void main() {
     expect(engine.spoken, hasLength(2));
   });
 
+  test('the one-action mute path stops the current utterance', () async {
+    await speaker.speakAlert(
+      key: 'stale-fix-1',
+      phrase: 'Balloon position is stale',
+      enabled: true,
+      rideActive: true,
+    );
+
+    await speaker.stop();
+
+    expect(engine.stopped, isTrue);
+  });
+
+  test('iOS uses a short navigation voice-prompt audio session', () async {
+    final tts = _AudioSessionRecordingTts();
+    final voiceEngine = FlutterTtsSpokenGuidanceEngine(tts: tts);
+
+    await voiceEngine.configure();
+
+    expect(tts.category, IosTextToSpeechAudioCategory.playback);
+    expect(tts.mode, IosTextToSpeechAudioMode.voicePrompt);
+    expect(
+      tts.options,
+      contains(IosTextToSpeechAudioCategoryOptions.duckOthers),
+    );
+    expect(
+      tts.options,
+      contains(
+        IosTextToSpeechAudioCategoryOptions
+            .interruptSpokenAudioAndMixWithOthers,
+      ),
+    );
+  });
+
   test('installed voice discovery keeps usable English voices', () async {
     final voices = await loadSpokenGuidanceVoices(_VoiceListTts());
 
@@ -283,6 +317,36 @@ class _VoiceListTts extends FlutterTts {
     {'name': 'Thomas', 'locale': 'fr-FR', 'identifier': 'thomas'},
     {'name': '', 'locale': 'en-US'},
   ];
+}
+
+class _AudioSessionRecordingTts extends FlutterTts {
+  IosTextToSpeechAudioCategory? category;
+  List<IosTextToSpeechAudioCategoryOptions> options = const [];
+  IosTextToSpeechAudioMode? mode;
+
+  @override
+  Future<dynamic> setSharedInstance(bool sharedSession) async => 1;
+
+  @override
+  Future<dynamic> setIosAudioCategory(
+    IosTextToSpeechAudioCategory category,
+    List<IosTextToSpeechAudioCategoryOptions> options, [
+    IosTextToSpeechAudioMode mode = IosTextToSpeechAudioMode.defaultMode,
+  ]) async {
+    this.category = category;
+    this.options = List.unmodifiable(options);
+    this.mode = mode;
+    return 1;
+  }
+
+  @override
+  Future<dynamic> setSpeechRate(double rate) async => 1;
+
+  @override
+  Future<dynamic> awaitSpeakCompletion(bool awaitCompletion) async => 1;
+
+  @override
+  Future<dynamic> clearVoice() async => 1;
 }
 
 class _VoiceRecordingTts extends FlutterTts {
