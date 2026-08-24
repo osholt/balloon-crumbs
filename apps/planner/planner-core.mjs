@@ -92,10 +92,13 @@ export function windForecastGrid(center) {
 export function openMeteoRequestUrl({ endpoint, center }) {
   const url = new URL(endpoint, "https://planner.invalid");
   const points = windForecastGrid(center);
-  const variables = WIND_LEVELS_METRES_MSL.flatMap((altitude) => [
-    `wind_speed_${altitude}m`,
-    `wind_direction_${altitude}m`,
-  ]);
+  const variables = [
+    "wind_gusts_10m",
+    ...WIND_LEVELS_METRES_MSL.flatMap((altitude) => [
+      `wind_speed_${altitude}m`,
+      `wind_direction_${altitude}m`,
+    ]),
+  ];
   url.searchParams.set("latitude", points.map((point) => point.latitude.toFixed(6)).join(","));
   url.searchParams.set("longitude", points.map((point) => point.longitude.toFixed(6)).join(","));
   url.searchParams.set("models", "ukmo_seamless");
@@ -145,6 +148,8 @@ export function parseOpenMeteoForecast(payload, requestedAt) {
     if (times.length === 0 || times.some((time) => time === null)) continue;
     for (let timeIndex = 0; timeIndex < times.length; timeIndex += 1) {
       const vectors = [];
+      const gusts = entry.hourly.wind_gusts_10m;
+      const surfaceGustKmh = Number(Array.isArray(gusts) ? gusts[timeIndex] : NaN);
       for (const altitudeMetresMsl of WIND_LEVELS_METRES_MSL) {
         const speeds = entry.hourly[`wind_speed_${altitudeMetresMsl}m`];
         const directions = entry.hourly[`wind_direction_${altitudeMetresMsl}m`];
@@ -160,7 +165,12 @@ export function parseOpenMeteoForecast(payload, requestedAt) {
       if (vectors.length === 0) continue;
       const epoch = times[timeIndex].getTime();
       const slice = slicesByTime.get(epoch) ?? { validAt: times[timeIndex], columns: [] };
-      slice.columns.push({ position, vectors });
+      slice.columns.push({
+        position,
+        vectors,
+        surfaceGustKmh:
+          Number.isFinite(surfaceGustKmh) && surfaceGustKmh >= 0 ? surfaceGustKmh : null,
+      });
       slicesByTime.set(epoch, slice);
     }
   }
@@ -280,6 +290,54 @@ function interpolatedVectorInColumns(columns, position, altitudeMetresMsl) {
     eastMetresPerSecond / totalWeight,
     northMetresPerSecond / totalWeight,
   );
+}
+
+function interpolatedSurfaceGustInColumns(columns, position) {
+  const candidates = columns
+    .map((column) => ({
+      distanceMetres: distanceMetres(column.position, position),
+      surfaceGustKmh: Number(column.surfaceGustKmh),
+    }))
+    .filter(
+      (candidate) =>
+        Number.isFinite(candidate.surfaceGustKmh) && candidate.surfaceGustKmh >= 0,
+    )
+    .sort((first, second) => first.distanceMetres - second.distanceMetres)
+    .slice(0, 4);
+  if (candidates.length === 0) return null;
+  if (candidates[0].distanceMetres < 1) return candidates[0].surfaceGustKmh;
+  let totalWeight = 0;
+  let weightedGust = 0;
+  for (const candidate of candidates) {
+    const weight = 1 / candidate.distanceMetres ** 2;
+    totalWeight += weight;
+    weightedGust += candidate.surfaceGustKmh * weight;
+  }
+  return weightedGust / totalWeight;
+}
+
+export function surfaceGustAtPosition(field, position, elapsedSeconds = 0) {
+  const slices = field?.timeSlices ?? [];
+  if (slices.length === 0) {
+    return interpolatedSurfaceGustInColumns(field?.columns ?? [], position);
+  }
+  const requestedAt = field.requestedAt instanceof Date ? field.requestedAt : field.validAt;
+  const targetTime = requestedAt.getTime() + finiteNumber(elapsedSeconds, "elapsed seconds") * 1000;
+  let upperIndex = slices.findIndex((slice) => slice.validAt.getTime() >= targetTime);
+  if (upperIndex < 0) upperIndex = slices.length - 1;
+  const lowerIndex = Math.max(0, upperIndex - 1);
+  const lower = slices[lowerIndex];
+  const upper = slices[upperIndex];
+  const lowerGust = interpolatedSurfaceGustInColumns(lower.columns, position);
+  const upperGust = interpolatedSurfaceGustInColumns(upper.columns, position);
+  if (lowerGust === null) return upperGust;
+  if (upperGust === null || lowerIndex === upperIndex) return lowerGust;
+  const interval = upper.validAt.getTime() - lower.validAt.getTime();
+  const fraction =
+    interval <= 0
+      ? 0
+      : Math.max(0, Math.min(1, (targetTime - lower.validAt.getTime()) / interval));
+  return lowerGust + (upperGust - lowerGust) * fraction;
 }
 
 export function interpolatedVectorAtPosition(

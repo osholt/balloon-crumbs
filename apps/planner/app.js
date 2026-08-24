@@ -15,6 +15,7 @@ import {
   operationalBoundariesGeoJson,
   parseOpenMeteoForecast,
   planWindRouteToDestination,
+  surfaceGustAtPosition,
 } from "./planner-core.mjs";
 import { applyThemePaint, themeStyle } from "./planner-theme.mjs";
 
@@ -660,7 +661,12 @@ function updateWindMarkers() {
     arrow.style.transform = `rotate(${(vector.fromDegrees + 180) % 360}deg)`;
     const speed = document.createElement("span");
     speed.className = "speed";
-    speed.textContent = `${Math.round(vector.speedKmh)}`;
+    const gust = surfaceGustAtPosition(
+      state.field,
+      position,
+      departureOffsetSeconds,
+    );
+    speed.textContent = `${Math.round(vector.speedKmh)}${gust === null ? "" : ` G${Math.round(gust)}`}`;
     element.append(arrow, speed);
     state.windMarkers.push(
       new maplibregl.Marker({ element, anchor: "center" })
@@ -932,7 +938,7 @@ function recomputeTrack({ fit = false } = {}) {
         `${formatLocalTime(state.routePlan?.departureAt ?? new Date(
           departureSearch.dayStart.getTime() +
             departureSearch.minimumDepartureOffsetMinutes * 60_000,
-        ))} model hour (not observed).`,
+        ))} model hour · speed/direction at selected MSL layer · G is 10 m AGL forecast gust (not observed).`,
       "good",
     );
     if (fit) fitForecast();
@@ -1236,6 +1242,7 @@ function windFieldDigest(field) {
     columns: (field?.columns ?? []).map((column) => ({
       position: column.position,
       vectors: column.vectors,
+      surfaceGustKmh: column.surfaceGustKmh,
     })),
   });
   let hash = 0x811c9dc5;
@@ -1323,7 +1330,7 @@ async function generatePlanCode() {
         validFrom: forecastTimes[0] ?? state.field.validAt,
         validTo: forecastTimes.at(-1) ?? state.field.validAt,
         attribution: "Weather data by Open-Meteo",
-        licence: "CC BY 4.0",
+        licence: "CC BY-SA 4.0",
         fieldDigest: windFieldDigest(state.field),
       },
       operationalBoundaries: state.operationalBoundaries,

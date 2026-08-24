@@ -20,6 +20,7 @@ import {
   openMeteoRequestUrl,
   parseOpenMeteoForecast,
   planWindRouteToDestination,
+  surfaceGustAtPosition,
   vectorAtAltitude,
   vectorAtPosition,
   windForecastGrid,
@@ -99,7 +100,10 @@ test("structured plans retain constraints, stages, envelope and wind provenance"
 });
 
 function payload({ direction = 270, speed = 36 } = {}) {
-  const hourly = { time: ["2026-08-21T08:00", "2026-08-21T09:00"] };
+  const hourly = {
+    time: ["2026-08-21T08:00", "2026-08-21T09:00"],
+    wind_gusts_10m: [44, 52],
+  };
   for (const altitude of WIND_LEVELS_METRES_MSL) {
     hourly[`wind_speed_${altitude}m`] = [speed, speed];
     hourly[`wind_direction_${altitude}m`] = [direction, direction];
@@ -131,6 +135,7 @@ test("wind request covers a bounded wide-area UKMO grid and height levels", () =
   assert.equal(url.searchParams.get("latitude").split(",").length, 25);
   assert.match(url.searchParams.get("hourly"), /wind_speed_500m/);
   assert.match(url.searchParams.get("hourly"), /wind_direction_2000m/);
+  assert.match(url.searchParams.get("hourly"), /wind_gusts_10m/);
 });
 
 test("forecast parser chooses the hour nearest the pilot's departure", () => {
@@ -139,6 +144,22 @@ test("forecast parser chooses the hour nearest the pilot's departure", () => {
   const field = parseOpenMeteoForecast(source, new Date("2026-08-21T08:52:00Z"));
   assert.equal(field.validAt.toISOString(), "2026-08-21T09:00:00.000Z");
   assert.equal(vectorAtAltitude(field.columns[0], 500).speedKmh, 28);
+  assert.equal(field.columns[0].surfaceGustKmh, 52);
+});
+
+test("surface gust stays explicitly at 10 m AGL and interpolates in time", () => {
+  const field = parseOpenMeteoForecast(
+    payload(),
+    new Date("2026-08-21T08:00:00Z"),
+  );
+  assert.equal(
+    surfaceGustAtPosition(
+      field,
+      { latitude: 51.5, longitude: -2.5 },
+      30 * 60,
+    ),
+    48,
+  );
 });
 
 test("wind vectors interpolate between hourly forecast slices during the flight", () => {

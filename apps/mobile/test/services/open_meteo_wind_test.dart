@@ -23,6 +23,7 @@ void main() {
                 '2026-08-21T10:00',
                 '2026-08-21T11:00',
               ],
+              'wind_gusts_10m': [30, 42, 54],
               'wind_speed_20m': [12, 18, 24],
               'wind_direction_20m': [260, 270, 280],
               'wind_speed_500m': [24, 36, 48],
@@ -68,6 +69,9 @@ void main() {
     );
     expect(vector?.speedKmh, 36);
     expect(vector?.fromDegrees, 180);
+    expect(field.columns[4].surfaceGustKmh, 42);
+    expect(field.surfaceGustRangeKmh?.minimum, 42);
+    expect(requestedUri?.queryParameters['hourly'], contains('wind_gusts_10m'));
   });
 
   test('interpolates wind components across north without bearing wrap', () {
@@ -130,7 +134,85 @@ void main() {
     controller.updateBalloonAltitude(1250);
     expect(controller.selectedAltitudeMetersMsl, 1250);
   });
+
+  test(
+    'labels live fields current, then stale after their validity expires',
+    () {
+      var now = DateTime.utc(2026, 8, 24, 8);
+      final field = _fieldAt(now);
+      final controller = WindForecastController(
+        _RecordingProvider(),
+        clock: () => now,
+        initialField: field,
+      );
+      addTearDown(controller.dispose);
+
+      expect(controller.freshness, WindForecastFreshness.currentForecast);
+      now = now.add(const Duration(hours: 3));
+      expect(controller.freshness, WindForecastFreshness.staleForecast);
+    },
+  );
+
+  test(
+    'a failed offline refresh retains but never freshens the old field',
+    () async {
+      var now = DateTime.utc(2026, 8, 24, 8);
+      final original = _fieldAt(now);
+      final controller = WindForecastController(
+        const _FailingProvider(),
+        clock: () => now,
+        initialField: original,
+      );
+      addTearDown(controller.dispose);
+
+      now = now.add(const Duration(hours: 3));
+      await controller.refresh(
+        const GeoPoint(latitude: 51.44, longitude: -2.65),
+        force: true,
+      );
+
+      expect(controller.field, same(original));
+      expect(controller.error, isNotNull);
+      expect(controller.freshness, WindForecastFreshness.staleForecast);
+    },
+  );
+
+  test('bundled simulator wind is always a dated reference, never live', () {
+    final sourceTime = DateTime.utc(2026, 8, 8, 6);
+    final field = WindForecastField(
+      columns: _fieldAt(sourceTime).columns,
+      validAt: sourceTime,
+      fetchedAt: sourceTime,
+      origin: WindForecastOrigin.bundledFallback,
+      sourceLabel: 'Bundled rehearsal wind',
+    );
+
+    expect(
+      field.freshnessAt(DateTime.utc(2026, 8, 24)),
+      WindForecastFreshness.bundledReference,
+    );
+  });
 }
+
+WindForecastField _fieldAt(DateTime at) => WindForecastField(
+  columns: [
+    WindForecastColumn(
+      position: const GeoPoint(latitude: 51.44, longitude: -2.65),
+      vectors: const [
+        WindForecastVector(
+          altitudeMetersMsl: 500,
+          fromDegrees: 270,
+          speedKmh: 20,
+        ),
+      ],
+      surfaceGustKmh: 32,
+    ),
+  ],
+  validAt: at,
+  fetchedAt: at,
+  origin: WindForecastOrigin.openMeteoUkmo,
+  sourceLabel: OpenMeteoWindProvider.sourceLabel,
+);
 
 class _RecordingProvider implements WindForecastProvider {
   int fetchCount = 0;
@@ -160,4 +242,14 @@ class _RecordingProvider implements WindForecastProvider {
       sourceLabel: OpenMeteoWindProvider.sourceLabel,
     );
   }
+}
+
+class _FailingProvider implements WindForecastProvider {
+  const _FailingProvider();
+
+  @override
+  Future<WindForecastField> fetch({
+    required GeoPoint center,
+    required DateTime at,
+  }) => throw const FormatException('offline');
 }

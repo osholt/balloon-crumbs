@@ -107,6 +107,7 @@ void main() {
                   speedKmh: 30,
                 ),
               ],
+              surfaceGustKmh: 38,
             ),
           ],
           validAt: DateTime.utc(2026, 8, 21, 10),
@@ -279,6 +280,12 @@ void main() {
       expect(find.byKey(const Key('wind-forecast-control')), findsOneWidget);
       expect(find.byKey(const Key('wind-altitude-slider')), findsOneWidget);
       expect(find.textContaining('1000 M MSL'), findsOneWidget);
+      expect(find.textContaining('BUNDLED REFERENCE'), findsOneWidget);
+      expect(
+        find.byKey(const Key('wind-surface-gust-summary')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('38–38 km/h'), findsOneWidget);
       Navigator.of(
         tester.element(find.byKey(const Key('wind-forecast-control'))),
       ).pop();
