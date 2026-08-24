@@ -134,6 +134,10 @@ void main() {
     expect(find.byKey(const Key('simulation-role')), findsOneWidget);
     expect(find.text('Chase'), findsOneWidget);
     expect(find.byKey(const Key('simulation-rider-count')), findsNothing);
+    expect(find.byKey(const Key('simulation-seed')), findsOneWidget);
+    expect(find.textContaining('no device GPS or live relay'), findsOneWidget);
+    expect(find.byKey(const Key('simulation-connectivity')), findsOneWidget);
+    expect(find.byKey(const Key('simulation-fix-quality')), findsOneWidget);
 
     await tester.ensureVisible(find.text('Chase'));
     await tester.tap(find.text('Chase'));

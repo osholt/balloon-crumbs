@@ -30,7 +30,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 8 | P0 | Voice-first chase guidance for a moving target — automated policy and phone/CarPlay controls done; physical audio matrix remains | WP8 | 7 |
 | 9 | P0 | Ground notes and the retrieve | WP9 | 3 |
 | 10 | P0 | Landing-phase basemap (OS topographic / aerial) | WP6b | 6 |
-| 11 | P0 | Balloon/chase simulator and replay matrix | WP10 | 3–9 |
+| 11 | P0 | ~~Balloon/chase simulator and replay matrix, including seeded multi-route chase and controllable link/fix degradation~~ **done** | WP10 | 3–9 |
 | 11a | P0 | Full-flight archive v2: time-align balloon telemetry, available chaser/craft locations, wind observations and guidance target changes; replay any previous flight, not only the bundled Fiesta scenario | WP10 | 5–9 |
 | 12 | P0 | Security, privacy, retention, and field-test gates | WP12 | 3–11 |
 | 12a | P0 | Multiple operational boundaries and altitude bands: draw, name, share and update more than one line/area in the web planner or app; alert on crossing with source, age and hysteresis; support configurable high/low altitude alerts | WP10b | 5, 6, 12 |
