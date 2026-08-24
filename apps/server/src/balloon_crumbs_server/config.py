@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -150,6 +151,14 @@ class Settings(BaseSettings):
     traffic_incident_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
     traffic_incident_maximum_response_bytes: int = Field(
         default=512 * 1024,
+        ge=64 * 1024,
+        le=2 * 1024 * 1024,
+    )
+    inspire_reference_path: Path | None = None
+    inspire_reference_rate_limit_requests: int = Field(default=60, ge=10, le=1000)
+    inspire_reference_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+    inspire_reference_maximum_response_bytes: int = Field(
+        default=384 * 1024,
         ge=64 * 1024,
         le=2 * 1024 * 1024,
     )

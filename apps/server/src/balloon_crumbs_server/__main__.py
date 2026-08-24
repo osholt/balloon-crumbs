@@ -12,6 +12,10 @@ def main() -> None:
         port=8080,
         proxy_headers=True,
         forwarded_allow_ips=settings.forwarded_allow_ips,
+        # Query strings for traffic and reference-map endpoints contain exact
+        # coordinates. Aggregate Prometheus counters replace access logs in
+        # production so a flight viewport is never retained as an URL.
+        access_log=settings.environment == "development",
     )
 
 
