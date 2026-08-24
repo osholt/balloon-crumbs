@@ -20,8 +20,12 @@ LIMITATION = (
     "and does not grant access or permission."
 )
 MAXIMUM_QUERY_FEATURES = 100
-MAXIMUM_RESPONSE_GEOMETRY_BYTES = 256 * 1024
-MAXIMUM_FEATURE_GEOMETRY_BYTES = 64 * 1024
+# Current HMLR authority files contain a small number of legitimate complex
+# freehold polygons above 256 KiB once converted to minified GeoJSON. Keep the
+# cap below the mobile/provider response ceiling while accepting those source
+# records; the aggregate query cap still truncates a crowded result safely.
+MAXIMUM_RESPONSE_GEOMETRY_BYTES = 368 * 1024
+MAXIMUM_FEATURE_GEOMETRY_BYTES = 368 * 1024
 MAXIMUM_FEATURE_POINTS = 20_000
 
 
@@ -64,6 +68,12 @@ class InspireReferenceCatalogue:
             connection = sqlite3.connect(f"{self.path.as_uri()}?mode=ro", uri=True)
             connection.execute("PRAGMA query_only = ON")
             metadata = dict(connection.execute("SELECT key, value FROM metadata"))
+            if not _installed_coverage_contains(
+                metadata,
+                latitude=query.latitude,
+                longitude=query.longitude,
+            ):
+                return _outside_installed_coverage_response(metadata)
             rows = connection.execute(
                 """
                 SELECT p.inspire_id, p.geometry_json
@@ -115,7 +125,11 @@ class InspireReferenceCatalogue:
         return {
             "type": "FeatureCollection",
             "features": features,
-            "metadata": _metadata(dataset_date, truncated=truncated, coverage="England and Wales"),
+            "metadata": _metadata(
+                dataset_date,
+                truncated=truncated,
+                coverage=metadata.get("coverage", "England and Wales"),
+            ),
         }
 
 
@@ -132,6 +146,41 @@ def _outside_coverage_response() -> dict[str, Any]:
             ),
         },
     }
+
+
+def _outside_installed_coverage_response(metadata: dict[str, str]) -> dict[str, Any]:
+    coverage = metadata.get("coverage", "the installed regional index")
+    return {
+        "type": "FeatureCollection",
+        "features": [],
+        "metadata": {
+            "available": False,
+            "coverage": coverage,
+            "limitation": (
+                "This location is outside the installed HMLR regional index. "
+                "Absence of a displayed polygon does not mean land is unregistered "
+                "or that access is permitted."
+            ),
+        },
+    }
+
+
+def _installed_coverage_contains(
+    metadata: dict[str, str],
+    *,
+    latitude: float,
+    longitude: float,
+) -> bool:
+    try:
+        return float(metadata["coverage_min_longitude"]) <= longitude <= float(
+            metadata["coverage_max_longitude"]
+        ) and float(metadata["coverage_min_latitude"]) <= latitude <= float(
+            metadata["coverage_max_latitude"]
+        )
+    except (KeyError, ValueError):
+        # Schema-version 1 catalogues produced before regional coverage bounds
+        # remain readable; their human-readable coverage label still applies.
+        return True
 
 
 def _metadata(dataset_date: date, *, truncated: bool, coverage: str) -> dict[str, Any]:
@@ -165,11 +214,15 @@ def build_catalogue(
     output: Path,
     *,
     dataset_date: date,
+    coverage: str = "England and Wales",
 ) -> int:
     """Build from WGS84 GeoJSON Sequence, keeping no source attributes but the ID."""
 
     if not inputs:
         raise ValueError("At least one GeoJSON Sequence input is required")
+    coverage = coverage.strip()
+    if not coverage or len(coverage) > 200:
+        raise ValueError("Coverage must be between 1 and 200 characters")
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary_handle, temporary_name = tempfile.mkstemp(
         prefix=f".{output.name}.",
@@ -207,8 +260,10 @@ def build_catalogue(
                 ("dataset_date", dataset_date.isoformat()),
                 ("source", SOURCE_NAME),
                 ("source_url", SOURCE_URL),
+                ("coverage", coverage),
             ],
         )
+        coverage_bounds: list[float] | None = None
         for input_path in inputs:
             with input_path.open(encoding="utf-8") as source:
                 for line_number, line in enumerate(source, start=1):
@@ -229,6 +284,13 @@ def build_catalogue(
                     )
                     if cursor.rowcount == 0:
                         continue
+                    if coverage_bounds is None:
+                        coverage_bounds = list(bounds)
+                    else:
+                        coverage_bounds[0] = min(coverage_bounds[0], bounds[0])
+                        coverage_bounds[1] = max(coverage_bounds[1], bounds[1])
+                        coverage_bounds[2] = min(coverage_bounds[2], bounds[2])
+                        coverage_bounds[3] = max(coverage_bounds[3], bounds[3])
                     polygon_id = cursor.lastrowid
                     connection.execute(
                         "INSERT INTO polygon_bounds VALUES (?, ?, ?, ?, ?)",
@@ -237,6 +299,16 @@ def build_catalogue(
                     inserted += 1
         if inserted == 0:
             raise ValueError("The input contained no valid unique polygons")
+        assert coverage_bounds is not None
+        connection.executemany(
+            "INSERT INTO metadata(key, value) VALUES (?, ?)",
+            [
+                ("coverage_min_longitude", str(coverage_bounds[0])),
+                ("coverage_max_longitude", str(coverage_bounds[1])),
+                ("coverage_min_latitude", str(coverage_bounds[2])),
+                ("coverage_max_latitude", str(coverage_bounds[3])),
+            ],
+        )
         connection.execute("PRAGMA optimize")
         connection.commit()
         connection.close()
@@ -316,8 +388,18 @@ def main() -> None:
     parser.add_argument("inputs", nargs="+", type=Path, help="WGS84 GeoJSON Sequence files")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--dataset-date", required=True, type=date.fromisoformat)
+    parser.add_argument(
+        "--coverage",
+        default="England and Wales",
+        help="Honest description of the installed authority-file coverage",
+    )
     args = parser.parse_args()
-    count = build_catalogue(args.inputs, args.output, dataset_date=args.dataset_date)
+    count = build_catalogue(
+        args.inputs,
+        args.output,
+        dataset_date=args.dataset_date,
+        coverage=args.coverage,
+    )
     print(f"Built {count} indicative INSPIRE polygons at {args.output}")
 
 

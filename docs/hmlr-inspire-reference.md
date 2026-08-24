@@ -77,13 +77,18 @@ cd apps/server
 uv run balloon-crumbs-build-inspire \
   ../../imports/*.geojsonseq \
   --output ../../deploy/maps/data/hmlr/current.sqlite \
-  --dataset-date 2026-08-02
+  --dataset-date 2026-08-02 \
+  --coverage "Somerset Council regional index"
 ```
 
 For national coverage, convert every current England and Wales local-authority
-download in the same batch. HMLR warns that reprojection can displace displayed
-geometry, which is another reason the UI must not describe the result as an
-exact boundary.
+download in the same batch and use `--coverage "England and Wales"`. A regional
+install must list its included authorities honestly in `--coverage`; it must
+never use the national label. HMLR warns that reprojection can displace
+displayed geometry, which is another reason the UI must not describe the result
+as an exact boundary. The builder records the installed data envelope so a
+lookup clearly reports `available: false` outside a regional index instead of
+silently implying that no registered interest exists there.
 
 The builder validates coordinate bounds, geometry size and point count and
 atomically replaces `current.sqlite`; a failed build leaves the prior index in
