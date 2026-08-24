@@ -219,6 +219,7 @@ class CarPlayBridge {
     this.onFreeRoamRequested,
     this.onStateRequested,
     this.onMapOrientationToggleRequested,
+    this.onVoiceMuteToggleRequested,
     @visibleForTesting MethodChannel? channel,
     @visibleForTesting DateTime Function()? clock,
     @visibleForTesting
@@ -280,6 +281,10 @@ class CarPlayBridge {
 
   /// Persists a CarPlay-only camera choice on the phone, then republishes it.
   final Future<void> Function()? onMapOrientationToggleRequested;
+
+  /// Toggles the phone-owned spoken-guidance mute state. Native CarPlay never
+  /// owns a second audio preference that could disagree after reconnect.
+  final Future<void> Function()? onVoiceMuteToggleRequested;
   DateTime? _lastPublishedAt;
 
   String? _publishedRideStartKey;
@@ -409,6 +414,9 @@ class CarPlayBridge {
       case 'toggleMapOrientation':
         _lastPublishedAt = null;
         await onMapOrientationToggleRequested?.call();
+      case 'toggleVoiceMute':
+        _lastPublishedAt = null;
+        await onVoiceMuteToggleRequested?.call();
     }
   }
 
@@ -448,6 +456,8 @@ class CarPlayBridge {
     CarPlayLandingArea? intendedLandingArea,
     CarPlayLandingArea? confirmedLanding,
     MapOrientationMode mapOrientation = MapOrientationMode.directionUp,
+    String? voiceMode,
+    bool voiceMuted = true,
   }) async {
     final now = _clock();
     // A question addressed to this rider is an event, not a state refresh. It
@@ -507,6 +517,8 @@ class CarPlayBridge {
       'distanceUnit': distanceUnit?.name,
       'groupStatus': groupStatus,
       'mapOrientation': mapOrientation.name,
+      'voiceMode': voiceMode,
+      'voiceMuted': voiceMuted,
       'sharedTraces': [for (final trace in sharedTraces) trace.toSnapshot()],
       'intendedLandingArea': intendedLandingArea?.toSnapshot(),
       'confirmedLanding': confirmedLanding?.toSnapshot(),

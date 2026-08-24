@@ -80,6 +80,14 @@ also rescored and retained unless another saves at least 90 seconds.
 | Replay is deterministic and failures are bounded | `chase_rendezvous_planner_test.dart` covers crossings, reversals, stationary fixes, rejected candidates, all-unreachable candidates and identical replay results |
 | Provider use is within current terms | `docs/routing-provider-policy.md`; candidate calls are sequential at 1.1 seconds and identify Balloon Crumbs through `User-Agent` and `X-Client-Id` |
 
+## Voice-first chase closure
+
+The automated speech contract is in `docs/spoken-recovery-guidance.md`.
+`chase_spoken_guidance_test.dart` proves rendezvous disclosure, priority and
+deduplication under churn; the phone and CarPlay source tests prove one-action
+mute-and-stop wiring. Physical Bluetooth, interruption, background and head-unit
+rows remain mandatory before reliability is claimed.
+
 ## Balloon telemetry closure
 
 Balloon Crumbs stores telemetry internally in metres and converts only at the

@@ -82,6 +82,8 @@ void main() {
       'distanceUnit': null,
       'groupStatus': '5 riders visible',
       'mapOrientation': 'directionUp',
+      'voiceMode': null,
+      'voiceMuted': true,
       'sharedTraces': <Object?>[],
       'intendedLandingArea': null,
       'confirmedLanding': null,
@@ -137,6 +139,8 @@ void main() {
       riderLocations: const [],
       activeHazards: const [],
       mapOrientation: MapOrientationMode.northUp,
+      voiceMode: 'Alerts only',
+      voiceMuted: false,
       craftLocations: const [
         CarPlayCraftLocation(
           id: 'balloon',
@@ -180,6 +184,8 @@ void main() {
 
     final snapshot = received!.arguments as Map;
     expect(snapshot['mapOrientation'], 'northUp');
+    expect(snapshot['voiceMode'], 'Alerts only');
+    expect(snapshot['voiceMuted'], isFalse);
     expect(snapshot['riders'], hasLength(1));
     expect(
       (snapshot['riders'] as List).single,
@@ -868,6 +874,25 @@ void main() {
     await messenger.handlePlatformMessage(
       channel.name,
       channel.codec.encodeMethodCall(const MethodCall('toggleMapOrientation')),
+      (_) {},
+    );
+
+    expect(toggles, 1);
+  });
+
+  test('relays the one-tap CarPlay voice mute to the phone', () async {
+    var toggles = 0;
+    final bridge = CarPlayBridge(
+      channel: channel,
+      onVoiceMuteToggleRequested: () async {
+        toggles += 1;
+      },
+    );
+    addTearDown(bridge.dispose);
+
+    await messenger.handlePlatformMessage(
+      channel.name,
+      channel.codec.encodeMethodCall(const MethodCall('toggleVoiceMute')),
       (_) {},
     );
 

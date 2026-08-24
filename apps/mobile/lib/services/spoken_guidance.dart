@@ -231,14 +231,11 @@ abstract interface class WarmableSpokenGuidanceEngine {
 ///   that kills the music is worse than no prompt.
 /// - **Android must not request audio focus permanently**, for the same reason.
 ///
-/// **Foreground only, deliberately.** iOS would need the `audio` background mode
-/// declared for prompts to continue once the app is not frontmost, and that is not
-/// added here for two reasons. It is a release and review decision rather than a
-/// code one. And #205 means the app does not yet record position in the
-/// background at all - so background prompts would be guidance computed from a
-/// position that had stopped updating, which is worse than silence. A rider
-/// running another navigation app in front will not hear these; that is a known
-/// limit, not an oversight.
+/// iOS declares both active-flight location and audio background modes. The
+/// `voicePrompt` session is configured only when the driver enables speech, and
+/// every utterance remains short and interruptible. Physical lock-screen,
+/// Bluetooth and CarPlay evidence remains mandatory before reliability is
+/// claimed.
 class FlutterTtsSpokenGuidanceEngine implements SpokenGuidanceEngine {
   FlutterTtsSpokenGuidanceEngine({FlutterTts? tts, this.voiceProvider})
     : _tts = tts ?? FlutterTts();
@@ -253,6 +250,7 @@ class FlutterTtsSpokenGuidanceEngine implements SpokenGuidanceEngine {
     await _tts.setIosAudioCategory(IosTextToSpeechAudioCategory.playback, [
       IosTextToSpeechAudioCategoryOptions.mixWithOthers,
       IosTextToSpeechAudioCategoryOptions.duckOthers,
+      IosTextToSpeechAudioCategoryOptions.interruptSpokenAudioAndMixWithOthers,
     ], IosTextToSpeechAudioMode.voicePrompt);
     // Slightly slower than default: a phrase heard once at 50 mph through a
     // helmet has to land first time.

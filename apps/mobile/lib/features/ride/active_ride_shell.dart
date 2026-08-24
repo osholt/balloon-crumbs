@@ -63,6 +63,7 @@ import '../../relay/sqlite_relay_queue.dart';
 import '../../services/carplay_bridge.dart';
 import '../../services/chase_guidance_target.dart';
 import '../../services/chase_rendezvous_planner.dart';
+import '../../services/chase_spoken_guidance.dart';
 import '../../services/craft_roster.dart';
 import '../../services/craft_track_reducer.dart';
 import '../../services/fiesta_flight_loader.dart';
@@ -1406,6 +1407,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// Every staged prompt already spoken, so a stage is not repeated on each fix
   /// and the early one does not suppress the ones after it (#410).
   final _spokenGuidanceKeys = <String>{};
+  static const _chaseSpokenGuidancePolicy = ChaseSpokenGuidancePolicy();
+  SpokenAudioMode? _spokenModeBeforeMute;
 
   /// The manoeuvre the rider was last being guided towards, and where it was.
   ///
@@ -1494,6 +1497,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   String? _observedFlightLandingEventId;
   bool _chaseGuidanceRouting = false;
   bool _chaseGuidanceHadUsableTarget = false;
+  bool _chaseFixLossActive = false;
+  int _chaseFixLossSequence = 0;
+  bool _chaseRoadEndpointDisclosureScheduled = false;
   String? _chaseGuidanceStatus;
   ChaseRendezvousSelection? _activeChaseRendezvous;
   ChaseGuidanceTarget? _lastChaseGuidanceKind;
@@ -1693,6 +1699,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _updateMapOverlays(updateDerivedState: false);
       },
       onMapOrientationToggleRequested: _toggleCarPlayMapOrientation,
+      onVoiceMuteToggleRequested: _toggleSpokenGuidanceMute,
     );
   }
 
@@ -3220,6 +3227,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 confirmed: true,
               ),
         mapOrientation: _carPlayOrientationMode,
+        voiceMode: spokenAudioModeLabel(_spokenAudioMode),
+        voiceMuted: _spokenAudioMode == SpokenAudioMode.silent,
       ),
     );
   }
@@ -4055,6 +4064,29 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final flightLandingChanged =
         flightLanding?.eventId != _observedFlightLandingEventId;
     _observedFlightLandingEventId = flightLanding?.eventId;
+    final chaseSpeechReason = !_isChaserPerspective
+        ? null
+        : flightLandingChanged && flightLanding != null
+        ? ChaseSpeechCandidate.targetChanged(
+            revision: 'landed:${flightLanding.eventId}',
+            phrase:
+                'The balloon is marked landed. Recalculating the road rendezvous from the confirmed landing evidence.',
+          )
+        : chaseTargetChanged
+        ? ChaseSpeechCandidate.targetChanged(
+            revision: 'choice:${sharedTarget.name}',
+            phrase: sharedTarget == ChaseGuidanceTarget.balloon
+                ? 'Chase target changed to a road rendezvous near the balloon. Recalculating.'
+                : 'Chase target changed to the intended landing area. Recalculating.',
+          )
+        : landingTargetChanged &&
+              _chaseGuidanceTarget == ChaseGuidanceTarget.landingArea
+        ? ChaseSpeechCandidate.targetChanged(
+            revision: 'landing-area:${landingRevision ?? 'removed'}',
+            phrase:
+                'The intended landing area changed. Recalculating the road rendezvous.',
+          )
+        : null;
     _syncSharedLandingZone();
     _syncOperationalBoundaries();
     if (_isChaserPerspective && _chaseGuidanceTarget == null) {
@@ -4106,6 +4138,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               (flightLandingChanged && flightLanding != null) ||
               (landingTargetChanged &&
                   _chaseGuidanceTarget == ChaseGuidanceTarget.landingArea),
+          reasonSpeech: chaseSpeechReason,
         ),
       );
     }
@@ -5335,10 +5368,21 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return;
     }
     setState(() => _chaseGuidanceTarget = selected);
-    await _refreshChaseGuidanceIfNeeded(force: true);
+    await _refreshChaseGuidanceIfNeeded(
+      force: true,
+      reasonSpeech: ChaseSpeechCandidate.targetChanged(
+        revision: 'choice:${selected.name}',
+        phrase: selected == ChaseGuidanceTarget.balloon
+            ? 'Chase target changed to a road rendezvous near the balloon. Recalculating.'
+            : 'Chase target changed to the intended landing area. Recalculating.',
+      ),
+    );
   }
 
-  Future<void> _refreshChaseGuidanceIfNeeded({bool force = false}) async {
+  Future<void> _refreshChaseGuidanceIfNeeded({
+    bool force = false,
+    ChaseSpeechCandidate? reasonSpeech,
+  }) async {
     if (!_isChaserPerspective ||
         _isSimulation ||
         _chaseGuidanceRouting ||
@@ -5350,7 +5394,17 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final destination = _currentChaseGuidanceDestination();
     final origin = _mapPosition.value;
     if (selected == null || destination == null || origin == null) {
+      final lostUsableTarget =
+          selected == ChaseGuidanceTarget.balloon &&
+          destination == null &&
+          _chaseGuidanceHadUsableTarget;
       if (destination == null) _chaseGuidanceHadUsableTarget = false;
+      if (lostUsableTarget) {
+        _chaseFixLossActive = true;
+        _speakChaseRecoveryEvents([
+          ChaseSpeechCandidate.staleFix('loss-${_chaseFixLossSequence++}'),
+        ]);
+      }
       _setChaseGuidanceStatus(
         selected == null
             ? 'choose a chase target'
@@ -5376,6 +5430,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final now = DateTime.now();
     final recoveredUsableTarget = !_chaseGuidanceHadUsableTarget;
     _chaseGuidanceHadUsableTarget = true;
+    if (recoveredUsableTarget && _chaseFixLossActive) {
+      _chaseFixLossActive = false;
+      reasonSpeech = ChaseSpeechCandidate.fixRecovered(
+        destination.observedAt.toUtc().toIso8601String(),
+      );
+    }
     if (!_chaseGuidanceReroutePolicy.shouldReroute(
       now: now,
       target: destination.point,
@@ -5388,6 +5448,14 @@ class _ActiveRideShellState extends State<ActiveRideShell>
 
     _chaseGuidanceRouting = true;
     if (mounted) setState(() {});
+    final attemptRevision =
+        '${selected.name}:$_chaseGuidanceRouteSequence:${now.toUtc().toIso8601String()}';
+    _speakChaseRecoveryEvents([
+      ?reasonSpeech,
+      if (reasonSpeech == null && force && _activeChaseRendezvous != null)
+        ChaseSpeechCandidate.recalculation(attemptRevision),
+    ]);
+    final wasInitialRoadRendezvous = _activeChaseRendezvous == null;
     try {
       final rendezvous = await _chaseRendezvousPlanner.plan(
         origin: origin,
@@ -5451,6 +5519,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           : 'road endpoint updated · mapped access only';
       await _rideRouteStore?.saveActiveRoute(route);
       await _replaceAwarenessController(route);
+      if (wasInitialRoadRendezvous) _ensureChaseRoadEndpointDisclosure();
       if (mounted) setState(() {});
     } on Object catch (error) {
       if (mounted) {
@@ -5458,6 +5527,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         _warnings.add(
           'Personal chase guidance is unavailable; the previous road route is still in use. $error',
         );
+        _speakChaseRecoveryEvents([
+          ChaseSpeechCandidate.routeUnavailable(attemptRevision),
+        ]);
         setState(() {});
       }
     } finally {
@@ -5489,7 +5561,72 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       widget.spokenGuidance?.mode ?? SpokenAudioMode.silent;
 
   void _onSpokenGuidanceChanged() {
+    if (_spokenAudioMode == SpokenAudioMode.silent) {
+      unawaited(_spokenGuidance?.stop());
+    }
     unawaited(_warmNaturalVoiceIfNeeded());
+    _schedulePublish();
+  }
+
+  Future<void> _toggleSpokenGuidanceMute() async {
+    final controller = widget.spokenGuidance;
+    if (controller == null) return;
+    if (controller.mode == SpokenAudioMode.silent) {
+      await controller.setMode(
+        _spokenModeBeforeMute ?? SpokenAudioMode.everything,
+      );
+      return;
+    }
+    _spokenModeBeforeMute = controller.mode;
+    await controller.setMode(SpokenAudioMode.silent);
+    await _spokenGuidance?.stop();
+  }
+
+  void _speakChaseRecoveryEvents(Iterable<ChaseSpeechCandidate> candidates) {
+    final speaker = _spokenGuidance;
+    if (speaker == null) return;
+    final announcement = _chaseSpokenGuidancePolicy.choose(candidates);
+    if (announcement == null) return;
+    final controller = widget.rideController;
+    unawaited(
+      speaker.speakAlert(
+        key: announcement.key,
+        phrase: announcement.phrase,
+        enabled: spokenAudioAllows(_spokenAudioMode, announcement.audioClass),
+        rideActive:
+            controller.rideStarted &&
+            !controller.rideEnded &&
+            !controller.ridePaused,
+      ),
+    );
+  }
+
+  bool _ensureChaseRoadEndpointDisclosure() {
+    if (_chaseRoadEndpointDisclosureScheduled ||
+        !_isChaserPerspective ||
+        !spokenAudioAllows(_spokenAudioMode, SpokenAudioClass.navigation)) {
+      return false;
+    }
+    final speaker = _spokenGuidance;
+    if (speaker == null) return false;
+    final controller = widget.rideController;
+    final rideActive =
+        controller.rideStarted &&
+        !controller.rideEnded &&
+        !controller.ridePaused;
+    if (!rideActive) return false;
+    _chaseRoadEndpointDisclosureScheduled = true;
+    final rideRevision = controller.session?.rideId ?? 'current-flight';
+    final disclosure = ChaseSpeechCandidate.routeOverview(rideRevision);
+    unawaited(
+      speaker.speakAlert(
+        key: disclosure.key,
+        phrase: disclosure.phrase,
+        enabled: true,
+        rideActive: true,
+      ),
+    );
+    return true;
   }
 
   /// Pulls the expensive model load out of the first camera or turn prompt.
@@ -5554,6 +5691,17 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     if (guidance == null) return;
     final controller = widget.rideController;
     final identity = guidance.instruction.maneuver.identity;
+    if (_ensureChaseRoadEndpointDisclosure()) return;
+    if (_isChaserPerspective &&
+        guidance.instruction.kind == ManeuverKind.arrive &&
+        guidance.distanceMeters <= 75) {
+      _speakChaseRecoveryEvents([
+        ChaseSpeechCandidate.arrival(
+          _activeRoute?.id ?? guidance.instruction.maneuver.identity,
+        ),
+      ]);
+      return;
+    }
 
     // The instruction has moved on, so the one before it is now behind the rider
     // and its position is what the clearance rule measures against (#429).
@@ -6920,16 +7068,24 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 animation: guidance,
                 builder: (context, _) => ListTile(
                   key: const Key('ride-menu-voice'),
-                  leading: Icon(switch (guidance.mode) {
-                    SpokenAudioMode.everything => Icons.volume_up,
-                    SpokenAudioMode.alertsOnly => Icons.notifications_active,
-                    SpokenAudioMode.silent => Icons.volume_off,
-                  }),
-                  title: Text(spokenAudioModeLabel(guidance.mode)),
-                  subtitle: Text(
-                    'Tap for ${spokenAudioModeLabel(guidance.nextMode).toLowerCase()}',
+                  minVerticalPadding: 18,
+                  leading: Icon(
+                    guidance.mode == SpokenAudioMode.silent
+                        ? Icons.volume_up
+                        : Icons.volume_off,
+                    size: 32,
                   ),
-                  onTap: () => unawaited(guidance.cycleMode()),
+                  title: Text(
+                    guidance.mode == SpokenAudioMode.silent
+                        ? 'Turn voice on'
+                        : 'Mute and stop voice',
+                  ),
+                  subtitle: Text(
+                    guidance.mode == SpokenAudioMode.silent
+                        ? 'Currently muted'
+                        : '${spokenAudioModeLabel(guidance.mode)} · stops the current prompt immediately',
+                  ),
+                  onTap: () => unawaited(_toggleSpokenGuidanceMute()),
                 ),
               ),
             const Divider(height: 1),

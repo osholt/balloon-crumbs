@@ -95,10 +95,16 @@
 	  physical testing showed While Using did not reliably survive another
 	  navigation app taking the foreground. It still only holds a location
 	  session during an active flight and shows the blue background indicator.
+
+	  Audio is present because a chase driver may lock the phone or place CarPlay
+	  in front while the active navigation session supplies short voicePrompt TTS
+	  directions. Speech is opt-in, uses temporary ducking, and stops on mute or
+	  when the active flight ends.
 	-->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>audio</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Scanning a flight invitation code lets you join a flight crew with no mobile signal. The camera is used only while that scanner is open, and no image is stored or sent anywhere.</string>
