@@ -229,7 +229,7 @@ class RelayProtocol {
           role: position.role,
           sample: position.sample,
           receivedAt: sentAt.toLocal(),
-          motorcycleStyle: position.motorcycleStyle,
+          craftStyle: position.craftStyle,
           riderSymbol: position.riderSymbol,
           riderColor: position.riderColor,
         );

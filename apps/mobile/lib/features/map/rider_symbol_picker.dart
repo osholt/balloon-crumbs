@@ -12,22 +12,22 @@ class RiderSymbolPicker extends StatelessWidget {
     super.key,
     required this.displayName,
     required this.selectedSymbol,
-    required this.motorcycleStyle,
+    required this.craftStyle,
     required this.badgeColor,
     required this.onSymbolChanged,
-    required this.onMotorcycleStyleChanged,
+    required this.onCraftStyleChanged,
     required this.keyPrefix,
-    required this.bikeKeyPrefix,
+    required this.craftKeyPrefix,
   });
 
   final String displayName;
   final RiderSymbol selectedSymbol;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final Color badgeColor;
   final ValueChanged<RiderSymbol> onSymbolChanged;
-  final ValueChanged<CraftIconStyle> onMotorcycleStyleChanged;
+  final ValueChanged<CraftIconStyle> onCraftStyleChanged;
   final String keyPrefix;
-  final String bikeKeyPrefix;
+  final String craftKeyPrefix;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -45,7 +45,7 @@ class RiderSymbolPicker extends StatelessWidget {
             selected: selectedSymbol.kind == RiderSymbolKind.craft,
             symbol: const RiderSymbol.craft(),
             displayName: displayName,
-            motorcycleStyle: motorcycleStyle,
+            craftStyle: craftStyle,
             badgeColor: badgeColor,
             onTap: () => onSymbolChanged(const RiderSymbol.craft()),
           ),
@@ -57,7 +57,7 @@ class RiderSymbolPicker extends StatelessWidget {
                 ? selectedSymbol
                 : const RiderSymbol.initials(),
             displayName: displayName,
-            motorcycleStyle: motorcycleStyle,
+            craftStyle: craftStyle,
             badgeColor: badgeColor,
             onTap: () => onSymbolChanged(
               selectedSymbol.kind == RiderSymbolKind.initials
@@ -75,7 +75,7 @@ class RiderSymbolPicker extends StatelessWidget {
                   : riderEmojiChoices.first,
             ),
             displayName: displayName,
-            motorcycleStyle: motorcycleStyle,
+            craftStyle: craftStyle,
             badgeColor: badgeColor,
             onTap: () => onSymbolChanged(
               RiderSymbol.emoji(
@@ -93,19 +93,19 @@ class RiderSymbolPicker extends StatelessWidget {
           height: 68,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: CraftIconStyle.values.length,
+            itemCount: vehicleCraftIconStyles.length,
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (context, index) {
-              final style = CraftIconStyle.values[index];
-              final selected = style == motorcycleStyle;
+              final style = vehicleCraftIconStyles[index];
+              final selected = style == craftStyle;
               return Semantics(
                 button: true,
                 selected: selected,
                 label: '${style.label} craft icon',
                 child: InkWell(
-                  key: Key('$bikeKeyPrefix-${style.name}'),
+                  key: Key('$craftKeyPrefix-${style.name}'),
                   borderRadius: BorderRadius.circular(12),
-                  onTap: () => onMotorcycleStyleChanged(style),
+                  onTap: () => onCraftStyleChanged(style),
                   child: Container(
                     width: 56,
                     decoration: BoxDecoration(
@@ -265,7 +265,7 @@ class _SymbolChoice extends StatelessWidget {
     required this.selected,
     required this.symbol,
     required this.displayName,
-    required this.motorcycleStyle,
+    required this.craftStyle,
     required this.badgeColor,
     required this.onTap,
   });
@@ -274,7 +274,7 @@ class _SymbolChoice extends StatelessWidget {
   final bool selected;
   final RiderSymbol symbol;
   final String displayName;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final Color badgeColor;
   final VoidCallback onTap;
 
@@ -303,7 +303,7 @@ class _SymbolChoice extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             RiderMarkerBadge(
-              style: motorcycleStyle,
+              style: craftStyle,
               symbol: symbol,
               displayName: displayName,
               badgeColor: badgeColor,

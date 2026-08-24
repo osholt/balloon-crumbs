@@ -6,7 +6,17 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../../domain/craft.dart';
 import 'route_trail_style.dart';
+
+export '../../domain/craft.dart'
+    show
+        CraftIconStyle,
+        CraftIconStyleKind,
+        craftIconStyleDefault,
+        craftIconStyleFromName,
+        defaultCraftIconStyleFor,
+        vehicleCraftIconStyles;
 
 /// The craft silhouettes a person can pick to represent themselves on the map.
 ///
@@ -20,13 +30,6 @@ import 'route_trail_style.dart';
 /// distinctions a retrieve actually turns on — whether it can leave the road,
 /// carry the envelope, or tow.
 ///
-/// Still chosen per *person*, which is the inherited model and is not yet right:
-/// several crew in one basket each pick their own, where the thing on the map
-/// ought to be the craft. Issue #18 moves the icon onto `Craft` once anything
-/// creates one — see "the craft model has no creation path" in
-/// `docs/delivery-plan.md`.
-enum CraftIconStyle { balloon, fourByFour, pickup, van, trailer }
-
 extension CraftIconStyleData on CraftIconStyle {
   static const Map<CraftIconStyle, String> _fileNames = {
     CraftIconStyle.balloon: '0_balloon',
@@ -45,32 +48,49 @@ extension CraftIconStyleData on CraftIconStyle {
     CraftIconStyle.van => 'Van',
     CraftIconStyle.trailer => 'Towing a trailer',
   };
-
-  bool get isBalloon => this == CraftIconStyle.balloon;
 }
 
-/// Default for sessions created before craft symbols existed, and the fallback
-/// when a peer sends a style name this build does not know.
+/// Canonical and compatibility keys for persisted and relayed craft identity.
 ///
-/// A vehicle rather than the balloon: most phones in a flight are in a chase
-/// vehicle, and exactly one craft is the balloon. Defaulting everyone to a
-/// balloon would put a fleet of aircraft on the map.
-const craftIconStyleDefault = CraftIconStyle.fourByFour;
+/// New builds prefer [craftStyleWireKey]. The legacy key is emitted during the
+/// tester migration so an older installed build still sees a valid marker, and
+/// is accepted indefinitely so saved sessions and delayed journal events do
+/// not become unreadable after an upgrade.
+const craftStyleWireKey = 'craftStyle';
+const riderSymbolWireKey = 'riderSymbol';
+const legacyCraftStyleWireKey = 'motorcycleStyle';
+
+String? craftStyleNameFromPayload(Map<Object?, Object?> payload) {
+  final canonical = payload[craftStyleWireKey];
+  if (canonical is String) return canonical;
+  final legacy = payload[legacyCraftStyleWireKey];
+  return legacy is String ? legacy : null;
+}
+
+Map<String, String> craftStyleWireFields({
+  required RiderSymbol symbol,
+  required CraftIconStyle craftStyle,
+}) {
+  return {
+    craftStyleWireKey: craftStyle.name,
+    riderSymbolWireKey: symbol.storageValue,
+    legacyCraftStyleWireKey: symbol.wireValue(craftStyle),
+  };
+}
+
+RiderSymbol riderSymbolFromPayload(Map<Object?, Object?> payload) {
+  final canonical = payload[riderSymbolWireKey];
+  if (canonical is String) return RiderSymbol.fromStorageValue(canonical);
+  final legacy = payload[legacyCraftStyleWireKey];
+  return RiderSymbol.fromWireValue(legacy is String ? legacy : null);
+}
 
 /// Reads a style name that may have been written by another build.
 ///
 /// Every motorcycle name a previous build wrote — `adventureTourer` and the
 /// fourteen others — is unrecognised here and degrades to
 /// [craftIconStyleDefault] rather than failing to parse, which is the same rule
-/// `rideRoleFromName` and `craftKindFromName` follow. The wire key is still
-/// `motorcycleStyle` so an older peer's snapshot stays readable; renaming it
-/// belongs to the vocabulary pass.
-CraftIconStyle craftIconStyleFromName(String? name) =>
-    CraftIconStyle.values.firstWhere(
-      (style) => style.name == name,
-      orElse: () => craftIconStyleDefault,
-    );
-
+/// `rideRoleFromName` and `craftKindFromName` follow.
 enum RiderSymbolKind { craft, initials, emoji }
 
 /// Ink choices for an initials marker. These stay separate from the rider's
@@ -102,12 +122,10 @@ const riderInitialsInkDefault = RiderInitialsInk.dark;
 
 /// How a rider identifies themselves inside their coloured marker badge.
 ///
-/// The wire representation deliberately reuses the existing `motorcycleStyle`
-/// string. An older build sees an unknown style and falls back to its own
-/// default, while this one can show initials or an emoji without a relay
-/// protocol migration. The key kept its name when the bikes became crafts, for
-/// the same reason: renaming it would break that fallback for no gain, and the
-/// vocabulary pass owns it.
+/// The wire representation remains a single string. During the additive key
+/// migration it is carried under both `craftStyle` and the legacy
+/// `motorcycleStyle`: an older build sees an unknown custom symbol and safely
+/// falls back to its own default, while a new build retains the richer marker.
 class RiderSymbol {
   const RiderSymbol.craft()
     : kind = RiderSymbolKind.craft,
@@ -141,17 +159,16 @@ class RiderSymbol {
     RiderSymbolKind.emoji => 'emoji:$emoji',
   };
 
-  String wireValue(CraftIconStyle motorcycleStyle) => switch (kind) {
-    RiderSymbolKind.craft => motorcycleStyle.name,
+  String wireValue(CraftIconStyle craftStyle) => switch (kind) {
+    RiderSymbolKind.craft => craftStyle.name,
     _ => storageValue,
   };
 
-  String label(String displayName, CraftIconStyle motorcycleStyle) =>
-      switch (kind) {
-        RiderSymbolKind.craft => motorcycleStyle.label,
-        RiderSymbolKind.initials => 'Initials ${initialsFor(displayName)}',
-        RiderSymbolKind.emoji => 'Emoji $emoji',
-      };
+  String label(String displayName, CraftIconStyle craftStyle) => switch (kind) {
+    RiderSymbolKind.craft => craftStyle.label,
+    RiderSymbolKind.initials => 'Initials ${initialsFor(displayName)}',
+    RiderSymbolKind.emoji => 'Emoji $emoji',
+  };
 
   String initialsFor(String displayName) =>
       customInitials ?? riderInitials(displayName);
@@ -167,8 +184,8 @@ class RiderSymbol {
     initialsInk: ink ?? initialsInk,
   );
 
-  String imageName(String displayName, CraftIconStyle motorcycleStyle) {
-    if (kind == RiderSymbolKind.craft) return motorcycleStyle.name;
+  String imageName(String displayName, CraftIconStyle craftStyle) {
+    if (kind == RiderSymbolKind.craft) return craftStyle.name;
     final glyph = kind == RiderSymbolKind.initials
         ? initialsFor(displayName)
         : emoji!;
@@ -221,7 +238,7 @@ const riderSymbolDefault = RiderSymbol.craft();
 
 /// A deliberately small, high-contrast catalogue that renders consistently on
 /// both supported platforms and keeps the wire value comfortably below the
-/// relay's existing 40-character motorcycle-style limit.
+/// relay's existing 40-character craft-style limit.
 const riderEmojiChoices = <String>[
   '🎈',
   '🚐',
@@ -270,7 +287,7 @@ String? normalizeCustomRiderInitials(String value) {
     return null;
   }
   // Keeps `initials:v1:<base64>:<ink>` below the existing 40-character
-  // motorcycleStyle relay limit even for multi-byte letters.
+  // craftStyle relay limit even for multi-byte letters.
   if (utf8.encode(normalized).length > 12) return null;
   return normalized;
 }
@@ -320,7 +337,7 @@ const double riderSymbolRasterSize = 128;
 /// This is the one number the whole app sizes initials by, and it exists
 /// because there were three different answers to the same question (#259).
 ///
-/// A bike or an emoji is a pictogram: it sits *inside* the badge, and every
+/// A craft or an emoji is a pictogram: it sits *inside* the badge, and every
 /// symbol layer draws one at roughly 0.8 of the badge diameter. Initials are
 /// not a pictogram — they are the rider's identity, and the point of #259 is
 /// that they should fill the circle. They silently inherited the pictogram's
@@ -342,8 +359,8 @@ double riderInitialsIconSize({
   double rasterSize = riderSymbolRasterSize,
 }) => badgeDiameter / rasterSize;
 
-/// A motorcycle glyph standing in for the plain circle/Material icon
-/// previously used for rider map markers, tinted by the caller (role colour)
+/// A craft glyph standing in for the plain circle/Material icon previously
+/// used for participant map markers, tinted by the caller (role colour)
 /// exactly like the `Icon` widget it replaces.
 class CraftIcon extends StatelessWidget {
   const CraftIcon({
@@ -369,7 +386,7 @@ class CraftIcon extends StatelessWidget {
   );
 }
 
-/// A white bike silhouette on a filled circle in the rider's colour - reads
+/// A white craft silhouette on a filled circle in the participant's colour - reads
 /// clearly against any basemap, unlike a flat-tinted icon alone, and matches
 /// the badge look used for the "you are here" marker.
 class RiderMarkerBadge extends StatelessWidget {
@@ -393,7 +410,7 @@ class RiderMarkerBadge extends StatelessWidget {
   final Color borderColor;
   final double borderWidth;
 
-  /// Ink for the motorcycle glyph inside the badge.
+  /// Ink for the craft glyph inside the badge.
   final Color glyphColor;
 
   @override
@@ -473,11 +490,11 @@ Future<Uint8List> loadCraftIconPng(CraftIconStyle style) async {
 Future<({Uint8List bytes, bool sdf})> rasterizeRiderSymbolPng({
   required RiderSymbol symbol,
   required String displayName,
-  required CraftIconStyle motorcycleStyle,
+  required CraftIconStyle craftStyle,
   double size = riderSymbolRasterSize,
 }) async {
   if (symbol.kind == RiderSymbolKind.craft) {
-    return (bytes: await loadCraftIconPng(motorcycleStyle), sdf: true);
+    return (bytes: await loadCraftIconPng(craftStyle), sdf: true);
   }
   final glyph = symbol.kind == RiderSymbolKind.initials
       ? symbol.initialsFor(displayName)

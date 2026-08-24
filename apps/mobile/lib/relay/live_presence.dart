@@ -146,7 +146,7 @@ class PresenceRosterMember {
     required this.joinedAt,
     this.left = false,
     this.leftAt,
-    this.motorcycleStyle = craftIconStyleDefault,
+    this.craftStyle = craftIconStyleDefault,
     this.riderSymbol = riderSymbolDefault,
     this.riderColor = riderColorDefault,
   });
@@ -163,7 +163,7 @@ class PresenceRosterMember {
   /// authoritative but cannot be ordered against a later rejoin, so the roster
   /// may only add a departed row it alone knows about (#144).
   final DateTime? leftAt;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
 }
@@ -179,7 +179,7 @@ class LiveRiderPresence {
     required this.sources,
     required this.isLocal,
     required this.knownSince,
-    this.motorcycleStyle = craftIconStyleDefault,
+    this.craftStyle = craftIconStyleDefault,
     this.riderSymbol = riderSymbolDefault,
     this.riderColor = riderColorDefault,
     this.location,
@@ -200,7 +200,7 @@ class LiveRiderPresence {
   /// roster when the transport supplies it and otherwise from their oldest
   /// observed sample. Deterministic so a recomputed roster does not reorder.
   final DateTime knownSince;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
 
@@ -541,7 +541,7 @@ class LivePresenceReconciler {
             sources: const {},
             isLocal: isLocal,
             knownSince: member.joinedAt,
-            motorcycleStyle: member.motorcycleStyle,
+            craftStyle: member.craftStyle,
             riderSymbol: member.riderSymbol,
             riderColor: member.riderColor,
           ),
@@ -589,7 +589,7 @@ class LivePresenceReconciler {
           sources: Set.unmodifiable(sources),
           isLocal: isLocal,
           knownSince: member?.joinedAt ?? candidate.oldestSampleAt,
-          motorcycleStyle: location.motorcycleStyle,
+          craftStyle: location.craftStyle,
           riderSymbol: location.riderSymbol,
           riderColor: location.riderColor,
           location: location,

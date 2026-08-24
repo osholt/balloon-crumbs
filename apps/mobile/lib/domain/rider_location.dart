@@ -155,7 +155,7 @@ class RiderLocation {
     required this.role,
     required this.sample,
     required this.receivedAt,
-    this.motorcycleStyle = craftIconStyleDefault,
+    this.craftStyle = craftIconStyleDefault,
     this.riderSymbol = riderSymbolDefault,
     this.riderColor = riderColorDefault,
   });
@@ -165,7 +165,7 @@ class RiderLocation {
   final RideRole role;
   final LocationSample sample;
   final DateTime receivedAt;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
 
@@ -175,7 +175,7 @@ class RiderLocation {
     'role': role.name,
     'sample': sample.toJson(),
     'receivedAt': receivedAt.toUtc().toIso8601String(),
-    'motorcycleStyle': riderSymbol.wireValue(motorcycleStyle),
+    ...craftStyleWireFields(symbol: riderSymbol, craftStyle: craftStyle),
     'riderColor': riderColor.name,
   };
 
@@ -187,8 +187,8 @@ class RiderLocation {
       Map<String, Object?>.from(json['sample']! as Map),
     ),
     receivedAt: DateTime.parse(json['receivedAt']! as String).toLocal(),
-    motorcycleStyle: craftIconStyleFromName(json['motorcycleStyle'] as String?),
-    riderSymbol: RiderSymbol.fromWireValue(json['motorcycleStyle'] as String?),
+    craftStyle: craftIconStyleFromName(craftStyleNameFromPayload(json)),
+    riderSymbol: riderSymbolFromPayload(json),
     riderColor: riderColorFromName(json['riderColor'] as String?),
   );
 }

@@ -38,7 +38,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
   late final TextEditingController _nameController = TextEditingController(
     text: widget.riderProfile.displayName,
   );
-  late CraftIconStyle _style = widget.riderProfile.motorcycleStyle;
+  late CraftIconStyle _style = widget.riderProfile.craftStyle;
   late RiderSymbol _symbol = widget.riderProfile.riderSymbol;
   late RiderColor _color = widget.riderProfile.riderColor;
   late bool _retainPeerTracks = widget.riderProfile.retainPeerTracksForReplay;
@@ -88,12 +88,12 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
           RiderSymbolPicker(
             displayName: _nameController.text,
             selectedSymbol: _symbol,
-            motorcycleStyle: _style,
+            craftStyle: _style,
             badgeColor: _color.color,
             keyPrefix: 'profile-symbol',
-            bikeKeyPrefix: 'profile-bike',
+            craftKeyPrefix: 'profile-craft',
             onSymbolChanged: (symbol) => setState(() => _symbol = symbol),
-            onMotorcycleStyleChanged: (style) => setState(() => _style = style),
+            onCraftStyleChanged: (style) => setState(() => _style = style),
           ),
           const SizedBox(height: 18),
           const Text('Your colour', style: TextStyle(color: Color(0xFFABB5C1))),
@@ -178,7 +178,7 @@ class _RiderProfileSheetState extends State<RiderProfileSheet> {
     setState(() => _saving = true);
     await widget.riderProfile.save(
       displayName: name,
-      motorcycleStyle: _style,
+      craftStyle: _style,
       riderSymbol: _symbol,
       riderColor: _color,
     );

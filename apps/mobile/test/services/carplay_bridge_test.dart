@@ -222,7 +222,7 @@ void main() {
       localRider: const CarPlayLocalRider(
         riderId: 'installation-1',
         displayName: 'Oliver',
-        motorcycleStyle: CraftIconStyle.van,
+        craftStyle: CraftIconStyle.van,
         riderSymbol: RiderSymbol.emoji('🦊'),
         riderColor: RiderColor.purple,
         detail: 'Chase vehicle · 42 km/h · live',
@@ -620,7 +620,7 @@ void main() {
             accuracyMeters: 6,
           ),
           receivedAt: now,
-          motorcycleStyle: CraftIconStyle.pickup,
+          craftStyle: CraftIconStyle.pickup,
           riderSymbol: const RiderSymbol.initials(
             customInitials: 'OH',
             initialsInk: RiderInitialsInk.purple,
@@ -634,7 +634,7 @@ void main() {
     final rider =
         ((received!.arguments as Map)['riders'] as List).single as Map;
     expect(rider['riderSymbol'], 'initials:v1:T0g:purple');
-    expect(rider['motorcycleStyle'], 'pickup');
+    expect(rider['craftStyle'], 'pickup');
     expect(rider['riderColor'], 'white');
   });
 

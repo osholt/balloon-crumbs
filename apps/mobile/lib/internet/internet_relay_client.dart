@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import '../domain/ride_event.dart';
 import '../domain/rider_location.dart';
 import '../domain/ride_session.dart';
+import '../features/map/craft_icon.dart';
 import '../relay/relay_event_compatibility.dart';
 
 class InternetRelayConfiguration {
@@ -1097,8 +1098,9 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
             : {
                 'displayName': position.displayName,
                 'role': position.role.name,
-                'motorcycleStyle': position.riderSymbol.wireValue(
-                  position.motorcycleStyle,
+                ...craftStyleWireFields(
+                  symbol: position.riderSymbol,
+                  craftStyle: position.craftStyle,
                 ),
                 'riderColor': position.riderColor.name,
                 'sample': position.sample.toJson(),
@@ -1246,6 +1248,8 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
     'role',
     'sample',
     'receivedAt',
+    'craftStyle',
+    'riderSymbol',
     'motorcycleStyle',
     'riderColor',
   };

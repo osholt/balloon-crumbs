@@ -90,7 +90,7 @@ class RideParticipant {
     required this.joinedAt,
     required this.lastSeenAt,
     required this.state,
-    required this.motorcycleStyle,
+    required this.craftStyle,
     required this.riderColor,
     required this.transportEvidence,
     required this.isLocal,
@@ -128,7 +128,7 @@ class RideParticipant {
   /// [RideLiveView.renderedPositions] draws, and that comes from live presence.
   final RiderLocation? lastKnownLocation;
   final RideMembershipState state;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final Set<RideTransportEvidence> transportEvidence;
@@ -253,7 +253,7 @@ class RideParticipant {
     DateTime? rejoinedAfterLeavingAt,
     RiderLocation? lastKnownLocation,
     RideMembershipState? state,
-    CraftIconStyle? motorcycleStyle,
+    CraftIconStyle? craftStyle,
     RiderSymbol? riderSymbol,
     RiderColor? riderColor,
     Set<RideTransportEvidence>? transportEvidence,
@@ -273,7 +273,7 @@ class RideParticipant {
         rejoinedAfterLeavingAt ?? this.rejoinedAfterLeavingAt,
     lastKnownLocation: lastKnownLocation ?? this.lastKnownLocation,
     state: state ?? this.state,
-    motorcycleStyle: motorcycleStyle ?? this.motorcycleStyle,
+    craftStyle: craftStyle ?? this.craftStyle,
     riderSymbol: riderSymbol ?? this.riderSymbol,
     riderColor: riderColor ?? this.riderColor,
     transportEvidence: transportEvidence ?? this.transportEvidence,
@@ -386,7 +386,7 @@ class RideMembershipReducer {
     required RideRole localRole,
     FlightRole localFlightRole = FlightRole.observer,
     required DateTime localJoinedAt,
-    required CraftIconStyle localMotorcycleStyle,
+    required CraftIconStyle localCraftStyle,
     required RiderColor localRiderColor,
     RiderSymbol localRiderSymbol = riderSymbolDefault,
     DateTime? rideStartedAt,
@@ -413,7 +413,7 @@ class RideMembershipReducer {
         joinedAt: localJoinedAt,
         lastSeenAt: localJoinedAt,
         state: RideMembershipState.joined,
-        motorcycleStyle: localMotorcycleStyle,
+        craftStyle: localCraftStyle,
         riderSymbol: localRiderSymbol,
         riderColor: localRiderColor,
         transportEvidence: const {RideTransportEvidence.localDevice},
@@ -456,16 +456,14 @@ class RideMembershipReducer {
           joinedAt: event.createdAt,
           lastSeenAt: event.createdAt,
           state: RideMembershipState.joined,
-          motorcycleStyle: isLocal
-              ? localMotorcycleStyle
+          craftStyle: isLocal
+              ? localCraftStyle
               : craftIconStyleFromName(
-                  event.payload['motorcycleStyle'] as String?,
+                  craftStyleNameFromPayload(event.payload),
                 ),
           riderSymbol: isLocal
               ? localRiderSymbol
-              : RiderSymbol.fromWireValue(
-                  event.payload['motorcycleStyle'] as String?,
-                ),
+              : riderSymbolFromPayload(event.payload),
           riderColor: isLocal
               ? localRiderColor
               : riderColorFromName(event.payload['riderColor'] as String?),
@@ -575,7 +573,7 @@ class RideMembershipReducer {
         joinedAt: presence.knownSince,
         lastSeenAt: presence.location?.sample.recordedAt ?? presence.knownSince,
         state: RideMembershipState.joined,
-        motorcycleStyle: presence.motorcycleStyle,
+        craftStyle: presence.craftStyle,
         riderSymbol: presence.riderSymbol,
         riderColor: presence.riderColor,
         // A roster entry with no position yet is still internet-relay evidence:
@@ -626,7 +624,7 @@ class RideMembershipReducer {
         lastSeenAt: departedAt ?? member.joinedAt,
         leftAt: departedAt,
         state: RideMembershipState.left,
-        motorcycleStyle: member.motorcycleStyle,
+        craftStyle: member.craftStyle,
         riderSymbol: member.riderSymbol,
         riderColor: member.riderColor,
         transportEvidence: const {RideTransportEvidence.internetRelay},
@@ -831,7 +829,7 @@ class RideMembershipReducer {
       joinedAt: location?.sample.recordedAt ?? event.createdAt,
       lastSeenAt: event.createdAt,
       state: RideMembershipState.left,
-      motorcycleStyle: location?.motorcycleStyle ?? craftIconStyleDefault,
+      craftStyle: location?.craftStyle ?? craftIconStyleDefault,
       riderSymbol: location?.riderSymbol ?? riderSymbolDefault,
       riderColor: location?.riderColor ?? riderColorDefault,
       transportEvidence: _evidenceFor(

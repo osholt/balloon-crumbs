@@ -381,7 +381,7 @@ class _CraftMapLocation {
     required this.sourceDeviceIds,
     required this.freshnessDeviceId,
     required this.isBalloon,
-    required this.motorcycleStyle,
+    required this.craftStyle,
     required this.riderSymbol,
     required this.riderColor,
     required this.altitudeMeters,
@@ -395,7 +395,7 @@ class _CraftMapLocation {
   final List<String> sourceDeviceIds;
   final String freshnessDeviceId;
   final bool isBalloon;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final double? altitudeMeters;
@@ -1903,7 +1903,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 role: currentSession.role,
                 sample: sample,
                 receivedAt: DateTime.now(),
-                motorcycleStyle: currentSession.motorcycleStyle,
+                craftStyle: currentSession.craftStyle,
                 riderSymbol: currentSession.riderSymbol,
                 riderColor: currentSession.riderColor,
               ),
@@ -2703,12 +2703,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           sourceDeviceIds: craft.deviceIds,
           freshnessDeviceId: reporterId,
           isBalloon: craft.isBalloon,
-          motorcycleStyle: craft.isBalloon
-              ? CraftIconStyle.balloon
-              : reporter?.motorcycleStyle ?? craftIconStyleDefault,
-          riderSymbol: craft.isBalloon
-              ? riderSymbolDefault
-              : reporter?.riderSymbol ?? riderSymbolDefault,
+          craftStyle: craft.craft.iconStyle,
+          riderSymbol: riderSymbolDefault,
           riderColor: reporter?.riderColor ?? riderColorDefault,
           altitudeMeters: sample.altitudeMeters,
           speedMetersPerSecond: sample.speedMetersPerSecond,
@@ -2900,7 +2896,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             ),
             label:
                 'LANDED · ${landing.locationConfidence?.label ?? 'location supplied'} · ${landing.declaredByDisplayName}',
-            motorcycleStyle: CraftIconStyle.balloon,
+            craftStyle: CraftIconStyle.balloon,
             riderDisplayName: 'LANDED',
             color: const Color(0xFF72D5A4),
           ),
@@ -2919,9 +2915,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                         sourceDeviceIds: [rider.id],
                         freshnessDeviceId: rider.id,
                         isBalloon: rider.role == RideRole.lead,
-                        motorcycleStyle: rider.role == RideRole.lead
+                        craftStyle: rider.role == RideRole.lead
                             ? CraftIconStyle.balloon
-                            : rider.motorcycleStyle,
+                            : rider.craftStyle,
                         riderSymbol: rider.riderSymbol,
                         riderColor: rider.riderColor,
                         altitudeMeters: rider.altitudeMeters,
@@ -2978,7 +2974,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               id: 'craft-${location.id}',
               point: location.point,
               label: label,
-              motorcycleStyle: location.motorcycleStyle,
+              craftStyle: location.craftStyle,
               riderSymbol: location.riderSymbol,
               riderDisplayName: location.displayName,
               color: baseColor,
@@ -3109,9 +3105,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             : CarPlayLocalRider(
                 riderId: session.localRiderId,
                 displayName: session.displayName,
-                motorcycleStyle: session.flightRole.isAboardBalloon
+                craftStyle: session.flightRole.isAboardBalloon
                     ? CraftIconStyle.balloon
-                    : session.motorcycleStyle,
+                    : session.craftStyle,
                 riderSymbol: session.riderSymbol,
                 riderColor: session.riderColor,
                 roleLabel: session.flightRole.label,
@@ -3203,7 +3199,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             ),
             craftStyle: craft.role == RideRole.lead
                 ? CraftIconStyle.balloon
-                : craft.motorcycleStyle,
+                : craft.craftStyle,
             riderSymbol: craft.role == RideRole.lead
                 ? riderSymbolDefault
                 : craft.riderSymbol,
@@ -3238,7 +3234,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             freshness[craft.freshnessDeviceId]?.freshnessLabel ?? 'unknown',
           ].join(' · '),
           point: craft.point,
-          craftStyle: craft.motorcycleStyle,
+          craftStyle: craft.craftStyle,
           riderSymbol: craft.riderSymbol,
           colorArgb: craft.riderColor.color.toARGB32(),
           headingDegrees: craft.headingDegrees,
@@ -4730,11 +4726,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       ),
       restrainedLightMapStyle:
           widget.mapStyleMode.dayStyle == DayMapStyle.restrained,
-      localMotorcycleStyle: isBalloonView
+      localCraftStyle: isBalloonView
           ? CraftIconStyle.balloon
           : _isSimulation
           ? CraftIconStyle.fourByFour
-          : session?.motorcycleStyle ?? craftIconStyleDefault,
+          : session?.craftStyle ?? craftIconStyleDefault,
       localRiderSymbol:
           widget.rideController.session?.riderSymbol ?? riderSymbolDefault,
       localDisplayName: widget.rideController.session?.displayName ?? 'You',

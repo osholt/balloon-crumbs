@@ -35,11 +35,37 @@ void main() {
     );
   }
 
-  RideEvent registerCraft(String id, CraftKind kind, String label) => event(
+  RideEvent registerCraft(
+    String id,
+    CraftKind kind,
+    String label, {
+    CraftIconStyle? style,
+  }) => event(
     RideEventType.craftRegistered,
     deviceId: 'pilot-phone',
-    payload: {'craftId': id, 'kind': kind.name, 'label': label},
+    payload: {
+      'craftId': id,
+      'kind': kind.name,
+      'label': label,
+      if (style != null) 'craftStyle': style.name,
+    },
   );
+
+  test('the registered craft owns its map style', () {
+    final roster = reducer.fromEvents(
+      events: [
+        registerCraft(
+          'v1',
+          CraftKind.vehicle,
+          'Recovery van',
+          style: CraftIconStyle.van,
+        ),
+      ],
+      now: start,
+    );
+
+    expect(roster.crafts.single.craft.iconStyle, CraftIconStyle.van);
+  });
 
   RideEvent attach(String deviceId, String craftId) => event(
     RideEventType.deviceAttachedToCraft,

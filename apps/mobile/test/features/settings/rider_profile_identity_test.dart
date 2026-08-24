@@ -17,7 +17,7 @@ void main() {
     final profile = await RiderProfileController.load();
     await profile.save(
       displayName: 'Oliver Holt',
-      motorcycleStyle: CraftIconStyle.van,
+      craftStyle: CraftIconStyle.van,
       riderColor: RiderColor.green,
     );
     await tester.pumpWidget(

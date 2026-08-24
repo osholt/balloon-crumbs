@@ -61,10 +61,31 @@ def test_presence_replaces_latest_position_without_storing_events(client, synchr
     positions = observed.json()["positions"]
     assert len(positions) == 1
     assert positions[0]["riderId"] == "rider-a"
+    assert positions[0]["craftStyle"] == "adventure"
+    assert positions[0]["motorcycleStyle"] == "adventure"
     assert positions[0]["sample"]["position"]["latitude"] == 51.1
     with client.app.state.session_factory() as session:
         assert session.scalar(select(func.count(StoredEvent.sequence))) == 0
         assert session.scalar(select(func.count()).select_from(PreStartPosition)) == 1
+
+
+def test_presence_accepts_the_canonical_craft_style_without_the_legacy_key(
+    client, synchronize
+) -> None:
+    ride_id = "ride-canonical-craft-style"
+    assert synchronize(client, ride_id=ride_id, secret=SECRET).status_code == 200
+    position = _position(51.0)
+    position["craftStyle"] = position.pop("motorcycleStyle")
+    position["riderSymbol"] = "initials:v1::white"
+
+    published = _presence(client, ride_id, "rider-a", position=position)
+    observed = _presence(client, ride_id, "leader")
+
+    assert published.status_code == 200
+    assert observed.status_code == 200
+    assert observed.json()["positions"][0]["craftStyle"] == "adventure"
+    assert observed.json()["positions"][0]["riderSymbol"] == "initials:v1::white"
+    assert observed.json()["positions"][0]["motorcycleStyle"] == "adventure"
 
 
 def test_presence_is_shared_between_relay_processes(client, settings, synchronize) -> None:

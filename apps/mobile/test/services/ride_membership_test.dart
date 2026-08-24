@@ -22,7 +22,7 @@ void main() {
           payload: const {
             'displayName': 'Alex',
             'role': 'rider',
-            'motorcycleStyle': 'adventure',
+            'motorcycleStyle': 'van',
             'riderColor': 'blue',
           },
           secret: secret,
@@ -47,7 +47,7 @@ void main() {
             localDisplayName: 'Lead',
             localRole: RideRole.lead,
             localJoinedAt: joinedAt,
-            localMotorcycleStyle: craftIconStyleDefault,
+            localCraftStyle: craftIconStyleDefault,
             localRiderColor: riderColorDefault,
             rideStartedAt: joinedAt,
             transportByEventId: const {
@@ -67,6 +67,7 @@ void main() {
       final expired = riderAt(joinedAt.add(const Duration(hours: 13)));
       expect(expired.state, RideMembershipState.expired);
       expect(expired.transportLabel, 'Internet relay');
+      expect(expired.craftStyle, CraftIconStyle.van);
       expect(expired.isIncludedInLiveCount, isFalse);
     },
   );
@@ -108,7 +109,7 @@ void main() {
       localDisplayName: 'Lead',
       localRole: RideRole.lead,
       localJoinedAt: joinedAt,
-      localMotorcycleStyle: craftIconStyleDefault,
+      localCraftStyle: craftIconStyleDefault,
       localRiderColor: riderColorDefault,
       rideStartedAt: joinedAt,
     );
@@ -150,7 +151,7 @@ void main() {
       payload: const {
         'displayName': 'Alex',
         'role': 'lead',
-        'motorcycleStyle': 'adventure',
+        'craftStyle': 'adventure',
         'riderColor': 'blue',
       },
       secret: secret,
@@ -163,7 +164,7 @@ void main() {
       payload: const {
         'displayName': 'Blake',
         'role': 'lead',
-        'motorcycleStyle': 'adventure',
+        'craftStyle': 'adventure',
         'riderColor': 'green',
       },
       secret: secret,
@@ -179,7 +180,7 @@ void main() {
           localDisplayName: 'Observer',
           localRole: RideRole.rider,
           localJoinedAt: joinedAt,
-          localMotorcycleStyle: craftIconStyleDefault,
+          localCraftStyle: craftIconStyleDefault,
           localRiderColor: riderColorDefault,
           rideStartedAt: joinedAt,
         );
@@ -241,7 +242,7 @@ void main() {
           localDisplayName: 'Lead',
           localRole: RideRole.lead,
           localJoinedAt: joinedAt,
-          localMotorcycleStyle: craftIconStyleDefault,
+          localCraftStyle: craftIconStyleDefault,
           localRiderColor: riderColorDefault,
         )
         .singleWhere((participant) => participant.riderId == 'rider-a');

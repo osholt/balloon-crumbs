@@ -6,7 +6,7 @@ import '../domain/rider_color.dart';
 import '../features/map/craft_icon.dart';
 import '../services/rider_contact_share.dart';
 
-/// Remembers how a rider last presented themselves - name, bike, colour -
+/// Remembers how a crew member last presented themselves - name, craft, colour -
 /// so the create/join ride form starts pre-filled instead of blank every
 /// time. Deliberately separate from RideSession, which is scoped to one
 /// ride: this is a standalone device preference, like DistanceUnitController.
@@ -15,7 +15,7 @@ class RiderProfileController extends ChangeNotifier {
     this._preferences,
     this._installationId,
     this._displayName,
-    this._motorcycleStyle,
+    this._craftStyle,
     this._riderSymbol,
     this._riderColor,
     this._emergencyContactName,
@@ -30,7 +30,8 @@ class RiderProfileController extends ChangeNotifier {
 
   static const _nameKey = 'rider_profile_display_name';
   static const _installationIdKey = 'rider_profile_installation_id';
-  static const _styleKey = 'rider_profile_motorcycle_style';
+  static const _styleKey = 'crew_profile_craft_style';
+  static const _legacyStyleKey = 'rider_profile_motorcycle_style';
   static const _symbolKey = 'rider_profile_symbol';
   static const _colorKey = 'rider_profile_colour';
   static const _emergencyContactNameKey = 'rider_profile_ice_contact_name';
@@ -52,7 +53,7 @@ class RiderProfileController extends ChangeNotifier {
   final SharedPreferences _preferences;
   final String _installationId;
   String _displayName;
-  CraftIconStyle _motorcycleStyle;
+  CraftIconStyle _craftStyle;
   RiderSymbol _riderSymbol;
   RiderColor _riderColor;
   String _emergencyContactName;
@@ -67,7 +68,7 @@ class RiderProfileController extends ChangeNotifier {
 
   String get installationId => _installationId;
   String get displayName => _displayName;
-  CraftIconStyle get motorcycleStyle => _motorcycleStyle;
+  CraftIconStyle get craftStyle => _craftStyle;
   RiderSymbol get riderSymbol => _riderSymbol;
   RiderColor get riderColor => _riderColor;
   bool get onboardingCompleted => _onboardingCompleted;
@@ -124,7 +125,10 @@ class RiderProfileController extends ChangeNotifier {
       preferences,
       installationId,
       displayName,
-      craftIconStyleFromName(preferences.getString(_styleKey)),
+      craftIconStyleFromName(
+        preferences.getString(_styleKey) ??
+            preferences.getString(_legacyStyleKey),
+      ),
       RiderSymbol.fromStorageValue(preferences.getString(_symbolKey)),
       riderColorFromName(preferences.getString(_colorKey)),
       preferences.getString(_emergencyContactNameKey) ?? '',
@@ -140,17 +144,17 @@ class RiderProfileController extends ChangeNotifier {
 
   Future<void> save({
     required String displayName,
-    required CraftIconStyle motorcycleStyle,
+    required CraftIconStyle craftStyle,
     RiderSymbol? riderSymbol,
     required RiderColor riderColor,
   }) async {
     _displayName = displayName;
-    _motorcycleStyle = motorcycleStyle;
+    _craftStyle = craftStyle;
     _riderSymbol = riderSymbol ?? _riderSymbol;
     _riderColor = riderColor;
     await Future.wait([
       _preferences.setString(_nameKey, displayName),
-      _preferences.setString(_styleKey, motorcycleStyle.name),
+      _preferences.setString(_styleKey, craftStyle.name),
       _preferences.setString(_symbolKey, _riderSymbol.storageValue),
       _preferences.setString(_colorKey, riderColor.name),
     ]);
@@ -159,7 +163,7 @@ class RiderProfileController extends ChangeNotifier {
 
   Future<void> completeOnboarding({
     required String displayName,
-    required CraftIconStyle motorcycleStyle,
+    required CraftIconStyle craftStyle,
     RiderSymbol? riderSymbol,
     required RiderColor riderColor,
     required bool educationSkipped,
@@ -170,7 +174,7 @@ class RiderProfileController extends ChangeNotifier {
       throw ArgumentError.value(displayName, 'displayName', 'is required');
     }
     _displayName = normalizedName;
-    _motorcycleStyle = motorcycleStyle;
+    _craftStyle = craftStyle;
     _riderSymbol = riderSymbol ?? riderSymbolDefault;
     _riderColor = riderColor;
     _onboardingCompleted = true;
@@ -178,7 +182,7 @@ class RiderProfileController extends ChangeNotifier {
     _pendingRideChoice = rideChoice;
     await Future.wait([
       _preferences.setString(_nameKey, normalizedName),
-      _preferences.setString(_styleKey, motorcycleStyle.name),
+      _preferences.setString(_styleKey, craftStyle.name),
       _preferences.setString(_symbolKey, _riderSymbol.storageValue),
       _preferences.setString(_colorKey, riderColor.name),
       _preferences.setBool(_onboardingCompletedKey, true),

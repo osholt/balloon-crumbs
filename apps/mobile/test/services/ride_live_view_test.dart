@@ -193,7 +193,7 @@ RideParticipant _participant(
   joinedAt: DateTime.utc(2026, 7, 26, 11),
   lastSeenAt: DateTime.utc(2026, 7, 26, 12),
   state: state,
-  motorcycleStyle: craftIconStyleDefault,
+  craftStyle: craftIconStyleDefault,
   riderColor: riderColorDefault,
   transportEvidence: const {RideTransportEvidence.internetRelay},
   isLocal: false,

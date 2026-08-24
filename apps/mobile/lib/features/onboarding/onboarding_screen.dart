@@ -20,7 +20,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final TextEditingController _nameController = TextEditingController(
     text: widget.riderProfile.displayName,
   );
-  late CraftIconStyle _motorcycleStyle = widget.riderProfile.motorcycleStyle;
+  late CraftIconStyle _craftStyle = widget.riderProfile.craftStyle;
   late RiderSymbol _riderSymbol = widget.riderProfile.riderSymbol;
   late RiderColor _riderColor = widget.riderProfile.riderColor;
   int _step = 0;
@@ -163,13 +163,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       RiderSymbolPicker(
         displayName: _nameController.text,
         selectedSymbol: _riderSymbol,
-        motorcycleStyle: _motorcycleStyle,
+        craftStyle: _craftStyle,
         badgeColor: _riderColor.color,
         keyPrefix: 'onboarding-symbol',
-        bikeKeyPrefix: 'onboarding-bike',
+        craftKeyPrefix: 'onboarding-craft',
         onSymbolChanged: (symbol) => setState(() => _riderSymbol = symbol),
-        onMotorcycleStyleChanged: (style) =>
-            setState(() => _motorcycleStyle = style),
+        onCraftStyleChanged: (style) => setState(() => _craftStyle = style),
       ),
       const SizedBox(height: 20),
       const Text('Your colour', style: TextStyle(color: Color(0xFFABB5C1))),
@@ -219,7 +218,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Row(
         children: [
           RiderMarkerBadge(
-            style: _motorcycleStyle,
+            style: _craftStyle,
             symbol: _riderSymbol,
             displayName: _nameController.text,
             badgeColor: _riderColor.color,
@@ -237,7 +236,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  '${_riderSymbol.label(_nameController.text, _motorcycleStyle)} · ${_riderColor.label}',
+                  '${_riderSymbol.label(_nameController.text, _craftStyle)} · ${_riderColor.label}',
                   style: const TextStyle(color: Color(0xFFABB5C1)),
                 ),
               ],
@@ -463,7 +462,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _saving = true);
     await widget.riderProfile.completeOnboarding(
       displayName: _nameController.text,
-      motorcycleStyle: _motorcycleStyle,
+      craftStyle: _craftStyle,
       riderSymbol: _riderSymbol,
       riderColor: _riderColor,
       educationSkipped: _educationSkipped,

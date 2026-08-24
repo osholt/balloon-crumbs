@@ -336,7 +336,7 @@ class RideController extends ChangeNotifier {
       localRole: activeSession.role,
       localFlightRole: activeSession.flightRole,
       localJoinedAt: activeSession.joinedAt,
-      localMotorcycleStyle: activeSession.motorcycleStyle,
+      localCraftStyle: activeSession.craftStyle,
       localRiderColor: activeSession.riderColor,
       localRiderSymbol: activeSession.riderSymbol,
       rideStartedAt: rideStartedAt,
@@ -446,7 +446,7 @@ class RideController extends ChangeNotifier {
           !setEquals(left.sources, right.sources) ||
           left.isLocal != right.isLocal ||
           left.knownSince != right.knownSince ||
-          left.motorcycleStyle != right.motorcycleStyle ||
+          left.craftStyle != right.craftStyle ||
           left.riderSymbol != right.riderSymbol ||
           left.riderColor != right.riderColor ||
           (left.contactAt == null) != (right.contactAt == null)) {
@@ -770,7 +770,7 @@ class RideController extends ChangeNotifier {
 
   Future<void> createRide(
     String displayName, {
-    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
+    CraftIconStyle craftStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
     RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,
@@ -783,7 +783,7 @@ class RideController extends ChangeNotifier {
           : normaliseCrewRoomAlias(crewRoomAlias);
       await _createRide(
         displayName: displayName,
-        motorcycleStyle: motorcycleStyle,
+        craftStyle: craftStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
         coordinationMode: coordinationMode,
@@ -826,7 +826,7 @@ class RideController extends ChangeNotifier {
   Future<void> startNewCrewRoomOperation(
     CrewRoomMembership membership, {
     required String displayName,
-    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
+    CraftIconStyle craftStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
   }) async {
@@ -838,7 +838,7 @@ class RideController extends ChangeNotifier {
       }
       await _createRide(
         displayName: displayName,
-        motorcycleStyle: motorcycleStyle,
+        craftStyle: craftStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
         coordinationMode: RideCoordinationMode.keepTogether,
@@ -881,7 +881,7 @@ class RideController extends ChangeNotifier {
         displayName: membership.displayName,
         flightRole: membership.flightRole,
         vehicleLabel: membership.vehicleLabel,
-        motorcycleStyle: craftIconStyleDefault,
+        craftStyle: craftIconStyleDefault,
         riderSymbol: riderSymbolDefault,
         riderColor: riderColorDefault,
         crewRoomId: access.roomId,
@@ -915,7 +915,7 @@ class RideController extends ChangeNotifier {
     required String displayName,
     required FlightRole flightRole,
     String vehicleLabel = 'Land Rover',
-    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
+    CraftIconStyle craftStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
   }) async {
@@ -941,7 +941,7 @@ class RideController extends ChangeNotifier {
         displayName: displayName,
         flightRole: flightRole,
         vehicleLabel: vehicleLabel,
-        motorcycleStyle: motorcycleStyle,
+        craftStyle: craftStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
         crewRoomId: access.roomId,
@@ -1038,7 +1038,7 @@ class RideController extends ChangeNotifier {
 
   Future<void> createSimulationRide({
     int riderCount = RideSession.defaultSimulationRiderCount,
-    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
+    CraftIconStyle craftStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
   }) async {
@@ -1047,7 +1047,7 @@ class RideController extends ChangeNotifier {
         displayName: 'Demo Lead',
         isSimulation: true,
         simulationRiderCount: _validatedSimulationRiderCount(riderCount),
-        motorcycleStyle: motorcycleStyle,
+        craftStyle: craftStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
       );
@@ -1073,7 +1073,7 @@ class RideController extends ChangeNotifier {
         simulationRiderCount: _validatedSimulationRiderCount(
           riderCount ?? activeSession.simulationRiderCount,
         ),
-        motorcycleStyle: activeSession.motorcycleStyle,
+        craftStyle: activeSession.craftStyle,
         riderSymbol: activeSession.riderSymbol,
         riderColor: activeSession.riderColor,
         rideName: activeSession.rideName,
@@ -1122,7 +1122,7 @@ class RideController extends ChangeNotifier {
     String displayName, {
     FlightRole flightRole = FlightRole.chaseCrew,
     String vehicleLabel = 'Land Rover',
-    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
+    CraftIconStyle craftStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
   }) async {
@@ -1138,7 +1138,7 @@ class RideController extends ChangeNotifier {
         displayName: displayName,
         flightRole: flightRole,
         vehicleLabel: vehicleLabel,
-        motorcycleStyle: motorcycleStyle,
+        craftStyle: craftStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
         crewRoomId: invitation.crewRoomId,
@@ -1189,7 +1189,7 @@ class RideController extends ChangeNotifier {
     String displayName, {
     FlightRole flightRole = FlightRole.chaseCrew,
     String vehicleLabel = 'Land Rover',
-    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
+    CraftIconStyle craftStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
     String? joinToken,
@@ -1211,7 +1211,7 @@ class RideController extends ChangeNotifier {
         displayName: displayName,
         flightRole: flightRole,
         vehicleLabel: vehicleLabel,
-        motorcycleStyle: motorcycleStyle,
+        craftStyle: craftStyle,
         riderSymbol: riderSymbol,
         riderColor: riderColor,
       );
@@ -1227,7 +1227,7 @@ class RideController extends ChangeNotifier {
     required String displayName,
     required FlightRole flightRole,
     required String vehicleLabel,
-    required CraftIconStyle motorcycleStyle,
+    required CraftIconStyle craftStyle,
     required RiderSymbol riderSymbol,
     required RiderColor riderColor,
     String? crewRoomId,
@@ -1282,7 +1282,9 @@ class RideController extends ChangeNotifier {
         flightRole: flightRole,
         localCraftId: craftId,
         joinedAt: now,
-        motorcycleStyle: motorcycleStyle,
+        craftStyle: craftStyle.kind == craftKind
+            ? craftStyle
+            : defaultCraftIconStyleFor(craftKind),
         riderSymbol: riderSymbol,
         riderColor: riderColor,
         crewRoomId: crewRoomId,
@@ -1298,8 +1300,9 @@ class RideController extends ChangeNotifier {
           'displayName': session.displayName,
           'role': session.role.name,
           'flightRole': session.flightRole.name,
-          'motorcycleStyle': session.riderSymbol.wireValue(
-            session.motorcycleStyle,
+          ...craftStyleWireFields(
+            symbol: session.riderSymbol,
+            craftStyle: session.craftStyle,
           ),
           'riderColor': session.riderColor.name,
         },
@@ -1311,6 +1314,7 @@ class RideController extends ChangeNotifier {
           'craftId': craftId,
           'kind': craftKind.name,
           'label': craftLabel,
+          'craftStyle': session.craftStyle.name,
         },
       );
       await _record(
@@ -1462,6 +1466,9 @@ class RideController extends ChangeNotifier {
         flightRole: role,
         localCraftId: craftId,
         requiresFlightAssignment: false,
+        craftStyle: activeSession.craftStyle.kind == craftKind
+            ? activeSession.craftStyle
+            : defaultCraftIconStyleFor(craftKind),
       );
 
       await _record(
@@ -1476,6 +1483,7 @@ class RideController extends ChangeNotifier {
           'craftId': craftId,
           'kind': craftKind.name,
           'label': craftLabel,
+          'craftStyle': updated.craftStyle.name,
         },
       );
       await _record(
@@ -1601,6 +1609,7 @@ class RideController extends ChangeNotifier {
     required String craftId,
     required CraftKind kind,
     required String label,
+    CraftIconStyle? craftStyle,
   }) async {
     if (_session == null || craftId.isEmpty) return false;
     // Only the pilot introduces the balloon. A vehicle can register itself:
@@ -1611,7 +1620,16 @@ class RideController extends ChangeNotifier {
       await _record(
         type: RideEventType.craftRegistered,
         priority: EventPriority.important,
-        payload: {'craftId': craftId, 'kind': kind.name, 'label': label},
+        payload: {
+          'craftId': craftId,
+          'kind': kind.name,
+          'label': label,
+          'craftStyle':
+              (craftStyle?.kind == kind
+                      ? craftStyle
+                      : defaultCraftIconStyleFor(kind))!
+                  .name,
+        },
       );
     });
     return _errorMessage == null;
@@ -2406,7 +2424,7 @@ class RideController extends ChangeNotifier {
     required String displayName,
     bool isSimulation = false,
     int simulationRiderCount = RideSession.defaultSimulationRiderCount,
-    CraftIconStyle motorcycleStyle = craftIconStyleDefault,
+    CraftIconStyle craftStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
     RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,
@@ -2452,7 +2470,7 @@ class RideController extends ChangeNotifier {
       joinedAt: now,
       isSimulation: isSimulation,
       simulationRiderCount: simulationRiderCount,
-      motorcycleStyle: motorcycleStyle,
+      craftStyle: CraftIconStyle.balloon,
       riderSymbol: riderSymbol,
       riderColor: riderColor,
       coordinationMode: coordinationMode,
@@ -2470,8 +2488,9 @@ class RideController extends ChangeNotifier {
         'role': session.role.name,
         'flightRole': session.flightRole.name,
         if (isSimulation) 'simulation': true,
-        'motorcycleStyle': session.riderSymbol.wireValue(
-          session.motorcycleStyle,
+        ...craftStyleWireFields(
+          symbol: session.riderSymbol,
+          craftStyle: session.craftStyle,
         ),
         'riderColor': session.riderColor.name,
         'coordinationMode': session.coordinationMode.name,
@@ -2485,6 +2504,7 @@ class RideController extends ChangeNotifier {
         'craftId': balloonCraftId,
         'kind': CraftKind.balloon.name,
         'label': 'Balloon',
+        'craftStyle': CraftIconStyle.balloon.name,
       },
     );
     await _record(

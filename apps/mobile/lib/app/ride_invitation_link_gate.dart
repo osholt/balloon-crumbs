@@ -224,7 +224,7 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
         flightRole: decision.role,
         vehicleLabel: decision.vehicleLabel,
         joinToken: invitation.joinToken,
-        motorcycleStyle: profile.motorcycleStyle,
+        craftStyle: profile.craftStyle,
         riderSymbol: profile.riderSymbol,
         riderColor: profile.riderColor,
       );

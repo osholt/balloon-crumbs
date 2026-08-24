@@ -169,7 +169,17 @@ class CraftTrackReducer {
     final id = payload['craftId'] ?? payload['id'];
     if (id is! String || id.isEmpty) return null;
     final kind = craftKindFromName(payload['kind']);
-    return Craft(id: id, kind: kind, label: payload['label'] as String? ?? id);
+    final requestedStyle = craftIconStyleFromName(
+      payload['craftStyle'] as String?,
+    );
+    return Craft(
+      id: id,
+      kind: kind,
+      label: payload['label'] as String? ?? id,
+      iconStyle: requestedStyle.kind == kind
+          ? requestedStyle
+          : defaultCraftIconStyleFor(kind),
+    );
   }
 
   static LocationSample? _sample(Map<String, Object?> payload) {

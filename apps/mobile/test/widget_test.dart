@@ -34,7 +34,7 @@ void main() {
     _riderProfile = await RiderProfileController.load();
     await _riderProfile.completeOnboarding(
       displayName: 'Oliver',
-      motorcycleStyle: _riderProfile.motorcycleStyle,
+      craftStyle: _riderProfile.craftStyle,
       riderColor: _riderProfile.riderColor,
       educationSkipped: false,
       rideChoice: OnboardingRideChoice.create,

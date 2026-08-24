@@ -21,6 +21,25 @@ void main() {
       expect(crafts.where((c) => !c.isBalloon), hasLength(2));
     });
 
+    test('icon styles are properties of crafts and must match their kind', () {
+      const vehicle = Craft(
+        id: 'v1',
+        kind: CraftKind.vehicle,
+        label: 'Recovery van',
+        iconStyle: CraftIconStyle.van,
+      );
+      expect(vehicle.iconStyle, CraftIconStyle.van);
+      expect(
+        () => Craft(
+          id: 'b1',
+          kind: CraftKind.balloon,
+          label: 'Balloon',
+          iconStyle: CraftIconStyle.van,
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
     test(
       'a chase assignment is its own fact, reassignable without a schema change',
       () {
@@ -84,6 +103,23 @@ void main() {
 
       expect(balloon.toJson().containsKey('chasing'), isFalse);
       expect(Craft.fromJson(balloon.toJson()), balloon);
+    });
+
+    test('a mismatched or absent style degrades to the kind default', () {
+      final balloon = Craft.fromJson({
+        'id': 'b1',
+        'kind': 'balloon',
+        'label': 'Balloon',
+        'craftStyle': 'van',
+      });
+      final vehicle = Craft.fromJson({
+        'id': 'v1',
+        'kind': 'vehicle',
+        'label': 'Vehicle',
+      });
+
+      expect(balloon.iconStyle, CraftIconStyle.balloon);
+      expect(vehicle.iconStyle, craftIconStyleDefault);
     });
 
     test('an assignment arriving on a balloon is dropped, not fatal', () {

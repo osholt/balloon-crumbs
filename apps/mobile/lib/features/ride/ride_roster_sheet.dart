@@ -334,7 +334,7 @@ class _ParticipantTile extends StatelessWidget {
         key: Key('roster-rider-${participant.riderId}'),
         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         leading: RiderMarkerBadge(
-          style: participant.motorcycleStyle,
+          style: participant.craftStyle,
           symbol: participant.riderSymbol,
           displayName: participant.displayName,
           // Identity colour belongs to the rider, not the role. Role and state

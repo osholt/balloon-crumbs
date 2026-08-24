@@ -171,7 +171,7 @@ class CarPlayLocalRider {
   const CarPlayLocalRider({
     required this.riderId,
     required this.displayName,
-    required this.motorcycleStyle,
+    required this.craftStyle,
     required this.riderSymbol,
     required this.riderColor,
     this.roleLabel = 'Chaser',
@@ -180,7 +180,7 @@ class CarPlayLocalRider {
 
   final String riderId;
   final String displayName;
-  final CraftIconStyle motorcycleStyle;
+  final CraftIconStyle craftStyle;
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final String roleLabel;
@@ -552,10 +552,9 @@ class CarPlayBridge {
           'riderSymbol':
               localRider?.riderSymbol.storageValue ??
               session!.riderSymbol.storageValue,
-          'craftStyle':
-              localRider?.motorcycleStyle.name ?? session!.motorcycleStyle.name,
+          'craftStyle': localRider?.craftStyle.name ?? session!.craftStyle.name,
           'motorcycleStyle':
-              localRider?.motorcycleStyle.name ?? session!.motorcycleStyle.name,
+              localRider?.craftStyle.name ?? session!.craftStyle.name,
           'riderColor': localRider?.riderColor.name ?? session!.riderColor.name,
           'latitude': localPosition.latitude,
           'longitude': localPosition.longitude,
@@ -578,8 +577,8 @@ class CarPlayBridge {
                   // peer with a role-coloured initial, so the two screens described
                   // the same group with different people.
                   'riderSymbol': location.riderSymbol.storageValue,
-                  'craftStyle': location.motorcycleStyle.name,
-                  'motorcycleStyle': location.motorcycleStyle.name,
+                  'craftStyle': location.craftStyle.name,
+                  'motorcycleStyle': location.craftStyle.name,
                   'riderColor': location.riderColor.name,
                   'latitude': location.sample.position.latitude,
                   'longitude': location.sample.position.longitude,

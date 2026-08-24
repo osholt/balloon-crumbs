@@ -325,7 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
         localRider: CarPlayLocalRider(
           riderId: widget.riderProfile.installationId,
           displayName: widget.riderProfile.displayName,
-          motorcycleStyle: widget.riderProfile.motorcycleStyle,
+          craftStyle: widget.riderProfile.craftStyle,
           riderSymbol: widget.riderProfile.riderSymbol,
           riderColor: widget.riderProfile.riderColor,
         ),
@@ -374,7 +374,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       await controller.createRide(
         profile.displayName,
-        motorcycleStyle: profile.motorcycleStyle,
+        craftStyle: profile.craftStyle,
         riderSymbol: profile.riderSymbol,
         riderColor: profile.riderColor,
         coordinationMode: groupRide
@@ -407,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final profile = widget.riderProfile;
     await controller.createRide(
       profile.displayName,
-      motorcycleStyle: profile.motorcycleStyle,
+      craftStyle: profile.craftStyle,
       riderSymbol: profile.riderSymbol,
       riderColor: profile.riderColor,
       coordinationMode: RideCoordinationMode.solo,
@@ -787,7 +787,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await widget.controller.startNewCrewRoomOperation(
       room,
       displayName: profile.displayName,
-      motorcycleStyle: profile.motorcycleStyle,
+      craftStyle: profile.craftStyle,
       riderSymbol: profile.riderSymbol,
       riderColor: profile.riderColor,
     );
@@ -1859,7 +1859,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
       }
       await widget.controller.createRide(
         name,
-        motorcycleStyle: widget.riderProfile.motorcycleStyle,
+        craftStyle: widget.riderProfile.craftStyle,
         riderSymbol: widget.riderProfile.riderSymbol,
         riderColor: widget.riderProfile.riderColor,
         coordinationMode: _selectedCoordinationMode,
@@ -1879,7 +1879,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
         name,
         flightRole: _selectedJoinRole,
         vehicleLabel: _vehicleLabelController.text,
-        motorcycleStyle: widget.riderProfile.motorcycleStyle,
+        craftStyle: widget.riderProfile.craftStyle,
         riderSymbol: widget.riderProfile.riderSymbol,
         riderColor: widget.riderProfile.riderColor,
         joinToken: _pastedJoinToken,
@@ -1896,7 +1896,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
     if (widget.controller.hasActiveRide && mounted) {
       await widget.riderProfile.save(
         displayName: name.trim(),
-        motorcycleStyle: widget.riderProfile.motorcycleStyle,
+        craftStyle: widget.riderProfile.craftStyle,
         riderSymbol: widget.riderProfile.riderSymbol,
         riderColor: widget.riderProfile.riderColor,
       );
@@ -1979,7 +1979,7 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
       name,
       flightRole: _selectedJoinRole,
       vehicleLabel: _vehicleLabelController.text,
-      motorcycleStyle: widget.riderProfile.motorcycleStyle,
+      craftStyle: widget.riderProfile.craftStyle,
       riderSymbol: widget.riderProfile.riderSymbol,
       riderColor: widget.riderProfile.riderColor,
     );

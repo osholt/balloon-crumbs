@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:balloon_crumbs/controllers/ride_simulation_controller.dart';
 import 'package:balloon_crumbs/controllers/situational_awareness_controller.dart';
 import 'package:balloon_crumbs/data/in_memory_event_store.dart';
+import 'package:balloon_crumbs/domain/craft.dart' show CraftKind;
 import 'package:balloon_crumbs/domain/geo_point.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
@@ -70,7 +71,7 @@ void main() {
       );
       expect(chase.displayName, 'Land Rover');
       expect(chase.role, RideRole.rider);
-      expect(chase.motorcycleStyle, CraftIconStyle.fourByFour);
+      expect(chase.craftStyle, CraftIconStyle.fourByFour);
 
       final initialProgress = simulation.progress;
       await simulation.advance(const Duration(seconds: 2));
@@ -192,6 +193,18 @@ void main() {
     expect(largeFleet.riders, hasLength(30));
     expect(largeFleet.riders.map((rider) => rider.id).toSet(), hasLength(30));
     expect(
+      largeFleet.riders
+          .singleWhere((rider) => rider.role == RideRole.lead)
+          .craftStyle,
+      CraftIconStyle.balloon,
+    );
+    expect(
+      largeFleet.riders
+          .where((rider) => rider.role != RideRole.lead)
+          .every((rider) => rider.craftStyle.kind == CraftKind.vehicle),
+      isTrue,
+    );
+    expect(
       largeFleet.riders.where(
         (rider) => rider.id == RideSimulationController.backRiderId,
       ),
@@ -231,7 +244,7 @@ void main() {
       (rider) => rider.displayName == 'Balloon',
     );
     expect(follower.displayName, 'You · Land Rover');
-    expect(follower.motorcycleStyle, CraftIconStyle.fourByFour);
+    expect(follower.craftStyle, CraftIconStyle.fourByFour);
     expect(leader.role, RideRole.lead);
   });
 

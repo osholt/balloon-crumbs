@@ -276,7 +276,7 @@ class _Device {
             localDisplayName: _session.displayName,
             localRole: _session.role,
             localJoinedAt: _session.joinedAt,
-            localMotorcycleStyle: _session.motorcycleStyle,
+            localCraftStyle: _session.craftStyle,
             localRiderColor: _session.riderColor,
             rideStartedAt: now.subtract(const Duration(minutes: 30)),
             livePresence: controller.presenceAt(now),

@@ -38,7 +38,7 @@ void main() {
     localDisplayName: 'Oliver',
     localRole: RideRole.lead,
     localJoinedAt: startedAt,
-    localMotorcycleStyle: craftIconStyleDefault,
+    localCraftStyle: craftIconStyleDefault,
     localRiderColor: riderColorDefault,
     rideStartedAt: startedAt,
     rideEndedAt: rideEndedAt,

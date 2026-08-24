@@ -148,7 +148,7 @@ void main() {
             mapOrientation: MapOrientationMode.northUp,
             onMapOrientationChanged: (mode) => requestedOrientation = mode,
             distanceUnit: DistanceUnit.miles,
-            localMotorcycleStyle: CraftIconStyle.fourByFour,
+            localCraftStyle: CraftIconStyle.fourByFour,
           ),
         ),
       );
