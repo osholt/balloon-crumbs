@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:balloon_crumbs/domain/altitude.dart';
+import 'package:balloon_crumbs/domain/altitude_unit.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
 import 'package:balloon_crumbs/domain/map_orientation.dart';
 import 'package:balloon_crumbs/domain/route_store.dart';
@@ -366,6 +367,57 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('feet preference converts telemetry and its legend together', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync('balloon-feet-map');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final navigation = ValueNotifier<MapNavigationPosition?>(
+      MapNavigationPosition(
+        point: const GeoPoint(latitude: 51.43, longitude: -2.70),
+        recordedAt: DateTime.now(),
+        accuracyMeters: 4,
+        altitudeMeters: 300,
+        altitudeSource: AltitudeSource.gnss,
+        altitudeDatum: AltitudeDatum.wgs84Geoid,
+        altitudeAccuracyMeters: 6,
+        verticalSpeedMetersPerSecond: 1.5,
+      ),
+    );
+    addTearDown(navigation.dispose);
+    final cache = OfflineTileCache(
+      rootDirectory: directory,
+      configuration: const BasemapConfiguration(),
+      httpClient: MockClient((_) async => http.Response('', 404)),
+    );
+    addTearDown(cache.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: RideMapScreen(
+          routeStore: InMemoryRouteStore(_roadRoute),
+          routeImporter: RouteImporter(source: const _NoFileSource()),
+          offlineTileCache: cache,
+          navigationPosition: navigation,
+          perspective: RideMapPerspective.balloon,
+          altitudeUnit: AltitudeUnit.feet,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('984 ft'), findsOneWidget);
+    expect(find.textContaining('↑ 295 ft/min'), findsOneWidget);
+    expect(find.textContaining('±20 ft'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('balloon-map-info-button')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('shown in feet'), findsOneWidget);
+    expect(find.text('TRACK ALTITUDE · FEET'), findsOneWidget);
+    expect(find.text('2953+ ft'), findsOneWidget);
+  });
 
   testWidgets('balloon map draws an advisory forecast without road controls', (
     tester,

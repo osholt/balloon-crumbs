@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import '../../domain/imported_route.dart';
+import '../../domain/altitude_unit.dart';
 
 /// One colour band in the balloon ground-track legend.
 class BalloonAltitudeBand {
@@ -25,11 +26,16 @@ class BalloonAltitudeSegment {
     required this.points,
     required this.color,
     required this.altitudeMeters,
+    required this.widthFactor,
   });
 
   final List<GeoPoint> points;
   final Color color;
   final double? altitudeMeters;
+
+  /// A non-colour cue shared by every renderer: higher bands are progressively
+  /// thicker, while an unknown-altitude leg is the thinnest.
+  final double widthFactor;
 
   bool get hasAltitude => altitudeMeters != null;
 }
@@ -39,6 +45,8 @@ class BalloonAltitudeStyle {
   const BalloonAltitudeStyle._();
 
   static const unknownColor = Color(0xFFB7C4D1);
+  static const unknownWidthFactor = 0.65;
+  static const bandWidthFactors = <double>[0.8, 0.95, 1.1, 1.25, 1.4];
 
   static const bands = <BalloonAltitudeBand>[
     BalloonAltitudeBand(
@@ -77,6 +85,24 @@ class BalloonAltitudeStyle {
     return selected;
   }
 
+  static List<String> labels(AltitudeUnit unit) => [
+    for (var index = 0; index < bands.length; index += 1)
+      _labelForBand(index, unit),
+  ];
+
+  static String _labelForBand(int index, AltitudeUnit unit) {
+    final lower = bands[index].minimumMeters;
+    final upper = index + 1 < bands.length
+        ? bands[index + 1].minimumMeters
+        : null;
+    String value(double metres) => unit.fromMetres(metres).round().toString();
+    if (!lower.isFinite && upper != null) {
+      return '<${value(upper)} ${unit.symbol}';
+    }
+    if (upper == null) return '${value(lower)}+ ${unit.symbol}';
+    return '${value(lower)}–${value(upper)} ${unit.symbol}';
+  }
+
   static List<BalloonAltitudeSegment> segments(List<GeoPoint> points) => [
     for (var index = 1; index < points.length; index += 1)
       _segment(points[index - 1], points[index]),
@@ -96,6 +122,18 @@ class BalloonAltitudeStyle {
       points: [start, end],
       color: altitude == null ? unknownColor : colorForMeters(altitude),
       altitudeMeters: altitude,
+      widthFactor: altitude == null
+          ? unknownWidthFactor
+          : _widthFactorForMeters(altitude),
     );
+  }
+
+  static double _widthFactorForMeters(double meters) {
+    var selected = bandWidthFactors.first;
+    for (var index = 0; index < bands.length; index += 1) {
+      if (meters < bands[index].minimumMeters) break;
+      selected = bandWidthFactors[index];
+    }
+    return selected;
   }
 }

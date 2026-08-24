@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/altitude_unit.dart';
 import '../../domain/distance_unit.dart';
 import '../../domain/imported_route.dart';
 import '../../services/measurement_formatter.dart';
@@ -31,6 +32,7 @@ class RouteConfirmationSheet extends StatelessWidget {
     super.key,
     required this.route,
     required this.distanceUnit,
+    this.altitudeUnit = AltitudeUnit.metres,
     this.distanceMeters,
     this.duration,
     this.warnings = const [],
@@ -39,6 +41,7 @@ class RouteConfirmationSheet extends StatelessWidget {
 
   final ImportedRoute route;
   final DistanceUnit distanceUnit;
+  final AltitudeUnit altitudeUnit;
   final double? distanceMeters;
   final Duration? duration;
   final List<String> warnings;
@@ -51,6 +54,7 @@ class RouteConfirmationSheet extends StatelessWidget {
     BuildContext context, {
     required ImportedRoute route,
     required DistanceUnit distanceUnit,
+    AltitudeUnit altitudeUnit = AltitudeUnit.metres,
     double? distanceMeters,
     Duration? duration,
     List<String> warnings = const [],
@@ -62,6 +66,7 @@ class RouteConfirmationSheet extends StatelessWidget {
       builder: (sheetContext) => RouteConfirmationSheet(
         route: route,
         distanceUnit: distanceUnit,
+        altitudeUnit: altitudeUnit,
         distanceMeters: distanceMeters,
         duration: duration,
         warnings: warnings,
@@ -124,7 +129,7 @@ class RouteConfirmationSheet extends StatelessWidget {
                   if (_maximumAltitude(route) case final altitude?)
                     _Fact(
                       icon: Icons.height,
-                      label: 'Max ${altitude.round()} m MSL',
+                      label: 'Max ${altitudeUnit.altitude(altitude)} MSL',
                     )
                   else
                     const _Fact(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../controllers/ride_simulation_controller.dart';
+import '../../domain/altitude_unit.dart';
 import '../../domain/distance_unit.dart';
 import '../../domain/ride_role.dart';
 import '../../services/measurement_formatter.dart';
@@ -13,6 +14,7 @@ class RideSimulationScreen extends StatelessWidget {
     super.key,
     required this.controller,
     this.distanceUnit = DistanceUnit.miles,
+    this.altitudeUnit = AltitudeUnit.metres,
     required this.onRestart,
     required this.onExit,
     required this.onRoleChanged,
@@ -21,6 +23,7 @@ class RideSimulationScreen extends StatelessWidget {
 
   final RideSimulationController controller;
   final DistanceUnit distanceUnit;
+  final AltitudeUnit altitudeUnit;
   final Future<void> Function() onRestart;
   final Future<void> Function() onExit;
   final Future<void> Function(RideRole role) onRoleChanged;
@@ -60,6 +63,7 @@ class RideSimulationScreen extends StatelessWidget {
             final fleet = _FleetCard(
               controller: controller,
               distanceUnit: distanceUnit,
+              altitudeUnit: altitudeUnit,
             );
             if (landscape) {
               return Padding(
@@ -247,10 +251,15 @@ class _SimulationControls extends StatelessWidget {
 }
 
 class _FleetCard extends StatelessWidget {
-  const _FleetCard({required this.controller, required this.distanceUnit});
+  const _FleetCard({
+    required this.controller,
+    required this.distanceUnit,
+    required this.altitudeUnit,
+  });
 
   final RideSimulationController controller;
   final DistanceUnit distanceUnit;
+  final AltitudeUnit altitudeUnit;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -288,7 +297,7 @@ class _FleetCard extends StatelessWidget {
                       Text(
                         '${rider.role.label} · '
                         '${MeasurementFormatter(distanceUnit).speed(rider.speedMetersPerSecond)}'
-                        '${rider.altitudeMeters == null ? '' : ' · ${rider.altitudeMeters!.round()} m'}',
+                        '${rider.altitudeMeters == null ? '' : ' · ${altitudeUnit.altitude(rider.altitudeMeters!)}'}',
                         style: const TextStyle(
                           color: Color(0xFF8F9BAA),
                           fontSize: 12,

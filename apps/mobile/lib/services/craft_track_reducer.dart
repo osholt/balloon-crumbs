@@ -2,6 +2,19 @@ import '../domain/craft.dart';
 import '../domain/ride_event.dart';
 import '../domain/rider_location.dart';
 import 'craft_telemetry_election.dart';
+import 'balloon_telemetry_plausibility.dart';
+
+class RejectedCraftTrackSample {
+  const RejectedCraftTrackSample({
+    required this.sample,
+    required this.reason,
+    required this.observedRate,
+  });
+
+  final LocationSample sample;
+  final BalloonTelemetryRejectionReason reason;
+  final double observedRate;
+}
 
 class CraftTrack {
   const CraftTrack({
@@ -9,12 +22,14 @@ class CraftTrack {
     required this.label,
     required this.kind,
     required this.samples,
+    this.rejectedSamples = const [],
   });
 
   final String craftId;
   final String label;
   final CraftKind kind;
   final List<LocationSample> samples;
+  final List<RejectedCraftTrackSample> rejectedSamples;
 
   bool get isBalloon => kind == CraftKind.balloon;
 }
@@ -26,9 +41,13 @@ class CraftTrack {
 /// election used for the current craft fix is replayed through measurement
 /// time. Out-of-order and duplicate fixes cannot regress the result.
 class CraftTrackReducer {
-  const CraftTrackReducer({this.election = const CraftTelemetryElection()});
+  const CraftTrackReducer({
+    this.election = const CraftTelemetryElection(),
+    this.plausibility = const BalloonTelemetryPlausibilityPolicy(),
+  });
 
   final CraftTelemetryElection election;
+  final BalloonTelemetryPlausibilityPolicy plausibility;
 
   List<CraftTrack> fromEvents(Iterable<RideEvent> events) {
     final crafts = <String, Craft>{};
@@ -118,6 +137,7 @@ class CraftTrackReducer {
         });
       final latestByDevice = <String, _TimedCandidate>{};
       final samples = <LocationSample>[];
+      final rejectedSamples = <RejectedCraftTrackSample>[];
       String? incumbentDeviceId;
       for (final candidate in candidates) {
         final previous = latestByDevice[candidate.deviceId];
@@ -145,6 +165,22 @@ class CraftTrackReducer {
             !elected.recordedAt.isAfter(samples.last.recordedAt)) {
           continue;
         }
+        if (craft.isBalloon && samples.isNotEmpty) {
+          final decision = plausibility.assess(
+            previous: samples.last,
+            candidate: elected,
+          );
+          if (!decision.accepted) {
+            rejectedSamples.add(
+              RejectedCraftTrackSample(
+                sample: elected,
+                reason: decision.rejectionReason!,
+                observedRate: decision.observedRate!,
+              ),
+            );
+            continue;
+          }
+        }
         samples.add(elected);
       }
       tracks.add(
@@ -153,6 +189,7 @@ class CraftTrackReducer {
           label: craft.label,
           kind: craft.kind,
           samples: List.unmodifiable(samples),
+          rejectedSamples: List.unmodifiable(rejectedSamples),
         ),
       );
     }

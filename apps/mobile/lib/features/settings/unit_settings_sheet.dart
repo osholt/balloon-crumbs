@@ -14,6 +14,7 @@ import '../../controllers/ride_diagnostics_controller.dart';
 import '../../controllers/spoken_guidance_controller.dart';
 import '../../controllers/test_control_controller.dart';
 import '../../domain/app_links.dart';
+import '../../domain/altitude_unit.dart';
 import '../../domain/distance_unit.dart';
 import '../../domain/geo_point.dart';
 import '../../domain/map_style_mode.dart';
@@ -279,6 +280,34 @@ class UnitSettingsSheet extends StatelessWidget {
                 ? 'Using the device locale default (${controller.localeDefault.label.toLowerCase()}).'
                 : 'Overriding the device locale default (${controller.localeDefault.label.toLowerCase()}).',
             style: const TextStyle(color: Color(0xFF98A3B1)),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'ALTITUDE UNITS',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: const Color(0xFF8D98A7),
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SegmentedButton<AltitudeUnit>(
+            key: const Key('altitude-unit-selector'),
+            segments: AltitudeUnit.values
+                .map(
+                  (unit) => ButtonSegment<AltitudeUnit>(
+                    value: unit,
+                    label: Text(unit.label),
+                  ),
+                )
+                .toList(growable: false),
+            selected: {controller.altitudeUnit},
+            onSelectionChanged: (selection) {
+              unawaited(controller.setAltitudeUnit(selection.single));
+            },
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Altitude defaults to metres independently of road distance.',
           ),
           if (!controller.followsLocale) ...[
             const SizedBox(height: 4),
