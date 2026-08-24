@@ -1307,6 +1307,8 @@ class _EventRow extends StatelessWidget {
         'Operational boundary updated',
       RideEventType.operationalBoundaryRemoved =>
         'Operational boundary removed',
+      RideEventType.operationalBoundaryAlerted =>
+        event.payload['message'] as String? ?? 'Operational boundary warning',
       RideEventType.chaseGuidanceTargetSelected =>
         '${event.payload['vehicleLabel'] ?? 'Chase vehicle'} now targets '
             '${event.payload['target'] == 'balloon' ? 'the balloon' : 'the intended landing area'}',

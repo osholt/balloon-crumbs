@@ -215,6 +215,64 @@ class FlightReplayLandingArea {
       );
 }
 
+class FlightReplayBoundaryAlert {
+  const FlightReplayBoundaryAlert({
+    required this.recordedAt,
+    required this.boundaryId,
+    required this.boundaryLabel,
+    required this.kind,
+    required this.assessment,
+    required this.confirmed,
+    required this.message,
+    this.position,
+    this.altitudeMeters,
+  });
+
+  final DateTime recordedAt;
+  final String boundaryId;
+  final String boundaryLabel;
+  final String kind;
+  final String assessment;
+  final bool confirmed;
+  final String message;
+  final GeoPoint? position;
+  final double? altitudeMeters;
+
+  Map<String, Object?> toJson() => {
+    'recordedAt': recordedAt.toUtc().toIso8601String(),
+    'boundaryId': boundaryId,
+    'boundaryLabel': boundaryLabel,
+    'kind': kind,
+    'assessment': assessment,
+    'confirmed': confirmed,
+    'message': message,
+    if (position != null) 'latitude': position!.latitude,
+    if (position != null) 'longitude': position!.longitude,
+    if (altitudeMeters != null) 'altitudeMeters': altitudeMeters,
+  };
+
+  factory FlightReplayBoundaryAlert.fromJson(Map<String, Object?> json) {
+    final latitude = json['latitude'];
+    final longitude = json['longitude'];
+    return FlightReplayBoundaryAlert(
+      recordedAt: DateTime.parse(json['recordedAt']! as String).toUtc(),
+      boundaryId: json['boundaryId']! as String,
+      boundaryLabel: json['boundaryLabel']! as String,
+      kind: json['kind']! as String,
+      assessment: json['assessment']! as String,
+      confirmed: json['confirmed']! as bool,
+      message: json['message']! as String,
+      position: latitude is num && longitude is num
+          ? GeoPoint(
+              latitude: latitude.toDouble(),
+              longitude: longitude.toDouble(),
+            )
+          : null,
+      altitudeMeters: _optionalFinite(json['altitudeMeters']),
+    );
+  }
+}
+
 class FlightReplay {
   const FlightReplay({
     required this.startedAt,
@@ -223,6 +281,7 @@ class FlightReplay {
     required this.windContexts,
     required this.landingAreas,
     required this.peerTracksIncluded,
+    this.boundaryAlerts = const [],
   });
 
   final DateTime startedAt;
@@ -230,6 +289,7 @@ class FlightReplay {
   final List<FlightReplayTrack> tracks;
   final List<FlightReplayWindContext> windContexts;
   final List<FlightReplayLandingArea> landingAreas;
+  final List<FlightReplayBoundaryAlert> boundaryAlerts;
   final bool peerTracksIncluded;
 
   Duration get duration => endedAt.difference(startedAt).abs();
@@ -242,6 +302,7 @@ class FlightReplay {
     'tracks': tracks.map((track) => track.toJson()).toList(),
     'windContexts': windContexts.map((wind) => wind.toJson()).toList(),
     'landingAreas': landingAreas.map((area) => area.toJson()).toList(),
+    'boundaryAlerts': boundaryAlerts.map((alert) => alert.toJson()).toList(),
   };
 
   factory FlightReplay.fromJson(Map<String, Object?> json) => FlightReplay(
@@ -256,6 +317,10 @@ class FlightReplay {
     landingAreas: _objects(
       json['landingAreas'],
       FlightReplayLandingArea.fromJson,
+    ),
+    boundaryAlerts: _objects(
+      json['boundaryAlerts'],
+      FlightReplayBoundaryAlert.fromJson,
     ),
   );
 }

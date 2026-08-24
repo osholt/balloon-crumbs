@@ -54,6 +54,7 @@ def test_retention_table_matches_the_documented_bands() -> None:
     assert retention("flightLandingRetracted") == timedelta(hours=72)
     assert retention("deviceAuthorityRevoked") == timedelta(hours=72)
     assert retention("deviceAuthorityRotated") == timedelta(hours=72)
+    assert retention("operationalBoundaryAlerted") == timedelta(hours=2)
 
 
 def test_ground_crew_start_is_accepted_and_relayed(client, synchronize, make_event) -> None:
@@ -389,6 +390,22 @@ def test_balloon_flight_context_is_accepted_and_relayed(client, synchronize, mak
             "boundary-remove",
             event_type="operationalBoundaryRemoved",
             payload={"leaderRiderId": "device-a", "boundaryId": "restricted-edge"},
+        ),
+        make_event(
+            ride_id,
+            "boundary-alert",
+            event_type="operationalBoundaryAlerted",
+            payload={
+                "boundaryId": "restricted-edge",
+                "boundaryLabel": "Restricted airspace edge",
+                "kind": "lineCrossed",
+                "assessment": "usable",
+                "confirmed": True,
+                "message": "Restricted airspace edge boundary crossed",
+                "observedAt": "2026-08-22T06:05:00Z",
+                "latitude": 51.46,
+                "longitude": -2.61,
+            },
         ),
     ]
 

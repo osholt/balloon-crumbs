@@ -1338,19 +1338,38 @@ class _OperationalBoundaryDraft {
     required this.label,
     required this.kind,
     required this.source,
+    this.enabled = true,
+    this.warningDirection = OperationalBoundaryWarningDirection.either,
+    this.effectiveFrom,
+    this.validUntil,
+    this.limitations =
+        'Advisory only; verify against current official information.',
     this.lowerAltitudeMeters,
     this.upperAltitudeMeters,
     this.altitudeDatum = AltitudeDatum.wgs84Geoid,
-  });
+    this.altitudeUnit = AltitudeUnit.metres,
+    this.acceptedAltitudeSources = const {
+      AltitudeSource.gnss,
+      AltitudeSource.barometric,
+    },
+    List<route_domain.GeoPoint> points = const [],
+  }) : points = List.of(points);
 
   final String id;
   final String label;
   final OperationalBoundaryKind kind;
   final String source;
+  final bool enabled;
+  final OperationalBoundaryWarningDirection warningDirection;
+  final DateTime? effectiveFrom;
+  final DateTime? validUntil;
+  final String limitations;
   final double? lowerAltitudeMeters;
   final double? upperAltitudeMeters;
   final AltitudeDatum altitudeDatum;
-  final List<route_domain.GeoPoint> points = [];
+  final AltitudeUnit altitudeUnit;
+  final Set<AltitudeSource> acceptedAltitudeSources;
+  final List<route_domain.GeoPoint> points;
 }
 
 class _ActiveRideShellState extends State<ActiveRideShell>
@@ -1407,6 +1426,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   /// Every staged prompt already spoken, so a stage is not repeated on each fix
   /// and the early one does not suppress the ones after it (#410).
   final _spokenGuidanceKeys = <String>{};
+  final _surfacedOperationalBoundaryAlertIds = <String>{};
   static const _chaseSpokenGuidancePolicy = ChaseSpokenGuidancePolicy();
   SpokenAudioMode? _spokenModeBeforeMute;
 
@@ -1667,6 +1687,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     widget.rideController.addListener(_onRideControllerChanged);
     _syncSharedLandingZone();
     _syncOperationalBoundaries();
+    _surfaceSharedOperationalBoundaryAlerts();
     widget.sharedRoutes.addListener(_onSharedRoutesChanged);
     _capturePlannerLinkError();
     if (widget.sharedRoutes.pending case final file?) {
@@ -4102,6 +4123,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         : null;
     _syncSharedLandingZone();
     _syncOperationalBoundaries();
+    _surfaceSharedOperationalBoundaryAlerts();
     if (_isChaserPerspective && _chaseGuidanceTarget == null) {
       _chaseGuidanceTarget = widget.rideController.landingZone == null
           ? ChaseGuidanceTarget.balloon
@@ -4197,7 +4219,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final draft = _operationalBoundaryDraft;
     _operationalBoundaryTraces = List.unmodifiable([
       for (final boundary in widget.rideController.operationalBoundaries)
-        if (boundary.kind != OperationalBoundaryKind.altitudeBand)
+        if (boundary.enabled &&
+            boundary.appliesAt(DateTime.now()) &&
+            boundary.kind != OperationalBoundaryKind.altitudeBand)
           MapOverlayTrace(
             id: 'operational-boundary-${boundary.id}',
             points: [
@@ -4435,6 +4459,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
   }
 
   void _checkOperationalBoundaries() {
+    if (widget.rideController.session?.flightRole.isAboardBalloon != true) {
+      return;
+    }
     final navigation = _mapNavigationPosition.value;
     if (navigation == null) return;
     final alerts = _operationalBoundaryMonitor.evaluate(
@@ -4444,14 +4471,29 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         longitude: navigation.point.longitude,
       ),
       now: DateTime.now(),
+      recordedAt: navigation.recordedAt,
+      horizontalAccuracyMeters: navigation.accuracyMeters,
       altitudeMeters: navigation.altitudeMeters,
+      altitudeSource: navigation.altitudeSource,
       altitudeDatum: navigation.altitudeDatum,
+      altitudeAccuracyMeters: navigation.altitudeAccuracyMeters,
     );
     if (alerts.isEmpty || !mounted) return;
     for (final alert in alerts) {
       _warnings.add(
         '${alert.message}. Advisory only — confirm the source and current flight information.',
       );
+      if (!_isSimulation) {
+        unawaited(
+          widget.rideController.recordOperationalBoundaryAlert(
+            alert,
+            horizontalAccuracyMeters: navigation.accuracyMeters,
+            altitudeSource: navigation.altitudeSource,
+            altitudeDatum: navigation.altitudeDatum,
+            altitudeAccuracyMeters: navigation.altitudeAccuracyMeters,
+          ),
+        );
+      }
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -4462,6 +4504,53 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         duration: const Duration(seconds: 8),
       ),
     );
+  }
+
+  void _surfaceSharedOperationalBoundaryAlerts() {
+    final session = widget.rideController.session;
+    if (session == null || !session.flightRole.isChasing || !mounted) return;
+    final now = DateTime.now();
+    for (final event in widget.rideController.events.where(
+      (event) => event.type == RideEventType.operationalBoundaryAlerted,
+    )) {
+      if (!_surfacedOperationalBoundaryAlertIds.add(event.id) ||
+          event.deviceId == session.localRiderId) {
+        continue;
+      }
+      final age = now.difference(event.createdAt);
+      if (age < const Duration(seconds: -30) ||
+          age > const Duration(minutes: 2)) {
+        continue;
+      }
+      final message = event.payload['message'] as String?;
+      if (message == null || message.trim().isEmpty) continue;
+      _warnings.add(
+        '$message. Shared from the balloon; advisory only — verify before acting.',
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFF8F2638),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+      final speaker = _spokenGuidance;
+      if (speaker != null) {
+        unawaited(
+          speaker.speakAlert(
+            key: 'operational-boundary:${event.id}',
+            phrase: message,
+            enabled: spokenAudioAllows(
+              _spokenAudioMode,
+              SpokenAudioClass.safety,
+            ),
+            rideActive:
+                widget.rideController.rideStarted &&
+                !widget.rideController.rideEnded,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -4957,6 +5046,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final minimum = draft.kind == OperationalBoundaryKind.line ? 2 : 3;
     if (draft.points.length < minimum) return;
     await widget.rideController.upsertOperationalBoundary(
+      _boundaryFromDraft(draft),
+    );
+    if (!mounted) return;
+    if (widget.rideController.errorMessage case final message?) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+    setState(() => _operationalBoundaryDraft = null);
+    _syncOperationalBoundaries();
+  }
+
+  OperationalBoundary _boundaryFromDraft(_OperationalBoundaryDraft draft) =>
       OperationalBoundary(
         id: draft.id,
         label: draft.label,
@@ -4970,21 +5073,17 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         ],
         source: draft.source,
         updatedAt: DateTime.now(),
+        enabled: draft.enabled,
+        warningDirection: draft.warningDirection,
+        effectiveFrom: draft.effectiveFrom,
+        validUntil: draft.validUntil,
+        limitations: draft.limitations,
         lowerAltitudeMeters: draft.lowerAltitudeMeters,
         upperAltitudeMeters: draft.upperAltitudeMeters,
         altitudeDatum: draft.altitudeDatum,
-      ),
-    );
-    if (!mounted) return;
-    if (widget.rideController.errorMessage case final message?) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
-      return;
-    }
-    setState(() => _operationalBoundaryDraft = null);
-    _syncOperationalBoundaries();
-  }
+        altitudeUnit: draft.altitudeUnit,
+        acceptedAltitudeSources: draft.acceptedAltitudeSources,
+      );
 
   Future<void> _updateLandingZoneFromMap(route_domain.GeoPoint point) async {
     await widget.rideController.setLandingZone(
@@ -6631,38 +6730,109 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                             final altitude = [
                               if (boundary.lowerAltitudeMeters
                                   case final value?)
-                                'min ${value.round()} m',
+                                'min ${boundary.altitudeUnit.altitude(value)}',
                               if (boundary.upperAltitudeMeters
                                   case final value?)
-                                'max ${value.round()} m',
+                                'max ${boundary.altitudeUnit.altitude(value)}',
                             ].join(' · ');
+                            final validity = boundary.validUntil == null
+                                ? 'from ${_formatBoundaryTime(boundary.effectiveAt)}'
+                                : '${_formatBoundaryTime(boundary.effectiveAt)}–${_formatBoundaryTime(boundary.validUntil!)}';
+                            final updated = _formatBoundaryTime(
+                              boundary.updatedAt,
+                            );
                             return ListTile(
-                              leading: Icon(switch (boundary.kind) {
-                                OperationalBoundaryKind.line => Icons.polyline,
-                                OperationalBoundaryKind.area =>
-                                  Icons.pentagon_outlined,
-                                OperationalBoundaryKind.altitudeBand =>
-                                  Icons.height,
-                              }, color: const Color(0xFFFF5D73)),
-                              title: Text(boundary.label),
+                              leading: Icon(
+                                switch (boundary.kind) {
+                                  OperationalBoundaryKind.line =>
+                                    Icons.polyline,
+                                  OperationalBoundaryKind.area =>
+                                    Icons.pentagon_outlined,
+                                  OperationalBoundaryKind.altitudeBand =>
+                                    Icons.height,
+                                },
+                                color: boundary.enabled
+                                    ? const Color(0xFFFF5D73)
+                                    : const Color(0xFF73808F),
+                              ),
+                              title: Text(
+                                boundary.enabled
+                                    ? boundary.label
+                                    : '${boundary.label} · off',
+                              ),
                               subtitle: Text(
-                                '${boundary.source}${altitude.isEmpty ? '' : ' · $altitude ${boundary.altitudeDatum.name}'}',
-                                maxLines: 2,
+                                '${boundary.source} · $validity · updated $updated${altitude.isEmpty ? '' : '\n$altitude · ${boundary.altitudeDatum.name}'}\n${boundary.limitations}',
+                                maxLines: 4,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               trailing: canEdit
-                                  ? IconButton(
-                                      tooltip: 'Remove boundary',
-                                      icon: const Icon(Icons.delete_outline),
-                                      onPressed: () async {
-                                        await widget.rideController
-                                            .removeOperationalBoundary(
-                                              boundary.id,
-                                            );
-                                        if (sheetContext.mounted) {
-                                          setSheetState(() {});
-                                        }
-                                      },
+                                  ? Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Switch(
+                                          value: boundary.enabled,
+                                          onChanged: (enabled) async {
+                                            await widget.rideController
+                                                .upsertOperationalBoundary(
+                                                  _copyOperationalBoundary(
+                                                    boundary,
+                                                    enabled: enabled,
+                                                  ),
+                                                );
+                                            _syncOperationalBoundaries();
+                                            if (sheetContext.mounted) {
+                                              setSheetState(() {});
+                                            }
+                                          },
+                                        ),
+                                        PopupMenuButton<String>(
+                                          tooltip: 'Boundary actions',
+                                          onSelected: (action) {
+                                            if (action == 'edit') {
+                                              Navigator.pop(sheetContext);
+                                              unawaited(
+                                                _configureOperationalBoundary(
+                                                  boundary.kind,
+                                                  existing: boundary,
+                                                ),
+                                              );
+                                            } else if (action == 'redraw') {
+                                              Navigator.pop(sheetContext);
+                                              _redrawOperationalBoundary(
+                                                boundary,
+                                              );
+                                            } else if (action == 'remove') {
+                                              unawaited(() async {
+                                                await widget.rideController
+                                                    .removeOperationalBoundary(
+                                                      boundary.id,
+                                                    );
+                                                _syncOperationalBoundaries();
+                                                if (sheetContext.mounted) {
+                                                  setSheetState(() {});
+                                                }
+                                              }());
+                                            }
+                                          },
+                                          itemBuilder: (context) => [
+                                            const PopupMenuItem(
+                                              value: 'edit',
+                                              child: Text('Edit details'),
+                                            ),
+                                            if (boundary.kind !=
+                                                OperationalBoundaryKind
+                                                    .altitudeBand)
+                                              const PopupMenuItem(
+                                                value: 'redraw',
+                                                child: Text('Redraw on map'),
+                                              ),
+                                            const PopupMenuItem(
+                                              value: 'remove',
+                                              child: Text('Remove'),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     )
                                   : null,
                             );
@@ -6723,29 +6893,137 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
   }
 
+  OperationalBoundary _copyOperationalBoundary(
+    OperationalBoundary boundary, {
+    bool? enabled,
+  }) => OperationalBoundary(
+    id: boundary.id,
+    label: boundary.label,
+    kind: boundary.kind,
+    points: boundary.points,
+    source: boundary.source,
+    updatedAt: DateTime.now(),
+    enabled: enabled ?? boundary.enabled,
+    warningDirection: boundary.warningDirection,
+    effectiveFrom: boundary.effectiveFrom,
+    validUntil: boundary.validUntil,
+    limitations: boundary.limitations,
+    lowerAltitudeMeters: boundary.lowerAltitudeMeters,
+    upperAltitudeMeters: boundary.upperAltitudeMeters,
+    altitudeDatum: boundary.altitudeDatum,
+    altitudeUnit: boundary.altitudeUnit,
+    acceptedAltitudeSources: boundary.acceptedAltitudeSources,
+  );
+
+  static String _formatBoundaryTime(DateTime value) {
+    final local = value.toLocal();
+    String two(int part) => part.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
+  _OperationalBoundaryDraft _draftFromBoundary(
+    OperationalBoundary boundary, {
+    bool includePoints = true,
+  }) => _OperationalBoundaryDraft(
+    id: boundary.id,
+    label: boundary.label,
+    kind: boundary.kind,
+    source: boundary.source,
+    enabled: boundary.enabled,
+    warningDirection: boundary.warningDirection,
+    effectiveFrom: boundary.effectiveFrom,
+    validUntil: boundary.validUntil,
+    limitations: boundary.limitations,
+    lowerAltitudeMeters: boundary.lowerAltitudeMeters,
+    upperAltitudeMeters: boundary.upperAltitudeMeters,
+    altitudeDatum: boundary.altitudeDatum,
+    altitudeUnit: boundary.altitudeUnit,
+    acceptedAltitudeSources: boundary.acceptedAltitudeSources,
+    points: includePoints
+        ? [
+            for (final point in boundary.points)
+              route_domain.GeoPoint(
+                latitude: point.latitude,
+                longitude: point.longitude,
+              ),
+          ]
+        : const [],
+  );
+
+  void _redrawOperationalBoundary(OperationalBoundary boundary) {
+    setState(() {
+      _selectedIndex = 0;
+      _selectingLandingZone = false;
+      _operationalBoundaryDraft = _draftFromBoundary(
+        boundary,
+        includePoints: false,
+      );
+    });
+    _syncOperationalBoundaries();
+  }
+
   Future<void> _configureOperationalBoundary(
-    OperationalBoundaryKind kind,
-  ) async {
+    OperationalBoundaryKind kind, {
+    OperationalBoundary? existing,
+  }) async {
     final labelController = TextEditingController(
-      text: switch (kind) {
-        OperationalBoundaryKind.line => 'Advisory boundary line',
-        OperationalBoundaryKind.area => 'Advisory boundary area',
-        OperationalBoundaryKind.altitudeBand => 'Planned altitude band',
-      },
+      text:
+          existing?.label ??
+          switch (kind) {
+            OperationalBoundaryKind.line => 'Advisory boundary line',
+            OperationalBoundaryKind.area => 'Advisory boundary area',
+            OperationalBoundaryKind.altitudeBand => 'Planned altitude band',
+          },
     );
     final sourceController = TextEditingController(
-      text: 'Pilot-entered advisory boundary',
+      text: existing?.source ?? 'Pilot-entered advisory boundary',
     );
-    final lowerController = TextEditingController();
-    final upperController = TextEditingController();
-    var datum = AltitudeDatum.wgs84Geoid;
+    final limitationsController = TextEditingController(
+      text:
+          existing?.limitations ??
+          'Advisory only; verify against current official information.',
+    );
+    var altitudeUnit = existing?.altitudeUnit ?? AltitudeUnit.metres;
+    final lowerController = TextEditingController(
+      text: existing?.lowerAltitudeMeters == null
+          ? ''
+          : altitudeUnit
+                .fromMetres(existing!.lowerAltitudeMeters!)
+                .toStringAsFixed(0),
+    );
+    final upperController = TextEditingController(
+      text: existing?.upperAltitudeMeters == null
+          ? ''
+          : altitudeUnit
+                .fromMetres(existing!.upperAltitudeMeters!)
+                .toStringAsFixed(0),
+    );
+    final effectiveController = TextEditingController(
+      text: existing?.effectiveFrom?.toLocal().toIso8601String() ?? '',
+    );
+    final validUntilController = TextEditingController(
+      text: existing?.validUntil?.toLocal().toIso8601String() ?? '',
+    );
+    var enabled = existing?.enabled ?? true;
+    var direction =
+        existing?.warningDirection ??
+        OperationalBoundaryWarningDirection.either;
+    var datum = existing?.altitudeDatum ?? AltitudeDatum.wgs84Geoid;
+    var acceptGnss =
+        existing?.acceptedAltitudeSources.contains(AltitudeSource.gnss) ?? true;
+    var acceptBarometric =
+        existing?.acceptedAltitudeSources.contains(AltitudeSource.barometric) ??
+        true;
     String? validationMessage;
     final draft = await showDialog<_OperationalBoundaryDraft>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(
-            kind == OperationalBoundaryKind.altitudeBand
+            existing != null
+                ? 'Edit operational boundary'
+                : kind == OperationalBoundaryKind.altitudeBand
                 ? 'Add altitude limits'
                 : 'Describe the boundary',
           ),
@@ -6753,6 +7031,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Enabled'),
+                  subtitle: const Text(
+                    'Disabled boundaries stay shared but do not alert.',
+                  ),
+                  value: enabled,
+                  onChanged: (value) => setDialogState(() => enabled = value),
+                ),
                 TextField(
                   controller: labelController,
                   maxLength: 96,
@@ -6766,15 +7053,106 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                     helperText: 'Shown to every crew member',
                   ),
                 ),
+                TextField(
+                  controller: limitationsController,
+                  maxLength: 500,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Limitations',
+                    helperText: 'State why this advisory may be incomplete',
+                  ),
+                ),
+                if (kind != OperationalBoundaryKind.altitudeBand)
+                  DropdownButtonFormField<OperationalBoundaryWarningDirection>(
+                    initialValue: direction,
+                    decoration: const InputDecoration(labelText: 'Warn when'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: OperationalBoundaryWarningDirection.either,
+                        child: Text('Entering or leaving'),
+                      ),
+                      DropdownMenuItem(
+                        value: OperationalBoundaryWarningDirection.entering,
+                        child: Text('Entering only'),
+                      ),
+                      DropdownMenuItem(
+                        value: OperationalBoundaryWarningDirection.leaving,
+                        child: Text('Leaving only'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => direction = value);
+                      }
+                    },
+                  ),
+                TextField(
+                  controller: effectiveController,
+                  keyboardType: TextInputType.datetime,
+                  decoration: const InputDecoration(
+                    labelText: 'Effective from (optional)',
+                    hintText: '2026-08-24T07:00',
+                  ),
+                ),
+                TextField(
+                  controller: validUntilController,
+                  keyboardType: TextInputType.datetime,
+                  decoration: const InputDecoration(
+                    labelText: 'Valid until (optional)',
+                    hintText: '2026-08-24T12:00',
+                  ),
+                ),
                 if (kind == OperationalBoundaryKind.altitudeBand) ...[
+                  DropdownButtonFormField<AltitudeUnit>(
+                    initialValue: altitudeUnit,
+                    decoration: const InputDecoration(
+                      labelText: 'Altitude units',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: AltitudeUnit.metres,
+                        child: Text('Metres'),
+                      ),
+                      DropdownMenuItem(
+                        value: AltitudeUnit.feet,
+                        child: Text('Feet'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null || value == altitudeUnit) return;
+                      final lower = double.tryParse(lowerController.text);
+                      final upper = double.tryParse(upperController.text);
+                      double convert(double input) {
+                        final metres = altitudeUnit == AltitudeUnit.metres
+                            ? input
+                            : input / 3.280839895;
+                        return value.fromMetres(metres);
+                      }
+
+                      setDialogState(() {
+                        if (lower != null) {
+                          lowerController.text = convert(
+                            lower,
+                          ).toStringAsFixed(0);
+                        }
+                        if (upper != null) {
+                          upperController.text = convert(
+                            upper,
+                          ).toStringAsFixed(0);
+                        }
+                        altitudeUnit = value;
+                      });
+                    },
+                  ),
                   TextField(
                     controller: lowerController,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                       signed: true,
                     ),
-                    decoration: const InputDecoration(
-                      labelText: 'Minimum altitude in metres (optional)',
+                    decoration: InputDecoration(
+                      labelText:
+                          'Minimum altitude in ${altitudeUnit.label.toLowerCase()} (optional)',
                     ),
                   ),
                   TextField(
@@ -6783,8 +7161,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                       decimal: true,
                       signed: true,
                     ),
-                    decoration: const InputDecoration(
-                      labelText: 'Maximum altitude in metres (optional)',
+                    decoration: InputDecoration(
+                      labelText:
+                          'Maximum altitude in ${altitudeUnit.label.toLowerCase()} (optional)',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -6811,6 +7190,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                       if (value != null) setDialogState(() => datum = value);
                     },
                   ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Accept GNSS altitude'),
+                    value: acceptGnss,
+                    onChanged: (value) =>
+                        setDialogState(() => acceptGnss = value ?? false),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Accept barometric altitude'),
+                    value: acceptBarometric,
+                    onChanged: (value) =>
+                        setDialogState(() => acceptBarometric = value ?? false),
+                  ),
                 ],
                 if (validationMessage != null)
                   Padding(
@@ -6832,39 +7225,88 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               onPressed: () {
                 final label = labelController.text.trim();
                 final source = sourceController.text.trim();
-                final lower = lowerController.text.trim().isEmpty
+                final limitations = limitationsController.text.trim();
+                final lowerInput = lowerController.text.trim().isEmpty
                     ? null
                     : double.tryParse(lowerController.text.trim());
-                final upper = upperController.text.trim().isEmpty
+                final upperInput = upperController.text.trim().isEmpty
                     ? null
                     : double.tryParse(upperController.text.trim());
+                final lower = lowerInput == null
+                    ? null
+                    : altitudeUnit == AltitudeUnit.metres
+                    ? lowerInput
+                    : lowerInput / 3.280839895;
+                final upper = upperInput == null
+                    ? null
+                    : altitudeUnit == AltitudeUnit.metres
+                    ? upperInput
+                    : upperInput / 3.280839895;
+                final effectiveText = effectiveController.text.trim();
+                final validUntilText = validUntilController.text.trim();
+                final effective = effectiveText.isEmpty
+                    ? null
+                    : DateTime.tryParse(effectiveText);
+                final validUntil = validUntilText.isEmpty
+                    ? null
+                    : DateTime.tryParse(validUntilText);
                 final altitudeValid =
                     kind != OperationalBoundaryKind.altitudeBand ||
                     ((lower != null || upper != null) &&
-                        (lower == null || upper == null || lower < upper));
-                if (label.isEmpty || source.isEmpty || !altitudeValid) {
+                        (lower == null || upper == null || lower < upper) &&
+                        (acceptGnss || acceptBarometric));
+                final effectiveAt = effective ?? DateTime.now();
+                final timesValid =
+                    (effectiveText.isEmpty || effective != null) &&
+                    (validUntilText.isEmpty || validUntil != null) &&
+                    (validUntil == null || validUntil.isAfter(effectiveAt));
+                if (label.isEmpty ||
+                    source.isEmpty ||
+                    limitations.isEmpty ||
+                    !altitudeValid ||
+                    !timesValid) {
                   setDialogState(() {
-                    validationMessage = label.isEmpty || source.isEmpty
-                        ? 'Add a name and source.'
-                        : 'Add at least one limit, with the minimum below the maximum.';
+                    validationMessage =
+                        label.isEmpty || source.isEmpty || limitations.isEmpty
+                        ? 'Add a name, source and limitations.'
+                        : !timesValid
+                        ? 'Use valid times, with the end after the start.'
+                        : 'Add at least one valid limit and altitude source.';
                   });
                   return;
                 }
                 Navigator.pop(
                   dialogContext,
                   _OperationalBoundaryDraft(
-                    id: 'boundary-${DateTime.now().microsecondsSinceEpoch}',
+                    id:
+                        existing?.id ??
+                        'boundary-${DateTime.now().microsecondsSinceEpoch}',
                     label: label,
                     kind: kind,
                     source: source,
+                    enabled: enabled,
+                    warningDirection: direction,
+                    effectiveFrom: effective,
+                    validUntil: validUntil,
+                    limitations: limitations,
                     lowerAltitudeMeters: lower,
                     upperAltitudeMeters: upper,
                     altitudeDatum: datum,
+                    altitudeUnit: altitudeUnit,
+                    acceptedAltitudeSources: {
+                      if (acceptGnss) AltitudeSource.gnss,
+                      if (acceptBarometric) AltitudeSource.barometric,
+                    },
+                    points: existing == null
+                        ? const []
+                        : _draftFromBoundary(existing).points,
                   ),
                 );
               },
               child: Text(
-                kind == OperationalBoundaryKind.altitudeBand
+                existing != null
+                    ? 'Save changes'
+                    : kind == OperationalBoundaryKind.altitudeBand
                     ? 'Save limits'
                     : 'Choose points on map',
               ),
@@ -6875,23 +7317,17 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     );
     labelController.dispose();
     sourceController.dispose();
+    limitationsController.dispose();
     lowerController.dispose();
     upperController.dispose();
+    effectiveController.dispose();
+    validUntilController.dispose();
     if (draft == null || !mounted) return;
-    if (kind == OperationalBoundaryKind.altitudeBand) {
+    if (kind == OperationalBoundaryKind.altitudeBand || existing != null) {
       await widget.rideController.upsertOperationalBoundary(
-        OperationalBoundary(
-          id: draft.id,
-          label: draft.label,
-          kind: draft.kind,
-          points: const [],
-          source: draft.source,
-          updatedAt: DateTime.now(),
-          lowerAltitudeMeters: draft.lowerAltitudeMeters,
-          upperAltitudeMeters: draft.upperAltitudeMeters,
-          altitudeDatum: draft.altitudeDatum,
-        ),
+        _boundaryFromDraft(draft),
       );
+      _syncOperationalBoundaries();
       return;
     }
     setState(() {

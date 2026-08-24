@@ -89,6 +89,15 @@ class _FlightReplayScreenState extends State<FlightReplayScreen> {
             ),
             const SizedBox(height: 12),
             _WindCard(frame.wind, altitudeUnit: widget.altitudeUnit),
+            if (widget.replay.boundaryAlerts
+                    .where(
+                      (alert) => !alert.recordedAt.isAfter(frame.recordedAt),
+                    )
+                    .lastOrNull
+                case final alert?) ...[
+              const SizedBox(height: 10),
+              _BoundaryAlertCard(alert),
+            ],
             const SizedBox(height: 10),
             Text(
               widget.replay.peerTracksIncluded
@@ -274,6 +283,26 @@ class _WindCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BoundaryAlertCard extends StatelessWidget {
+  const _BoundaryAlertCard(this.alert);
+
+  final FlightReplayBoundaryAlert alert;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    color: alert.confirmed ? const Color(0xFF572531) : null,
+    child: ListTile(
+      leading: Icon(
+        alert.confirmed ? Icons.warning_amber_rounded : Icons.gps_off,
+      ),
+      title: Text(alert.message),
+      subtitle: Text(
+        '${_clock(alert.recordedAt)} · ${alert.confirmed ? 'confirmed from a usable fix' : '${alert.assessment}; not confirmed'}',
+      ),
+    ),
+  );
 }
 
 class _FlightReplayPainter extends CustomPainter {

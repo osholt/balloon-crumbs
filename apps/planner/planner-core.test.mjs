@@ -619,12 +619,20 @@ test("operational boundaries validate several lines, areas and altitude limits",
     lowerAltitudeMeters: 200,
     upperAltitudeMeters: 900,
     altitudeDatum: "wgs84Geoid",
+    altitudeUnit: "feet",
+    acceptedAltitudeSources: ["barometric"],
+    limitations: "Briefing snapshot; verify before launch.",
+    effectiveFrom: "2026-08-22T07:00:00Z",
+    validUntil: "2026-08-22T12:00:00Z",
   });
   const geoJson = operationalBoundariesGeoJson([line, area, altitude]);
 
   assert.equal(geoJson.features.length, 2);
   assert.equal(geoJson.features[0].geometry.type, "LineString");
   assert.equal(geoJson.features[1].geometry.type, "Polygon");
+  assert.equal(altitude.altitudeUnit, "feet");
+  assert.deepEqual(altitude.acceptedAltitudeSources, ["barometric"]);
+  assert.equal(altitude.effectiveFrom, "2026-08-22T07:00:00.000Z");
   assert.deepEqual(
     geoJson.features[1].geometry.coordinates[0][0],
     geoJson.features[1].geometry.coordinates[0].at(-1),
@@ -633,4 +641,36 @@ test("operational boundaries validate several lines, areas and altitude limits",
     () => normaliseOperationalBoundary({ ...altitude, lowerAltitudeMeters: 1000 }),
     /below maximum/,
   );
+  assert.throws(
+    () =>
+      normaliseOperationalBoundary({
+        ...altitude,
+        acceptedAltitudeSources: [],
+      }),
+    /altitude source/,
+  );
+  assert.throws(
+    () =>
+      normaliseOperationalBoundary({
+        ...altitude,
+        validUntil: "2026-08-22T06:00:00Z",
+      }),
+    /after its effective time/,
+  );
+  assert.equal(
+    operationalBoundariesGeoJson([{ ...line, enabled: false }, area]).features.length,
+    1,
+  );
+  const edited = [line, area, altitude].map((boundary, index) =>
+    normaliseOperationalBoundary({
+      ...boundary,
+      label: `${boundary.label} edit ${index + 1}`,
+      enabled: index !== 1,
+      updatedAt: `2026-08-22T${String(8 + index).padStart(2, "0")}:00:00Z`,
+    }),
+  );
+  assert.equal(edited.length, 3);
+  assert.equal(edited[0].label, "Restricted edge edit 1");
+  assert.equal(edited[1].enabled, false);
+  assert.equal(edited[2].updatedAt, "2026-08-22T10:00:00.000Z");
 });

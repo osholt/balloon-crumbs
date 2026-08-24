@@ -29,6 +29,8 @@ void main() {
     expect(replay.windContexts, hasLength(1));
     expect(replay.windContexts.single.isForecast, isTrue);
     expect(replay.landingAreas.single.label, 'North field');
+    expect(replay.boundaryAlerts.single.boundaryLabel, 'Restricted edge');
+    expect(replay.boundaryAlerts.single.confirmed, isTrue);
     expect(replay.peerTracksIncluded, isFalse);
     expect(replay.canReplay, isTrue);
   });
@@ -130,6 +132,24 @@ List<RideEvent> _events(DateTime start) => [
       'vectors': [
         {'altitudeMetersMsl': 100, 'fromDegrees': 240, 'speedKmh': 12},
       ],
+    },
+  ),
+  _event(
+    'boundary-alert',
+    'pilot-device',
+    RideEventType.operationalBoundaryAlerted,
+    start.add(const Duration(minutes: 6)),
+    {
+      'boundaryId': 'restricted-edge',
+      'boundaryLabel': 'Restricted edge',
+      'kind': 'lineCrossed',
+      'assessment': 'usable',
+      'confirmed': true,
+      'message': 'Restricted edge boundary crossed',
+      'observedAt': start.add(const Duration(minutes: 6)).toIso8601String(),
+      'latitude': 51.47,
+      'longitude': -2.58,
+      'altitudeMeters': 420,
     },
   ),
 ];

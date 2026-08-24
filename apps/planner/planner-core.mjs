@@ -1464,9 +1464,20 @@ export function normaliseOperationalBoundary(input) {
   const id = String(input.id ?? "").trim().slice(0, 96);
   const label = String(input.label ?? "").trim().slice(0, 96);
   const source = String(input.source ?? "").trim().slice(0, 160);
+  const limitations = String(
+    input.limitations ?? "Advisory only; verify against current official information.",
+  )
+    .trim()
+    .slice(0, 500);
   const kind = String(input.kind ?? "");
-  if (!id || !label || !source || !["line", "area", "altitudeBand"].includes(kind)) {
-    throw new TypeError("Boundary name, kind and source are required.");
+  if (
+    !id ||
+    !label ||
+    !source ||
+    !limitations ||
+    !["line", "area", "altitudeBand"].includes(kind)
+  ) {
+    throw new TypeError("Boundary name, kind, source and limitations are required.");
   }
   const points = Array.isArray(input.points)
     ? input.points.map((point) => validPoint(point, "boundary point"))
@@ -1504,15 +1515,58 @@ export function normaliseOperationalBoundary(input) {
   )
     ? input.altitudeDatum
     : "wgs84Geoid";
+  const altitudeUnit = ["metres", "feet"].includes(input.altitudeUnit)
+    ? input.altitudeUnit
+    : "metres";
+  const warningDirection = ["entering", "leaving", "either"].includes(
+    input.warningDirection,
+  )
+    ? input.warningDirection
+    : "either";
+  if (kind === "altitudeBand" && warningDirection !== "either") {
+    throw new RangeError("Altitude bands must warn at either limit.");
+  }
+  const acceptedAltitudeSources = Array.isArray(input.acceptedAltitudeSources)
+    ? [...new Set(input.acceptedAltitudeSources.filter((value) => ["gnss", "barometric"].includes(value)))]
+    : ["gnss", "barometric"];
+  if (
+    (kind === "altitudeBand" ||
+      lowerAltitudeMeters !== null ||
+      upperAltitudeMeters !== null) &&
+    acceptedAltitudeSources.length === 0
+  ) {
+    throw new RangeError("Choose at least one accepted altitude source.");
+  }
+  const optionalTime = (value, label) => {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = new Date(value);
+    if (!Number.isFinite(parsed.getTime())) throw new TypeError(`${label} is invalid.`);
+    return parsed.toISOString();
+  };
+  const updatedAt = optionalTime(input.updatedAt, "Boundary update time");
+  const effectiveFrom = optionalTime(input.effectiveFrom, "Boundary effective time");
+  const validUntil = optionalTime(input.validUntil, "Boundary expiry time");
+  const start = effectiveFrom ?? updatedAt;
+  if (start && validUntil && new Date(validUntil) <= new Date(start)) {
+    throw new RangeError("Boundary expiry must be after its effective time.");
+  }
   return Object.freeze({
     id,
     label,
     kind,
     points: Object.freeze(points.map((point) => Object.freeze(point))),
     source,
+    enabled: input.enabled !== false,
+    warningDirection,
+    effectiveFrom,
+    validUntil,
+    limitations,
     lowerAltitudeMeters,
     upperAltitudeMeters,
     altitudeDatum,
+    altitudeUnit,
+    acceptedAltitudeSources: Object.freeze(acceptedAltitudeSources),
+    ...(updatedAt ? { updatedAt } : {}),
   });
 }
 
@@ -1520,7 +1574,7 @@ export function operationalBoundariesGeoJson(boundaries, draft = null) {
   const features = [];
   for (const boundary of boundaries ?? []) {
     const value = normaliseOperationalBoundary(boundary);
-    if (value.kind === "altitudeBand") continue;
+    if (!value.enabled || value.kind === "altitudeBand") continue;
     const coordinates = value.points.map((point) => [point.longitude, point.latitude]);
     features.push({
       type: "Feature",

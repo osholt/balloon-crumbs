@@ -84,6 +84,7 @@ EVENT_TYPES = {
     "windContextNoted",
     "operationalBoundaryUpserted",
     "operationalBoundaryRemoved",
+    "operationalBoundaryAlerted",
     # One shared navigation target per chase vehicle. The relay carries the
     # choice; each vehicle still computes and validates its own road route.
     "chaseGuidanceTargetSelected",
@@ -1718,6 +1719,7 @@ class RelayService:
             "windContextNoted": timedelta(hours=72),
             "operationalBoundaryUpserted": timedelta(hours=72),
             "operationalBoundaryRemoved": timedelta(hours=72),
+            "operationalBoundaryAlerted": timedelta(hours=2),
             "chaseGuidanceTargetSelected": timedelta(hours=72),
             "pilotHandoverOffered": timedelta(hours=72),
             "pilotHandoverAccepted": timedelta(hours=72),

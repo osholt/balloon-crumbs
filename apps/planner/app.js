@@ -30,12 +30,23 @@ const elements = Object.fromEntries(
     "airspace-toggle",
     "add-altitude-boundary",
     "boundary-altitude-datum",
+    "boundary-altitude-unit",
+    "boundary-effective-from",
+    "boundary-enabled",
     "boundary-list",
+    "boundary-limitations",
     "boundary-lower-altitude",
+    "boundary-lower-unit",
     "boundary-name",
     "boundary-source",
+    "boundary-source-barometric",
+    "boundary-source-gnss",
     "boundary-status",
     "boundary-upper-altitude",
+    "boundary-upper-unit",
+    "boundary-valid-until",
+    "boundary-warning-direction",
+    "cancel-boundary-edit",
     "cancel-boundary",
     "clock",
     "code-result",
@@ -82,6 +93,7 @@ const elements = Object.fromEntries(
     "profile-window",
     "retry-map",
     "route-status",
+    "save-boundary-details",
     "set-landing",
     "set-launch",
     "theme-label",
@@ -115,6 +127,7 @@ const state = {
   mapTileFailures: 0,
   operationalBoundaries: [],
   operationalBoundaryDraft: null,
+  operationalBoundaryEditId: null,
 };
 
 function setStatus(element, message, kind = "") {
@@ -1090,11 +1103,26 @@ function boundaryId() {
 
 function boundaryDescription(boundary) {
   const geometry = boundary.kind === "line" ? "Line" : boundary.kind === "area" ? "Area" : "Altitude";
+  const unit = boundary.altitudeUnit === "feet" ? "ft" : "m";
+  const scale = boundary.altitudeUnit === "feet" ? 3.280839895 : 1;
   const limits = [
-    boundary.lowerAltitudeMeters === null ? null : `min ${boundary.lowerAltitudeMeters} m`,
-    boundary.upperAltitudeMeters === null ? null : `max ${boundary.upperAltitudeMeters} m`,
+    boundary.lowerAltitudeMeters === null
+      ? null
+      : `min ${Math.round(boundary.lowerAltitudeMeters * scale)} ${unit}`,
+    boundary.upperAltitudeMeters === null
+      ? null
+      : `max ${Math.round(boundary.upperAltitudeMeters * scale)} ${unit}`,
   ].filter(Boolean);
-  return `${geometry}${limits.length ? ` · ${limits.join(" · ")} · ${boundary.altitudeDatum}` : ""} · ${boundary.source}`;
+  const validity = boundary.validUntil
+    ? ` · until ${new Date(boundary.validUntil).toLocaleString()}`
+    : "";
+  const effective = boundary.effectiveFrom
+    ? ` · from ${new Date(boundary.effectiveFrom).toLocaleString()}`
+    : "";
+  const updated = boundary.updatedAt
+    ? ` · updated ${new Date(boundary.updatedAt).toLocaleString()}`
+    : "";
+  return `${boundary.enabled ? geometry : `${geometry} · off`} · ${boundary.warningDirection}${limits.length ? ` · ${limits.join(" · ")} · ${boundary.altitudeDatum}` : ""} · ${boundary.source}${effective}${validity}${updated} · ${boundary.limitations}`;
 }
 
 function persistOperationalBoundaries() {
@@ -1119,9 +1147,33 @@ function renderOperationalBoundaries() {
     const copy = document.createElement("div");
     const title = document.createElement("strong");
     const detail = document.createElement("small");
+    const actions = document.createElement("div");
+    const toggle = document.createElement("button");
+    const edit = document.createElement("button");
     const remove = document.createElement("button");
     title.textContent = boundary.label;
     detail.textContent = boundaryDescription(boundary);
+    toggle.type = "button";
+    toggle.textContent = boundary.enabled ? "Disable" : "Enable";
+    toggle.setAttribute("aria-label", `${toggle.textContent} ${boundary.label}`);
+    toggle.addEventListener("click", () => {
+      state.operationalBoundaries = state.operationalBoundaries.map((candidate) =>
+        candidate.id === boundary.id
+          ? normaliseOperationalBoundary({
+              ...candidate,
+              enabled: !candidate.enabled,
+              updatedAt: new Date().toISOString(),
+            })
+          : candidate,
+      );
+      persistOperationalBoundaries();
+      renderOperationalBoundaries();
+      updateSources();
+    });
+    edit.type = "button";
+    edit.textContent = "Edit";
+    edit.setAttribute("aria-label", `Edit ${boundary.label}`);
+    edit.addEventListener("click", () => editOperationalBoundary(boundary));
     remove.type = "button";
     remove.textContent = "Remove";
     remove.setAttribute("aria-label", `Remove ${boundary.label}`);
@@ -1135,7 +1187,8 @@ function renderOperationalBoundaries() {
       setStatus(elements.boundary_status, `${boundary.label} removed.`);
     });
     copy.append(title, detail);
-    item.append(copy, remove);
+    actions.append(toggle, edit, remove);
+    item.append(copy, actions);
     elements.boundary_list.append(item);
   }
 }
@@ -1158,17 +1211,158 @@ function loadOperationalBoundaries() {
   renderOperationalBoundaries();
 }
 
-function boundaryLabelAndSource() {
+function optionalIsoTime(element, label) {
+  if (!element.value) return null;
+  const parsed = new Date(element.value);
+  if (!Number.isFinite(parsed.getTime())) throw new Error(`${label} is invalid.`);
+  return parsed.toISOString();
+}
+
+function altitudeInputMetres(element) {
+  const value = optionalNumber(element);
+  if (value === null) return null;
+  return elements.boundary_altitude_unit.value === "feet" ? value / 3.280839895 : value;
+}
+
+function boundaryConfiguration() {
   const label = elements.boundary_name.value.trim();
   const source = elements.boundary_source.value.trim();
-  if (!label || !source) throw new Error("Add a boundary name and source first.");
-  return { label, source };
+  const limitations = elements.boundary_limitations.value.trim();
+  if (!label || !source || !limitations) {
+    throw new Error("Add a boundary name, source and limitations first.");
+  }
+  const effectiveFrom = optionalIsoTime(elements.boundary_effective_from, "Effective time");
+  const validUntil = optionalIsoTime(elements.boundary_valid_until, "Expiry time");
+  if (effectiveFrom && validUntil && new Date(validUntil) <= new Date(effectiveFrom)) {
+    throw new Error("Expiry must be after the effective time.");
+  }
+  return {
+    label,
+    source,
+    enabled: elements.boundary_enabled.checked,
+    warningDirection: elements.boundary_warning_direction.value,
+    effectiveFrom,
+    validUntil,
+    limitations,
+    lowerAltitudeMeters: altitudeInputMetres(elements.boundary_lower_altitude),
+    upperAltitudeMeters: altitudeInputMetres(elements.boundary_upper_altitude),
+    altitudeDatum: elements.boundary_altitude_datum.value,
+    altitudeUnit: elements.boundary_altitude_unit.value,
+    acceptedAltitudeSources: [
+      ...(elements.boundary_source_gnss.checked ? ["gnss"] : []),
+      ...(elements.boundary_source_barometric.checked ? ["barometric"] : []),
+    ],
+  };
+}
+
+function localDateTimeValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function setBoundaryEditMode(boundaryId) {
+  state.operationalBoundaryEditId = boundaryId;
+  elements.save_boundary_details.disabled = !boundaryId;
+  elements.cancel_boundary_edit.disabled = !boundaryId;
+}
+
+function editOperationalBoundary(boundary) {
+  setBoundaryEditMode(boundary.id);
+  elements.boundary_name.value = boundary.label;
+  elements.boundary_source.value = boundary.source;
+  elements.boundary_enabled.checked = boundary.enabled;
+  elements.boundary_warning_direction.value = boundary.warningDirection;
+  elements.boundary_limitations.value = boundary.limitations;
+  elements.boundary_effective_from.value = localDateTimeValue(boundary.effectiveFrom);
+  elements.boundary_valid_until.value = localDateTimeValue(boundary.validUntil);
+  elements.boundary_altitude_unit.value = boundary.altitudeUnit;
+  elements.boundary_altitude_unit.dataset.previous = boundary.altitudeUnit;
+  const scale = boundary.altitudeUnit === "feet" ? 3.280839895 : 1;
+  elements.boundary_lower_altitude.value =
+    boundary.lowerAltitudeMeters === null
+      ? ""
+      : String(Math.round(boundary.lowerAltitudeMeters * scale));
+  elements.boundary_upper_altitude.value =
+    boundary.upperAltitudeMeters === null
+      ? ""
+      : String(Math.round(boundary.upperAltitudeMeters * scale));
+  elements.boundary_altitude_datum.value = boundary.altitudeDatum;
+  elements.boundary_source_gnss.checked = boundary.acceptedAltitudeSources.includes("gnss");
+  elements.boundary_source_barometric.checked =
+    boundary.acceptedAltitudeSources.includes("barometric");
+  syncBoundaryAltitudeUnit({ convert: false });
+  setStatus(
+    elements.boundary_status,
+    `Editing ${boundary.label}. Save details or redraw the same kind to replace its geometry.`,
+    "good",
+  );
+}
+
+function cancelOperationalBoundaryEdit() {
+  setBoundaryEditMode(null);
+  setStatus(elements.boundary_status, "Boundary edit cancelled.");
+}
+
+function saveOperationalBoundaryDetails() {
+  const boundary = state.operationalBoundaries.find(
+    (candidate) => candidate.id === state.operationalBoundaryEditId,
+  );
+  if (!boundary) return cancelOperationalBoundaryEdit();
+  try {
+    const updated = normaliseOperationalBoundary({
+      ...boundary,
+      ...boundaryConfiguration(),
+      warningDirection:
+        boundary.kind === "altitudeBand"
+          ? "either"
+          : elements.boundary_warning_direction.value,
+      updatedAt: new Date().toISOString(),
+    });
+    state.operationalBoundaries = state.operationalBoundaries.map((candidate) =>
+      candidate.id === updated.id ? updated : candidate,
+    );
+    persistOperationalBoundaries();
+    renderOperationalBoundaries();
+    updateSources();
+    setBoundaryEditMode(null);
+    setStatus(elements.boundary_status, `${updated.label} updated.`, "good");
+  } catch (error) {
+    setStatus(elements.boundary_status, error.message, "error");
+  }
+}
+
+function syncBoundaryAltitudeUnit({ convert = true } = {}) {
+  const next = elements.boundary_altitude_unit.value;
+  const previous = elements.boundary_altitude_unit.dataset.previous ?? next;
+  if (convert && previous !== next) {
+    for (const input of [elements.boundary_lower_altitude, elements.boundary_upper_altitude]) {
+      const value = Number(input.value);
+      if (!Number.isFinite(value)) continue;
+      const metres = previous === "feet" ? value / 3.280839895 : value;
+      input.value = String(Math.round(next === "feet" ? metres * 3.280839895 : metres));
+    }
+  }
+  elements.boundary_altitude_unit.dataset.previous = next;
+  const symbol = next === "feet" ? "ft" : "m";
+  elements.boundary_lower_unit.textContent = symbol;
+  elements.boundary_upper_unit.textContent = symbol;
 }
 
 function beginOperationalBoundary(kind) {
   try {
-    const { label, source } = boundaryLabelAndSource();
-    state.operationalBoundaryDraft = { id: boundaryId(), label, source, kind, points: [] };
+    const configuration = boundaryConfiguration();
+    const existing = state.operationalBoundaries.find(
+      (candidate) => candidate.id === state.operationalBoundaryEditId,
+    );
+    state.operationalBoundaryDraft = {
+      ...configuration,
+      id: existing?.kind === kind ? existing.id : boundaryId(),
+      kind,
+      points: [],
+      updatedAt: new Date().toISOString(),
+    };
     state.mode = "boundary";
     elements.finish_boundary.disabled = true;
     elements.cancel_boundary.disabled = false;
@@ -1198,16 +1392,17 @@ function finishOperationalBoundary() {
   try {
     const boundary = normaliseOperationalBoundary({
       ...draft,
-      lowerAltitudeMeters: null,
-      upperAltitudeMeters: null,
-      altitudeDatum: "wgs84Geoid",
     });
-    state.operationalBoundaries = [...state.operationalBoundaries, boundary];
+    state.operationalBoundaries = [
+      ...state.operationalBoundaries.filter((candidate) => candidate.id !== boundary.id),
+      boundary,
+    ];
     state.operationalBoundaryDraft = null;
     state.mode = null;
     elements.finish_boundary.disabled = true;
     elements.cancel_boundary.disabled = true;
     elements.map_prompt.hidden = true;
+    setBoundaryEditMode(null);
     persistOperationalBoundaries();
     renderOperationalBoundaries();
     updateSources();
@@ -1254,18 +1449,23 @@ function windFieldDigest(field) {
 
 function addAltitudeBoundary() {
   try {
-    const { label, source } = boundaryLabelAndSource();
+    const configuration = boundaryConfiguration();
+    const existing = state.operationalBoundaries.find(
+      (candidate) => candidate.id === state.operationalBoundaryEditId,
+    );
     const boundary = normaliseOperationalBoundary({
-      id: boundaryId(),
-      label,
-      source,
+      ...configuration,
+      id: existing?.kind === "altitudeBand" ? existing.id : boundaryId(),
       kind: "altitudeBand",
       points: [],
-      lowerAltitudeMeters: optionalNumber(elements.boundary_lower_altitude),
-      upperAltitudeMeters: optionalNumber(elements.boundary_upper_altitude),
-      altitudeDatum: elements.boundary_altitude_datum.value,
+      warningDirection: "either",
+      updatedAt: new Date().toISOString(),
     });
-    state.operationalBoundaries = [...state.operationalBoundaries, boundary];
+    state.operationalBoundaries = [
+      ...state.operationalBoundaries.filter((candidate) => candidate.id !== boundary.id),
+      boundary,
+    ];
+    setBoundaryEditMode(null);
     persistOperationalBoundaries();
     renderOperationalBoundaries();
     updateSources();
@@ -1404,6 +1604,9 @@ function bindControls() {
   elements.draw_boundary_area.addEventListener("click", () => beginOperationalBoundary("area"));
   elements.finish_boundary.addEventListener("click", finishOperationalBoundary);
   elements.cancel_boundary.addEventListener("click", cancelOperationalBoundary);
+  elements.save_boundary_details.addEventListener("click", saveOperationalBoundaryDetails);
+  elements.cancel_boundary_edit.addEventListener("click", cancelOperationalBoundaryEdit);
+  elements.boundary_altitude_unit.addEventListener("change", syncBoundaryAltitudeUnit);
   elements.add_altitude_boundary.addEventListener("click", addAltitudeBoundary);
 }
 
@@ -1413,6 +1616,7 @@ async function start() {
   configureDepartureInput();
   syncMaxAltitudeControl();
   syncVerticalRateControls();
+  syncBoundaryAltitudeUnit({ convert: false });
   updateClock();
   window.setInterval(updateClock, 1_000);
   bindControls();

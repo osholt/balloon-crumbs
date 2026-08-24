@@ -124,6 +124,7 @@ class DeviceAuthorityPolicy {
       RideEventType.deviceAuthorityRevoked => isPilot,
       RideEventType.windContextNoted =>
         isPilot || role == FlightRole.balloonCrew,
+      RideEventType.operationalBoundaryAlerted => role.isAboardBalloon,
       RideEventType.flightStartedByCrew => role.isChasing,
       RideEventType.flightLanded ||
       RideEventType.flightLandingRetracted ||

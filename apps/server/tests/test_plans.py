@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from balloon_crumbs_server.app import create_app
 from balloon_crumbs_server.gpx import GpxValidationError, validate_gpx
 from balloon_crumbs_server.models import RidePlan
+from balloon_crumbs_server.schemas import ForecastPlanBoundary
 from balloon_crumbs_server.service import PLAN_CODE_ALPHABET, PLAN_CODE_LENGTH, purge_expired
 
 GPX_TWO_POINTS = """<?xml version="1.0" encoding="UTF-8"?>
@@ -214,6 +215,28 @@ def test_structured_plan_rejects_unknown_schema_and_mismatched_fallback(client) 
     response = _create(client, forecast_plan=mismatched)
     assert response.status_code == 400
     assert "fallback" in response.json()["error"].lower()
+
+
+def test_structured_plan_rejects_empty_altitude_boundary(client) -> None:
+    forecast_plan = _forecast_plan()
+    boundary = {
+        "id": "empty-altitude-band",
+        "label": "Missing limits",
+        "kind": "altitudeBand",
+        "points": [],
+        "source": "Pilot briefing",
+        "updatedAt": "2026-08-23T06:00:00Z",
+        "altitudeDatum": "wgs84Geoid",
+    }
+    forecast_plan["operationalBoundaries"] = [boundary]
+
+    with pytest.raises(ValueError, match="at least one altitude limit"):
+        ForecastPlanBoundary.model_validate(boundary)
+
+    response = _create(client, forecast_plan=forecast_plan)
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "Malformed plan request"
 
 
 def test_unknown_plan_code_is_not_found(client) -> None:

@@ -1,9 +1,18 @@
 import 'altitude.dart';
+import 'altitude_unit.dart';
 import 'geo_point.dart';
 import 'ride_event.dart';
 import 'ride_role.dart';
 
 enum OperationalBoundaryKind { line, area, altitudeBand }
+
+/// Which transition should raise an alert.
+///
+/// For an area this has the ordinary inside/outside meaning. For an oriented
+/// line, [entering] means right-to-left into the line's left side and [leaving]
+/// means left-to-right. Altitude bands use [either]: either upper or lower
+/// limit is a departure from the configured band.
+enum OperationalBoundaryWarningDirection { entering, leaving, either }
 
 class OperationalBoundary {
   const OperationalBoundary({
@@ -13,9 +22,20 @@ class OperationalBoundary {
     required this.points,
     required this.source,
     required this.updatedAt,
+    this.enabled = true,
+    this.warningDirection = OperationalBoundaryWarningDirection.either,
+    this.effectiveFrom,
+    this.validUntil,
+    this.limitations =
+        'Advisory only; verify against current official information.',
     this.lowerAltitudeMeters,
     this.upperAltitudeMeters,
     this.altitudeDatum = AltitudeDatum.wgs84Geoid,
+    this.altitudeUnit = AltitudeUnit.metres,
+    this.acceptedAltitudeSources = const {
+      AltitudeSource.gnss,
+      AltitudeSource.barometric,
+    },
   });
 
   final String id;
@@ -24,9 +44,26 @@ class OperationalBoundary {
   final List<GeoPoint> points;
   final String source;
   final DateTime updatedAt;
+  final bool enabled;
+  final OperationalBoundaryWarningDirection warningDirection;
+
+  /// When this advisory starts applying; [updatedAt] for legacy definitions.
+  final DateTime? effectiveFrom;
+  final DateTime? validUntil;
+  final String limitations;
   final double? lowerAltitudeMeters;
   final double? upperAltitudeMeters;
   final AltitudeDatum altitudeDatum;
+  final AltitudeUnit altitudeUnit;
+  final Set<AltitudeSource> acceptedAltitudeSources;
+
+  DateTime get effectiveAt => effectiveFrom ?? updatedAt;
+
+  bool appliesAt(DateTime value) {
+    final utc = value.toUtc();
+    return !utc.isBefore(effectiveAt.toUtc()) &&
+        (validUntil == null || !utc.isAfter(validUntil!.toUtc()));
+  }
 
   bool get hasAltitudeBand =>
       lowerAltitudeMeters != null || upperAltitudeMeters != null;
@@ -44,14 +81,29 @@ class OperationalBoundary {
             (lowerAltitudeMeters == null ||
                 upperAltitudeMeters == null ||
                 lowerAltitudeMeters! < upperAltitudeMeters!));
+    final timeValid =
+        validUntil == null || validUntil!.isAfter(effectiveAt.toUtc());
+    final sourceRequirementsValid =
+        !hasAltitudeBand ||
+        (altitudeDatum != AltitudeDatum.unknown &&
+            acceptedAltitudeSources.isNotEmpty &&
+            !acceptedAltitudeSources.contains(AltitudeSource.unknown));
+    final directionValid =
+        kind != OperationalBoundaryKind.altitudeBand ||
+        warningDirection == OperationalBoundaryWarningDirection.either;
     return id.trim().isNotEmpty &&
         id.length <= 96 &&
         label.trim().isNotEmpty &&
         label.length <= 96 &&
         source.trim().isNotEmpty &&
         source.length <= 160 &&
+        limitations.trim().isNotEmpty &&
+        limitations.length <= 500 &&
         pointCountValid &&
         altitudeValid &&
+        timeValid &&
+        sourceRequirementsValid &&
+        directionValid &&
         points.every(
           (point) =>
               point.latitude.isFinite &&
@@ -78,9 +130,19 @@ class OperationalBoundary {
     ],
     'source': source,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
+    'enabled': enabled,
+    'warningDirection': warningDirection.name,
+    'effectiveFrom': effectiveAt.toUtc().toIso8601String(),
+    if (validUntil != null) 'validUntil': validUntil!.toUtc().toIso8601String(),
+    'limitations': limitations,
     if (lowerAltitudeMeters != null) 'lowerAltitudeMeters': lowerAltitudeMeters,
     if (upperAltitudeMeters != null) 'upperAltitudeMeters': upperAltitudeMeters,
     'altitudeDatum': altitudeDatum.name,
+    'altitudeUnit': altitudeUnit.name,
+    'acceptedAltitudeSources': [
+      for (final source in AltitudeSource.values)
+        if (acceptedAltitudeSources.contains(source)) source.name,
+    ],
   };
 
   factory OperationalBoundary.fromJson(Map<String, Object?> json) {
@@ -94,6 +156,17 @@ class OperationalBoundary {
     if (kind == null) {
       throw const FormatException('Boundary kind is invalid.');
     }
+    final updatedAt = DateTime.parse(json['updatedAt']! as String).toUtc();
+    final warningDirection = OperationalBoundaryWarningDirection.values
+        .where((direction) => direction.name == json['warningDirection'])
+        .firstOrNull;
+    final rawAcceptedSources = json['acceptedAltitudeSources'];
+    final acceptedSources = rawAcceptedSources is List
+        ? {
+            for (final value in rawAcceptedSources.whereType<String>())
+              ...AltitudeSource.values.where((source) => source.name == value),
+          }
+        : const {AltitudeSource.gnss, AltitudeSource.barometric};
     final boundary = OperationalBoundary(
       id: json['id']! as String,
       label: json['label']! as String,
@@ -106,7 +179,19 @@ class OperationalBoundary {
           ),
       ],
       source: json['source']! as String,
-      updatedAt: DateTime.parse(json['updatedAt']! as String).toUtc(),
+      updatedAt: updatedAt,
+      enabled: json['enabled'] as bool? ?? true,
+      warningDirection:
+          warningDirection ?? OperationalBoundaryWarningDirection.either,
+      effectiveFrom: DateTime.tryParse(
+        json['effectiveFrom'] as String? ?? '',
+      )?.toUtc(),
+      validUntil: DateTime.tryParse(
+        json['validUntil'] as String? ?? '',
+      )?.toUtc(),
+      limitations:
+          json['limitations'] as String? ??
+          'Advisory only; verify against current official information.',
       lowerAltitudeMeters: (json['lowerAltitudeMeters'] as num?)?.toDouble(),
       upperAltitudeMeters: (json['upperAltitudeMeters'] as num?)?.toDouble(),
       altitudeDatum:
@@ -114,6 +199,12 @@ class OperationalBoundary {
               .where((datum) => datum.name == json['altitudeDatum'])
               .firstOrNull ??
           AltitudeDatum.unknown,
+      altitudeUnit:
+          AltitudeUnit.values
+              .where((unit) => unit.name == json['altitudeUnit'])
+              .firstOrNull ??
+          AltitudeUnit.metres,
+      acceptedAltitudeSources: acceptedSources,
     );
     if (!boundary.isValid) {
       throw const FormatException('Boundary is invalid.');
@@ -168,6 +259,7 @@ class OperationalBoundaryReducer {
           }
           final id = event.payload['boundaryId'];
           if (id is String) boundaries.remove(id);
+        case RideEventType.operationalBoundaryAlerted:
         case RideEventType.riderLeft:
         case RideEventType.rideStarted:
         case RideEventType.flightStartedByCrew:

@@ -113,6 +113,7 @@ class ChaseGuidanceSelectionReducer {
         case RideEventType.windContextNoted:
         case RideEventType.operationalBoundaryUpserted:
         case RideEventType.operationalBoundaryRemoved:
+        case RideEventType.operationalBoundaryAlerted:
         case RideEventType.pilotHandoverOffered:
         case RideEventType.pilotHandoverAccepted:
           break;
