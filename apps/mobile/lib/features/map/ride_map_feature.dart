@@ -33,7 +33,6 @@ import '../../services/basemap_configuration.dart';
 import '../../services/aeronautical_chart_configuration.dart';
 import '../../services/basemap_status.dart';
 import '../../services/demo_route_loader.dart';
-import 'ride_clock.dart';
 import '../../services/ride_completion_detector.dart';
 import '../../services/gpx_import_source.dart';
 import '../../services/hmlr_inspire_reference.dart';
@@ -72,6 +71,8 @@ import 'maneuver_symbol.dart';
 import 'group_mini_map_framing.dart';
 import 'craft_icon.dart';
 import 'navigation_export_sheet.dart';
+import 'os_api_branding_logo.dart';
+import 'ride_clock.dart';
 import 'route_confirmation_sheet.dart';
 import 'route_progress_panel.dart';
 import 'route_trail_style.dart';
@@ -1780,6 +1781,16 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     child: _buildMap(),
                   ),
                 ),
+                if (_showOsFinalApproach)
+                  Positioned(
+                    key: const Key('os-api-branding-logo-position'),
+                    left: overlayLeft + 8,
+                    bottom:
+                        overlayBottom +
+                        _safetyBandReservedHeight(landscape) +
+                        8,
+                    child: const IgnorePointer(child: OsApiBrandingLogo()),
+                  ),
                 if (_showsForecastContext &&
                     ((_isBalloonView && widget.navigationPosition != null) ||
                         widget.windForecastController != null))
@@ -9074,6 +9085,45 @@ class _OsFinalApproachMapSheet extends StatelessWidget {
             configuration.attribution,
             key: const Key('os-final-approach-attribution'),
             style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 4,
+            runSpacing: 0,
+            children: [
+              TextButton(
+                key: const Key('os-open-government-licence-link'),
+                onPressed: () => unawaited(
+                  launchUrl(
+                    Uri.parse(
+                      OsFinalApproachMapConfiguration.openGovernmentLicenceUrl,
+                    ),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                ),
+                child: const Text('Open Government Licence'),
+              ),
+              TextButton(
+                key: const Key('os-api-terms-link'),
+                onPressed: () => unawaited(
+                  launchUrl(
+                    Uri.parse(OsFinalApproachMapConfiguration.apiTermsUrl),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                ),
+                child: const Text('OS API terms'),
+              ),
+              TextButton(
+                key: const Key('os-map-error-link'),
+                onPressed: () => unawaited(
+                  launchUrl(
+                    Uri.parse(OsFinalApproachMapConfiguration.mapErrorUrl),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                ),
+                child: const Text('Report a map error'),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           const Text(

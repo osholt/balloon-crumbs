@@ -73,13 +73,13 @@
 		header Cache-Control "public, max-age=300"
 	}
 
-	# Optional Great Britain field-approach detail. Only useful close zooms are
-	# admitted, and the OS project key stays in the host environment rather than
-	# in a mobile build or URL. Caddy access logging is not enabled: aggregate
-	# tile/map-view use is observed in the OS Data Hub project dashboard without
-	# retaining a crew's precise viewport. Premium terms permit only temporary
-	# end-user caching, so shared intermediaries are explicitly excluded.
-	@os_outdoor path_regexp os_outdoor ^/maps/os/outdoor/(1[3-9]|20)/([0-9]+)/([0-9]+)\.png$
+	# Optional Great Britain field-approach detail. The free Outdoor_3857
+	# OpenData layer ends at zoom 16, so the proxy cannot request Premium tiles.
+	# The OS project key stays in the host environment rather than a mobile build
+	# or URL. Caddy access logging is not enabled: aggregate use is observed in
+	# OS Data Hub without retaining a crew's precise viewport. Responses stay
+	# private and short-lived even though the OpenData licence is more permissive.
+	@os_outdoor path_regexp os_outdoor ^/maps/os/outdoor/(1[3-6])/([0-9]+)/([0-9]+)\.png$
 	handle @os_outdoor {
 		rewrite * /maps/raster/v1/zxy/Outdoor_3857/{re.os_outdoor.1}/{re.os_outdoor.2}/{re.os_outdoor.3}.png
 		reverse_proxy https://api.os.uk {

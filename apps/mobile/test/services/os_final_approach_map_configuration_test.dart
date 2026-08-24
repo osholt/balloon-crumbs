@@ -16,7 +16,15 @@ void main() {
     );
     expect(configured.isConfigured, isTrue);
     expect(configured.minimumZoom, 13);
-    expect(configured.maximumZoom, 20);
+    expect(configured.maximumZoom, 16);
+
+    const premiumZooms = OsFinalApproachMapConfiguration(
+      enabled: true,
+      tileUrlTemplate:
+          'https://balloon-crumbs.pages.dev/maps/os/outdoor/{z}/{x}/{y}.png',
+      maximumZoom: 17,
+    );
+    expect(premiumZooms.isConfigured, isFalse);
 
     const insecure = OsFinalApproachMapConfiguration(
       enabled: true,

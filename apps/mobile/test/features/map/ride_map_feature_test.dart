@@ -268,6 +268,12 @@ void main() {
         find.byKey(const Key('os-final-approach-attribution')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('os-open-government-licence-link')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('os-api-terms-link')), findsOneWidget);
+      expect(find.byKey(const Key('os-map-error-link')), findsOneWidget);
     },
   );
 

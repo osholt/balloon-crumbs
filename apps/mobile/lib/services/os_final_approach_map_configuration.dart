@@ -11,7 +11,7 @@ class OsFinalApproachMapConfiguration {
     this.tileUrlTemplate = '',
     this.attribution = defaultAttribution,
     this.minimumZoom = 13,
-    this.maximumZoom = 20,
+    this.maximumZoom = 16,
   });
 
   factory OsFinalApproachMapConfiguration.fromEnvironment() =>
@@ -28,6 +28,10 @@ class OsFinalApproachMapConfiguration {
 
   static const defaultAttribution =
       'Contains OS data © Crown copyright and database right 2026';
+  static const openGovernmentLicenceUrl =
+      'https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/';
+  static const apiTermsUrl = 'https://osdatahub.os.uk/support/legal/api-terms';
+  static const mapErrorUrl = 'https://www.ordnancesurvey.co.uk/contact-us';
 
   final bool enabled;
   final String tileUrlTemplate;
@@ -40,7 +44,10 @@ class OsFinalApproachMapConfiguration {
       attribution.trim().isNotEmpty &&
       minimumZoom >= 7 &&
       maximumZoom >= minimumZoom &&
-      maximumZoom <= 20 &&
+      // Outdoor_3857 zooms 17–20 are Premium. Production intentionally uses
+      // the free OS OpenData plan, so the app rejects a configuration that
+      // could ever ask the protected relay for one of those tiles.
+      maximumZoom <= 16 &&
       _hasRequiredPlaceholders(tileUrlTemplate) &&
       _isSecureHttpTemplate(tileUrlTemplate);
 
