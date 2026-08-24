@@ -73,6 +73,23 @@
 		header Cache-Control "public, max-age=300"
 	}
 
+	# Optional Great Britain field-approach detail. Only useful close zooms are
+	# admitted, and the OS project key stays in the host environment rather than
+	# in a mobile build or URL. Caddy access logging is not enabled: aggregate
+	# tile/map-view use is observed in the OS Data Hub project dashboard without
+	# retaining a crew's precise viewport. Premium terms permit only temporary
+	# end-user caching, so shared intermediaries are explicitly excluded.
+	@os_outdoor path_regexp os_outdoor ^/maps/os/outdoor/(1[3-9]|20)/([0-9]+)/([0-9]+)\.png$
+	handle @os_outdoor {
+		rewrite * /maps/raster/v1/zxy/Outdoor_3857/{re.os_outdoor.1}/{re.os_outdoor.2}/{re.os_outdoor.3}.png
+		reverse_proxy https://api.os.uk {
+			header_up Host api.os.uk
+			header_up key {$BALLOON_CRUMBS_OS_MAPS_API_KEY}
+		}
+		header Cache-Control "private, max-age=86400"
+		header Access-Control-Allow-Origin "*"
+	}
+
 	# A path-bounded, same-origin proxy for the public Open-Meteo forecast API.
 	# It prevents the browser's IP and page origin going directly to the provider
 	# and cannot be used as a general-purpose forward proxy.
