@@ -19,14 +19,14 @@ not a claim that every P0 item is small. Work packages are defined in
 |---:|:---:|---|:---:|---|
 | 1 | P0 | ~~Isolate inherited TEC baseline and keep CI green~~ **done** | WP1 | — |
 | 2 | P0 | ~~Balloon-capable telemetry: altitude, source, datum, accuracy, vertical speed~~ **done** | WP2 | 1 |
-| 3 | P0 | Craft model, flight roles, and pilot authority | WP3 | 2 |
+| 3 | P0 | ~~Craft model, flight roles, and pilot authority~~ **done** | WP3 | 2 |
 | 4 | P0 | ~~Delete the motorcycle domain and replace user-facing ride/rider copy~~ **done**; compatibility identifiers remain until after 6, 7 | WP4 | 3 |
-| 4a | P0 | Replace the 15 motorcycle map markers with craft icons (#18) | WP4 | 6, 7 |
+| 4a | P0 | ~~Replace the 15 motorcycle map markers with craft icons (#18)~~ **done** | WP4 | 6, 7 |
 | 5 | P0 | ~~Altitude-coloured ground track and telemetry card~~ **done** | WP5 | 2, 3 |
 | 6 | P0 | Pilot view, drawn landing area, and inferred landing phase | WP6 | 3, 5 |
-| 7 | P0 | Multiple chase vehicles, rendezvous, and vehicle assignment | WP7 | 3, 5 |
+| 7 | P0 | ~~Multiple chase vehicles and vehicle assignment~~ **done**; rendezvous remains in 7a | WP7 | 3, 5 |
 | 7a | P0 | Chaser-selectable road guidance to the balloon or intended landing area, with safe road rendezvous and balloon-divergence checks | WP7 | 6, 7 |
-| 7b | P0 | Mini-map as the chase decision surface (balloon, track, area, vehicles) | WP7 | 7a |
+| 7b | P0 | ~~Mini-map and local viewpoint switching as the chase decision surface (balloon, track, area, vehicles)~~ **done** | WP7 | 7a |
 | 8 | P0 | Voice-first chase guidance for a moving target | WP8 | 7 |
 | 9 | P0 | Ground notes and the retrieve | WP9 | 3 |
 | 10 | P0 | Landing-phase basemap (OS topographic / aerial) | WP6b | 6 |

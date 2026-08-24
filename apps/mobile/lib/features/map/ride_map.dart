@@ -6,18 +6,21 @@ export 'ride_map_feature.dart'
         GroupMiniMapRenderer,
         MapOverlayMarker,
         MapOverlayTrace,
+        RecoveryMapViewpoint,
         RideMapPerspective,
         RideMapFeature,
         RideMapScreen,
         describeQuickMessageOrigin,
         groupMiniMapBackgroundColor,
         groupMiniMapGridColor,
+        groupMiniMapCraftMarkers,
         groupMiniMapRenderer,
         landscapeGuidancePanelWidth,
         portraitRideMenuTopOffset,
         portraitBottomChromeKey,
         rideMapPrimaryPanelFill,
         rideMapShowsForecastContext,
+        recoveryMapViewpointPoints,
         quickMessageIcon;
 export 'route_trail_style.dart'
     show RouteLineStyle, RouteTrailStyle, contrastRatio, relativeLuminance;

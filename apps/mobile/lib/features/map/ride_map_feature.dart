@@ -116,6 +116,50 @@ enum _ImportedTrackChoice { cancel, followOriginal, generateNavigable }
 /// aviation presentation.
 enum RideMapPerspective { chase, balloon }
 
+enum RecoveryMapViewpoint {
+  ownCraft('My craft', Icons.my_location),
+  balloon('Balloon', Icons.air_outlined),
+  wholeCrew('Whole crew', Icons.groups_outlined);
+
+  const RecoveryMapViewpoint(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
+
+@visibleForTesting
+List<GeoPoint> recoveryMapViewpointPoints({
+  required RecoveryMapViewpoint viewpoint,
+  required GeoPoint? currentPosition,
+  required CraftIconStyle localCraftStyle,
+  required Iterable<MapOverlayMarker> markers,
+}) {
+  final craftMarkers = markers.where((marker) => marker.craftStyle != null);
+  return switch (viewpoint) {
+    RecoveryMapViewpoint.ownCraft => [?currentPosition],
+    RecoveryMapViewpoint.balloon => [
+      if (localCraftStyle == CraftIconStyle.balloon) ?currentPosition,
+      ...craftMarkers
+          .where((marker) => marker.craftStyle == CraftIconStyle.balloon)
+          .map((marker) => marker.point),
+    ],
+    RecoveryMapViewpoint.wholeCrew => [
+      ?currentPosition,
+      ...craftMarkers.map((marker) => marker.point),
+    ],
+  };
+}
+
+@visibleForTesting
+List<MapOverlayMarker> groupMiniMapCraftMarkers(
+  Iterable<MapOverlayMarker> markers,
+) => markers
+    .where(
+      (marker) =>
+          marker.id.startsWith('craft-') || marker.id.startsWith('rider-'),
+    )
+    .toList(growable: false);
+
 @visibleForTesting
 bool rideMapShowsForecastContext({
   required RideMapPerspective perspective,
@@ -1108,6 +1152,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
   bool _routing = false;
   bool _routingToStart = false;
   bool _navigationMode = false;
+  RecoveryMapViewpoint? _recoveryMapViewpoint;
+  DateTime? _lastBalloonViewpointUpdateAt;
   bool _navigationCanvasActive = false;
   bool _autoFollowSuppressed = false;
   bool _cameraFramingRefreshScheduled = false;
@@ -2295,13 +2341,63 @@ class _RideMapScreenState extends State<RideMapScreen> {
               ),
               label: Text(widget.mapOrientation.label),
             );
-      final cameraControls = orientation == null && followMe == null
+      final selectedViewpoint =
+          _recoveryMapViewpoint ??
+          (_navigationMode ? RecoveryMapViewpoint.ownCraft : null);
+      final viewpoint = widget.groupRiderCount == null
+          ? null
+          : Material(
+              color: const Color(0xE6252E39),
+              borderRadius: BorderRadius.circular(24),
+              child: PopupMenuButton<RecoveryMapViewpoint>(
+                key: const Key('recovery-map-viewpoint'),
+                tooltip: 'Choose map viewpoint',
+                onSelected: (choice) =>
+                    unawaited(_focusRecoveryMapViewpoint(choice)),
+                itemBuilder: (context) => [
+                  for (final choice in RecoveryMapViewpoint.values)
+                    PopupMenuItem(
+                      value: choice,
+                      child: Row(
+                        children: [
+                          Icon(
+                            choice == selectedViewpoint
+                                ? Icons.check_circle
+                                : choice.icon,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(choice.label),
+                        ],
+                      ),
+                    ),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.center_focus_strong, size: 20),
+                      const SizedBox(width: 8),
+                      const Text('View'),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_drop_down, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            );
+      final cameraControls =
+          orientation == null && followMe == null && viewpoint == null
           ? null
           : Wrap(
               spacing: 8,
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
-              children: [?orientation, ?followMe],
+              children: [?viewpoint, ?orientation, ?followMe],
             );
 
       if (landscape) {
@@ -2585,9 +2681,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     required double width,
     required double height,
   }) {
-    final groupRiders = overlays
-        .where((marker) => marker.id.startsWith('rider-'))
-        .toList(growable: false);
+    final groupRiders = groupMiniMapCraftMarkers(overlays);
     final inferredGroupSize =
         groupRiders.length + (_effectivePosition == null ? 0 : 1);
     // The participant count is a snapshot supplied by the ride shell, while
@@ -3496,6 +3590,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         if (activateNavigationCanvas) _navigationCanvasActive = true;
         if (autoFollow) {
           _navigationMode = true;
+          _recoveryMapViewpoint = RecoveryMapViewpoint.ownCraft;
           _navigationCanvasActive = true;
         }
       });
@@ -3588,6 +3683,23 @@ class _RideMapScreenState extends State<RideMapScreen> {
     if (!_basemap.usesMapLibre) setState(() {});
     _scheduleMapLibreSync(overlays: true);
     unawaited(_publishGroupPipSnapshot());
+    if (_recoveryMapViewpoint == RecoveryMapViewpoint.balloon) {
+      final now = DateTime.now();
+      final previous = _lastBalloonViewpointUpdateAt;
+      if (previous == null ||
+          now.difference(previous) >= const Duration(milliseconds: 750)) {
+        _lastBalloonViewpointUpdateAt = now;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              _recoveryMapViewpoint == RecoveryMapViewpoint.balloon) {
+            _focusRecoveryMapViewpoint(
+              RecoveryMapViewpoint.balloon,
+              reportMissingFix: false,
+            );
+          }
+        });
+      }
+    }
   }
 
   void _onWindForecastChanged() {
@@ -3681,35 +3793,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       _stopFollowing(suppressAutomatic: _shouldAutoFollow);
       return;
     }
-    if (_effectivePosition == null) {
-      final acquired = await widget.acquireCurrentPosition?.call();
-      if (!mounted) return;
-      if (acquired == null && _effectivePosition == null) {
-        _showMessage(
-          'Could not get your position. Check Location Services and '
-          'Balloon Crumbs location access.',
-        );
-        return;
-      }
-    }
-    setState(() {
-      _navigationMode = true;
-      _navigationCanvasActive = true;
-      _autoFollowSuppressed = false;
-      // Taking the camera is not arriving at the viewport. The control stays on
-      // screen until the map reports it got there (#141), because a rider
-      // watching the map ease across has not been given the viewport yet.
-      _releaseNavigationViewport();
-    });
-    // Going to the navigation viewport is a change of framing, not a tracking
-    // update, so it is eased rather than run at the linear rate the per-fix
-    // updates use.
-    unawaited(
-      _followNavigationCamera(
-        force: true,
-        transitionDuration: const Duration(milliseconds: 700),
-      ),
-    );
+    await _focusRecoveryMapViewpoint(RecoveryMapViewpoint.ownCraft);
   }
 
   /// Hands the camera back to the rider.
@@ -3722,6 +3806,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
     if (!mounted) return;
     setState(() {
       _navigationMode = false;
+      _recoveryMapViewpoint = null;
       _autoFollowSuppressed = suppressAutomatic;
       _releaseNavigationViewport();
     });
@@ -3925,7 +4010,115 @@ class _RideMapScreenState extends State<RideMapScreen> {
     }
   }
 
+  Future<void> _focusRecoveryMapViewpoint(
+    RecoveryMapViewpoint viewpoint, {
+    bool reportMissingFix = true,
+  }) async {
+    if (viewpoint == RecoveryMapViewpoint.ownCraft) {
+      if (_effectivePosition == null) {
+        final acquired = await widget.acquireCurrentPosition?.call();
+        if (!mounted) return;
+        if (acquired == null && _effectivePosition == null) {
+          if (reportMissingFix) {
+            _showMessage(
+              'Could not get your position. Check Location Services and '
+              'Balloon Crumbs location access.',
+            );
+          }
+          return;
+        }
+      }
+      setState(() {
+        _recoveryMapViewpoint = viewpoint;
+        _navigationMode = true;
+        _navigationCanvasActive = true;
+        _autoFollowSuppressed = false;
+        _releaseNavigationViewport();
+      });
+      unawaited(
+        _followNavigationCamera(
+          force: true,
+          transitionDuration: const Duration(milliseconds: 700),
+        ),
+      );
+      return;
+    }
+
+    final points = recoveryMapViewpointPoints(
+      viewpoint: viewpoint,
+      currentPosition: _effectivePosition,
+      localCraftStyle: _localCraftStyle,
+      markers: widget.overlayMarkers?.value ?? const <MapOverlayMarker>[],
+    );
+    if (points.isEmpty) {
+      if (reportMissingFix) {
+        _showMessage(
+          viewpoint == RecoveryMapViewpoint.balloon
+              ? 'No balloon position is available yet.'
+              : 'No crew positions are available yet.',
+        );
+      }
+      return;
+    }
+    _stopFollowing(suppressAutomatic: _shouldAutoFollow);
+    if (!mounted) return;
+    setState(() => _recoveryMapViewpoint = viewpoint);
+    _frameRecoveryMapPoints(points);
+  }
+
+  void _frameRecoveryMapPoints(List<GeoPoint> points) {
+    if (points.isEmpty) return;
+    final framing = GroupMiniMapFraming.forPoints(
+      points,
+      width: math.max(160.0, _mapViewportWidthPixels - 84),
+      height: math.max(160.0, _mapViewportHeightPixels - 84),
+    );
+    if (!MapCameraCommand.isUsable(
+      latitude: framing.centre.latitude,
+      longitude: framing.centre.longitude,
+      zoom: framing.zoom,
+      bearing: _effectiveCameraBearingDegrees,
+    )) {
+      return;
+    }
+    _initialCameraPositioned = true;
+    if (_basemap.usesMapLibre) {
+      final controller = _mapLibreController;
+      if (controller == null) return;
+      unawaited(
+        controller.animateCamera(
+          ml.CameraUpdate.newCameraPosition(
+            ml.CameraPosition(
+              target: ml.LatLng(
+                framing.centre.latitude,
+                framing.centre.longitude,
+              ),
+              zoom: framing.zoom,
+              bearing: _effectiveCameraBearingDegrees,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    try {
+      _mapController.moveAndRotateAnimatedRaw(
+        _latLng(framing.centre),
+        framing.zoom,
+        _effectiveCameraBearingDegrees,
+        offset: Offset.zero,
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeInOutCubic,
+        hasGesture: false,
+        source: MapEventSource.mapController,
+      );
+    } on StateError {
+      // A viewpoint may be selected just before FlutterMap attaches.
+    }
+  }
+
   void _showWholeRoute() {
+    _recoveryMapViewpoint = null;
     _stopFollowing(suppressAutomatic: _shouldAutoFollow);
     _fitRoute();
   }
@@ -10659,7 +10852,14 @@ class _BasemapStatusBadge extends StatelessWidget {
               ),
               const SizedBox(width: 5),
             ],
-            Text(status.badgeLabel, style: const TextStyle(fontSize: 10)),
+            Flexible(
+              child: Text(
+                status.badgeLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 10),
+              ),
+            ),
           ],
         ),
       ),
