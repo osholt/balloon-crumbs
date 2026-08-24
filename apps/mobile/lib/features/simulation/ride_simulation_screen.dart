@@ -137,6 +137,12 @@ class _SimulationControls extends StatelessWidget {
               'profile while forecast wind drives its horizontal track.',
               style: const TextStyle(color: Color(0xFFADB7C4), height: 1.35),
             ),
+            const SizedBox(height: 6),
+            Text(
+              'Scenario seed ${controller.scenarioSeed} · no device GPS or live relay',
+              key: const Key('simulation-seed'),
+              style: const TextStyle(color: Color(0xFF8F9BAA), fontSize: 12),
+            ),
             const SizedBox(height: 14),
             Text(
               'YOUR VIEW',
@@ -173,6 +179,68 @@ class _SimulationControls extends StatelessWidget {
               selected: {controller.localRole},
               onSelectionChanged: (selection) =>
                   unawaited(onRoleChanged(selection.single)),
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<SimulationConnectivity>(
+              key: const Key('simulation-connectivity'),
+              initialValue: controller.connectivity,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Synthetic crew links',
+                isDense: true,
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: SimulationConnectivity.internetAndNearby,
+                  child: Text('Internet + nearby'),
+                ),
+                DropdownMenuItem(
+                  value: SimulationConnectivity.nearbyOnly,
+                  child: Text('Nearby only'),
+                ),
+                DropdownMenuItem(
+                  value: SimulationConnectivity.disconnected,
+                  child: Text('No crew link'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  unawaited(controller.setConnectivity(value));
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<SimulationBalloonFixQuality>(
+              key: const Key('simulation-fix-quality'),
+              initialValue: controller.balloonFixQuality,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Synthetic balloon fix',
+                isDense: true,
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: SimulationBalloonFixQuality.precise,
+                  child: Text('Precise GNSS + altitude'),
+                ),
+                DropdownMenuItem(
+                  value: SimulationBalloonFixQuality.inaccurate,
+                  child: Text('Inaccurate GNSS'),
+                ),
+                DropdownMenuItem(
+                  value: SimulationBalloonFixQuality.positionOnly,
+                  child: Text('Position, altitude lost'),
+                ),
+                DropdownMenuItem(
+                  value: SimulationBalloonFixQuality.unavailable,
+                  child: Text('Balloon GPS lost'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  unawaited(controller.setBalloonFixQuality(value));
+                }
+              },
             ),
             const SizedBox(height: 14),
             LinearProgressIndicator(value: controller.progress),

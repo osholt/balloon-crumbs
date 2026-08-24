@@ -67,9 +67,27 @@ void main() {
     );
 
     final faults = (fixture['faults']! as List).cast<Map<String, Object?>>();
+    expect(
+      {for (final fault in faults) fault['kind']},
+      containsAll({
+        'gpsLoss',
+        'inaccurateFix',
+        'altitudeLoss',
+        'staleWind',
+        'clockSkew',
+        'relayDelay',
+        'duplicateEvent',
+        'outOfOrderReplay',
+        'routeProviderFailure',
+        'unreachableRoadCandidates',
+      }),
+    );
+
+    final linkModes = (fixture['linkModes']! as List)
+        .cast<Map<String, Object?>>();
     expect({
-      for (final fault in faults) fault['kind'],
-    }, containsAll({'gpsLoss', 'staleWind', 'relayDelay', 'outOfOrderReplay'}));
+      for (final change in linkModes) change['mode'],
+    }, containsAll({'internetAndNearby', 'nearbyOnly', 'disconnected'}));
 
     final carPlay = Map<String, Object?>.from(fixture['carPlay']! as Map);
     expect(carPlay['orientations'], containsAll(['northUp', 'directionUp']));

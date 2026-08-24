@@ -6,6 +6,7 @@ import 'package:balloon_crumbs/domain/craft.dart' show CraftKind;
 import 'package:balloon_crumbs/domain/geo_point.dart';
 import 'package:balloon_crumbs/domain/ride_role.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
+import 'package:balloon_crumbs/domain/rider_location.dart';
 import 'package:balloon_crumbs/features/map/craft_icon.dart';
 import 'package:balloon_crumbs/services/ride_completion_detector.dart';
 
@@ -236,6 +237,125 @@ void main() {
     expect(movingLeader.travelTrail.length, greaterThan(1));
   });
 
+  test(
+    'crew links disconnect, freeze peers, and converge nearby-only',
+    () async {
+      final remoteId = RideSimulationController.companionRiderId;
+      RiderLocation remote() => awareness.riderLocations.singleWhere(
+        (location) => location.riderId == remoteId,
+      );
+      final before = remote();
+
+      await simulation.setConnectivity(SimulationConnectivity.disconnected);
+      await simulation.advance(const Duration(seconds: 10));
+
+      expect(simulation.connectivity, SimulationConnectivity.disconnected);
+      expect(remote().sample.recordedAt, before.sample.recordedAt);
+      expect(remote().sample.position, before.sample.position);
+
+      await simulation.setConnectivity(SimulationConnectivity.nearbyOnly);
+
+      expect(simulation.connectivity, SimulationConnectivity.nearbyOnly);
+      expect(
+        remote().sample.recordedAt.isAfter(before.sample.recordedAt),
+        isTrue,
+      );
+      expect(remote().sample.position, isNot(before.sample.position));
+    },
+  );
+
+  test(
+    'balloon fix quality covers inaccurate, altitude loss and GPS loss',
+    () async {
+      await simulation.setBalloonFixQuality(
+        SimulationBalloonFixQuality.inaccurate,
+      );
+      expect(awareness.localLocation!.sample.accuracyMeters, 150);
+      expect(awareness.localLocation!.sample.altitudeAccuracyMeters, 80);
+
+      await simulation.setBalloonFixQuality(
+        SimulationBalloonFixQuality.positionOnly,
+      );
+      expect(awareness.localLocation!.sample.altitudeMeters, isNull);
+      expect(
+        awareness.localLocation!.sample.altitudeSource,
+        AltitudeSource.unknown,
+      );
+
+      final lastBalloonFix = awareness.localLocation!.sample.recordedAt;
+      await simulation.setBalloonFixQuality(
+        SimulationBalloonFixQuality.unavailable,
+      );
+      await simulation.advance(const Duration(seconds: 10));
+      expect(awareness.localLocation!.sample.recordedAt, lastBalloonFix);
+
+      await simulation.setBalloonFixQuality(
+        SimulationBalloonFixQuality.precise,
+      );
+      expect(
+        awareness.localLocation!.sample.recordedAt.isAfter(lastBalloonFix),
+        isTrue,
+      );
+      expect(awareness.localLocation!.sample.accuracyMeters, 4);
+      expect(awareness.localLocation!.sample.altitudeMeters, isNotNull);
+    },
+  );
+
+  test('two chase vehicles follow independent road paths', () async {
+    final fleet = await _buildSeededFleet(
+      seed: 742023,
+      route: route,
+      chaseRoutesByAgentId: const {
+        RideSimulationController.offRouteRiderId: [
+          GeoPoint(latitude: 51, longitude: -1),
+          GeoPoint(latitude: 51.05, longitude: -1),
+        ],
+        RideSimulationController.backRiderId: [
+          GeoPoint(latitude: 51, longitude: -1),
+          GeoPoint(latitude: 50.95, longitude: -1),
+        ],
+      },
+    );
+    addTearDown(fleet.dispose);
+
+    await fleet.advance(const Duration(seconds: 30));
+
+    final north = fleet.riders.singleWhere(
+      (rider) => rider.id == RideSimulationController.offRouteRiderId,
+    );
+    final south = fleet.riders.singleWhere(
+      (rider) => rider.id == RideSimulationController.backRiderId,
+    );
+    expect(north.position.latitude, greaterThan(51));
+    expect(south.position.latitude, lessThan(51));
+    expect(north.travelTrail.last.longitude, closeTo(-1, 0.000001));
+    expect(south.travelTrail.last.longitude, closeTo(-1, 0.000001));
+  });
+
+  test('the same seed and inputs reproduce every craft decision', () async {
+    final first = await _buildSeededFleet(seed: 99, route: route);
+    final second = await _buildSeededFleet(seed: 99, route: route);
+    final different = await _buildSeededFleet(seed: 100, route: route);
+    addTearDown(first.dispose);
+    addTearDown(second.dispose);
+    addTearDown(different.dispose);
+
+    for (final controller in [first, second, different]) {
+      controller.setTimeScale(1);
+      await controller.advance(const Duration(seconds: 37));
+    }
+
+    List<(String, GeoPoint, double)> decisions(
+      RideSimulationController value,
+    ) => [
+      for (final rider in value.riders)
+        (rider.id, rider.position, rider.speedMetersPerSecond),
+    ];
+
+    expect(decisions(first), decisions(second));
+    expect(decisions(first), isNot(decisions(different)));
+  });
+
   test('switches between balloon and Land Rover perspectives', () {
     simulation.setLocalRole(RideRole.rider);
     expect(simulation.localRole, RideRole.rider);
@@ -353,4 +473,42 @@ void main() {
       isTrue,
     );
   });
+}
+
+Future<RideSimulationController> _buildSeededFleet({
+  required int seed,
+  required List<GeoPoint> route,
+  Map<String, List<GeoPoint>> chaseRoutesByAgentId = const {},
+}) async {
+  final session = RideSession(
+    rideId: 'seed-$seed',
+    rideCode: 'SIM123',
+    inviteSecret: 'simulation-secret-that-is-long-enough',
+    joinToken: 'test-join-token-0123456789',
+    localRiderId: 'lead',
+    displayName: 'Demo Lead',
+    role: RideRole.lead,
+    joinedAt: DateTime.utc(2026, 7, 17),
+    isSimulation: true,
+    simulationRiderCount: 4,
+  );
+  final awareness = SituationalAwarenessController(
+    InMemoryEventStore(),
+    session,
+    route: route,
+  );
+  await awareness.initialize();
+  addTearDown(awareness.dispose);
+  final controller = RideSimulationController(
+    awareness,
+    session: session,
+    route: route,
+    chaseRoutesByAgentId: chaseRoutesByAgentId,
+    riderCount: 4,
+    scenarioSeed: seed,
+    clock: () => DateTime.utc(2026, 7, 17, 6),
+    tickInterval: const Duration(days: 1),
+  );
+  await controller.initialize();
+  return controller;
 }

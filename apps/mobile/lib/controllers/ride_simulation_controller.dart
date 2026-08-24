@@ -20,6 +20,22 @@ import 'situational_awareness_controller.dart';
 
 enum RideSimulationState { ready, running, paused, completed }
 
+/// Which synthetic transport paths are available to the simulated crew.
+///
+/// Neither connected mode opens a real socket: both feed the same in-memory,
+/// authenticated production read model. The distinction exists so a rehearsal
+/// can exercise the user-visible transition between internet, nearby-only and
+/// completely isolated operation without publishing synthetic coordinates.
+enum SimulationConnectivity { internetAndNearby, nearbyOnly, disconnected }
+
+/// Quality of the balloon device's next and subsequent synthetic fixes.
+enum SimulationBalloonFixQuality {
+  precise,
+  inaccurate,
+  positionOnly,
+  unavailable,
+}
+
 class SimulatedRiderSnapshot {
   const SimulatedRiderSnapshot({
     required this.id,
@@ -75,10 +91,13 @@ class RideSimulationController extends ChangeNotifier {
     required RideSession session,
     required List<GeoPoint> route,
     BalloonFlight? balloonFlight,
+    Map<String, List<GeoPoint>> chaseRoutesByAgentId = const {},
     this.windForecastController,
     this.tickInterval = const Duration(milliseconds: 100),
     this.eventInterval = const Duration(seconds: 2),
     this.riderCount = RideSession.defaultSimulationRiderCount,
+    this.scenarioSeed = defaultScenarioSeed,
+    DateTime Function()? clock,
     bool rideStarted = true,
   }) : assert(session.isSimulation),
        assert(route.length >= 2),
@@ -91,14 +110,20 @@ class RideSimulationController extends ChangeNotifier {
        // ignore: prefer_initializing_formals
        _rideStarted = rideStarted,
        _routeSampler = _RouteSampler(route),
+       _clock = clock ?? DateTime.now,
        // Keep the public constructor argument usable outside this library.
        // ignore: prefer_initializing_formals
        _balloonFlight = balloonFlight,
        _balloonPosition = balloonFlight?.launch,
        _selectedLocalRole = session.role {
     _agents = _buildAgents(_routeSampler.totalDistanceMeters * 0.06);
+    _chaseRouteSamplersByAgentId = {
+      for (final entry in chaseRoutesByAgentId.entries)
+        if (entry.value.length >= 2) entry.key: _RouteSampler(entry.value),
+    };
   }
 
+  static const defaultScenarioSeed = 742023;
   static const offRouteRiderId = 'ride-lab-alex';
   static const backRiderId = 'ride-lab-charlie';
   static const companionRiderId = 'ride-lab-land-rover';
@@ -106,6 +131,8 @@ class RideSimulationController extends ChangeNotifier {
   final SituationalAwarenessController _awarenessController;
   final RideSession _session;
   _RouteSampler _routeSampler;
+  late final Map<String, _RouteSampler> _chaseRouteSamplersByAgentId;
+  final DateTime Function() _clock;
 
   /// The balloon's own flight, when one is bundled.
   ///
@@ -123,6 +150,7 @@ class RideSimulationController extends ChangeNotifier {
   final Duration tickInterval;
   final Duration eventInterval;
   final int riderCount;
+  final int scenarioSeed;
   late final List<_SimulatedAgent> _agents;
   RideRole _selectedLocalRole;
   Timer? _timer;
@@ -135,6 +163,10 @@ class RideSimulationController extends ChangeNotifier {
   bool _emitting = false;
   bool _disposed = false;
   bool _rideStarted;
+  SimulationConnectivity _connectivity =
+      SimulationConnectivity.internetAndNearby;
+  SimulationBalloonFixQuality _balloonFixQuality =
+      SimulationBalloonFixQuality.precise;
   Duration _eventElapsed = Duration.zero;
   int _eventSequence = 0;
   DateTime? _lastRecordedAt;
@@ -147,6 +179,8 @@ class RideSimulationController extends ChangeNotifier {
   double get baseSpeedMetersPerSecond => _baseSpeedMetersPerSecond;
   bool get backRiderDelayed => _backRiderDelayed;
   bool get rideStarted => _rideStarted;
+  SimulationConnectivity get connectivity => _connectivity;
+  SimulationBalloonFixQuality get balloonFixQuality => _balloonFixQuality;
   RideRole get localRole => _selectedLocalRole;
   bool get alexOffRoute =>
       _agents
@@ -156,6 +190,11 @@ class RideSimulationController extends ChangeNotifier {
       false;
   bool get isRunning => _state == RideSimulationState.running;
   double get routeDistanceMeters => _routeSampler.totalDistanceMeters;
+
+  double routeDistanceForAgent(String agentId) =>
+      (_chaseRouteSamplersByAgentId[agentId] ?? _routeSampler)
+          .totalDistanceMeters;
+
   double get progress {
     final flight = _balloonFlight;
     if (_selectedLocalRole == RideRole.lead && flight != null) {
@@ -166,7 +205,8 @@ class RideSimulationController extends ChangeNotifier {
     final chase = _agents
         .where((agent) => agent.role != RideRole.lead)
         .firstOrNull;
-    return ((chase?.progressMeters ?? 0) / routeDistanceMeters).clamp(0, 1);
+    if (chase == null) return 0;
+    return (chase.progressMeters / _routeDistanceFor(chase)).clamp(0, 1);
   }
 
   GeoPoint? get predictedLandingZone => _predictLandingZone();
@@ -178,11 +218,12 @@ class RideSimulationController extends ChangeNotifier {
     _agents.map((agent) {
       final sampled = _sampleAgent(agent);
       final flight = _balloonFlightAt(agent);
+      final routeDistance = _routeDistanceFor(agent);
       return SimulatedRiderSnapshot(
         id: agent.id,
         displayName: agent.isLocal ? _localPerspectiveName : agent.displayName,
         role: agent.role,
-        progress: (agent.progressMeters / routeDistanceMeters).clamp(0, 1),
+        progress: (agent.progressMeters / routeDistance).clamp(0, 1),
         speedMetersPerSecond: _speedFor(agent),
         isLocal: agent.isLocal,
         isOffRoute: agent.isOffRoute,
@@ -206,13 +247,14 @@ class RideSimulationController extends ChangeNotifier {
         required String displayName,
         required RideRole role,
         required bool isLocal,
+        required int index,
       }) => _SimulatedAgent(
         id: id,
         displayName: displayName,
         role: role,
         progressMeters: 0,
         speedFactor: 1,
-        trafficPhaseSeconds: isLocal ? 3 : 17,
+        trafficPhaseSeconds: _trafficPhaseFor(index),
         isLocal: isLocal,
         craftStyle: role == RideRole.lead
             ? CraftIconStyle.balloon
@@ -232,6 +274,7 @@ class RideSimulationController extends ChangeNotifier {
           displayName: _session.displayName,
           role: _selectedLocalRole,
           isLocal: true,
+          index: 0,
         ),
         agent(
           id: companionRiderId,
@@ -242,6 +285,7 @@ class RideSimulationController extends ChangeNotifier {
               ? RideRole.rider
               : RideRole.lead,
           isLocal: false,
+          index: 1,
         ),
       ];
     }
@@ -268,7 +312,7 @@ class RideSimulationController extends ChangeNotifier {
       role: role,
       progressMeters: initialProgress(index),
       speedFactor: 1 - (0.2 * index / (riderCount - 1)),
-      trafficPhaseSeconds: (3 + index * 12) % 58,
+      trafficPhaseSeconds: _trafficPhaseFor(index),
       isLocal: isLocal,
       craftStyle: role == RideRole.lead
           ? CraftIconStyle.balloon
@@ -341,7 +385,7 @@ class RideSimulationController extends ChangeNotifier {
   }
 
   List<GeoPoint> _displayTrailFor(_SimulatedAgent agent) {
-    if (riderCount == 2) return agent.travelTrail;
+    if (riderCount == 2 || _balloonFlight != null) return agent.travelTrail;
     if (agent.role != RideRole.lead) return agent.travelTrail;
     final backRider = _agent(backRiderId);
     final routeTrail = _routeSampler.pointsBetween(
@@ -354,6 +398,14 @@ class RideSimulationController extends ChangeNotifier {
     // Keep the planned path back to TEC, then show the actual deviation beyond
     // it so the leader trail remains useful during a prolonged off-course run.
     return [...routeTrail, ...agent.offRouteTrail];
+  }
+
+  double _trafficPhaseFor(int index) {
+    // A small integer mixer, kept independent of Dart's hash implementation so
+    // the same documented seed remains replayable across app releases.
+    var value = (scenarioSeed & 0x7fffffff) + index * 1103515245 + 12345;
+    value = (value ^ (value >> 16)) & 0x7fffffff;
+    return (value % 58).toDouble();
   }
 
   Future<void> initialize() async {
@@ -399,6 +451,27 @@ class RideSimulationController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setConnectivity(SimulationConnectivity value) async {
+    if (value == _connectivity) return;
+    _connectivity = value;
+    notifyListeners();
+    // Reconnection publishes one bounded current snapshot for every synthetic
+    // participant. The event journal/read model performs the same convergence
+    // and duplicate protection used after a real transport outage.
+    if (value != SimulationConnectivity.disconnected) {
+      await _emitPositions();
+    }
+  }
+
+  Future<void> setBalloonFixQuality(SimulationBalloonFixQuality value) async {
+    if (value == _balloonFixQuality) return;
+    _balloonFixQuality = value;
+    notifyListeners();
+    if (value != SimulationBalloonFixQuality.unavailable) {
+      await _emitPositions();
+    }
+  }
+
   void setBaseSpeedMetersPerSecond(double value) {
     final next = value.clamp(4, 25).toDouble();
     if (next == _baseSpeedMetersPerSecond) return;
@@ -435,12 +508,15 @@ class RideSimulationController extends ChangeNotifier {
   }
 
   Future<void> reportRoadworks() async {
-    final lead = _agents.firstWhere(
-      (agent) => agent.role == RideRole.lead,
+    final roadAgent = _agents.firstWhere(
+      (agent) => agent.role != RideRole.lead,
       orElse: () => _agents.first,
     );
-    final hazardPoint = _routeSampler
-        .sampleAt(math.min(routeDistanceMeters, lead.progressMeters + 450))
+    final sampler = _routeSamplerFor(roadAgent);
+    final hazardPoint = sampler
+        .sampleAt(
+          math.min(sampler.totalDistanceMeters, roadAgent.progressMeters + 450),
+        )
         .point;
     await _awarenessController.reportHazard(
       type: HazardType.roadworks,
@@ -484,12 +560,27 @@ class RideSimulationController extends ChangeNotifier {
         ? 0.0
         : plannedDuration.inMicroseconds / Duration.microsecondsPerSecond;
     _routeSampler = next;
+    _chaseRouteSamplersByAgentId.clear();
     _routedRoadSpeedMetersPerSecond = durationSeconds > 0
         ? next.totalDistanceMeters / durationSeconds
         : null;
     for (final agent in _agents.where((agent) => agent.role != RideRole.lead)) {
       agent.progressMeters = 0;
     }
+    notifyListeners();
+  }
+
+  /// Replaces one vehicle's road journey without moving the balloon or any
+  /// other chase vehicle. This is used by the multi-vehicle recovery scenario
+  /// to prove independently routed crews do not collapse onto one trace.
+  void replaceChaseRouteForAgent(String agentId, List<GeoPoint> route) {
+    if (route.length < 2) return;
+    final agent = _agents.where((entry) => entry.id == agentId).firstOrNull;
+    if (agent == null || agent.role == RideRole.lead) return;
+    _chaseRouteSamplersByAgentId[agentId] = _RouteSampler(route);
+    agent.progressMeters = 0;
+    agent.travelTrail.clear();
+    _recordTravelTrail(agent);
     notifyListeners();
   }
 
@@ -504,8 +595,9 @@ class RideSimulationController extends ChangeNotifier {
         simulatedDelta.inMicroseconds / Duration.microsecondsPerSecond;
     for (final agent in _agents) {
       if (_balloonFlight != null && agent.role == RideRole.lead) continue;
+      final routeDistance = _routeDistanceFor(agent);
       agent.progressMeters = math.min(
-        routeDistanceMeters,
+        routeDistance,
         agent.progressMeters + _speedFor(agent) * seconds,
       );
     }
@@ -522,7 +614,7 @@ class RideSimulationController extends ChangeNotifier {
     final completed =
         flightCompleted &&
         roadAgents.every(
-          (agent) => agent.progressMeters >= routeDistanceMeters,
+          (agent) => agent.progressMeters >= _routeDistanceFor(agent),
         );
     if (completed) _state = RideSimulationState.completed;
     if (completed) {
@@ -543,23 +635,43 @@ class RideSimulationController extends ChangeNotifier {
       for (final entry in samples) {
         if (_disposed) return;
         final agent = entry.agent;
+        if (!agent.isLocal &&
+            _connectivity == SimulationConnectivity.disconnected) {
+          continue;
+        }
+        if (agent.role == RideRole.lead &&
+            _balloonFixQuality == SimulationBalloonFixQuality.unavailable) {
+          continue;
+        }
         final sampled = entry.sampled;
         final flight = _balloonFlightAt(agent);
+        final positionOnly =
+            agent.role == RideRole.lead &&
+            _balloonFixQuality == SimulationBalloonFixQuality.positionOnly;
+        final inaccurate =
+            agent.role == RideRole.lead &&
+            _balloonFixQuality == SimulationBalloonFixQuality.inaccurate;
         final sample = LocationSample(
           position: sampled.position,
           recordedAt: recordedAt,
-          accuracyMeters: 4,
+          accuracyMeters: inaccurate ? 150 : 4,
           speedMetersPerSecond: _speedFor(agent),
           headingDegrees: sampled.headingDegrees,
-          altitudeMeters: flight?.altitudeMeters,
-          altitudeSource: flight == null
+          altitudeMeters: positionOnly ? null : flight?.altitudeMeters,
+          altitudeSource: flight == null || positionOnly
               ? AltitudeSource.unknown
               : AltitudeSource.gnss,
-          altitudeDatum: flight == null
+          altitudeDatum: flight == null || positionOnly
               ? AltitudeDatum.unknown
               : AltitudeDatum.relativeToLaunch,
-          altitudeAccuracyMeters: flight == null ? null : 6,
-          verticalSpeedMetersPerSecond: flight?.verticalSpeedMetersPerSecond,
+          altitudeAccuracyMeters: flight == null || positionOnly
+              ? null
+              : inaccurate
+              ? 80
+              : 6,
+          verticalSpeedMetersPerSecond: positionOnly
+              ? null
+              : flight?.verticalSpeedMetersPerSecond,
         );
         if (agent.isLocal) {
           await _awarenessController.recordLocalLocation(sample);
@@ -606,7 +718,8 @@ class RideSimulationController extends ChangeNotifier {
           session: remoteSession,
           clock: () => recordedAt,
           idFactory: () =>
-              'ride-lab-${agent.id}-${recordedAt.microsecondsSinceEpoch}-${_eventSequence++}',
+              'ride-lab-$scenarioSeed-${agent.id}-'
+              '${recordedAt.microsecondsSinceEpoch}-${_eventSequence++}',
         ).create(
           type: RideEventType.riderLocationUpdated,
           payload: {'location': location.toJson()},
@@ -794,11 +907,9 @@ class RideSimulationController extends ChangeNotifier {
             : (after.heightMetres - before.heightMetres) / seconds,
       );
     }
-    if (routeDistanceMeters <= 0) return null;
-    final progress = (agent.progressMeters / routeDistanceMeters).clamp(
-      0.0,
-      1.0,
-    );
+    final routeDistance = _routeDistanceFor(agent);
+    if (routeDistance <= 0) return null;
+    final progress = (agent.progressMeters / routeDistance).clamp(0.0, 1.0);
     const groundMeters = 100.0;
     const cruiseMeters = 640.0;
     const climbRate = 2.4;
@@ -848,7 +959,7 @@ class RideSimulationController extends ChangeNotifier {
                 seconds;
     }
     if (agent.role != RideRole.lead &&
-        agent.progressMeters >= routeDistanceMeters) {
+        agent.progressMeters >= _routeDistanceFor(agent)) {
       return 0;
     }
     if (agent.id == backRiderId && _backRiderDelayed) {
@@ -901,13 +1012,14 @@ class RideSimulationController extends ChangeNotifier {
 
   void _positionFleetForPerspective() {
     if (riderCount == 2) return;
+    if (_chaseRouteSamplersByAgentId.isNotEmpty) return;
     final local = _agents.first;
     if (_selectedLocalRole != RideRole.rider) return;
     final balloon = riderCount == 2
         ? _agent(companionRiderId)
         : _agent('ride-lab-maya');
     balloon.progressMeters = math.min(
-      routeDistanceMeters,
+      _routeDistanceFor(balloon),
       math.max(
         balloon.progressMeters,
         local.progressMeters + _followerGapMeters,
@@ -917,6 +1029,7 @@ class RideSimulationController extends ChangeNotifier {
 
   void _keepFollowerBehindLeader() {
     if (riderCount == 2) return;
+    if (_chaseRouteSamplersByAgentId.isNotEmpty) return;
     if (_selectedLocalRole != RideRole.rider) return;
     final local = _agents.first;
     final lead = _leadAgent();
@@ -929,11 +1042,12 @@ class RideSimulationController extends ChangeNotifier {
 
   _SimulatedPosition _sampleAgent(_SimulatedAgent agent) {
     if (_flightPlayback(agent) case final flown?) return flown;
-    final sampled = _routeSampler.sampleAt(agent.progressMeters);
+    final sampler = _routeSamplerFor(agent);
+    final sampled = sampler.sampleAt(agent.progressMeters);
     // The synthetic off-route scenario must recover at the destination so the
     // same completion rule used by a live ride can end the demo naturally.
     final recoveredAtDestination =
-        agent.progressMeters >= routeDistanceMeters - 45;
+        agent.progressMeters >= sampler.totalDistanceMeters - 45;
     return _SimulatedPosition(
       position: agent.isOffRoute && !recoveredAtDestination
           ? _offsetPoint(sampled.point, sampled.headingDegrees, 220)
@@ -975,6 +1089,12 @@ class RideSimulationController extends ChangeNotifier {
 
   static const _followerGapMeters = 180.0;
 
+  _RouteSampler _routeSamplerFor(_SimulatedAgent agent) =>
+      _chaseRouteSamplersByAgentId[agent.id] ?? _routeSampler;
+
+  double _routeDistanceFor(_SimulatedAgent agent) =>
+      _routeSamplerFor(agent).totalDistanceMeters;
+
   _SimulatedAgent _leadAgent() => _agents.firstWhere(
     (agent) => agent.role == RideRole.lead,
     orElse: () => _agents.first,
@@ -986,7 +1106,7 @@ class RideSimulationController extends ChangeNotifier {
   };
 
   DateTime _nextRecordedAt() {
-    final now = DateTime.now();
+    final now = _clock().toUtc();
     final previous = _lastRecordedAt;
     final result = previous == null || now.isAfter(previous)
         ? now

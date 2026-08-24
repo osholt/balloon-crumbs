@@ -30,9 +30,21 @@
   ],
   "faults": [
     {"atSeconds": 3000, "kind": "gpsLoss", "deviceId": "synthetic-pilot", "durationSeconds": 55},
+    {"atSeconds": 3060, "kind": "inaccurateFix", "deviceId": "synthetic-pilot", "accuracyMetres": 150},
+    {"atSeconds": 3120, "kind": "altitudeLoss", "deviceId": "synthetic-pilot", "durationSeconds": 45},
     {"atSeconds": 3300, "kind": "staleWind", "durationSeconds": 600},
+    {"atSeconds": 3600, "kind": "clockSkew", "deviceId": "synthetic-crew-b", "offsetSeconds": 180},
     {"atSeconds": 4200, "kind": "relayDelay", "durationSeconds": 40},
-    {"atSeconds": 4260, "kind": "outOfOrderReplay", "deviceId": "synthetic-driver-c"}
+    {"atSeconds": 4250, "kind": "duplicateEvent", "deviceId": "synthetic-driver-a"},
+    {"atSeconds": 4260, "kind": "outOfOrderReplay", "deviceId": "synthetic-driver-c"},
+    {"atSeconds": 4320, "kind": "routeProviderFailure", "deviceId": "synthetic-driver-a"},
+    {"atSeconds": 4380, "kind": "unreachableRoadCandidates", "deviceId": "synthetic-driver-c"}
+  ],
+  "linkModes": [
+    {"atSeconds": 0, "mode": "internetAndNearby"},
+    {"atSeconds": 840, "mode": "disconnected"},
+    {"atSeconds": 900, "mode": "nearbyOnly"},
+    {"atSeconds": 960, "mode": "internetAndNearby"}
   ],
   "carPlay": {
     "orientations": ["northUp", "directionUp"],

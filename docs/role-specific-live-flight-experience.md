@@ -819,6 +819,19 @@ and a UI rebuild cannot change authority.
 - [ ] Bluetooth, interruption, screen-off, app-background and physical CarPlay
       evidence is recorded in `docs/spoken-recovery-guidance.md`.
 
+### P0.11 Balloon/chase simulator and replay matrix
+
+- [x] A fixed seed makes traffic, route and telemetry decisions reproducible.
+- [x] Virtual time, balloon/chase viewpoint, link mode and balloon fix quality
+      are explicit user controls on a continuously labelled synthetic surface.
+- [x] One balloon plus multiple chase vehicles can follow independent air and
+      road paths without device GPS or external position publication.
+- [x] The bounded CI matrix covers ascent, wind drift, level flight, descent,
+      landing/retrieve, inaccurate/missing telemetry, disconnection/reconnect,
+      clock skew, duplicate/out-of-order evidence and route-provider failures.
+- [x] The evidence map and safety boundary are recorded in
+      `docs/simulator-replay-matrix.md`.
+
 ## P1 requirements
 
 - Live projected track and possible-landing envelope from current telemetry and
