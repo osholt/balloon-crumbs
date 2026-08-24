@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Deploy the ride relay from a pinned commit. Runs on the relay host, either by
+# Deploy the Balloon Crumbs relay from a pinned commit. Runs on the relay host,
+# either by
 # hand or from CI through the restricted deploy key (see relay-deploy-command).
 #
 #   relay-deploy.sh <staging|production> [commit]
@@ -32,7 +33,7 @@ set -euo pipefail
 # shellcheck source=/dev/null
 test -r /etc/relay-deploy.conf && source /etc/relay-deploy.conf
 
-repo="${RELAY_DEPLOY_REPO:-/opt/tailendcharlie}"
+repo="${RELAY_DEPLOY_REPO:-/opt/balloon-crumbs}"
 state_dir="${RELAY_DEPLOY_STATE_DIR:-/var/lib/relay-deploy}"
 read -r -a production_overrides <<<"${RELAY_DEPLOY_PRODUCTION_OVERRIDES:-}"
 

@@ -2,7 +2,7 @@
 """Generate the bundled mini-roundabout layer from OpenStreetMap data.
 
 OSRM and Valhalla both route through `highway=mini_roundabout` nodes without
-necessarily emitting a manoeuvre, so a rider gets no instruction at a junction
+necessarily emitting a manoeuvre, so a driver gets no instruction at a junction
 they have to give way at. This layer restores that.
 
 It replaces a hand-reviewed catalogue of two junctions. A catalogue only ever
@@ -10,8 +10,7 @@ covers the junctions somebody happened to report, and its hand-measured arm
 bearings could not be checked against anything.
 
 Input is Overpass JSON holding `highway=mini_roundabout` nodes. Output is a
-GeoJSON FeatureCollection carrying the ODbL attribution and the extract date, in
-the same shape as the discovery and speed camera layers.
+GeoJSON FeatureCollection carrying the ODbL attribution and the extract date.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ ATTRIBUTION = "© OpenStreetMap contributors, ODbL"
 # Which way traffic goes round. Only these two spellings mean a rotation; the
 # `direction` tag is also used on some nodes for a compass bearing, and a GB
 # extract carries values like `195` and `340`. Reading one of those as a
-# rotation would tell a rider to go the wrong way round a junction, so anything
+# rotation would tell a driver to go the wrong way round a junction, so anything
 # unrecognised is left unstated and the app falls back to its own default.
 ROTATIONS = {"clockwise": "clockwise", "anticlockwise": "anticlockwise"}
 

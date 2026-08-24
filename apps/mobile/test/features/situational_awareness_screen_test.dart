@@ -46,7 +46,7 @@ void main() {
 
   tearDown(() => controller.dispose());
 
-  testWidgets('reports a rider hazard from the current position', (
+  testWidgets('reports a road condition from the current position', (
     tester,
   ) async {
     await controller.recordLocalLocation(_sample(51));
@@ -63,7 +63,7 @@ void main() {
     expect(find.textContaining('1 report'), findsOneWidget);
   });
 
-  testWidgets('offers enforcement report categories', (tester) async {
+  testWidgets('offers road-condition report categories', (tester) async {
     await controller.recordLocalLocation(_sample(51));
     await tester.pumpWidget(_app(controller));
 
@@ -72,8 +72,8 @@ void main() {
     await tester.tap(find.byKey(const Key('hazard-type-field')));
     await tester.pumpAndSettle();
 
-    expect(find.text(HazardType.policeActivity.label), findsOneWidget);
-    expect(find.text(HazardType.speedCamera.label), findsOneWidget);
+    expect(find.text(HazardType.roadworks.label), findsNWidgets(2));
+    expect(find.text(HazardType.flooding.label), findsOneWidget);
     expect(find.text(HazardType.debris.label), findsOneWidget);
   });
 

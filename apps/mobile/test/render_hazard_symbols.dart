@@ -3,9 +3,8 @@
 // The sibling of `render_roundabout_symbols.dart`, and it exists for the same
 // reason: #127, #130 and #137 all changed a symbol, all passed their tests, and
 // all shipped something that read wrongly on the road, because every one of those
-// tests asserted on geometry values rather than on the drawn result. #135 adds a
-// camera, a police shield and a road-defect triangle at three stages of age, in
-// two badge shapes, over two basemaps. Run it and look at the output.
+// tests asserted on geometry values rather than on the drawn result. This renders
+// the retained road-condition symbol at three stages of age over two basemaps.
 //
 //   flutter test test/render_hazard_symbols.dart
 //
@@ -29,11 +28,11 @@ const _outputDirectory = 'build/hazard-render';
 /// The badge box, and the scale each grid is drawn at so it can be judged.
 const _tile = HazardMapSymbols.extentPixels;
 
-/// Every symbol a rider can raise, in the order a rider meets them.
+/// Representative road-condition categories.
 const _kinds = <String, HazardType>{
-  'camera': HazardType.speedCamera,
-  'police': HazardType.policeActivity,
   'pothole': HazardType.pothole,
+  'roadworks': HazardType.roadworks,
+  'flooding': HazardType.flooding,
 };
 
 Future<void> _write(
@@ -59,9 +58,7 @@ HazardMapSymbol _symbol(HazardType type, HazardMapFreshness freshness) =>
 
 /// Every kind against every freshness stage, on one basemap surface, at [scale].
 ///
-/// Rows are kinds, columns are ages. Reading down a column says "can I tell a
-/// camera from a police sighting"; reading along a row says "can I tell a fresh
-/// report from one about to expire".
+/// Rows are representative categories and columns are ages.
 Future<void> _writeGrid({
   required String name,
   required Color background,
@@ -204,8 +201,8 @@ void main() {
       );
     }
     await _writeLarge(
-      'camera-fading',
-      _symbol(HazardType.speedCamera, HazardMapFreshness.fading),
+      'roadworks-fading',
+      _symbol(HazardType.roadworks, HazardMapFreshness.fading),
     );
     await _writeGrid(
       name: 'grid-dark-basemap',

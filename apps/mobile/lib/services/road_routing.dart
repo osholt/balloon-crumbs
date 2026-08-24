@@ -624,7 +624,7 @@ class OsrmRoadRoutingService implements RoadRoutingService {
 /// restrictions OpenStreetMap actually records. UK `maxheight` coverage is
 /// patchy and plenty of signed bridges are unmapped, so a clear route means "no
 /// mapped restriction on this line", never "this line is passable". The same
-/// discipline the speed-camera layer already keeps.
+/// discipline used by other bounded road-data layers.
 ///
 /// It asked for `motorcycle` costing until the motorcycle domain was deleted: a chase
 /// vehicle is a Land Rover or a van, often towing, and routing one as a motorbike
@@ -1393,7 +1393,7 @@ bool _isRoundaboutManeuver(String type) => const {
 
 const _requestHeaders = {
   'Accept': 'application/json',
-  'User-Agent': 'TailEndCharlie/1.0 (https://github.com/osholt/tailendcharlie)',
+  'User-Agent': 'BalloonCrumbs/1.0 (https://github.com/osholt/balloon-crumbs)',
 };
 
 String _basePath(Uri base) {

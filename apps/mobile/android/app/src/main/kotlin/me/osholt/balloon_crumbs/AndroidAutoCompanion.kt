@@ -48,8 +48,8 @@ internal data class ProjectedRideSnapshot(
                 .mapNotNull { item ->
                     val rider = item as? Map<*, *> ?: return@mapNotNull null
                     ProjectedRider(
-                        label = rider.string("label", "Rider"),
-                        role = rider.string("role", "Rider"),
+                        label = rider.string("label", "Crew"),
+                        role = rider.string("role", "Crew"),
                         needsAttention = rider["needsAttention"] == true,
                     )
                 }
@@ -57,7 +57,7 @@ internal data class ProjectedRideSnapshot(
             val rawAlert = raw["alert"] as? Map<*, *>
             val alert = rawAlert?.let {
                 ProjectedAlert(
-                    message = it.string("message", "Ride alert"),
+                    message = it.string("message", "Flight alert"),
                     severity = it.string("severity", "alert"),
                 )
             }
@@ -66,7 +66,7 @@ internal data class ProjectedRideSnapshot(
                 rideState = raw.boundedString("rideState") ?: "Open the phone app",
                 guidanceTitle = raw.boundedString("guidanceTitle"),
                 guidanceDetail = raw.boundedString("guidanceDetail"),
-                groupStatus = raw.boundedString("groupStatus") ?: "${riders.size} riders visible",
+                groupStatus = raw.boundedString("groupStatus") ?: "${riders.size} crew visible",
                 markerStatus = raw.boundedString("markerStatus"),
                 riders = riders,
                 alert = alert,
@@ -113,7 +113,7 @@ internal object AndroidAutoSnapshotStore {
     }
 }
 
-class TailEndCharlieCarAppService : CarAppService() {
+class BalloonCrumbsCarAppService : CarAppService() {
     override fun createHostValidator(): HostValidator =
         if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
@@ -123,15 +123,15 @@ class TailEndCharlieCarAppService : CarAppService() {
                 .build()
         }
 
-    override fun onCreateSession(): Session = TailEndCharlieCarSession()
+    override fun onCreateSession(): Session = BalloonCrumbsCarSession()
 }
 
-private class TailEndCharlieCarSession : Session() {
+private class BalloonCrumbsCarSession : Session() {
     override fun onCreateScreen(intent: Intent): Screen =
-        TailEndCharlieStatusScreen(carContext)
+        BalloonCrumbsStatusScreen(carContext)
 }
 
-private class TailEndCharlieStatusScreen(carContext: CarContext) : Screen(carContext) {
+private class BalloonCrumbsStatusScreen(carContext: CarContext) : Screen(carContext) {
     private val listener = AndroidAutoSnapshotStore.Listener { invalidate() }
     private val handler = Handler(Looper.getMainLooper())
     private val refreshFreshness = object : Runnable {
@@ -163,7 +163,7 @@ private class TailEndCharlieStatusScreen(carContext: CarContext) : Screen(carCon
         if (snapshot == null) {
             rows.addItem(
                 Row.Builder()
-                    .setTitle("Waiting for ride status")
+                    .setTitle("Waiting for flight status")
                     .addText("Open Balloon Crumbs on the phone")
                     .build(),
             )

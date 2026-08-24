@@ -90,7 +90,6 @@ flutter:
   assets:
     - assets/demo_route.gpx
     - assets/demo_route_maneuvers.json
-    - assets/fixed_speed_cameras.geojson
     - assets/mini_roundabouts.geojson
     - assets/route_places.json
     - assets/icons/craft/

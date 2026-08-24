@@ -18,8 +18,8 @@ enum FlightRole {
   balloonCrew,
 
   /// Driving a chase vehicle. The role that must never be asked to look at a
-  /// screen, and the only one that sees road furniture — speed limits, camera and
-  /// enforcement alerts belong here and nowhere else.
+  /// screen, and the only one that sees driver-specific road information such
+  /// as posted speed limits.
   chaseDriver,
 
   /// In a chase vehicle, not driving. Can read, type and plan; this is who the
@@ -47,9 +47,8 @@ extension FlightRoleLabel on FlightRole {
   bool get isChasing =>
       this == FlightRole.chaseDriver || this == FlightRole.chaseCrew;
 
-  /// Whether road furniture — speed limits, cameras, enforcement alerts — should
-  /// be shown. Only the person driving, and never in the basket: a camera
-  /// warning is noise to a pilot and attention taken from flying.
+  /// Whether driver-specific road information should be shown. Only the person
+  /// driving, and never anyone in the basket.
   bool get seesRoadFurniture => this == FlightRole.chaseDriver;
 
   /// Whether this role holds pilot-only authority over the balloon and shared

@@ -9,8 +9,6 @@ enum HazardType {
   stoppedVehicle,
   flooding,
   animals,
-  policeActivity,
-  speedCamera,
   other,
 }
 
@@ -24,19 +22,12 @@ extension HazardTypeLabel on HazardType {
     HazardType.stoppedVehicle => 'Stopped vehicle',
     HazardType.flooding => 'Flooding',
     HazardType.animals => 'Animals',
-    HazardType.policeActivity => 'Police activity',
-    HazardType.speedCamera => 'Speed camera',
     HazardType.other => 'Other hazard',
   };
 }
 
-/// Everything a rider can raise from the app. Enforcement sightings are
-/// included: they are first-hand observations by the rider making the report,
-/// which is a different thing from redistributing a provider's data, and they
-/// are the reports the group most wants to receive.
+/// Road conditions that an operational crew member can raise from the app.
 const riderReportableHazardTypes = <HazardType>[
-  HazardType.speedCamera,
-  HazardType.policeActivity,
   HazardType.pothole,
   HazardType.looseSurface,
   HazardType.debris,
@@ -64,28 +55,6 @@ extension HazardSeverityLabel on HazardSeverity {
 }
 
 enum HazardSource { rider, externalProvider }
-
-/// The bundled OpenStreetMap fixed-camera layer.
-///
-/// Named here rather than in the provider so the domain can say what kind of
-/// claim it makes without depending on the service that produces it.
-const osmFixedCameraProviderId = 'osm-fixed-cameras';
-
-/// Providers whose hazards are standing records rather than sightings.
-///
-/// Everything else in this model is something somebody saw at a moment: it has
-/// an age, it decays, and it eventually expires. A permanent roadside camera
-/// has none of those. Reporting one as seen "just now" would tell a rider a
-/// patrol is out when all the app knows is what the map has always said.
-const standingRecordProviderIds = <String>{osmFixedCameraProviderId};
-
-extension HazardReportProvenance on HazardReport {
-  /// True when this hazard is a permanent record, so its age says nothing and
-  /// must not be shown or allowed to fade it.
-  bool get isStandingRecord =>
-      source == HazardSource.externalProvider &&
-      standingRecordProviderIds.contains(providerId);
-}
 
 class HazardReport {
   const HazardReport({
@@ -166,7 +135,10 @@ class HazardReport {
   factory HazardReport.fromJson(Map<String, Object?> json) => HazardReport(
     id: json['id']! as String,
     rideId: json['rideId']! as String,
-    type: HazardType.values.byName(json['type']! as String),
+    // Builds predating baseline isolation may have persisted the inherited
+    // `speedCamera` or `policeActivity` values. They reopen as an ordinary
+    // short-lived road note rather than restoring enforcement behaviour.
+    type: _hazardTypeFromJson(json['type']),
     severity: HazardSeverity.values.byName(json['severity']! as String),
     position: GeoPoint.fromJson(
       Map<String, Object?>.from(json['position']! as Map),
@@ -194,11 +166,6 @@ class HazardExpiryPolicy {
       HazardType.pothole ||
       HazardType.roadworks ||
       HazardType.flooding => const Duration(hours: 12),
-      // Enforcement a rider reports is almost always a mobile van or a patrol
-      // car, and both move on. A stale sighting raises a full-screen warning
-      // for the whole group, so these expire faster than a road defect.
-      HazardType.speedCamera => const Duration(hours: 2),
-      HazardType.policeActivity => const Duration(hours: 1),
       HazardType.collision ||
       HazardType.stoppedVehicle => const Duration(hours: 2),
       HazardType.looseSurface ||
@@ -207,4 +174,16 @@ class HazardExpiryPolicy {
       HazardType.other => const Duration(hours: 6),
     };
   }
+}
+
+HazardType _hazardTypeFromJson(Object? value) {
+  if (value == 'speedCamera' || value == 'policeActivity') {
+    return HazardType.other;
+  }
+  if (value is String) {
+    for (final type in HazardType.values) {
+      if (type.name == value) return type;
+    }
+  }
+  return HazardType.other;
 }

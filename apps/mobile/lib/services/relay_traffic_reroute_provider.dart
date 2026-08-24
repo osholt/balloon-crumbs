@@ -7,7 +7,6 @@ import 'package:uuid/uuid.dart';
 import '../domain/hazard.dart';
 import '../domain/imported_route.dart';
 import '../internet/internet_relay_client.dart';
-import 'enforcement_alert_detector.dart';
 
 typedef TrafficHttpPost =
     Future<http.Response> Function(
@@ -139,9 +138,6 @@ class RelayTrafficRerouteProvider {
           (hazard) =>
               hazard.source == HazardSource.externalProvider &&
               hazard.providerId == 'tomtom-traffic' &&
-              // Enforcement reports warn the rider; they never justify
-              // recalculating the group's route around them.
-              !enforcementHazardTypes.contains(hazard.type) &&
               hazard.isActiveAt(_clock()) &&
               hazard.severity.index >= HazardSeverity.serious.index,
         )
@@ -238,7 +234,7 @@ class RelayTrafficRerouteProvider {
           'Pilot-reviewed TomTom traffic alternative calculated '
           '${now.toIso8601String()}.',
       importedAt: now,
-      sourceFileName: 'tail-end-charlie-traffic-${_idFactory()}.gpx',
+      sourceFileName: 'balloon-crumbs-traffic-${_idFactory()}.gpx',
       paths: [
         RoutePath(
           kind: RoutePathKind.route,

@@ -774,7 +774,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       else { return }
       interfaceController.pushTemplate(template, animated: true) { success, error in
         if !success, let error {
-          NSLog("CarPlay ride status was not presented: %@", error.localizedDescription)
+          NSLog("CarPlay flight status was not presented: %@", error.localizedDescription)
         }
       }
     }
@@ -1014,7 +1014,7 @@ private enum CarPlayPalette {
   static let markerGlyph = casing
   static let routeAhead = UIColor(red: 0x3D / 255, green: 0xDC / 255, blue: 0x84 / 255, alpha: 1)
   static let ownRider = UIColor(red: 0x2F / 255, green: 0x80 / 255, blue: 0xED / 255, alpha: 1)
-  static let tailEndCharlie = UIColor(red: 0x68 / 255, green: 0xA9 / 255, blue: 0xFF / 255, alpha: 1)
+  static let balloonBlue = UIColor(red: 0x68 / 255, green: 0xA9 / 255, blue: 0xFF / 255, alpha: 1)
   static let rider = UIColor(red: 0x6E / 255, green: 0xD8 / 255, blue: 0x9A / 255, alpha: 1)
   static let alerting = UIColor(red: 0xFF / 255, green: 0x5D / 255, blue: 0x73 / 255, alpha: 1)
 
@@ -2378,7 +2378,7 @@ private final class CarPlayGroupMiniMapView: UIView {
     }
 
     isHidden = false
-    let riderWord = riders.count == 1 ? "rider" : "riders"
+    let craftWord = "craft"
     // How far the picture spans, so a rider can tell what they are looking at
     // (#442: "It needs a clear edge, and a scale"). Without it the overview could
     // be a hundred metres or ten miles and there is nothing on it to say which.
@@ -2386,8 +2386,8 @@ private final class CarPlayGroupMiniMapView: UIView {
       for: Self.groupBounds(for: riders.map(\.coordinate)),
       usesMiles: (snapshot["distanceUnit"] as? String) == "miles"
     )
-    caption.text = "  \(riders.count) \(riderWord) · \(span)  "
-    accessibilityLabel = "Group overview, \(riders.count) \(riderWord)"
+    caption.text = "  \(riders.count) \(craftWord) · \(span)  "
+    accessibilityLabel = "Group overview, \(riders.count) \(craftWord)"
 
     let now = Date()
     if !force,
@@ -2556,7 +2556,7 @@ private final class CarPlayGroupMiniMapView: UIView {
         height: radius * 2
       )
       if rider.isTec {
-        context.setStrokeColor(CarPlayPalette.tailEndCharlie.cgColor)
+        context.setStrokeColor(CarPlayPalette.balloonBlue.cgColor)
         context.setLineWidth(3)
         context.strokeEllipse(in: rect.insetBy(dx: -3, dy: -3))
       }

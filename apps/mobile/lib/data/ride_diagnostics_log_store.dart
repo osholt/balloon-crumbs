@@ -65,8 +65,7 @@ class RideDiagnosticsLog {
   final String text;
 
   /// What the share sheet calls the attachment.
-  String get fileName =>
-      'tail-end-charlie-diagnostics-${rideCode ?? rideId}.txt';
+  String get fileName => 'balloon-crumbs-diagnostics-${rideCode ?? rideId}.txt';
 
   /// Parses the `Ride:` line the recorder's header writes.
   static String? rideCodeIn(String text) =>

@@ -32,7 +32,7 @@ class BundledDemoRouteLoader {
 
   /// Navigation decisions bundled with the offline demo route. They were
   /// generated from OSRM steps for the same road-following route, so the demo
-  /// does not need a network request before it can demonstrate a bike drop.
+  /// does not need a network request before it can demonstrate chase guidance.
   Future<List<RoadRouteManeuver>> loadManeuvers() async {
     final data = await rootBundle.loadString(
       'assets/demo_route_maneuvers.json',

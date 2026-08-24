@@ -379,7 +379,7 @@ class SystemRideSummarySharer implements RideSummarySharer {
     final csvFileName = exporter.fileName(summary);
     final gpxFileName = exporter.trailFileName(summary);
     final diagnosticsFileName =
-        'tail-end-charlie-diagnostics-'
+        'balloon-crumbs-diagnostics-'
         '${summary.rideCode}.txt';
     await SharePlus.instance.share(
       ShareParams(

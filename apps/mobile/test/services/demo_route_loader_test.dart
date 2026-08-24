@@ -8,7 +8,7 @@ void main() {
   test('bundled demo follows roads from Kings Oak to Cross Hands', () async {
     final route = await const BundledDemoRouteLoader().load();
 
-    expect(route.name, "King's Oak Academy to Cross Hands Hotel");
+    expect(route.name, 'Demo chase route: Kingswood to Old Sodbury');
     expect(route.pathPointCount, greaterThan(450));
     expect(route.waypoints, hasLength(3));
     expect(route.waypoints.first.name, "King's Oak Academy car park");
@@ -27,19 +27,13 @@ void main() {
     expect(points.last.longitude, closeTo(-2.342245, 0.00001));
   });
 
-  test(
-    'bundled demo includes map-derived second-bike-drop decisions',
-    () async {
-      final maneuvers = await const BundledDemoRouteLoader().loadManeuvers();
+  test('bundled demo includes map-derived chase guidance', () async {
+    final maneuvers = await const BundledDemoRouteLoader().loadManeuvers();
 
-      expect(maneuvers, hasLength(5));
-      expect(maneuvers.first.type, 'end of road');
-      expect(
-        maneuvers.map((maneuver) => maneuver.name),
-        contains('Gorse Lane'),
-      );
-      expect(maneuvers.map((maneuver) => maneuver.type), contains('rotary'));
-      expect(maneuvers.last.type, 'exit rotary');
-    },
-  );
+    expect(maneuvers, hasLength(5));
+    expect(maneuvers.first.type, 'end of road');
+    expect(maneuvers.map((maneuver) => maneuver.name), contains('Gorse Lane'));
+    expect(maneuvers.map((maneuver) => maneuver.type), contains('rotary'));
+    expect(maneuvers.last.type, 'exit rotary');
+  });
 }

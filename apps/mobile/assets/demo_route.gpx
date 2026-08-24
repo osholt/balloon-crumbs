@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Balloon Crumbs" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>King&apos;s Oak Academy to Cross Hands Hotel</name>
-    <desc>A 17.5 km road-following demo ride from the King&apos;s Oak Academy car park in Kingswood to the Cross Hands Hotel car park in Old Sodbury.</desc>
+    <name>Demo chase route: Kingswood to Old Sodbury</name>
+    <desc>A 17.5 km road-following chase-vehicle demo from the King&apos;s Oak Academy car park in Kingswood to the Cross Hands Hotel car park in Old Sodbury.</desc>
   </metadata>
   <wpt lat="51.462674" lon="-2.484519">
     <name>King&apos;s Oak Academy car park</name>
     <sym>Parking Area</sym>
   </wpt>
   <wpt lat="51.452344" lon="-2.386091">
-    <name>Gorse Lane marker junction</name>
-    <desc>Demo second-bike-drop marker point.</desc>
+    <name>Gorse Lane recovery waypoint</name>
+    <desc>Demo road-accessible rendezvous point.</desc>
     <sym>Waypoint</sym>
   </wpt>
   <wpt lat="51.528729" lon="-2.342245">
@@ -18,7 +18,7 @@
     <sym>Flag, Blue</sym>
   </wpt>
   <trk>
-    <name>King&apos;s Oak to Cross Hands road route</name>
+    <name>Demo chase road route</name>
     <trkseg>
       <trkpt lat="51.462671" lon="-2.484517" />
       <trkpt lat="51.462577" lon="-2.48444" />

@@ -1,11 +1,11 @@
 # Balloon Crumbs
 
 **Working title:** Balloon Crumbs
-**Status:** product scaffold; inherited functionality is not yet field-ready for balloon operations
+**Status:** internal testing; not yet field-ready for operational balloon recovery
 
 Balloon Crumbs is an account-free coordination app for hot-air-balloon pilots,
-crew, and multiple chase vehicles. A pilot starts a flight, shares a six-digit
-code, and the participating phones exchange live position and flight state. The
+crew, and multiple chase vehicles. A crew member opens a reusable flight code,
+and the participating phones exchange live position and flight state. The
 chase view is designed to show the balloon's coloured altitude trail, current
 heading and speed, weather context, chase-vehicle positions, and safe voice
 guidance over the road network.
@@ -13,9 +13,10 @@ guidance over the road network.
 The repository is derived from Tail End Charlie's offline-first Flutter and
 FastAPI architecture. Its event journal, six-digit sessions, nearby/internet
 relay, location capture, mapping, GPX, voice guidance, observer sharing,
-simulation, diagnostics, and CI are retained as an implementation baseline.
-Motorcycle concepts still present below the new product surface are migration
-work, not balloon features.
+simulation, diagnostics, and CI were retained as an implementation baseline.
+Motorcycle-only screens, enforcement data, and production configuration are not
+part of Balloon Crumbs; wire/storage names retained solely for mixed-version
+compatibility are documented in [docs/source-baseline.md](docs/source-baseline.md).
 
 > [!WARNING]
 > This is not an aviation, navigation, landing-site, or driver-safety product.
@@ -79,9 +80,8 @@ uv run ruff check .
 uv run pytest
 ```
 
-All copied network and associated-domain defaults use `*.invalid`. A real
-domain, map provider, weather provider, and app-store identifiers are separate
-release decisions.
+Production values are injected by CI or deployment configuration. Examples do
+not contain provider credentials, signing material, or Tail End Charlie hosts.
 
 ## Licence and attribution
 

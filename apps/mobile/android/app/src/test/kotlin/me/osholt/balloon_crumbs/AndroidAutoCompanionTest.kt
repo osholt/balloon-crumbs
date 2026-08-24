@@ -17,30 +17,30 @@ class AndroidAutoCompanionTest {
     fun `snapshot parser bounds untrusted phone data`() {
         val snapshot = ProjectedRideSnapshot.from(
             mapOf(
-                "routeName" to " Friday to the Ferry ",
-                "rideState" to "Ride in progress",
+                "routeName" to " Balloon recovery ",
+                "rideState" to "Flight in progress",
                 "guidanceTitle" to "At the roundabout take exit 3",
                 "guidanceDetail" to "400 m",
-                "groupStatus" to "5 riders visible",
-                "markerStatus" to "Marker at the next junction",
+                "groupStatus" to "5 crew visible",
+                "markerStatus" to "Landing area updated",
                 "riders" to listOf(
                     mapOf(
                         "label" to "Charlie",
-                        "role" to "Rider",
+                        "role" to "Chase crew",
                         "needsAttention" to true,
                     ),
                 ),
-                "alert" to mapOf("message" to "Rider off route", "severity" to "urgent"),
+                "alert" to mapOf("message" to "Crew need assistance", "severity" to "urgent"),
                 "updatedAtMillis" to 123L,
             ),
         )
 
-        assertEquals("Friday to the Ferry", snapshot.routeName)
+        assertEquals("Balloon recovery", snapshot.routeName)
         assertEquals("At the roundabout take exit 3", snapshot.guidanceTitle)
-        assertEquals("Marker at the next junction", snapshot.markerStatus)
+        assertEquals("Landing area updated", snapshot.markerStatus)
         assertEquals(1, snapshot.riders.size)
         assertTrue(snapshot.riders.single().needsAttention)
-        assertEquals("Rider off route", snapshot.alert?.message)
+        assertEquals("Crew need assistance", snapshot.alert?.message)
         assertEquals(123L, snapshot.updatedAtMillis)
     }
 
@@ -50,7 +50,7 @@ class AndroidAutoCompanionTest {
 
         assertNull(snapshot.routeName)
         assertEquals("Open the phone app", snapshot.rideState)
-        assertEquals("0 riders visible", snapshot.groupStatus)
+        assertEquals("0 crew visible", snapshot.groupStatus)
         assertTrue(snapshot.riders.isEmpty())
         assertNull(snapshot.alert)
     }
@@ -61,13 +61,13 @@ class AndroidAutoCompanionTest {
         val listener = AndroidAutoSnapshotStore.Listener { notified = true }
         AndroidAutoSnapshotStore.addListener(listener)
 
-        AndroidAutoSnapshotStore.update(mapOf("rideState" to "Ride paused"))
+        AndroidAutoSnapshotStore.update(mapOf("rideState" to "Flight paused"))
 
         assertTrue(notified)
-        assertEquals("Ride paused", AndroidAutoSnapshotStore.latest?.rideState)
+        assertEquals("Flight paused", AndroidAutoSnapshotStore.latest?.rideState)
         AndroidAutoSnapshotStore.removeListener(listener)
         notified = false
-        AndroidAutoSnapshotStore.update(mapOf("rideState" to "Ride ended"))
+        AndroidAutoSnapshotStore.update(mapOf("rideState" to "Flight ended"))
         assertFalse(notified)
     }
 }

@@ -163,20 +163,6 @@ class RideDiagnosticsRecorder {
     _add('VOICE      $renderer  "$phrase"');
   }
 
-  /// An enforcement warning armed or cleared (#418).
-  void recordEnforcementWarning({
-    required String hazardType,
-    required double distanceMeters,
-    required bool armed,
-    required String? clearedBy,
-  }) {
-    _add(
-      'ENFORCE    ${armed ? 'armed' : 'cleared'}  $hazardType  '
-      '${distanceMeters.round()} m'
-      '${clearedBy == null ? '' : '  (cleared by $clearedBy)'}',
-    );
-  }
-
   /// The route was recalculated (#414).
   void recordReroute({required String reason, required bool succeeded}) {
     _add('REROUTE    $reason  ${succeeded ? 'produced a route' : 'failed'}');

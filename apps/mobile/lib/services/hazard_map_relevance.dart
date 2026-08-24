@@ -52,28 +52,15 @@ class HazardMapJudgement {
 
 /// Decides which hazard reports the ride map draws.
 ///
-/// This is the map's half of the judgement #112 made for the full-screen
-/// warning, and it is deliberately the same judgement: ahead along the loaded
-/// route, falling back to bearing versus heading, with a report that has been
-/// passed or sits on the opposite carriageway dropped rather than drawn as
-/// though it were ahead (#135).
-///
-/// It differs from [EnforcementAlertDetector] in three ways, all of them
-/// intentional:
-///
-/// 1. It judges every report rather than returning the nearest one, because a
-///    map draws all of them.
-/// 2. It looks further out - a symbol has to be on screen *before* the warning
-///    fires, which is the whole point of the issue.
-/// 3. It considers every pass the route makes near a report, not just the
-///    geometrically nearest one. On an out-and-back the nearest projection puts
-///    a report the rider is about to reach behind them; see
-///    [GeoCalculations.passesNear].
+/// It judges every current road-condition report, preferring the loaded route
+/// and falling back to bearing versus heading. It considers every pass the route
+/// makes near a report so an out-and-back route does not place an upcoming
+/// condition behind the crew; see [GeoCalculations.passesNear].
 ///
 /// ## Opposite carriageway
 ///
 /// Two independent signals have to agree before a report is dropped as being on
-/// the opposite carriageway, because dropping a real camera is the worse error:
+/// the opposite carriageway, because dropping a real report is the worse error:
 ///
 /// - the route, where one is loaded: the pass the report sits on runs against
 ///   the direction the rider is travelling, so the rider will only reach it
@@ -82,10 +69,10 @@ class HazardMapJudgement {
 ///   more than [aheadHeadingToleranceDegrees] off the direction of travel.
 ///
 /// A report round a bend fails the second test - it is in front of you - so a
-/// twisty road cannot hide a genuine sighting, while a camera on the far side of
+/// twisty road cannot hide a genuine sighting, while a report on the far side of
 /// a dual carriageway the rider has already passed fails both.
 ///
-/// What this cannot decide, honestly stated: a camera on the opposite
+/// What this cannot decide, honestly stated: a report on the opposite
 /// carriageway several hundred metres *ahead* is, to within the GPS corridor,
 /// geometrically identical to one on the rider's own carriageway. A report
 /// carries only a position - no reporter heading and no carriageway - so
@@ -101,13 +88,10 @@ class HazardMapRelevance {
     this.passedToleranceMeters = 25,
   });
 
-  /// How far ahead a report is drawn. Comfortably more than the one mile #112
-  /// warns at, so the symbol is already on the map when the warning arrives, and
-  /// well beyond what a phone shows at ride zoom.
+  /// How far ahead a report is drawn.
   final double visibilityRangeMeters;
 
   /// How far off the loaded route a report may sit and still count as on it.
-  /// Matches [EnforcementAlertDetector.routeCorridorMeters].
   final double routeCorridorMeters;
 
   /// How far a report's bearing may differ from the direction of travel and

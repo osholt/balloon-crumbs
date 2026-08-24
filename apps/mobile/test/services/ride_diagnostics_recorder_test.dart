@@ -301,7 +301,7 @@ void main() {
       );
 
       recorder.recordSpeechDelivery(
-        phrase: 'Speed camera, in 150 yards',
+        phrase: 'Road blocked ahead',
         output: SpokenGuidanceOutput.natural,
       );
       recorder.recordSpeechDelivery(
@@ -311,29 +311,6 @@ void main() {
 
       expect(recorder.render(), contains('natural voice'));
       expect(recorder.render(), contains('system fallback'));
-    });
-
-    test('an enforcement warning records arming and clearing (#418)', () {
-      final recorder = RideDiagnosticsRecorder(
-        clock: () => DateTime.utc(2026, 8, 10),
-      );
-
-      recorder.recordEnforcementWarning(
-        hazardType: 'speedCamera',
-        distanceMeters: 1600,
-        armed: true,
-        clearedBy: null,
-      );
-      recorder.recordEnforcementWarning(
-        hazardType: 'speedCamera',
-        distanceMeters: 0,
-        armed: false,
-        clearedBy: 'crew tap',
-      );
-
-      final report = recorder.render();
-      expect(report, contains('ENFORCE    armed  speedCamera  1600 m'));
-      expect(report, contains('cleared by crew tap'));
     });
 
     test('a recalculation is recorded either way (#414)', () {

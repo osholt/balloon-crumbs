@@ -2,7 +2,7 @@
 ///
 /// One switch was not enough. A rider off route does not want turn-by-turn for a
 /// route they are not on, and a rider who has silenced the chatter still wants to
-/// be told about a speed camera — so "spoken guidance on or off" cannot express
+/// hear a safety alert — so "spoken guidance on or off" cannot express
 /// what is actually wanted.
 ///
 /// The distinction is **navigation against safety**, and it is drawn here rather
