@@ -28,6 +28,7 @@ import 'package:balloon_crumbs/services/imported_track_matcher.dart';
 import 'package:balloon_crumbs/services/map_style_repository.dart';
 import 'package:balloon_crumbs/services/navigation_camera.dart';
 import 'package:balloon_crumbs/services/offline_tile_cache.dart';
+import 'package:balloon_crumbs/services/os_final_approach_map_configuration.dart';
 import 'package:balloon_crumbs/services/received_quick_message.dart';
 import 'package:balloon_crumbs/services/route_importer.dart';
 import 'package:balloon_crumbs/services/road_routing.dart';
@@ -118,6 +119,58 @@ void main() {
 
     expect(map.basemapConfiguration.restrainedLightStyle, isFalse);
   });
+
+  testWidgets(
+    'chase map explains the optional OS layer without implying land access',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync('os-map-sheet');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final cache = OfflineTileCache(
+        rootDirectory: directory,
+        configuration: const BasemapConfiguration(),
+        httpClient: MockClient((_) async => http.Response('', 404)),
+      );
+      addTearDown(cache.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(useMaterial3: true),
+          home: RideMapScreen(
+            routeStore: _RecordingRouteStore(),
+            routeImporter: RouteImporter(source: const _NoFileSource()),
+            offlineTileCache: cache,
+            osFinalApproachMapConfiguration: const OsFinalApproachMapConfiguration(
+              enabled: true,
+              tileUrlTemplate:
+                  'https://balloon-crumbs.pages.dev/maps/os/outdoor/{z}/{x}/{y}.png',
+            ),
+            rideStarted: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('map-layer-actions')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Final-approach map…'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('os-final-approach-map-sheet')),
+        findsOneWidget,
+      );
+      expect(find.text('Road map'), findsOneWidget);
+      expect(find.text('OS Outdoor detail'), findsOneWidget);
+      expect(
+        find.textContaining('does not identify a landowner'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('os-final-approach-attribution')),
+        findsOneWidget,
+      );
+    },
+  );
 
   test('group mini-map avoids a second MapLibre surface on Android', () {
     expect(

@@ -18,6 +18,7 @@ test("only bounded relay and provider paths are proxied", () => {
     "/maps/basemap/7/63/42.pbf",
     "/maps/fonts/Noto/0-255.pbf",
     "/maps/openaip/7/63/42.png",
+    "/maps/os/outdoor/16/32311/21782.png",
   ]) {
     assert.equal(worker.isOracleProxyPath(pathname), true, pathname);
   }

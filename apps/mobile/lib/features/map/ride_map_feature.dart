@@ -52,6 +52,7 @@ import '../../services/navigation_export.dart';
 import '../../services/navigation_camera.dart';
 import '../../services/navigation_heading.dart';
 import '../../services/offline_tile_cache.dart';
+import '../../services/os_final_approach_map_configuration.dart';
 import '../../services/open_meteo_wind.dart';
 import '../../services/received_quick_message.dart';
 import '../../services/rider_trail_recorder.dart';
@@ -286,6 +287,8 @@ class RideMapFeature extends StatefulWidget {
     this.mapOrientation = MapOrientationMode.directionUp,
     this.onMapOrientationChanged,
     this.showAeronauticalChart = false,
+    this.osFinalApproachMapConfiguration =
+        const OsFinalApproachMapConfiguration(),
   });
 
   factory RideMapFeature.fromEnvironment({
@@ -354,6 +357,7 @@ class RideMapFeature extends StatefulWidget {
     MapOrientationMode mapOrientation = MapOrientationMode.directionUp,
     ValueChanged<MapOrientationMode>? onMapOrientationChanged,
     bool showAeronauticalChart = false,
+    OsFinalApproachMapConfiguration? osFinalApproachMapConfiguration,
   }) => RideMapFeature(
     key: key,
     currentPosition: currentPosition,
@@ -423,6 +427,9 @@ class RideMapFeature extends StatefulWidget {
     mapOrientation: mapOrientation,
     onMapOrientationChanged: onMapOrientationChanged,
     showAeronauticalChart: showAeronauticalChart,
+    osFinalApproachMapConfiguration:
+        osFinalApproachMapConfiguration ??
+        OsFinalApproachMapConfiguration.fromEnvironment(),
   );
 
   final ValueListenable<GeoPoint?>? currentPosition;
@@ -528,6 +535,7 @@ class RideMapFeature extends StatefulWidget {
   final MapOrientationMode mapOrientation;
   final ValueChanged<MapOrientationMode>? onMapOrientationChanged;
   final bool showAeronauticalChart;
+  final OsFinalApproachMapConfiguration osFinalApproachMapConfiguration;
 
   @override
   State<RideMapFeature> createState() => _RideMapFeatureState();
@@ -694,6 +702,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         mapOrientation: widget.mapOrientation,
         onMapOrientationChanged: widget.onMapOrientationChanged,
         showAeronauticalChart: widget.showAeronauticalChart,
+        osFinalApproachMapConfiguration: widget.osFinalApproachMapConfiguration,
       );
     },
   );
@@ -799,6 +808,8 @@ class RideMapScreen extends StatefulWidget {
     this.mapOrientation = MapOrientationMode.directionUp,
     this.onMapOrientationChanged,
     this.showAeronauticalChart = false,
+    this.osFinalApproachMapConfiguration =
+        const OsFinalApproachMapConfiguration(),
   });
 
   final RouteStore routeStore;
@@ -926,6 +937,7 @@ class RideMapScreen extends StatefulWidget {
   final MapOrientationMode mapOrientation;
   final ValueChanged<MapOrientationMode>? onMapOrientationChanged;
   final bool showAeronauticalChart;
+  final OsFinalApproachMapConfiguration osFinalApproachMapConfiguration;
 
   @override
   State<RideMapScreen> createState() => _RideMapScreenState();
@@ -944,9 +956,12 @@ class _RideMapScreenState extends State<RideMapScreen> {
   static const _landingZoneImage = 'balloon-crumbs-landing-zone-flag';
   static const _windForecastSource = 'balloon-crumbs-wind-forecast';
   static const _windForecastImage = 'balloon-crumbs-wind-arrow';
+  static const _windForecastLayer = 'balloon-crumbs-wind-forecast-arrows';
   static const _aeronauticalChartSource = 'balloon-crumbs-aeronautical-chart';
   static const _aeronauticalChartLayer =
       'balloon-crumbs-aeronautical-chart-layer';
+  static const _osFinalApproachSource = 'balloon-crumbs-os-final-approach';
+  static const _osFinalApproachLayer = 'balloon-crumbs-os-final-approach-layer';
   static const _trailDirectionArrowImage =
       'balloon-crumbs-trail-direction-arrow';
 
@@ -964,6 +979,23 @@ class _RideMapScreenState extends State<RideMapScreen> {
       widget.showAeronauticalChart &&
       _showsForecastContext &&
       widget.aeronauticalChartConfiguration.isCurrentAt(DateTime.now());
+
+  bool _osFinalApproachSelected = false;
+
+  bool get _osFinalApproachAvailable {
+    final configuration = widget.osFinalApproachMapConfiguration;
+    final position = _effectivePosition;
+    return !_isBalloonView &&
+        configuration.isConfigured &&
+        (position == null ||
+            configuration.covers(
+              latitude: position.latitude,
+              longitude: position.longitude,
+            ));
+  }
+
+  bool get _showOsFinalApproach =>
+      _osFinalApproachSelected && _osFinalApproachAvailable;
 
   double get _effectiveCameraBearingDegrees =>
       widget.mapOrientation == MapOrientationMode.northUp
@@ -1608,6 +1640,21 @@ class _RideMapScreenState extends State<RideMapScreen> {
                             const Expanded(
                               child: Text('Show mapped speed limit'),
                             ),
+                          ],
+                        ),
+                      ),
+                    if (!_isBalloonView)
+                      PopupMenuItem(
+                        value: _MapAction.osFinalApproachMap,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _showOsFinalApproach
+                                  ? Icons.check_box
+                                  : Icons.map_outlined,
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(child: Text('Final-approach map…')),
                           ],
                         ),
                       ),
@@ -2687,6 +2734,16 @@ class _RideMapScreenState extends State<RideMapScreen> {
             tileProvider: LicensedCachingTileProvider(
               cache: widget.offlineTileCache,
             ),
+          ),
+        if (_showOsFinalApproach)
+          TileLayer(
+            key: const Key('os-final-approach-tile-layer'),
+            urlTemplate: widget.osFinalApproachMapConfiguration.tileUrlTemplate,
+            userAgentPackageName: 'me.osholt.balloon_crumbs',
+            minNativeZoom: widget.osFinalApproachMapConfiguration.minimumZoom,
+            maxNativeZoom: widget.osFinalApproachMapConfiguration.maximumZoom,
+            errorTileCallback: (_, error, _) =>
+                _onOsFinalApproachTileFailure(error),
           ),
         if (_showAeronauticalChart)
           TileLayer(
@@ -4292,6 +4349,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
     _mapLibreStyleReady = false;
     try {
       await _registerMarkerImages(controller);
+      if (_showOsFinalApproach) {
+        await _addOsFinalApproachMapLibreLayer(controller);
+      }
       if (_showAeronauticalChart) {
         final chart = widget.aeronauticalChartConfiguration;
         await controller.addSource(
@@ -4315,7 +4375,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       );
       await controller.addSymbolLayer(
         _windForecastSource,
-        'balloon-crumbs-wind-forecast-arrows',
+        _windForecastLayer,
         const ml.SymbolLayerProperties(
           iconImage: _windForecastImage,
           iconColor: '#64D8FF',
@@ -5753,6 +5813,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
         } else {
           await _confirmEnableSpeedLimitDisplay();
         }
+      case _MapAction.osFinalApproachMap:
+        await _showOsFinalApproachSettings();
       case _MapAction.maneuverList:
         await _showManeuverList();
       case _MapAction.groupPip:
@@ -5790,6 +5852,135 @@ class _RideMapScreenState extends State<RideMapScreen> {
         await widget.offlineTileCache.clearAll();
         _showMessage('Offline map data cleared.');
     }
+  }
+
+  Future<void> _showOsFinalApproachSettings() async {
+    final configuration = widget.osFinalApproachMapConfiguration;
+    final selected = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) => _OsFinalApproachMapSheet(
+        configuration: configuration,
+        selected: _showOsFinalApproach,
+        available: _osFinalApproachAvailable,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    await _setOsFinalApproachSelected(selected);
+  }
+
+  Future<void> _setOsFinalApproachSelected(bool selected) async {
+    if (selected && !_osFinalApproachAvailable) {
+      _showMessage(widget.osFinalApproachMapConfiguration.unavailableMessage);
+      return;
+    }
+    if (selected == _osFinalApproachSelected) return;
+    if (selected && !await _probeOsFinalApproachTile()) {
+      if (mounted) {
+        _showMessage(
+          'OS detail is unavailable. The ordinary road map is still active.',
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _osFinalApproachSelected = selected);
+    final controller = _mapLibreController;
+    if (!_mapLibreStyleReady || controller == null) return;
+    try {
+      if (selected) {
+        await _addOsFinalApproachMapLibreLayer(
+          controller,
+          belowLayerId: _windForecastLayer,
+        );
+      } else {
+        await controller.removeLayer(_osFinalApproachLayer);
+        await controller.removeSource(_osFinalApproachSource);
+      }
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _osFinalApproachSelected = false);
+      _showMessage(
+        'OS detail could not be drawn. The ordinary road map remains active.',
+      );
+      debugPrint('Could not change OS final-approach layer: $error');
+    }
+  }
+
+  Future<bool> _probeOsFinalApproachTile() async {
+    final configuration = widget.osFinalApproachMapConfiguration;
+    final position = _effectivePosition;
+    final latitude = position?.latitude ?? 51.4545;
+    final longitude = position?.longitude ?? -2.5879;
+    final zoom = configuration.minimumZoom;
+    final scale = 1 << zoom;
+    final x = ((longitude + 180) / 360 * scale).floor();
+    final latitudeRadians = latitude * math.pi / 180;
+    final y =
+        ((1 -
+                    math.log(
+                          math.tan(latitudeRadians) +
+                              1 / math.cos(latitudeRadians),
+                        ) /
+                        math.pi) /
+                2 *
+                scale)
+            .floor();
+    final uri = Uri.tryParse(
+      configuration.tileUrlTemplate
+          .replaceAll('{z}', '$zoom')
+          .replaceAll('{x}', '$x')
+          .replaceAll('{y}', '$y'),
+    );
+    if (uri == null) return false;
+    try {
+      final response = await _routingClient
+          .get(uri, headers: const {'Accept': 'image/png'})
+          .timeout(const Duration(seconds: 6));
+      return response.statusCode == 200 &&
+          response.bodyBytes.isNotEmpty &&
+          response.bodyBytes.length <= 3 * 1024 * 1024 &&
+          (response.headers['content-type'] ?? '').toLowerCase().startsWith(
+            'image/png',
+          );
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<void> _addOsFinalApproachMapLibreLayer(
+    ml.MapLibreMapController controller, {
+    String? belowLayerId,
+  }) async {
+    final configuration = widget.osFinalApproachMapConfiguration;
+    await controller.addSource(
+      _osFinalApproachSource,
+      ml.RasterSourceProperties(
+        tiles: [configuration.tileUrlTemplate],
+        bounds: const [-10.8, 49.5, 1.9, 61.4],
+        minzoom: configuration.minimumZoom.toDouble(),
+        maxzoom: configuration.maximumZoom.toDouble(),
+        tileSize: 256,
+        attribution: configuration.attribution,
+      ),
+    );
+    await controller.addRasterLayer(
+      _osFinalApproachSource,
+      _osFinalApproachLayer,
+      const ml.RasterLayerProperties(rasterOpacity: 1),
+      belowLayerId: belowLayerId,
+    );
+  }
+
+  void _onOsFinalApproachTileFailure(Object error) {
+    if (!_osFinalApproachSelected) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_osFinalApproachSelected) return;
+      setState(() => _osFinalApproachSelected = false);
+      _showMessage('OS detail was lost. The ordinary road map remains active.');
+      debugPrint('OS final-approach tile failed: $error');
+    });
   }
 
   /// Lists every manoeuvre for the loaded route.
@@ -6208,6 +6399,7 @@ enum _MapAction {
   importGpx,
   loadDemo,
   speedLimitDisplay,
+  osFinalApproachMap,
   maneuverList,
   groupPip,
   downloadOffline,
@@ -8855,6 +9047,79 @@ class _WindForecastControl extends StatelessWidget {
         ),
       );
     },
+  );
+}
+
+class _OsFinalApproachMapSheet extends StatelessWidget {
+  const _OsFinalApproachMapSheet({
+    required this.configuration,
+    required this.selected,
+    required this.available,
+  });
+
+  final OsFinalApproachMapConfiguration configuration;
+  final bool selected;
+  final bool available;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      child: Column(
+        key: const Key('os-final-approach-map-sheet'),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Final-approach map',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Road mapping stays the recovery default. OS Outdoor detail is an '
+            'optional phone-only aid for identifying tracks, buildings and '
+            'field approaches after the balloon is close to landing.',
+          ),
+          const SizedBox(height: 14),
+          ListTile(
+            key: const Key('select-road-basemap'),
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.directions_car_outlined),
+            title: const Text('Road map'),
+            subtitle: const Text('Always available; used on CarPlay.'),
+            trailing: selected ? null : const Icon(Icons.check),
+            onTap: () => Navigator.of(context).pop(false),
+          ),
+          ListTile(
+            key: const Key('select-os-final-approach-map'),
+            contentPadding: EdgeInsets.zero,
+            enabled: available,
+            leading: const Icon(Icons.terrain_outlined),
+            title: const Text('OS Outdoor detail'),
+            subtitle: Text(
+              available
+                  ? 'Online only. Failed or missing tiles reveal the road map '
+                        'underneath without removing crew tracks or guidance.'
+                  : configuration.unavailableMessage,
+            ),
+            trailing: selected ? const Icon(Icons.check) : null,
+            onTap: available ? () => Navigator.of(context).pop(true) : null,
+          ),
+          const Divider(height: 28),
+          Text(
+            configuration.attribution,
+            key: const Key('os-final-approach-attribution'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Map detail does not identify a landowner, show permission to '
+            'enter, guarantee vehicle access, or replace local confirmation.',
+            style: TextStyle(color: Color(0xFFFFC857)),
+          ),
+        ],
+      ),
+    ),
   );
 }
 

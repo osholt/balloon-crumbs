@@ -161,6 +161,7 @@ jobs:
           BALLOON_CRUMBS_DATA_ENCRYPTION_KEY: BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc
           BALLOON_CRUMBS_DOMAIN: relay.balloon-crumbs.example.com
           BALLOON_CRUMBS_OPENAIP_API_KEY: ci-only-key
+          BALLOON_CRUMBS_OS_MAPS_API_KEY: ci-only-key
         run: |
           docker compose \
             --file deploy/compose.yaml \
@@ -168,6 +169,7 @@ jobs:
             config --quiet
           docker run --rm \
             --env BALLOON_CRUMBS_OPENAIP_API_KEY \
+            --env BALLOON_CRUMBS_OS_MAPS_API_KEY \
             --volume "$PWD/deploy/Caddyfile.oracle:/etc/caddy/Caddyfile:ro" \
             caddy:2.11.4-alpine \
             caddy validate --config /etc/caddy/Caddyfile

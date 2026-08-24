@@ -20,7 +20,8 @@ export function isOracleProxyPath(pathname) {
     pathname.startsWith("/maps/styles/") ||
     pathname.startsWith("/maps/basemap/") ||
     pathname.startsWith("/maps/fonts/") ||
-    pathname.startsWith("/maps/openaip/")
+    pathname.startsWith("/maps/openaip/") ||
+    pathname.startsWith("/maps/os/outdoor/")
   );
 }
 

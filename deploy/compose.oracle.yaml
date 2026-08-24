@@ -9,6 +9,10 @@ services:
     environment:
       BALLOON_CRUMBS_DOMAIN: ${BALLOON_CRUMBS_DOMAIN:?set BALLOON_CRUMBS_DOMAIN}
       BALLOON_CRUMBS_OPENAIP_API_KEY: ${BALLOON_CRUMBS_OPENAIP_API_KEY:?set BALLOON_CRUMBS_OPENAIP_API_KEY}
+      # Optional until an OS Data Hub live project is selected. An empty value
+      # leaves the app's ordinary road map working and the client probe declines
+      # to enable OS detail.
+      BALLOON_CRUMBS_OS_MAPS_API_KEY: ${BALLOON_CRUMBS_OS_MAPS_API_KEY:-}
     volumes:
       - ./Caddyfile.oracle:/etc/caddy/Caddyfile:ro
     networks:
