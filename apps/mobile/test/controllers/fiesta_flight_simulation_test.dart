@@ -294,6 +294,38 @@ void main() {
       reason: 'at least one chase vehicle should still be moving',
     );
   });
+
+  test('a replacement road route follows its provider journey time', () async {
+    final simulation = await build();
+    addTearDown(simulation.dispose);
+    const roadRoute = [
+      GeoPoint(latitude: 51.4459, longitude: -2.6413),
+      GeoPoint(latitude: 51.4459, longitude: -2.6313),
+    ];
+    final distance = GeoCalculations.distanceMeters(
+      roadRoute.first,
+      roadRoute.last,
+    );
+
+    simulation.replaceChaseRoute(
+      roadRoute,
+      plannedDuration: const Duration(minutes: 10),
+    );
+
+    final chase = simulation.riders.singleWhere(
+      (rider) => rider.role != RideRole.lead,
+    );
+    expect(chase.speedMetersPerSecond, closeTo(distance / 600, 0.001));
+
+    await simulation.advance(const Duration(minutes: 5));
+    final chaseHalfway = simulation.riders.singleWhere(
+      (rider) => rider.role != RideRole.lead,
+    );
+    expect(
+      GeoCalculations.distanceMeters(roadRoute.first, chaseHalfway.position),
+      closeTo(distance / 2, 2),
+    );
+  });
 }
 
 class _UnusedWindProvider implements WindForecastProvider {

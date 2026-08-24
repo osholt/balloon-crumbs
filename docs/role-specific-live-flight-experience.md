@@ -796,15 +796,15 @@ and a UI rebuild cannot change authority.
 
 ### P0.7 Per-vehicle chase guidance
 
-- [ ] Each chase vehicle independently selects intended-area or near-balloon
+- [x] Each chase vehicle independently selects intended-area or near-balloon
       road guidance.
-- [ ] A pilot landing-area update reaches every vehicle and triggers bounded
+- [x] A pilot landing-area update reaches every vehicle and triggers bounded
       route reconsideration for vehicles following that area.
-- [ ] Near-balloon mode refuses a stale balloon fix and never routes to a raw
+- [x] Near-balloon mode refuses a stale balloon fix and never routes to a raw
       airborne coordinate.
-- [ ] Reroutes use provider road geometry, speeds and vehicle constraints and
+- [x] Reroutes use provider road geometry, speeds and vehicle constraints and
       preserve the last valid route on failure.
-- [ ] Target selection, road endpoint, target age and reroute reason are visible.
+- [x] Target selection, road endpoint, target age and reroute reason are visible.
 
 ## P1 requirements
 
