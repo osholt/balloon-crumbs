@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hmac
 import json
 import math
@@ -9,6 +10,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -98,6 +101,8 @@ EVENT_TYPES = {
     "flightStartedByCrew",
     "flightLanded",
     "flightLandingRetracted",
+    "deviceAuthorityRevoked",
+    "deviceAuthorityRotated",
 }
 PRIORITIES = {"routine", "important", "critical"}
 EVENT_FIELDS = {
@@ -111,6 +116,8 @@ EVENT_FIELDS = {
     "expiresAt",
     "payload",
     "signature",
+    "devicePublicKey",
+    "deviceSignature",
     "acknowledged",
 }
 
@@ -279,6 +286,7 @@ class RelayService:
         bearer_token: str,
         device_header: str,
         request: PresenceSyncRequest,
+        raw_position: dict[str, Any] | None = None,
         live_presence: bool = False,
         client_protocol: int = 1,
         now: datetime | None = None,
@@ -295,9 +303,9 @@ class RelayService:
         self._validate_identity(ride_id, request.deviceId, device_header)
         if not TOKEN.fullmatch(bearer_token):
             raise RelayServiceError(401, "Ride credential rejected")
-        position = (
-            request.position.model_dump(mode="json") if request.position is not None else None
-        )
+        position = raw_position
+        if request.position is not None and position is None:
+            position = request.position.model_dump(mode="json", exclude_unset=True)
         if position is not None:
             recorded_at = request.position.sample.recordedAt
             if recorded_at < now - timedelta(minutes=5):
@@ -310,6 +318,22 @@ class RelayService:
                 raise RelayServiceError(404, "Ride is not ready for presence")
             if not hmac.compare_digest(ride.token_hash, token_hash(bearer_token)):
                 raise RelayServiceError(403, "Ride credential rejected")
+            authority_required = self._ride_uses_device_authority(session, ride_id)
+            authority_present = request.authorityVersion is not None
+            if authority_required and not authority_present:
+                raise RelayServiceError(403, "Device authority proof required")
+            if authority_present:
+                self._verify_presence_authority(
+                    ride_id=ride_id,
+                    rider_id=request.deviceId,
+                    position=position,
+                    clear=request.clear,
+                    authority_version=request.authorityVersion,
+                    signed_at_milliseconds=request.signedAtMilliseconds,
+                    public_key=request.devicePublicKey,
+                    signature=request.deviceSignature,
+                    now=now,
+                )
             session.execute(
                 delete(PreStartPosition).where(
                     PreStartPosition.ride_id == ride_id,
@@ -349,6 +373,10 @@ class RelayService:
                         "expiresAt": expires_at.isoformat(),
                         "livePresence": live_presence,
                         "clientProtocol": client_protocol,
+                        "authorityVersion": request.authorityVersion,
+                        "signedAtMilliseconds": request.signedAtMilliseconds,
+                        "devicePublicKey": request.devicePublicKey,
+                        "deviceSignature": request.deviceSignature,
                     }
                     ciphertext = self._cipher.encrypt_json(
                         snapshot,
@@ -393,6 +421,76 @@ class RelayService:
             # age a peer's position without trusting that peer's own clock.
             "serverTime": now.isoformat(),
         }
+
+    def _ride_uses_device_authority(self, session: Session, ride_id: str) -> bool:
+        row = session.scalar(
+            select(StoredEvent)
+            .where(
+                StoredEvent.ride_id == ride_id,
+                StoredEvent.event_type == "rideCreated",
+            )
+            .order_by(StoredEvent.sequence)
+            .limit(1)
+        )
+        if row is None:
+            return False
+        try:
+            body = self._cipher.decrypt_json(
+                row.body_ciphertext,
+                associated_data=self._event_aad(ride_id, row.event_id),
+            )
+        except ValueError:
+            return False
+        return isinstance(body, dict) and body.get("schemaVersion") == 2
+
+    @staticmethod
+    def _verify_presence_authority(
+        *,
+        ride_id: str,
+        rider_id: str,
+        position: dict[str, Any] | None,
+        clear: bool,
+        authority_version: int | None,
+        signed_at_milliseconds: int | None,
+        public_key: str | None,
+        signature: str | None,
+        now: datetime,
+    ) -> None:
+        if (
+            authority_version != 1
+            or signed_at_milliseconds is None
+            or public_key is None
+            or signature is None
+        ):
+            raise RelayServiceError(403, "Device authority proof rejected")
+        signed_at = datetime.fromtimestamp(signed_at_milliseconds / 1000, tz=UTC)
+        if signed_at < now - timedelta(minutes=5) or signed_at > now + timedelta(minutes=2):
+            raise RelayServiceError(400, "Device authority proof is outside its time window")
+        body = {
+            "rideId": ride_id,
+            "riderId": rider_id,
+            "signedAtMilliseconds": signed_at_milliseconds,
+            "clear": clear,
+            "position": position,
+        }
+        challenge = "balloon-crumbs-live-presence-v1\n" + json.dumps(
+            body,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        try:
+            key_bytes = base64.urlsafe_b64decode(public_key + "=")
+            signature_bytes = base64.urlsafe_b64decode(signature + "==")
+            if len(key_bytes) != 32 or len(signature_bytes) != 64:
+                raise ValueError
+            Ed25519PublicKey.from_public_bytes(key_bytes).verify(
+                signature_bytes,
+                challenge.encode(),
+            )
+        except (InvalidSignature, ValueError) as error:
+            raise RelayServiceError(403, "Device authority proof rejected") from error
 
     @staticmethod
     def _ride_presence_phase(session: Session, ride_id: str) -> str:
@@ -496,6 +594,7 @@ class RelayService:
         invite_secret: str,
         bearer_token: str,
         resolve_token: str,
+        authority_root_public_key: str | None = None,
         now: datetime | None = None,
     ) -> None:
         now = now or datetime.now(UTC)
@@ -503,9 +602,21 @@ class RelayService:
         self._validate_join_credential(ride_id, invite_secret, bearer_token)
         if not 16 <= len(resolve_token) <= 128:
             raise RelayServiceError(400, "Invalid ride credential")
+        if authority_root_public_key is not None and not re.fullmatch(
+            r"[A-Za-z0-9_-]{43}", authority_root_public_key
+        ):
+            raise RelayServiceError(400, "Invalid device authority")
         credential_hash = token_hash(bearer_token)
         secret_ciphertext = self._cipher.encrypt_json(
-            {"inviteSecret": invite_secret, "resolveToken": resolve_token},
+            {
+                "inviteSecret": invite_secret,
+                "resolveToken": resolve_token,
+                **(
+                    {"authorityRootPublicKey": authority_root_public_key}
+                    if authority_root_public_key is not None
+                    else {}
+                ),
+            },
             associated_data=self._join_code_aad(ride_code),
         )
         with session.begin():
@@ -554,12 +665,20 @@ class RelayService:
                 raise RelayServiceError(500, "Ride code record is invalid") from error
             secret = value.get("inviteSecret") if isinstance(value, dict) else None
             stored_resolve_token = value.get("resolveToken") if isinstance(value, dict) else None
+            authority_root_public_key = (
+                value.get("authorityRootPublicKey") if isinstance(value, dict) else None
+            )
             if not isinstance(secret, str) or not 16 <= len(secret) <= 512:
                 raise RelayServiceError(500, "Ride code record is invalid")
             valid_resolve_token = (
                 isinstance(stored_resolve_token, str) and 16 <= len(stored_resolve_token) <= 128
             )
             if not valid_resolve_token:
+                raise RelayServiceError(500, "Ride code record is invalid")
+            if authority_root_public_key is not None and not (
+                isinstance(authority_root_public_key, str)
+                and re.fullmatch(r"[A-Za-z0-9_-]{43}", authority_root_public_key)
+            ):
                 raise RelayServiceError(500, "Ride code record is invalid")
             if resolve_token is not None and not hmac.compare_digest(
                 stored_resolve_token, resolve_token
@@ -570,6 +689,11 @@ class RelayService:
                 "rideCode": record.code,
                 "inviteSecret": secret,
                 "resolveToken": stored_resolve_token,
+                **(
+                    {"authorityRootPublicKey": authority_root_public_key}
+                    if authority_root_public_key is not None
+                    else {}
+                ),
             }
 
     def create_crew_room(
@@ -1089,12 +1213,22 @@ class RelayService:
         operation: dict[str, str],
         bearer_token: str,
     ) -> dict[str, str]:
-        expected_fields = {"rideId", "rideCode", "inviteSecret", "resolveToken"}
-        if set(operation) != expected_fields or not all(
-            isinstance(operation.get(field), str) for field in expected_fields
+        required_fields = {"rideId", "rideCode", "inviteSecret", "resolveToken"}
+        allowed_fields = required_fields | {"authorityRootPublicKey"}
+        if (
+            not required_fields.issubset(operation)
+            or not set(operation).issubset(allowed_fields)
+            or not all(isinstance(operation.get(field), str) for field in required_fields)
         ):
             raise RelayServiceError(400, "Crew room operation is invalid")
-        clean = {field: operation[field] for field in expected_fields}
+        clean = {field: operation[field] for field in required_fields}
+        authority_root_public_key = operation.get("authorityRootPublicKey")
+        if authority_root_public_key is not None:
+            if not isinstance(authority_root_public_key, str) or not re.fullmatch(
+                r"[A-Za-z0-9_-]{43}", authority_root_public_key
+            ):
+                raise RelayServiceError(400, "Crew room device authority is invalid")
+            clean["authorityRootPublicKey"] = authority_root_public_key
         self._validate_join_code(clean["rideCode"])
         self._validate_join_credential(clean["rideId"], clean["inviteSecret"], bearer_token)
         if not 16 <= len(clean["resolveToken"]) <= 128:
@@ -1443,9 +1577,15 @@ class RelayService:
         ride_id: str,
         now: datetime,
     ) -> ValidatedEvent:
-        if set(value) != EVENT_FIELDS:
+        schema_version = value.get("schemaVersion")
+        expected_fields = (
+            EVENT_FIELDS
+            if schema_version == 2
+            else EVENT_FIELDS - {"devicePublicKey", "deviceSignature"}
+        )
+        if set(value) != expected_fields:
             raise RelayServiceError(400, "Event fields are invalid")
-        if value.get("schemaVersion") != 1 or value.get("rideId") != ride_id:
+        if schema_version not in {1, 2} or value.get("rideId") != ride_id:
             raise RelayServiceError(400, "Event is invalid for this ride")
         event_id = value.get("id")
         device_id = value.get("deviceId")
@@ -1463,6 +1603,17 @@ class RelayService:
         signature = value.get("signature")
         if not isinstance(signature, str) or not SIGNATURE.fullmatch(signature):
             raise RelayServiceError(400, "Event signature is invalid")
+        if schema_version == 2:
+            public_key = value.get("devicePublicKey")
+            device_signature = value.get("deviceSignature")
+            if not isinstance(public_key, str) or not re.fullmatch(
+                r"[A-Za-z0-9_-]{43}", public_key
+            ):
+                raise RelayServiceError(400, "Event device authority is invalid")
+            if not isinstance(device_signature, str) or not re.fullmatch(
+                r"[A-Za-z0-9_-]{86}", device_signature
+            ):
+                raise RelayServiceError(400, "Event device authority is invalid")
         created_at = self._parse_timestamp(value.get("createdAt"), "createdAt")
         if created_at > now + timedelta(minutes=10):
             raise RelayServiceError(400, "Event creation time is too far in the future")
@@ -1570,6 +1721,8 @@ class RelayService:
             "chaseGuidanceTargetSelected": timedelta(hours=72),
             "pilotHandoverOffered": timedelta(hours=72),
             "pilotHandoverAccepted": timedelta(hours=72),
+            "deviceAuthorityRevoked": timedelta(hours=72),
+            "deviceAuthorityRotated": timedelta(hours=72),
             # Who was asked to cover the back of the group, and what they said.
             # Ride-scoped coordination, not history worth keeping for days.
         }.get(event_type, timedelta(hours=72))

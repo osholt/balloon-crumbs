@@ -6,18 +6,22 @@ class CrewRoomOperation {
     required this.rideCode,
     required this.inviteSecret,
     required this.joinToken,
+    this.authorityRootPublicKey,
   });
 
   final String rideId;
   final String rideCode;
   final String inviteSecret;
   final String joinToken;
+  final String? authorityRootPublicKey;
 
   Map<String, Object?> toJson() => {
     'rideId': rideId,
     'rideCode': rideCode,
     'inviteSecret': inviteSecret,
     'resolveToken': joinToken,
+    if (authorityRootPublicKey != null)
+      'authorityRootPublicKey': authorityRootPublicKey,
   };
 
   factory CrewRoomOperation.fromJson(Map<String, Object?> json) {
@@ -25,6 +29,7 @@ class CrewRoomOperation {
     final rideCode = json['rideCode'];
     final inviteSecret = json['inviteSecret'];
     final joinToken = json['resolveToken'];
+    final authorityRootPublicKey = json['authorityRootPublicKey'];
     if (rideId is! String ||
         rideId.isEmpty ||
         rideCode is! String ||
@@ -32,7 +37,12 @@ class CrewRoomOperation {
         inviteSecret is! String ||
         inviteSecret.length < 16 ||
         joinToken is! String ||
-        joinToken.length < 16) {
+        joinToken.length < 16 ||
+        (authorityRootPublicKey != null &&
+            (authorityRootPublicKey is! String ||
+                !RegExp(
+                  r'^[A-Za-z0-9_-]{43}$',
+                ).hasMatch(authorityRootPublicKey)))) {
       throw const FormatException('Crew room operation is invalid.');
     }
     return CrewRoomOperation(
@@ -40,6 +50,7 @@ class CrewRoomOperation {
       rideCode: rideCode,
       inviteSecret: inviteSecret,
       joinToken: joinToken,
+      authorityRootPublicKey: authorityRootPublicKey as String?,
     );
   }
 }

@@ -269,8 +269,13 @@ class InternetRelayWorker {
       if (!_isCurrent(generation, session)) return;
       for (final event in result.events) {
         if (event.rideId != session.rideId ||
-            event.schemaVersion != 1 ||
-            !RideEventAuthenticator.verify(event, session.inviteSecret)) {
+            (session.usesDeviceAuthority
+                ? event.schemaVersion != 2
+                : event.schemaVersion != 1) ||
+            !await RideEventAuthenticator.verifyAsync(
+              event,
+              session.inviteSecret,
+            )) {
           throw InternetRelayException(
             'Server returned an unauthenticated event ${event.id}.',
           );
@@ -284,6 +289,12 @@ class InternetRelayWorker {
         if (!_isCurrent(generation, session)) return;
         if (!knownEventIds.add(event.id)) continue;
         final stored = event.copyWith(acknowledged: true);
+        if (!await RideEventAuthenticator.verifyAsync(
+          stored,
+          session.inviteSecret,
+        )) {
+          continue;
+        }
         await _eventStore.append(stored);
         if (_isCurrent(generation, session) &&
             !_receivedEventController.isClosed) {

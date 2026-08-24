@@ -12,7 +12,15 @@ import '../relay/relay_presence.dart';
 /// particular radio SDK.
 class NearbyRelayController extends ChangeNotifier
     implements RelayPresenceGateway {
-  NearbyRelayController(this._engine) {
+  NearbyRelayController(
+    this._engine, {
+    RelayPresenceFactory? presenceFactory,
+    RelayPresenceVerifier? presenceVerifier,
+  }) : // Public constructor names stay free of library-private underscores.
+       // ignore: prefer_initializing_formals
+       _presenceFactory = presenceFactory,
+       // ignore: prefer_initializing_formals
+       _presenceVerifier = presenceVerifier {
     _subscription = _engine.statuses.listen((status) {
       _status = status;
       notifyListeners();
@@ -20,6 +28,8 @@ class NearbyRelayController extends ChangeNotifier
   }
 
   final RelayEngine _engine;
+  final RelayPresenceFactory? _presenceFactory;
+  final RelayPresenceVerifier? _presenceVerifier;
   late final StreamSubscription<RelayStatus> _subscription;
   RelayStatus _status = const RelayStatus.stopped();
 
@@ -35,6 +45,8 @@ class NearbyRelayController extends ChangeNotifier
       rideSecret: session.inviteSecret,
       localDeviceId: session.localRiderId,
       endpointName: session.displayName,
+      presenceFactory: _presenceFactory,
+      presenceVerifier: _presenceVerifier,
     ),
   );
 

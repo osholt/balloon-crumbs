@@ -95,7 +95,9 @@ class TestControlServer {
     server.listen(
       _handle,
       onError: (Object error) {
-        if (kDebugMode) debugPrint('Test control request failed: $error');
+        if (kDebugMode) {
+          debugPrint('Test control request failed (${error.runtimeType})');
+        }
       },
       cancelOnError: false,
     );
@@ -210,6 +212,7 @@ class TestControlServer {
           rideCode: session.rideCode,
           inviteSecret: session.inviteSecret,
           joinToken: session.joinToken,
+          authorityRootPublicKey: session.authorityRootPublicKey,
         ).encode(),
       });
       return;

@@ -8,6 +8,7 @@ import '../domain/ride_event.dart';
 import 'relay_event_compatibility.dart';
 import 'relay_queue.dart';
 import 'relay_presence.dart';
+import '../services/presence_authenticator.dart';
 
 enum RelayFrameKind { events, acknowledgement, presence }
 
@@ -234,6 +235,17 @@ class RelayProtocol {
           riderColor: position.riderColor,
         );
       }
+      PresenceAuthorityProof? authorityProof;
+      final authorityVersion = presence['authorityVersion'];
+      if (authorityVersion != null) {
+        try {
+          authorityProof = PresenceAuthorityProof.fromJson(presence);
+        } on Object {
+          throw const RelayProtocolException(
+            'Invalid presence authority proof',
+          );
+        }
+      }
       return RelayFrame(
         kind: kind,
         rideId: rideId,
@@ -246,6 +258,7 @@ class RelayProtocol {
           expiresAt: expiresAt,
           clear: clear,
           position: position,
+          authorityProof: authorityProof,
         ),
       );
     }
@@ -345,6 +358,7 @@ class RelayProtocol {
         'clear': frame.presence!.clear,
         if (frame.presence!.position case final position?)
           'position': position.toJson(),
+        if (frame.presence!.authorityProof case final proof?) ...proof.toJson(),
       },
   };
 

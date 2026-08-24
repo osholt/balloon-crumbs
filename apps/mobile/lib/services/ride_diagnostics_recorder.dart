@@ -265,12 +265,11 @@ class RideDiagnosticsRecorder {
   String render({String? rideCode, String? appBuild}) {
     final lines = <String>[
       'Balloon Crumbs · flight diagnostics',
-      if (rideCode != null) 'Flight:  $rideCode',
       if (appBuild != null) 'Build: $appBuild',
       'Written: ${_stamp()}',
       '',
       'Positions in this file are this phone\'s own. No other crew member\'s position,',
-      'no flight or invite secret, and no emergency-contact detail is recorded.',
+      'no flight code or invite secret, and no emergency-contact detail is recorded.',
       '',
       if (_dropped > 0) ...[
         '$_dropped earlier entries were dropped to stay inside the '

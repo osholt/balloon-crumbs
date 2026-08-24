@@ -52,6 +52,8 @@ def test_retention_table_matches_the_documented_bands() -> None:
     assert retention("flightStartedByCrew") == timedelta(hours=72)
     assert retention("flightLanded") == timedelta(hours=72)
     assert retention("flightLandingRetracted") == timedelta(hours=72)
+    assert retention("deviceAuthorityRevoked") == timedelta(hours=72)
+    assert retention("deviceAuthorityRotated") == timedelta(hours=72)
 
 
 def test_ground_crew_start_is_accepted_and_relayed(client, synchronize, make_event) -> None:

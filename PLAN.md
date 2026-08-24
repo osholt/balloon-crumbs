@@ -172,17 +172,18 @@ Acceptance:
 
 - Retain Tail End Charlie's local journal, deduplication, bounded relay, QR
   bootstrap, diagnostics, and explicit stale states.
-- Replace the inherited group-HMAC trust model with per-device authority and
-  encrypted payloads before public release.
-- Default precise server-side data retention to the active flight plus a short,
-  documented recovery period.
+- Per-device Ed25519 authority now supplements the bounded group transport HMAC;
+  copied flight credentials cannot impersonate an established device or pilot.
+- Precise server-side retention is capped by data class and an ended flight is
+  deleted after a maximum 24-hour recovery window. See
+  `docs/security-privacy-field-gate.md`.
 
 Acceptance:
 
-- [ ] Replayed and duplicated events produce one canonical state.
-- [ ] Connectivity loss and recovery require no repair screen.
-- [ ] Logs redact codes, secrets, exact tracks, and provider credentials.
-- [ ] A participant can leave and delete their local flight data.
+- [x] Replayed and duplicated events produce one canonical state.
+- [x] Connectivity loss and recovery require no repair screen.
+- [x] Logs redact codes, secrets, exact tracks, and provider credentials.
+- [x] A participant can leave and delete their local flight data.
 
 ### P1 — useful after the core loop works
 
@@ -234,7 +235,9 @@ Lagging indicators:
   airspace, and NOTAM providers permit caching and redistribution in this app?
 - **Blocking — product:** What prediction horizon and recalculation cadence are
   acceptable to experienced UK chase crews?
-- **Blocking — privacy:** Exact retention durations and observer precision.
+- **Resolved — privacy:** Exact retention durations and deletion triggers are in
+  `docs/security-privacy-field-gate.md`; observer precision remains deliberately
+  reduced and separately gated by issue #14.
 - **Non-blocking — design:** Final altitude palette and simultaneous non-colour cue.
 - **Non-blocking — release:** Final product name, domains, and permanent bundle IDs.
 

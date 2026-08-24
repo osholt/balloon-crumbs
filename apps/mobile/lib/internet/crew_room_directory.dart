@@ -231,6 +231,8 @@ class HttpCrewRoomDirectory implements CrewRoomDirectory {
     'rideCode': session.rideCode,
     'inviteSecret': session.inviteSecret,
     'resolveToken': session.joinToken,
+    if (session.authorityRootPublicKey != null)
+      'authorityRootPublicKey': session.authorityRootPublicKey,
   };
 
   Future<Map<String, Object?>> _request(

@@ -1,4 +1,5 @@
 import '../domain/rider_location.dart';
+import '../services/presence_authenticator.dart';
 
 /// One authenticated, replace-only presence update carried by Nearby.
 ///
@@ -10,6 +11,7 @@ class RelayPresenceUpdate {
     required this.expiresAt,
     required this.clear,
     this.position,
+    this.authorityProof,
   });
 
   final String riderId;
@@ -17,6 +19,7 @@ class RelayPresenceUpdate {
   final DateTime expiresAt;
   final bool clear;
   final RiderLocation? position;
+  final PresenceAuthorityProof? authorityProof;
 }
 
 abstract interface class RelayPresenceGateway {

@@ -75,6 +75,13 @@ void main() {
     return joined;
   }
 
+  Future<void> appendAuthenticatedPeerEvent(RideEvent event) async {
+    final secret = controller.session!.inviteSecret;
+    await eventStore.append(
+      event.copyWith(signature: RideEventAuthenticator.sign(event, secret)),
+    );
+  }
+
   test(
     'new flight persists pilot role and atomic balloon assignment',
     () async {
@@ -1123,10 +1130,9 @@ void main() {
 
       expect(controller.hasActiveRide, isFalse);
       expect(await sessionStore.load(), isNull);
-      final retained = await eventStore.eventsForRide(rideId);
-      expect(retained.last.type, RideEventType.riderLeft);
-      expect(retained.last.payload['riderId'], retained.last.deviceId);
-      expect(published?.id, retained.last.id);
+      expect(await eventStore.eventsForRide(rideId), isEmpty);
+      expect(published?.type, RideEventType.riderLeft);
+      expect(published?.payload['riderId'], published?.deviceId);
       expect(published?.signature, hasLength(64));
     },
   );
@@ -1239,7 +1245,7 @@ void main() {
     final rideId = controller.session!.rideId;
     final myId = controller.session!.localRiderId;
 
-    await eventStore.append(
+    await appendAuthenticatedPeerEvent(
       RideEvent(
         id: 'broadcast-share',
         rideId: rideId,
@@ -1256,7 +1262,7 @@ void main() {
         signature: 'relay-test',
       ),
     );
-    await eventStore.append(
+    await appendAuthenticatedPeerEvent(
       RideEvent(
         id: 'addressed-to-me',
         rideId: rideId,
@@ -1274,7 +1280,7 @@ void main() {
         signature: 'relay-test',
       ),
     );
-    await eventStore.append(
+    await appendAuthenticatedPeerEvent(
       RideEvent(
         id: 'addressed-elsewhere',
         rideId: rideId,
@@ -1306,7 +1312,7 @@ void main() {
     final rideId = controller.session!.rideId;
     final myId = controller.session!.localRiderId;
 
-    await eventStore.append(
+    await appendAuthenticatedPeerEvent(
       RideEvent(
         id: 'their-share',
         rideId: rideId,
@@ -1351,7 +1357,7 @@ void main() {
         .id;
     expect(controller.sentIceShares.single.viewedAt, isNull);
 
-    await eventStore.append(
+    await appendAuthenticatedPeerEvent(
       RideEvent(
         id: 'their-view',
         rideId: rideId,
@@ -1376,7 +1382,7 @@ void main() {
     final rideId = controller.session!.rideId;
     final myId = controller.session!.localRiderId;
 
-    await eventStore.append(
+    await appendAuthenticatedPeerEvent(
       RideEvent(
         id: 'unused-share',
         rideId: rideId,
@@ -1393,7 +1399,7 @@ void main() {
         signature: 'relay-test',
       ),
     );
-    await eventStore.append(
+    await appendAuthenticatedPeerEvent(
       RideEvent(
         id: 'used-share',
         rideId: rideId,

@@ -261,7 +261,9 @@ class ObserverAccessController extends ChangeNotifier {
         onError: (Object error, StackTrace stackTrace) {
           _publishLoop = null;
           if (kDebugMode) {
-            debugPrint('Observer snapshot publish failed: $error');
+            debugPrint(
+              'Observer snapshot publish failed (${error.runtimeType})',
+            );
           }
           _ensurePublishing();
         },

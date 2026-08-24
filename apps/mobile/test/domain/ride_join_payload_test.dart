@@ -6,6 +6,7 @@ import 'package:balloon_crumbs/domain/ride_join_payload.dart';
 void main() {
   const secret = '0123456789abcdef0123456789abcdef';
   const joinToken = 'resolve-token-0123456789';
+  const rootKey = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 
   const payload = RideJoinPayload(
     rideId: '019fb78c-4045-7213-b053-9197b4c2669f',
@@ -21,6 +22,21 @@ void main() {
     expect(decoded.rideCode, payload.rideCode);
     expect(decoded.inviteSecret, payload.inviteSecret);
     expect(decoded.joinToken, payload.joinToken);
+  });
+
+  test('current invitation carries the authority root', () {
+    const current = RideJoinPayload(
+      rideId: 'ride-1',
+      rideCode: '934893',
+      inviteSecret: secret,
+      joinToken: joinToken,
+      authorityRootPublicKey: rootKey,
+    );
+
+    final decoded = RideJoinPayload.decode(current.encode());
+
+    expect(current.encode(), startsWith('bc2:'));
+    expect(decoded.authorityRootPublicKey, rootKey);
   });
 
   test('tolerates surrounding whitespace from a scan', () {
@@ -87,6 +103,10 @@ void main() {
     test('too few or too many fields', () {
       expectRejected('bc1:934893:ride-1:$secret');
       expectRejected('bc1:934893:ride-1:$secret:$joinToken:extra');
+    });
+
+    test('a malformed authority root', () {
+      expectRejected('bc2:934893:ride-1:$secret:$joinToken:short');
     });
   });
 

@@ -11,7 +11,10 @@ import '../data/in_memory_crew_room_store.dart';
 import '../domain/crew_room.dart';
 import '../domain/crew_room_store.dart';
 import '../domain/craft.dart';
+import '../domain/device_identity_store.dart';
 import '../services/craft_roster.dart';
+import '../services/device_identity.dart';
+import '../services/device_authority_policy.dart';
 import '../services/chase_guidance_target.dart';
 import '../domain/event_store.dart';
 import '../domain/flight_replay.dart';
@@ -37,6 +40,7 @@ import '../features/map/craft_icon.dart';
 import '../relay/live_presence.dart';
 import '../services/nearby_bridge.dart';
 import '../services/pilot_handover.dart';
+import '../services/presence_authenticator.dart';
 import '../services/completed_ride_archiver.dart';
 import '../services/ride_event_authenticator.dart';
 import '../services/ride_lifecycle.dart';
@@ -47,6 +51,7 @@ import '../services/ride_route_reducer.dart';
 import '../services/rider_contact_share.dart';
 import '../internet/internet_relay_client.dart';
 import '../internet/crew_room_directory.dart';
+import '../relay/relay_presence.dart';
 
 typedef Clock = DateTime Function();
 typedef IdFactory = String Function();
@@ -88,6 +93,7 @@ class RideController extends ChangeNotifier {
     CrewRoomStore? crewRoomStore,
     this._completedRideStore,
     this._installationId,
+    DeviceIdentityStore? deviceIdentityStore,
   }) : _clock = clock ?? DateTime.now,
        _idFactory = idFactory ?? const Uuid().v7,
        _random = random ?? Random.secure(),
@@ -95,7 +101,10 @@ class RideController extends ChangeNotifier {
            rideCodeDirectory ?? HttpRideCodeDirectory.fromEnvironment(),
        _crewRoomDirectory =
            crewRoomDirectory ?? HttpCrewRoomDirectory.fromEnvironment(),
-       _crewRoomStore = crewRoomStore ?? InMemoryCrewRoomStore();
+       _crewRoomStore = crewRoomStore ?? InMemoryCrewRoomStore(),
+       _deviceIdentityManager = deviceIdentityStore == null
+           ? null
+           : DeviceIdentityManager(deviceIdentityStore);
 
   static const endedRideRecoveryWindow = Duration(hours: 24);
 
@@ -110,6 +119,7 @@ class RideController extends ChangeNotifier {
   final RideCodeDirectory _rideCodeDirectory;
   final CrewRoomDirectory _crewRoomDirectory;
   final CrewRoomStore _crewRoomStore;
+  final DeviceIdentityManager? _deviceIdentityManager;
   List<CrewRoomMembership> _crewRooms = const [];
 
   RideSession? _session;
@@ -126,6 +136,7 @@ class RideController extends ChangeNotifier {
   RideRouteState _routeState = const RideRouteState();
   final Map<String, Set<RideTransportEvidence>> _transportByEventId = {};
   List<LiveRiderPresence> _livePresence = const [];
+  DeviceAuthorityPolicy? _deviceAuthorityPolicy;
 
   /// The relay's cursor-independent roster, including the riders it reports as
   /// having left. Live presence drops a departed rider — they are not there —
@@ -236,6 +247,9 @@ class RideController extends ChangeNotifier {
 
   PilotAuthorityState get pilotAuthority =>
       const PilotAuthorityReducer().fromEvents(events: _events, now: _clock());
+
+  Set<String> get revokedDeviceIds =>
+      _deviceAuthorityPolicy?.revokedDeviceIds ?? const {};
 
   PilotHandoverOffer? get pendingLocalPilotHandover {
     final localId = _session?.localRiderId;
@@ -660,7 +674,9 @@ class RideController extends ChangeNotifier {
     _session = await _sessionStore.load();
     final activeSession = _session;
     if (activeSession != null) {
-      _replaceEvents(await _eventStore.eventsForRide(activeSession.rideId));
+      await _replaceAuthenticatedEvents(
+        await _eventStore.eventsForRide(activeSession.rideId),
+      );
       _rebuildLifecycle();
       await _archiveCurrentRideIfComplete();
       await _expireEndedRideIfDue();
@@ -675,7 +691,9 @@ class RideController extends ChangeNotifier {
     if (activeSession == null) {
       return;
     }
-    _replaceEvents(await _eventStore.eventsForRide(activeSession.rideId));
+    await _replaceAuthenticatedEvents(
+      await _eventStore.eventsForRide(activeSession.rideId),
+    );
     _rebuildLifecycle();
     await _archiveCurrentRideIfComplete();
     await _expireEndedRideIfDue();
@@ -698,9 +716,43 @@ class RideController extends ChangeNotifier {
     final activeSession = _session;
     if (activeSession == null ||
         event.rideId != activeSession.rideId ||
+        (activeSession.usesDeviceAuthority
+            ? event.schemaVersion != 2
+            : event.schemaVersion != 1) ||
         _eventIds.contains(event.id) ||
         !RideEventAuthenticator.verify(event, activeSession.inviteSecret)) {
       return false;
+    }
+
+    if (activeSession.usesDeviceAuthority) {
+      final appendsInOrder =
+          _events.isEmpty ||
+          RideLifecycleReducer.compareEvents(_events.last, event) <= 0;
+      if (appendsInOrder) {
+        final policy =
+            _deviceAuthorityPolicy ?? DeviceAuthorityPolicy(activeSession);
+        if (!policy.accept(event)) return false;
+        _deviceAuthorityPolicy = policy;
+      } else {
+        final policy = DeviceAuthorityPolicy(activeSession);
+        final accepted = policy.filter([..._events, event]);
+        if (!accepted.any((candidate) => candidate.id == event.id)) {
+          return false;
+        }
+        _deviceAuthorityPolicy = policy;
+        _events = accepted.toList(growable: true);
+        _eventIds
+          ..clear()
+          ..addAll(_events.map((candidate) => candidate.id));
+        _invalidateMembershipProjection();
+        _landingZoneDirty = true;
+        _flightLandingDirty = true;
+        _operationalBoundaryDirty = true;
+        _rebuildLifecycle();
+        _applyLocalPilotAuthorityFromEvents();
+        if (notify) notifyListeners();
+        return true;
+      }
     }
 
     if (_events.isEmpty ||
@@ -878,6 +930,7 @@ class RideController extends ChangeNotifier {
         rideCode: operation.rideCode,
         inviteSecret: operation.inviteSecret,
         joinToken: operation.joinToken,
+        authorityRootPublicKey: operation.authorityRootPublicKey,
         displayName: membership.displayName,
         flightRole: membership.flightRole,
         vehicleLabel: membership.vehicleLabel,
@@ -1135,6 +1188,7 @@ class RideController extends ChangeNotifier {
         rideCode: invitation.rideCode,
         inviteSecret: invitation.inviteSecret,
         joinToken: invitation.joinToken,
+        authorityRootPublicKey: invitation.authorityRootPublicKey,
         displayName: displayName,
         flightRole: flightRole,
         vehicleLabel: vehicleLabel,
@@ -1177,7 +1231,8 @@ class RideController extends ChangeNotifier {
       } on CrewRoomDirectoryException catch (error) {
         if (kDebugMode) {
           debugPrint(
-            'Joined flight offline; returning room access was deferred: $error',
+            'Joined flight offline; returning room access was deferred '
+            '(${error.runtimeType})',
           );
         }
       }
@@ -1208,6 +1263,7 @@ class RideController extends ChangeNotifier {
         rideCode: credentials.rideCode,
         inviteSecret: credentials.inviteSecret,
         joinToken: credentials.joinToken,
+        authorityRootPublicKey: credentials.authorityRootPublicKey,
         displayName: displayName,
         flightRole: flightRole,
         vehicleLabel: vehicleLabel,
@@ -1224,6 +1280,7 @@ class RideController extends ChangeNotifier {
     required String rideCode,
     required String inviteSecret,
     required String joinToken,
+    String? authorityRootPublicKey,
     required String displayName,
     required FlightRole flightRole,
     required String vehicleLabel,
@@ -1271,12 +1328,20 @@ class RideController extends ChangeNotifier {
         kind: craftKind,
         label: craftLabel,
       );
+      final identity =
+          authorityRootPublicKey == null || _deviceIdentityManager == null
+          ? null
+          : await _deviceIdentityManager.loadOrCreate(credentials.rideId);
       final session = RideSession(
         rideId: credentials.rideId,
         rideCode: credentials.rideCode,
         inviteSecret: credentials.inviteSecret,
         joinToken: credentials.joinToken,
-        localRiderId: _localRiderIdForRide(credentials.rideId),
+        localRiderId:
+            identity?.deviceId ?? _localRiderIdForRide(credentials.rideId),
+        authorizationVersion: identity == null ? 1 : 2,
+        authorityRootPublicKey: authorityRootPublicKey,
+        localDevicePublicKey: identity?.publicKey,
         displayName: _normaliseName(displayName),
         role: flightRole == FlightRole.pilot ? RideRole.lead : RideRole.rider,
         flightRole: flightRole,
@@ -1291,7 +1356,9 @@ class RideController extends ChangeNotifier {
       );
       _session = session;
       await _sessionStore.save(session);
-      _replaceEvents(await _eventStore.eventsForRide(session.rideId));
+      await _replaceAuthenticatedEvents(
+        await _eventStore.eventsForRide(session.rideId),
+      );
       _invalidateMembershipProjection();
       _rebuildLifecycle();
       await _record(
@@ -1431,6 +1498,91 @@ class RideController extends ChangeNotifier {
           'toDeviceId': offer.toDeviceId,
         },
       );
+    });
+  }
+
+  /// Revokes one participant's operation-scoped signing identity. Possessing
+  /// the shared flight code may still reach the transport, but later events
+  /// from the revoked key are discarded before product state is reduced.
+  Future<void> revokeDeviceAuthority(
+    String targetDeviceId, {
+    String reason = 'removed by pilot',
+  }) async {
+    await _run(() async {
+      final session = _requireSession();
+      if (!session.usesDeviceAuthority || !hasFlightAuthority) {
+        throw const FormatException(
+          'Only the current pilot can revoke a crew device.',
+        );
+      }
+      if (targetDeviceId == session.localRiderId ||
+          !participants.any(
+            (participant) => participant.riderId == targetDeviceId,
+          )) {
+        throw const FormatException('Choose another active crew device.');
+      }
+      final trimmedReason = reason.trim();
+      await _record(
+        type: RideEventType.deviceAuthorityRevoked,
+        priority: EventPriority.critical,
+        payload: {
+          'targetDeviceId': targetDeviceId,
+          'reason': trimmedReason.isEmpty
+              ? 'removed by pilot'
+              : trimmedReason.length <= 120
+              ? trimmedReason
+              : trimmedReason.substring(0, 120),
+        },
+      );
+    });
+  }
+
+  /// Replaces this device's operation key without changing its roster identity.
+  /// The old key signs the rotation and the new key signs a detached proof, so
+  /// neither the relay nor another invite holder can substitute a replacement.
+  Future<void> rotateLocalDeviceAuthority() async {
+    await _run(() async {
+      final session = _requireSession();
+      final manager = _deviceIdentityManager;
+      final oldPublicKey = session.localDevicePublicKey;
+      if (!session.usesDeviceAuthority ||
+          manager == null ||
+          oldPublicKey == null) {
+        throw const FormatException(
+          'This legacy flight cannot rotate device authority.',
+        );
+      }
+      final previous = await manager.loadOrCreate(session.rideId);
+      final replacement = await manager.generateReplacement(session.rideId);
+      final proof = await RideEventAuthenticator.signRotationProof(
+        rideId: session.rideId,
+        deviceId: session.localRiderId,
+        oldPublicKey: oldPublicKey,
+        replacement: replacement,
+      );
+      final event = await createAuthenticatedEvent(
+        type: RideEventType.deviceAuthorityRotated,
+        priority: EventPriority.critical,
+        payload: {
+          'newPublicKey': replacement.publicKey,
+          'newDeviceSignature': proof,
+        },
+      );
+      await manager.save(replacement, rideId: session.rideId);
+      try {
+        await _eventStore.append(event);
+        if (!_acceptStoredEvent(event, notify: false)) {
+          throw StateError('Device authority rotation was rejected.');
+        }
+      } on Object {
+        await manager.save(previous, rideId: session.rideId);
+        rethrow;
+      }
+      final updated = session.copyWith(
+        localDevicePublicKey: replacement.publicKey,
+      );
+      _session = updated;
+      await _sessionStore.save(updated);
     });
   }
 
@@ -2366,12 +2518,16 @@ class RideController extends ChangeNotifier {
           await publishDeparture(departure);
         } on Object catch (error, stackTrace) {
           if (kDebugMode) {
-            debugPrint('Departure remains queued locally: $error\n$stackTrace');
+            debugPrint(
+              'Departure was not confirmed before local flight deletion '
+              '(${error.runtimeType})\n'
+              '$stackTrace',
+            );
           }
         }
       }
       await _archiveCurrentRideIfComplete(force: true);
-      await _removeRideData(deleteEvents: false);
+      await _removeRideData();
     });
   }
 
@@ -2381,39 +2537,148 @@ class RideController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<RideEvent> _record({
+  /// Builds an authenticated local event without storing it. The situational
+  /// controller uses this path so location and hazard updates receive the same
+  /// per-device author proof as lifecycle events.
+  Future<RideEvent> createAuthenticatedEvent({
     required RideEventType type,
     required Map<String, Object?> payload,
     EventPriority priority = EventPriority.routine,
     DateTime? expiresAt,
   }) async {
     final activeSession = _requireSession();
-    final now = _clock();
-    final id = _idFactory();
     final unsignedEvent = RideEvent(
-      id: id,
+      id: _idFactory(),
       rideId: activeSession.rideId,
       deviceId: activeSession.localRiderId,
       type: type,
       priority: priority,
-      createdAt: now,
+      createdAt: _clock(),
       expiresAt: expiresAt,
       payload: payload,
       signature: '',
+      devicePublicKey: activeSession.localDevicePublicKey,
+      schemaVersion: activeSession.usesDeviceAuthority ? 2 : 1,
     );
-    final event = RideEvent(
-      id: unsignedEvent.id,
-      rideId: unsignedEvent.rideId,
-      deviceId: unsignedEvent.deviceId,
-      type: unsignedEvent.type,
-      priority: unsignedEvent.priority,
-      createdAt: unsignedEvent.createdAt,
-      expiresAt: unsignedEvent.expiresAt,
-      payload: unsignedEvent.payload,
-      signature: RideEventAuthenticator.sign(
-        unsignedEvent,
-        activeSession.inviteSecret,
-      ),
+    if (!activeSession.usesDeviceAuthority) {
+      return RideEvent(
+        id: unsignedEvent.id,
+        rideId: unsignedEvent.rideId,
+        deviceId: unsignedEvent.deviceId,
+        type: unsignedEvent.type,
+        priority: unsignedEvent.priority,
+        createdAt: unsignedEvent.createdAt,
+        expiresAt: unsignedEvent.expiresAt,
+        payload: unsignedEvent.payload,
+        signature: RideEventAuthenticator.sign(
+          unsignedEvent,
+          activeSession.inviteSecret,
+        ),
+      );
+    }
+    var identity = await _deviceIdentityManager!.loadOrCreate(
+      activeSession.rideId,
+    );
+    if (identity.publicKey != activeSession.localDevicePublicKey ||
+        (identity.deviceId != activeSession.localRiderId &&
+            !_events.any(
+              (event) =>
+                  event.type == RideEventType.deviceAuthorityRotated &&
+                  event.deviceId == activeSession.localRiderId &&
+                  event.payload['newPublicKey'] == identity.publicKey,
+            ))) {
+      throw StateError(
+        'This device no longer holds the signing identity for the flight.',
+      );
+    }
+    identity = identity.boundToDeviceId(activeSession.localRiderId);
+    return RideEventAuthenticator.signForDevice(
+      event: unsignedEvent,
+      secret: activeSession.inviteSecret,
+      identity: identity,
+    );
+  }
+
+  Future<RelayPresenceUpdate> createAuthenticatedPresence({
+    required RiderLocation? position,
+    required bool clear,
+    required Duration ttl,
+  }) async {
+    final activeSession = _requireSession();
+    final now = _clock();
+    if (!activeSession.usesDeviceAuthority) {
+      return RelayPresenceUpdate(
+        riderId: activeSession.localRiderId,
+        sentAt: now,
+        expiresAt: now.add(ttl),
+        clear: clear,
+        position: position,
+      );
+    }
+    var identity = await _deviceIdentityManager!.loadOrCreate(
+      activeSession.rideId,
+    );
+    if (identity.publicKey != activeSession.localDevicePublicKey) {
+      throw StateError(
+        'This device no longer holds the live-position identity.',
+      );
+    }
+    identity = identity.boundToDeviceId(activeSession.localRiderId);
+    final proof = await PresenceAuthenticator.sign(
+      rideId: activeSession.rideId,
+      riderId: activeSession.localRiderId,
+      position: position,
+      clear: clear,
+      signedAt: now,
+      identity: identity,
+    );
+    return RelayPresenceUpdate(
+      riderId: activeSession.localRiderId,
+      sentAt: now,
+      expiresAt: now.add(ttl),
+      clear: clear,
+      position: position,
+      authorityProof: proof,
+    );
+  }
+
+  Future<bool> verifyAuthenticatedPresence(
+    RelayPresenceUpdate update,
+    DateTime trustedNow,
+  ) async {
+    final activeSession = _session;
+    if (activeSession == null) return false;
+    if (!activeSession.usesDeviceAuthority) {
+      return update.authorityProof == null;
+    }
+    final proof = update.authorityProof;
+    final policy = _deviceAuthorityPolicy;
+    if (proof == null ||
+        policy == null ||
+        !policy.authorizesDeviceKey(update.riderId, proof.devicePublicKey)) {
+      return false;
+    }
+    return PresenceAuthenticator.verify(
+      rideId: activeSession.rideId,
+      riderId: update.riderId,
+      position: update.position,
+      clear: update.clear,
+      proof: proof,
+      now: trustedNow,
+    );
+  }
+
+  Future<RideEvent> _record({
+    required RideEventType type,
+    required Map<String, Object?> payload,
+    EventPriority priority = EventPriority.routine,
+    DateTime? expiresAt,
+  }) async {
+    final event = await createAuthenticatedEvent(
+      type: type,
+      payload: payload,
+      priority: priority,
+      expiresAt: expiresAt,
     );
     await _eventStore.append(event);
     _acceptStoredEvent(event, notify: false);
@@ -2452,6 +2717,10 @@ class RideController extends ChangeNotifier {
     final now = _clock();
     final normalisedRideName = rideName?.trim();
     final rideId = _idFactory();
+    final identityManager = _deviceIdentityManager;
+    final identity = identityManager == null
+        ? null
+        : await identityManager.loadOrCreate(rideId);
     final balloonCraftId = _craftIdFor(
       rideId: rideId,
       kind: CraftKind.balloon,
@@ -2462,7 +2731,10 @@ class RideController extends ChangeNotifier {
       rideCode: _generateCode(),
       inviteSecret: _generateInviteSecret(),
       joinToken: _generateJoinToken(),
-      localRiderId: _localRiderIdForRide(rideId),
+      localRiderId: identity?.deviceId ?? _localRiderIdForRide(rideId),
+      authorizationVersion: identity == null ? 1 : 2,
+      authorityRootPublicKey: identity?.publicKey,
+      localDevicePublicKey: identity?.publicKey,
       displayName: normalisedDisplayName,
       role: RideRole.lead,
       flightRole: FlightRole.pilot,
@@ -2561,7 +2833,7 @@ class RideController extends ChangeNotifier {
       _errorMessage = 'That action could not be saved. Please try again.';
       _errorIsRetryable = true;
       if (kDebugMode) {
-        debugPrint('Flight action failed: $error\n$stackTrace');
+        debugPrint('Flight action failed (${error.runtimeType})\n$stackTrace');
       }
     } finally {
       _busy = false;
@@ -2722,7 +2994,8 @@ class RideController extends ChangeNotifier {
       _rideArchiveError = rideArchiveFailedMessage;
       if (kDebugMode) {
         debugPrint(
-          'Could not archive the completed flight: $error\n$stackTrace',
+          'Could not archive the completed flight (${error.runtimeType})\n'
+          '$stackTrace',
         );
       }
     }
@@ -2768,6 +3041,7 @@ class RideController extends ChangeNotifier {
     _endedRideSetAside = false;
     final rideId = _requireSession().rideId;
     if (deleteEvents) await _eventStore.deleteRide(rideId);
+    await _deviceIdentityManager?.delete(rideId);
     await _sessionStore.clear();
     _session = null;
     _replaceEvents(const []);
@@ -2782,7 +3056,15 @@ class RideController extends ChangeNotifier {
   }
 
   void _replaceEvents(Iterable<RideEvent> events) {
-    _events = events.toList(growable: true);
+    final session = _session;
+    if (session?.usesDeviceAuthority ?? false) {
+      final policy = DeviceAuthorityPolicy(session!);
+      _events = policy.filter(events).toList(growable: true);
+      _deviceAuthorityPolicy = policy;
+    } else {
+      _events = events.toList(growable: true);
+      _deviceAuthorityPolicy = null;
+    }
     _eventIds
       ..clear()
       ..addAll(_events.map((event) => event.id));
@@ -2791,6 +3073,24 @@ class RideController extends ChangeNotifier {
     _flightLandingDirty = true;
     _operationalBoundaryDirty = true;
     _applyLocalPilotAuthorityFromEvents();
+  }
+
+  Future<void> _replaceAuthenticatedEvents(Iterable<RideEvent> events) async {
+    final session = _requireSession();
+    final accepted = <RideEvent>[];
+    for (final event in events) {
+      final compatibleSchema = session.usesDeviceAuthority
+          ? event.schemaVersion == 2
+          : event.schemaVersion == 1;
+      if (compatibleSchema &&
+          await RideEventAuthenticator.verifyAsync(
+            event,
+            session.inviteSecret,
+          )) {
+        accepted.add(event);
+      }
+    }
+    _replaceEvents(accepted);
   }
 
   void _applyLocalPilotAuthorityFromEvents() {

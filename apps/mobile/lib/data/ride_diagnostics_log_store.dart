@@ -56,20 +56,23 @@ class RideDiagnosticsLog {
 
   final String rideId;
 
-  /// The ride's short code, read back out of the log's own header, or null if the
-  /// log was written without one. Read rather than stored alongside so there is
-  /// no second copy to fall out of step.
+  /// Retained as a compatibility field for old settings UI. New and migrated
+  /// logs always return null because a reusable flight code is a credential.
   final String? rideCode;
 
   final DateTime writtenAt;
   final String text;
 
   /// What the share sheet calls the attachment.
-  String get fileName => 'balloon-crumbs-diagnostics-${rideCode ?? rideId}.txt';
+  String get fileName => 'balloon-crumbs-diagnostics-$rideId.txt';
 
-  /// Parses the `Ride:` line the recorder's header writes.
-  static String? rideCodeIn(String text) =>
-      _headerValue(text, 'Flight:') ?? _headerValue(text, 'Ride:');
+  /// Legacy compatibility parser. Flight-code headers are no longer retained.
+  static String? rideCodeIn(String text) => null;
+
+  static String withoutCredentialHeader(String text) => text
+      .split('\n')
+      .where((line) => !line.startsWith('Flight:') && !line.startsWith('Ride:'))
+      .join('\n');
 
   /// Parses the `Written:` line the recorder's header writes.
   ///
@@ -85,8 +88,7 @@ class RideDiagnosticsLog {
   }
 
   static String? _headerValue(String text, String label) {
-    // Bounded to the header: a `Ride:` inside a recorded entry is not the ride
-    // code, and a whole log can be thousands of lines.
+    // Bounded to the header because a whole log can be thousands of lines.
     for (final line in text.split('\n').take(8)) {
       if (!line.startsWith(label)) continue;
       final value = line.substring(label.length).trim();
@@ -123,7 +125,10 @@ class FileRideDiagnosticsLogStore implements RideDiagnosticsLogStore {
     // previous log rather than a truncated one. Same reason the route stores do
     // it.
     final temporary = File('${file.path}.tmp');
-    await temporary.writeAsString(text, flush: true);
+    await temporary.writeAsString(
+      RideDiagnosticsLog.withoutCredentialHeader(text),
+      flush: true,
+    );
     if (await file.exists()) await file.delete();
     await temporary.rename(file.path);
     await _prune();
@@ -133,7 +138,10 @@ class FileRideDiagnosticsLogStore implements RideDiagnosticsLogStore {
   Future<String?> read(String rideId) async {
     final file = _fileFor(rideId);
     if (!await file.exists()) return null;
-    return file.readAsString();
+    final storedText = await file.readAsString();
+    final text = RideDiagnosticsLog.withoutCredentialHeader(storedText);
+    if (text != storedText) await file.writeAsString(text, flush: true);
+    return text;
   }
 
   @override
@@ -143,7 +151,9 @@ class FileRideDiagnosticsLogStore implements RideDiagnosticsLogStore {
     await for (final entity in directory.list()) {
       if (entity is! File || !entity.path.endsWith('.txt')) continue;
       try {
-        final text = await entity.readAsString();
+        final storedText = await entity.readAsString();
+        final text = RideDiagnosticsLog.withoutCredentialHeader(storedText);
+        if (text != storedText) await entity.writeAsString(text, flush: true);
         logs.add(
           RideDiagnosticsLog(
             rideId: path.basenameWithoutExtension(entity.path),
@@ -198,11 +208,12 @@ class InMemoryRideDiagnosticsLogStore implements RideDiagnosticsLogStore {
 
   @override
   Future<void> write({required String rideId, required String text}) async {
+    final safeText = RideDiagnosticsLog.withoutCredentialHeader(text);
     _logs[rideId] = RideDiagnosticsLog(
       rideId: rideId,
-      rideCode: RideDiagnosticsLog.rideCodeIn(text),
-      writtenAt: RideDiagnosticsLog.writtenAtIn(text) ?? _clock(),
-      text: text,
+      rideCode: null,
+      writtenAt: RideDiagnosticsLog.writtenAtIn(safeText) ?? _clock(),
+      text: safeText,
     );
   }
 

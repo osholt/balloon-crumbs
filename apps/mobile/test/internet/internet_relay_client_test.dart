@@ -306,6 +306,7 @@ void main() {
     test(
       'registers and resolves a six-digit code over the configured relay',
       () async {
+        const rootKey = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
         final requests = <http.Request>[];
         final transport = MockClient((request) async {
           requests.add(request);
@@ -321,6 +322,7 @@ void main() {
               'rideCode': '123456',
               'inviteSecret': _session.inviteSecret,
               'resolveToken': _session.joinToken,
+              'authorityRootPublicKey': rootKey,
             }),
             200,
             headers: {'content-type': 'application/json'},
@@ -332,7 +334,12 @@ void main() {
           ),
           client: transport,
         );
-        final leader = _session.copyWith(rideCode: '123456');
+        final leader = _session.copyWith(
+          rideCode: '123456',
+          authorizationVersion: 2,
+          authorityRootPublicKey: rootKey,
+          localDevicePublicKey: rootKey,
+        );
 
         await directory.register(leader);
         final resolved = await directory.resolve('123456');
@@ -341,6 +348,7 @@ void main() {
         expect(resolved.rideCode, '123456');
         expect(resolved.inviteSecret, _session.inviteSecret);
         expect(resolved.joinToken, _session.joinToken);
+        expect(resolved.authorityRootPublicKey, rootKey);
         expect(requests, hasLength(3));
         expect(requests.first.url.path, '/base/v1/compatibility');
         expect(requests[1].method, 'PUT');
@@ -350,6 +358,7 @@ void main() {
           'rideId': _session.rideId,
           'inviteSecret': _session.inviteSecret,
           'resolveToken': _session.joinToken,
+          'authorityRootPublicKey': rootKey,
         });
         expect(requests.last.method, 'GET');
         expect(

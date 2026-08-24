@@ -121,6 +121,16 @@ enum RideEventType {
   /// Naming the event prevents a late offline retraction from undoing a newer
   /// landing declaration.
   flightLandingRetracted,
+
+  /// The current pilot revokes one device's operation-scoped signing identity.
+  /// Later events from that identity are ignored even when they still possess
+  /// the shared transport credential.
+  deviceAuthorityRevoked,
+
+  /// A device replaces its operation-scoped signing key. The event is signed by
+  /// the old key and carries a proof made by the replacement key, preventing a
+  /// relay or another invite holder from substituting a key of their own.
+  deviceAuthorityRotated,
 }
 
 enum EventPriority { routine, important, critical }
@@ -135,6 +145,8 @@ class RideEvent {
     required this.createdAt,
     required this.payload,
     required this.signature,
+    this.devicePublicKey,
+    this.deviceSignature,
     this.expiresAt,
     this.acknowledged = false,
     this.schemaVersion = 1,
@@ -149,10 +161,12 @@ class RideEvent {
   final DateTime? expiresAt;
   final Map<String, Object?> payload;
   final String signature;
+  final String? devicePublicKey;
+  final String? deviceSignature;
   final bool acknowledged;
   final int schemaVersion;
 
-  RideEvent copyWith({bool? acknowledged}) => RideEvent(
+  RideEvent copyWith({bool? acknowledged, String? signature}) => RideEvent(
     id: id,
     rideId: rideId,
     deviceId: deviceId,
@@ -161,7 +175,9 @@ class RideEvent {
     createdAt: createdAt,
     expiresAt: expiresAt,
     payload: payload,
-    signature: signature,
+    signature: signature ?? this.signature,
+    devicePublicKey: devicePublicKey,
+    deviceSignature: deviceSignature,
     acknowledged: acknowledged ?? this.acknowledged,
     schemaVersion: schemaVersion,
   );
@@ -177,6 +193,8 @@ class RideEvent {
     'expiresAt': expiresAt?.toUtc().toIso8601String(),
     'payload': payload,
     'signature': signature,
+    if (devicePublicKey != null) 'devicePublicKey': devicePublicKey,
+    if (deviceSignature != null) 'deviceSignature': deviceSignature,
     'acknowledged': acknowledged,
   };
 
@@ -192,13 +210,15 @@ class RideEvent {
       'expiresAt',
       'payload',
       'signature',
+      'devicePublicKey',
+      'deviceSignature',
       'acknowledged',
     };
     if (json.keys.any((key) => !allowedKeys.contains(key))) {
       throw const FormatException('Event contains an unsupported field.');
     }
     final schemaVersion = _integer(json['schemaVersion'], 'schemaVersion');
-    if (schemaVersion != 1) {
+    if (schemaVersion != 1 && schemaVersion != 2) {
       throw const FormatException('Unsupported event schema version.');
     }
     final type = _enumValue(
@@ -228,6 +248,21 @@ class RideEvent {
     if (acknowledged != null && acknowledged is! bool) {
       throw const FormatException('Event acknowledgement is invalid.');
     }
+    final devicePublicKey = json['devicePublicKey'];
+    final deviceSignature = json['deviceSignature'];
+    if (schemaVersion == 2 &&
+        (devicePublicKey is! String ||
+            !_devicePublicKeyPattern.hasMatch(devicePublicKey) ||
+            deviceSignature is! String ||
+            !_deviceSignaturePattern.hasMatch(deviceSignature))) {
+      throw const FormatException('Event device authority is invalid.');
+    }
+    if (schemaVersion == 1 &&
+        (devicePublicKey != null || deviceSignature != null)) {
+      throw const FormatException(
+        'Legacy event cannot carry device authority.',
+      );
+    }
     return RideEvent(
       schemaVersion: schemaVersion,
       id: _string(json['id'], 'id', maximumLength: 128),
@@ -242,6 +277,8 @@ class RideEvent {
       },
       payload: payload,
       signature: _signature(json['signature']),
+      devicePublicKey: devicePublicKey as String?,
+      deviceSignature: deviceSignature as String?,
       acknowledged: acknowledged as bool? ?? false,
     );
   }
@@ -250,6 +287,8 @@ class RideEvent {
   static const _maximumJsonDepth = 16;
   static const _maximumCollectionEntries = 128;
   static final _signaturePattern = RegExp(r'^[0-9a-f]{64}$');
+  static final _devicePublicKeyPattern = RegExp(r'^[A-Za-z0-9_-]{43}$');
+  static final _deviceSignaturePattern = RegExp(r'^[A-Za-z0-9_-]{86}$');
 
   static String _string(
     Object? value,

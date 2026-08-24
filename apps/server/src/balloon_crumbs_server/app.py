@@ -532,6 +532,7 @@ def create_app(
             invite_secret=payload.inviteSecret,
             bearer_token=authorization[7:],
             resolve_token=payload.resolveToken,
+            authority_root_public_key=payload.authorityRootPublicKey,
         )
         join_code_requests.labels(outcome="registered").inc()
         return Response(status_code=204)
@@ -563,7 +564,9 @@ def create_app(
             resolve_token=resolve_token,
         )
         join_code_requests.labels(outcome="resolved").inc()
-        return JSONResponse(content=JoinCodeResponse.model_validate(result).model_dump())
+        return JSONResponse(
+            content=JoinCodeResponse.model_validate(result).model_dump(exclude_none=True)
+        )
 
     def _crew_room_rate_limit(request: Request) -> Response | None:
         client_ip = request.client.host if request.client is not None else "unknown"
@@ -585,6 +588,13 @@ def create_app(
             raise RelayServiceError(401, "Ride credential rejected")
         return token
 
+    def _crew_room_content(result: dict[str, object]) -> dict[str, object]:
+        content = CrewRoomResponse.model_validate(result).model_dump(mode="json")
+        operation = content.get("operation")
+        if isinstance(operation, dict) and operation.get("authorityRootPublicKey") is None:
+            operation.pop("authorityRootPublicKey", None)
+        return content
+
     @app.post("/api/v1/crew-rooms/create", include_in_schema=False)
     def create_crew_room(
         payload: CreateCrewRoomRequest,
@@ -603,7 +613,7 @@ def create_app(
         )
         return JSONResponse(
             status_code=201,
-            content=CrewRoomResponse.model_validate(result).model_dump(mode="json"),
+            content=_crew_room_content(result),
         )
 
     @app.post("/api/v1/crew-rooms/open", include_in_schema=False)
@@ -620,7 +630,7 @@ def create_app(
             device_id=payload.deviceId,
             device_credential=payload.deviceCredential,
         )
-        return JSONResponse(content=CrewRoomResponse.model_validate(result).model_dump(mode="json"))
+        return JSONResponse(content=_crew_room_content(result))
 
     @app.post("/api/v1/crew-rooms/join", include_in_schema=False)
     def join_crew_room(
@@ -637,7 +647,7 @@ def create_app(
             device_id=payload.deviceId,
             display_name=payload.displayName,
         )
-        return JSONResponse(content=CrewRoomResponse.model_validate(result).model_dump(mode="json"))
+        return JSONResponse(content=_crew_room_content(result))
 
     @app.post("/api/v1/crew-rooms/start-operation", include_in_schema=False)
     def start_crew_room_operation(
@@ -655,7 +665,7 @@ def create_app(
             operation=payload.operation.model_dump(),
             bearer_token=_ride_bearer_for_room(request),
         )
-        return JSONResponse(content=CrewRoomResponse.model_validate(result).model_dump(mode="json"))
+        return JSONResponse(content=_crew_room_content(result))
 
     @app.post("/api/v1/crew-rooms/devices", include_in_schema=False)
     def list_crew_room_devices(
@@ -1136,7 +1146,8 @@ def create_app(
             )
 
         try:
-            payload = PresenceSyncRequest.model_validate_json(body)
+            raw_payload = json.loads(body)
+            payload = PresenceSyncRequest.model_validate(raw_payload)
         except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as error:
             raise RelayServiceError(400, "Malformed presence request") from error
         request_protocol = client_protocol(request, payload.protocolVersion)
@@ -1159,6 +1170,7 @@ def create_app(
             bearer_token=bearer_token,
             device_header=request.headers.get("x-balloon-crumbs-device", ""),
             request=payload,
+            raw_position=(raw_payload.get("position") if isinstance(raw_payload, dict) else None),
             live_presence=live_presence,
             client_protocol=request_protocol,
         )

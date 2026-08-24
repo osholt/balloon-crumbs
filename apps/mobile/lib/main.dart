@@ -24,6 +24,7 @@ import 'data/json_file_completed_ride_store.dart';
 import 'data/secure_land_access_note_store.dart';
 import 'data/shared_preferences_session_store.dart';
 import 'data/secure_crew_room_store.dart';
+import 'data/secure_device_identity_store.dart';
 import 'data/sqlite_event_store.dart';
 import 'services/nearby_bridge.dart';
 import 'services/test_control_registry.dart';
@@ -103,6 +104,7 @@ Future<void> main() async {
     installationId: riderProfile.installationId,
     completedRideStore: completedRides,
     crewRoomStore: const SecureCrewRoomStore(),
+    deviceIdentityStore: const SecureDeviceIdentityStore(),
   );
   final landAccessNotes = LandAccessNoteController(
     const SecureLandAccessNoteStore(),

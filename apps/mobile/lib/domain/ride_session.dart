@@ -32,6 +32,9 @@ class RideSession {
     this.coordinationMode = RideCoordinationMode.keepTogether,
     this.rideName,
     this.crewRoomId,
+    this.authorizationVersion = 1,
+    this.authorityRootPublicKey,
+    this.localDevicePublicKey,
   }) : flightRole =
            flightRole ??
            (role == RideRole.lead ? FlightRole.pilot : FlightRole.chaseCrew),
@@ -51,6 +54,18 @@ class RideSession {
   /// carried in the "Share" text and a smart-paste, never displayed on its
   /// own - the six digits remain what a rider reads or types.
   final String joinToken;
+
+  /// Version one trusts only the shared flight HMAC and is retained solely for
+  /// local development-alpha recovery. Version two additionally binds every
+  /// accepted event to an operation-scoped device signing key.
+  final int authorizationVersion;
+  final String? authorityRootPublicKey;
+  final String? localDevicePublicKey;
+
+  bool get usesDeviceAuthority =>
+      authorizationVersion >= 2 &&
+      authorityRootPublicKey != null &&
+      localDevicePublicKey != null;
   final String localRiderId;
   final String displayName;
   final RideRole role;
@@ -93,11 +108,18 @@ class RideSession {
     CraftIconStyle? craftStyle,
     RideCoordinationMode? coordinationMode,
     String? crewRoomId,
+    int? authorizationVersion,
+    String? authorityRootPublicKey,
+    String? localDevicePublicKey,
   }) => RideSession(
     rideId: rideId,
     rideCode: rideCode ?? this.rideCode,
     inviteSecret: inviteSecret,
     joinToken: joinToken,
+    authorizationVersion: authorizationVersion ?? this.authorizationVersion,
+    authorityRootPublicKey:
+        authorityRootPublicKey ?? this.authorityRootPublicKey,
+    localDevicePublicKey: localDevicePublicKey ?? this.localDevicePublicKey,
     localRiderId: localRiderId,
     displayName: displayName,
     role: role ?? this.role,
@@ -121,6 +143,11 @@ class RideSession {
     'rideCode': rideCode,
     'inviteSecret': inviteSecret,
     'joinToken': joinToken,
+    if (authorizationVersion >= 2) 'authorizationVersion': authorizationVersion,
+    if (authorityRootPublicKey != null)
+      'authorityRootPublicKey': authorityRootPublicKey,
+    if (localDevicePublicKey != null)
+      'localDevicePublicKey': localDevicePublicKey,
     'localRiderId': localRiderId,
     'displayName': displayName,
     'role': role.name,
@@ -149,6 +176,9 @@ class RideSession {
       rideCode: json['rideCode']! as String,
       inviteSecret: json['inviteSecret']! as String,
       joinToken: _joinTokenOrFallback(json['joinToken']),
+      authorizationVersion: json['authorizationVersion'] as int? ?? 1,
+      authorityRootPublicKey: json['authorityRootPublicKey'] as String?,
+      localDevicePublicKey: json['localDevicePublicKey'] as String?,
       localRiderId: json['localRiderId']! as String,
       displayName: json['displayName']! as String,
       role: rideRoleFromName(json['role']),

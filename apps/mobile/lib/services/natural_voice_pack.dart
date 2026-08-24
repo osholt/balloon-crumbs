@@ -352,7 +352,10 @@ class NaturalVoicePackController extends ChangeNotifier {
       _status = NaturalVoicePackStatus.failed;
       _failure = _friendlyFailure(error);
       if (error is! FormatException && error is! HttpException) {
-        debugPrint('Natural voice installation failed: $error\n$stackTrace');
+        debugPrint(
+          'Natural voice installation failed (${error.runtimeType})\n'
+          '$stackTrace',
+        );
       }
     }
     notifyListeners();

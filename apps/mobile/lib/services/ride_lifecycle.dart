@@ -71,6 +71,8 @@ class RideLifecycleReducer {
           }
         case RideEventType.flightLanded:
         case RideEventType.flightLandingRetracted:
+        case RideEventType.deviceAuthorityRevoked:
+        case RideEventType.deviceAuthorityRotated:
           break;
         case RideEventType.craftRegistered:
           final craftId = event.payload['craftId'];

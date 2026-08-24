@@ -145,6 +145,8 @@ class RideRouteReducer {
         case RideEventType.flightStartedByCrew:
         case RideEventType.flightLanded:
         case RideEventType.flightLandingRetracted:
+        case RideEventType.deviceAuthorityRevoked:
+        case RideEventType.deviceAuthorityRotated:
         case RideEventType.statusMessage:
         case RideEventType.riderLocationUpdated:
         case RideEventType.hazardReported:

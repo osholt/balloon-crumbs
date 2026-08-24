@@ -48,7 +48,7 @@ void main() {
       frame([
         _rawEvent(id: 'future', type: 'rideTeleported'),
         _rawEvent(id: 'known', type: 'riderJoined'),
-        _rawEvent(id: 'future-schema', schemaVersion: 2),
+        _rawEvent(id: 'future-schema', schemaVersion: 3),
         _rawEvent(id: 'known-position', type: 'riderLocationUpdated'),
       ]),
       secret: secret,

@@ -101,7 +101,9 @@ class RecapBasemapSnapshotter {
       return RecapBasemapSnapshot.captured(await decode(bytes));
     } on Object catch (error, stackTrace) {
       if (kDebugMode) {
-        debugPrint('Recap basemap snapshot failed: $error\n$stackTrace');
+        debugPrint(
+          'Recap basemap snapshot failed (${error.runtimeType})\n$stackTrace',
+        );
       }
       // A timeout is worth distinguishing: it is the one a rider can fix by
       // waiting a moment and pressing Share again.
