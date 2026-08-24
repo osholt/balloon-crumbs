@@ -95,7 +95,9 @@ class GroupPipBridge {
       _active = entered == true;
       return _active;
     } on Object catch (error) {
-      if (kDebugMode) debugPrint('Could not open group PiP: $error');
+      if (kDebugMode) {
+        debugPrint('Could not open group PiP (${error.runtimeType})');
+      }
       _active = false;
       return false;
     }
@@ -110,7 +112,9 @@ class GroupPipBridge {
       );
       _active = stillActive == true;
     } on Object catch (error) {
-      if (kDebugMode) debugPrint('Could not update group PiP: $error');
+      if (kDebugMode) {
+        debugPrint('Could not update group PiP (${error.runtimeType})');
+      }
     }
   }
 
@@ -119,7 +123,9 @@ class GroupPipBridge {
     try {
       await _channel.invokeMethod<void>('close');
     } on Object catch (error) {
-      if (kDebugMode) debugPrint('Could not close group PiP: $error');
+      if (kDebugMode) {
+        debugPrint('Could not close group PiP (${error.runtimeType})');
+      }
     } finally {
       _active = false;
     }

@@ -10,6 +10,7 @@ from .conftest import ride_token
 
 SECRET = "0123456789abcdef0123456789abcdef"
 RESOLVE_TOKEN = "resolve-token-0123456789abcdef"
+ROOT_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 
 def _register(
@@ -45,6 +46,25 @@ def test_register_and_resolve_six_digit_ride_code(client, settings) -> None:
         assert stored is not None
         assert SECRET.encode() not in stored.secret_ciphertext
         assert RESOLVE_TOKEN.encode() not in stored.secret_ciphertext
+
+
+def test_join_code_round_trips_the_device_authority_root(client) -> None:
+    registered = client.put(
+        "/api/v1/join-codes/123456",
+        json={
+            "rideId": "ride-device-authority",
+            "inviteSecret": SECRET,
+            "resolveToken": RESOLVE_TOKEN,
+            "authorityRootPublicKey": ROOT_KEY,
+        },
+        headers={"authorization": f"Bearer {ride_token('ride-device-authority', SECRET)}"},
+    )
+    assert registered.status_code == 204
+
+    resolved = client.get("/api/v1/join-codes/123456")
+
+    assert resolved.status_code == 200
+    assert resolved.json()["authorityRootPublicKey"] == ROOT_KEY
 
 
 def test_resolve_with_correct_token_succeeds(client) -> None:

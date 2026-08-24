@@ -1631,7 +1631,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       reassertInterval: widget.screenWakeReassertInterval,
       onError: (error, _) {
         if (kDebugMode) {
-          debugPrint('Could not enforce flight wake lock: $error');
+          debugPrint(
+            'Could not enforce flight wake lock (${error.runtimeType})',
+          );
         }
       },
     )..start();
@@ -2003,7 +2005,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           if (kDebugMode) {
             debugPrint(
               'Could not persist a location update; continuing: '
-              '$error\n$stackTrace',
+              '${error.runtimeType}\n$stackTrace',
             );
           }
           final added = _warnings.add(
@@ -2091,6 +2093,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             HttpPreStartPresenceClient(
               configuration: InternetRelayConfiguration.fromEnvironment(),
               client: http.Client(),
+              presenceFactory:
+                  widget.rideController.createAuthenticatedPresence,
+              presenceVerifier:
+                  widget.rideController.verifyAuthenticatedPresence,
             ),
           );
           _preStartPresenceController = preStartPresenceController;
@@ -2110,6 +2116,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             eventStore: widget.eventStore,
             queue: SqliteRelayQueue(),
           ),
+          presenceFactory: widget.rideController.createAuthenticatedPresence,
+          presenceVerifier: widget.rideController.verifyAuthenticatedPresence,
         );
         _relayController = relayController;
         _receivedEventSubscription = relayController.receivedEvents.listen(
@@ -2369,6 +2377,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       rideStarted: widget.rideController.rideStarted,
       rideStartedAt: widget.rideController.rideStartedAt,
       onEventStored: widget.rideController.ingestStoredEvent,
+      authenticatedEventFactory: widget.rideController.createAuthenticatedEvent,
     );
     await controller.initialize(restoredEvents: widget.rideController.events);
     if (!mounted || generation != _routeGeneration) {
@@ -3567,7 +3576,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       }
     } catch (error, stackTrace) {
       if (kDebugMode) {
-        debugPrint('Could not end the completed flight: $error\n$stackTrace');
+        debugPrint(
+          'Could not end the completed flight (${error.runtimeType})\n'
+          '$stackTrace',
+        );
       }
     } finally {
       _autoEndingRide = false;
@@ -4031,7 +4043,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       } on Object catch (error, stackTrace) {
         if (kDebugMode) {
           debugPrint(
-            'Rejected received situational event: $error\n$stackTrace',
+            'Rejected received situational event (${error.runtimeType})\n'
+            '$stackTrace',
           );
         }
       }
@@ -4251,7 +4264,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     } on Object catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint(
-          'Could not start GPS before the flight: $error\n$stackTrace',
+          'Could not start GPS before the flight (${error.runtimeType})\n'
+          '$stackTrace',
         );
       }
     }
@@ -4272,7 +4286,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       await locationController.resumeIfAuthorized();
     } on Object catch (error, stackTrace) {
       if (kDebugMode) {
-        debugPrint('Could not resume live GPS: $error\n$stackTrace');
+        debugPrint(
+          'Could not resume live GPS (${error.runtimeType})\n$stackTrace',
+        );
       }
       final added = _warnings.add(
         'Live GPS could not resume automatically. Use Follow me or Safety '
@@ -4517,7 +4533,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       } on Object catch (error) {
         retryNeeded = true;
         if (kDebugMode) {
-          debugPrint('Could not queue ${event.id} for nearby relay: $error');
+          debugPrint(
+            'Could not queue nearby relay event (${error.runtimeType})',
+          );
         }
       }
     }
@@ -5647,9 +5665,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     } on Object catch (error, stackTrace) {
       // OS speech remains configured as the fail-safe. A model-load problem is
       // useful in diagnostics but must never block or end a ride.
-      _diagnostics?.recordNote('Natural voice warm-up failed: $error');
+      _diagnostics?.recordNote(
+        'Natural voice warm-up failed (${error.runtimeType})',
+      );
       if (kDebugMode) {
-        debugPrint('Natural voice warm-up failed: $error\n$stackTrace');
+        debugPrint(
+          'Natural voice warm-up failed (${error.runtimeType})\n$stackTrace',
+        );
       }
     }
   }
@@ -5863,11 +5885,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       return true;
     } on Object catch (error, stackTrace) {
       _diagnostics?.recordNote(
-        'start flight failed from $source: ${error.runtimeType}: $error',
+        'start flight failed from $source (${error.runtimeType})',
       );
       if (kDebugMode) {
         debugPrint(
-          'Could not start the flight from $source: $error\n$stackTrace',
+          'Could not start the flight from $source (${error.runtimeType})\n'
+          '$stackTrace',
         );
       }
       final message = source == 'CarPlay'
@@ -6268,7 +6291,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             await _locationController?.requestAndStart();
           } on Object catch (error, stackTrace) {
             if (kDebugMode) {
-              debugPrint('Could not start live GPS: $error\n$stackTrace');
+              debugPrint(
+                'Could not start live GPS (${error.runtimeType})\n$stackTrace',
+              );
             }
             final added = _warnings.add(
               'The flight started, but live GPS could not start. Use Follow me '

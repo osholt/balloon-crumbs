@@ -28,7 +28,7 @@ void main() {
     test('a written log survives and reads back whole', () async {
       await store.write(rideId: 'ride-1', text: _log('ABCD'));
 
-      expect(await store.read('ride-1'), _log('ABCD'));
+      expect(await store.read('ride-1'), _safeLog(_log('ABCD')));
     });
 
     test('writing again replaces rather than accumulates', () async {
@@ -39,15 +39,14 @@ void main() {
       expect(await store.list(), hasLength(1));
     });
 
-    test('the ride code is read back out of the log itself', () async {
+    test('a ride code is removed before the log reaches storage', () async {
       await store.write(rideId: 'ride-1', text: _log('ABCD'));
 
       final log = await store.latest();
 
-      // Read rather than stored alongside, so there is no second copy to fall out
-      // of step with the file a rider actually holds.
-      expect(log?.rideCode, 'ABCD');
-      expect(log?.fileName, 'balloon-crumbs-diagnostics-ABCD.txt');
+      expect(log?.rideCode, isNull);
+      expect(log?.text, isNot(contains('ABCD')));
+      expect(log?.fileName, 'balloon-crumbs-diagnostics-ride-1.txt');
     });
 
     test('a log with no ride code is still offered', () async {
@@ -81,7 +80,7 @@ void main() {
       final logs = await store.list();
 
       expect(logs, hasLength(kept));
-      expect(logs.first.rideCode, 'CODE${kept + 2}', reason: 'newest first');
+      expect(logs.first.rideId, 'ride-${kept + 2}', reason: 'newest first');
       expect(
         logs.map((log) => log.rideId),
         isNot(contains('ride-0')),
@@ -129,7 +128,7 @@ void main() {
       // A recorded entry can contain the word, and a log is thousands of lines.
       final log = '${_log('ABCD')}\n${'filler\n' * 20}Ride:  WRONG';
 
-      expect(RideDiagnosticsLog.rideCodeIn(log), 'ABCD');
+      expect(RideDiagnosticsLog.rideCodeIn(log), isNull);
     });
 
     test('a log with no written-at falls back to the file time', () async {
@@ -148,7 +147,7 @@ void main() {
       // path.
       await store.write(rideId: '../escaped', text: _log('ABCD'));
 
-      expect(await store.read('../escaped'), _log('ABCD'));
+      expect(await store.read('../escaped'), _safeLog(_log('ABCD')));
       final escaped = File('${directory.path}/escaped.txt');
       expect(await escaped.exists(), isFalse);
       expect(await store.list(), hasLength(1));
@@ -170,8 +169,8 @@ void main() {
 
       await memory.write(rideId: 'ride-1', text: _log('ABCD'));
 
-      expect(await memory.read('ride-1'), _log('ABCD'));
-      expect((await memory.latest())?.rideCode, 'ABCD');
+      expect(await memory.read('ride-1'), _safeLog(_log('ABCD')));
+      expect((await memory.latest())?.rideCode, isNull);
     });
   });
 }
@@ -187,3 +186,6 @@ String _log(String rideCode, {DateTime? at}) {
       '\n'
       '$written  NOTE       recording started';
 }
+
+String _safeLog(String value) =>
+    RideDiagnosticsLog.withoutCredentialHeader(value);

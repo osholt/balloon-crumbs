@@ -10,6 +10,7 @@ import 'package:balloon_crumbs/domain/rider_location.dart';
 import 'package:balloon_crumbs/relay/in_memory_relay_queue.dart';
 import 'package:balloon_crumbs/relay/peer_transport.dart';
 import 'package:balloon_crumbs/relay/relay_engine.dart';
+import 'package:balloon_crumbs/services/ride_event_authenticator.dart';
 
 void main() {
   const secret = '0123456789abcdef0123456789abcdef';
@@ -68,7 +69,7 @@ void main() {
 
     await _drain();
     transportA.connect(transportB);
-    final event = RideEvent(
+    final unsignedEvent = RideEvent(
       id: 'event-1',
       rideId: 'ride-1',
       deviceId: 'device-a',
@@ -76,7 +77,10 @@ void main() {
       priority: EventPriority.critical,
       createdAt: now,
       payload: const {'message': 'emergencyStop'},
-      signature: 'a' * 64,
+      signature: '',
+    );
+    final event = unsignedEvent.copyWith(
+      signature: RideEventAuthenticator.sign(unsignedEvent, secret),
     );
     await storeA.append(event);
     await engineA.enqueueLocal(event);

@@ -11,7 +11,16 @@ import '../domain/rider_location.dart';
 import '../relay/live_presence.dart';
 import '../services/external_hazard_provider.dart';
 import '../services/hazard_deduplicator.dart';
+import '../services/ride_event_authenticator.dart';
 import '../services/situation_event_factory.dart';
+
+typedef AuthenticatedSituationEventFactory =
+    Future<RideEvent> Function({
+      required RideEventType type,
+      required Map<String, Object?> payload,
+      EventPriority priority,
+      DateTime? expiresAt,
+    });
 
 class SituationalAwarenessController extends ChangeNotifier {
   SituationalAwarenessController(
@@ -28,6 +37,7 @@ class SituationalAwarenessController extends ChangeNotifier {
     this.deduplicator = const HazardDeduplicator(),
     this.freshnessPolicy = const PresenceFreshnessPolicy(),
     this.onEventStored,
+    this.authenticatedEventFactory,
   }) : _route = List.unmodifiable(route),
        _externalProviders = List.unmodifiable(externalProviders),
        _clock = clock ?? DateTime.now,
@@ -68,6 +78,7 @@ class SituationalAwarenessController extends ChangeNotifier {
   /// at a time instead of re-reading the complete SQLite ride after every
   /// position fix (#165).
   final ValueChanged<RideEvent>? onEventStored;
+  final AuthenticatedSituationEventFactory? authenticatedEventFactory;
   late SituationEventFactory _eventFactory;
 
   final Map<String, RiderLocation> _locations = {};
@@ -224,7 +235,7 @@ class SituationalAwarenessController extends ChangeNotifier {
     );
     await _run(() async {
       await _appendAndApply(
-        _eventFactory.create(
+        await _createEvent(
           type: RideEventType.riderLocationUpdated,
           payload: {'location': location.toJson()},
           expiresAt: _clock().add(const Duration(minutes: 30)),
@@ -272,7 +283,7 @@ class SituationalAwarenessController extends ChangeNotifier {
               ),
       );
       result = deduplicator.mergeOrAdd(incoming, activeHazards);
-      final event = _eventFactory.create(
+      final event = await _createEvent(
         type: RideEventType.hazardReported,
         payload: {'hazard': result!.toJson()},
         priority: _priorityForSeverity(result!.severity),
@@ -288,7 +299,7 @@ class SituationalAwarenessController extends ChangeNotifier {
       return;
     }
     await _run(() async {
-      final event = _eventFactory.create(
+      final event = await _createEvent(
         type: RideEventType.hazardCleared,
         payload: {'hazardId': hazardId, 'reason': reason},
         priority: EventPriority.important,
@@ -303,7 +314,10 @@ class SituationalAwarenessController extends ChangeNotifier {
         !_supportedSituationalEventTypes.contains(event.type)) {
       throw const FormatException('Event is not valid for this flight.');
     }
-    if (!SituationEventFactory.verify(event, _session.inviteSecret)) {
+    if (!await RideEventAuthenticator.verifyAsync(
+      event,
+      _session.inviteSecret,
+    )) {
       throw const FormatException('Event signature is invalid.');
     }
     await _eventStore.append(event);
@@ -342,7 +356,7 @@ class SituationalAwarenessController extends ChangeNotifier {
                   existingProviderIncident?.providerId == provider.id
               ? hazard
               : deduplicator.mergeOrAdd(hazard, activeHazards);
-          final event = _eventFactory.create(
+          final event = await _createEvent(
             type: RideEventType.hazardReported,
             payload: {'hazard': merged.toJson()},
             priority: _priorityForSeverity(merged.severity),
@@ -376,6 +390,31 @@ class SituationalAwarenessController extends ChangeNotifier {
     if (_disposed) return;
     _applyEvent(event);
     onEventStored?.call(event);
+  }
+
+  Future<RideEvent> _createEvent({
+    required RideEventType type,
+    required Map<String, Object?> payload,
+    EventPriority priority = EventPriority.routine,
+    DateTime? expiresAt,
+  }) {
+    final authenticated = authenticatedEventFactory;
+    if (authenticated != null) {
+      return authenticated(
+        type: type,
+        payload: payload,
+        priority: priority,
+        expiresAt: expiresAt,
+      );
+    }
+    return Future.value(
+      _eventFactory.create(
+        type: type,
+        payload: payload,
+        priority: priority,
+        expiresAt: expiresAt,
+      ),
+    );
   }
 
   void _applyEvent(RideEvent event, {bool replaying = false}) {
@@ -431,6 +470,8 @@ class SituationalAwarenessController extends ChangeNotifier {
       case RideEventType.flightStartedByCrew:
       case RideEventType.flightLanded:
       case RideEventType.flightLandingRetracted:
+      case RideEventType.deviceAuthorityRevoked:
+      case RideEventType.deviceAuthorityRotated:
       case RideEventType.statusMessage:
       case RideEventType.ridePaused:
       case RideEventType.rideResumed:
@@ -547,7 +588,9 @@ class SituationalAwarenessController extends ChangeNotifier {
     } on Object catch (error, stackTrace) {
       _errorMessage = 'Situational awareness could not be updated.';
       if (kDebugMode) {
-        debugPrint('Situational awareness failed: $error\n$stackTrace');
+        debugPrint(
+          'Situational awareness failed (${error.runtimeType})\n$stackTrace',
+        );
       }
     } finally {
       _busy = false;

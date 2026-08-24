@@ -45,6 +45,11 @@ class PresenceLocationSample(BaseModel):
     accuracyMeters: float = Field(ge=0, le=500)
     speedMetersPerSecond: float | None = Field(default=None, ge=0, le=100)
     headingDegrees: float | None = Field(default=None, ge=0, lt=360)
+    altitudeMeters: float | None = Field(default=None, ge=-1000, le=30000)
+    altitudeSource: str | None = Field(default=None, min_length=1, max_length=40)
+    altitudeDatum: str | None = Field(default=None, min_length=1, max_length=40)
+    altitudeAccuracyMeters: float | None = Field(default=None, ge=0, le=10000)
+    verticalSpeedMetersPerSecond: float | None = Field(default=None, ge=-100, le=100)
 
 
 class PresencePositionRequest(BaseModel):
@@ -77,11 +82,25 @@ class PresenceSyncRequest(BaseModel):
     deviceId: str = Field(min_length=1, max_length=128)
     position: PresencePositionRequest | None = None
     clear: bool = False
+    authorityVersion: Literal[1] | None = None
+    signedAtMilliseconds: int | None = Field(default=None, ge=0)
+    devicePublicKey: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{43}$")
+    deviceSignature: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{86}$")
 
     @model_validator(mode="after")
     def clear_cannot_publish(self) -> PresenceSyncRequest:
         if self.clear and self.position is not None:
             raise ValueError("A presence request cannot publish and clear together")
+        authority = (
+            self.authorityVersion,
+            self.signedAtMilliseconds,
+            self.devicePublicKey,
+            self.deviceSignature,
+        )
+        if any(value is not None for value in authority) and not all(
+            value is not None for value in authority
+        ):
+            raise ValueError("A presence authority proof must be complete")
         return self
 
 
@@ -95,6 +114,10 @@ class PresencePositionResponse(PresencePositionRequest):
     # unexplained gap once the ride starts.
     livePresence: bool = False
     clientProtocol: int = Field(default=1, ge=1, le=1000)
+    authorityVersion: Literal[1] | None = None
+    signedAtMilliseconds: int | None = Field(default=None, ge=0)
+    devicePublicKey: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{43}$")
+    deviceSignature: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{86}$")
 
 
 class PresenceMemberResponse(BaseModel):
@@ -179,6 +202,7 @@ class RegisterJoinCodeRequest(BaseModel):
     rideId: str = Field(min_length=1, max_length=128)
     inviteSecret: str = Field(min_length=16, max_length=512)
     resolveToken: str = Field(min_length=16, max_length=128)
+    authorityRootPublicKey: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{43}$")
 
 
 class JoinCodeResponse(BaseModel):
@@ -188,6 +212,7 @@ class JoinCodeResponse(BaseModel):
     rideCode: str
     inviteSecret: str
     resolveToken: str
+    authorityRootPublicKey: str | None = None
 
 
 class CrewRoomOperation(BaseModel):
@@ -197,6 +222,7 @@ class CrewRoomOperation(BaseModel):
     rideCode: str = Field(pattern=r"^\d{6}$")
     inviteSecret: str = Field(min_length=16, max_length=512)
     resolveToken: str = Field(min_length=16, max_length=128)
+    authorityRootPublicKey: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{43}$")
 
 
 class CreateCrewRoomRequest(BaseModel):

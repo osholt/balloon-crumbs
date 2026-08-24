@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
+import json
 from datetime import UTC, datetime, timedelta
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy import func, select
 
 from balloon_crumbs_server.crypto import CursorCodec, DataCipher
@@ -12,6 +15,42 @@ from balloon_crumbs_server.service import RelayService
 from .conftest import event, ride_token
 
 SECRET = "0123456789abcdef0123456789abcdef"
+
+
+def _b64(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode().rstrip("=")
+
+
+def _authority_proof(
+    *,
+    ride_id: str,
+    rider_id: str,
+    position: dict | None,
+    clear: bool,
+    signed_at: datetime,
+    seed: bytes,
+) -> dict:
+    signed_at_milliseconds = int(signed_at.timestamp() * 1000)
+    body = {
+        "rideId": ride_id,
+        "riderId": rider_id,
+        "signedAtMilliseconds": signed_at_milliseconds,
+        "clear": clear,
+        "position": position,
+    }
+    challenge = "balloon-crumbs-live-presence-v1\n" + json.dumps(
+        body,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    private_key = Ed25519PrivateKey.from_private_bytes(seed)
+    return {
+        "authorityVersion": 1,
+        "signedAtMilliseconds": signed_at_milliseconds,
+        "devicePublicKey": _b64(private_key.public_key().public_bytes_raw()),
+        "deviceSignature": _b64(private_key.sign(challenge.encode())),
+    }
 
 
 def _position(
@@ -182,6 +221,53 @@ def test_presence_requires_matching_authenticated_device(client, synchronize) ->
     )
 
     assert response.status_code == 400
+
+
+def test_device_authority_flight_requires_and_verifies_live_position_proof(
+    client, synchronize
+) -> None:
+    ride_id = "ride-device-presence"
+    now = datetime.now(UTC)
+    seed = bytes(range(32))
+    private_key = Ed25519PrivateKey.from_private_bytes(seed)
+    public_key = _b64(private_key.public_key().public_bytes_raw())
+    created = event(ride_id, "ride-created", device_id="pilot")
+    created.update(
+        {
+            "schemaVersion": 2,
+            "devicePublicKey": public_key,
+            "deviceSignature": "A" * 86,
+        }
+    )
+    assert (
+        synchronize(
+            client,
+            ride_id=ride_id,
+            secret=SECRET,
+            device_id="pilot",
+            events=[created],
+        ).status_code
+        == 200
+    )
+
+    position = _position(51.2, recorded_at=now)
+    without_proof = _presence(client, ride_id, "pilot", position=position)
+    assert without_proof.status_code == 403
+    proof = _authority_proof(
+        ride_id=ride_id,
+        rider_id="pilot",
+        position=position,
+        clear=False,
+        signed_at=now,
+        seed=seed,
+    )
+    published = _presence(client, ride_id, "pilot", position=position, **proof)
+    assert published.status_code == 200
+    assert published.json()["positions"][0]["devicePublicKey"] == public_key
+
+    tampered = _position(51.3, recorded_at=now)
+    rejected = _presence(client, ride_id, "pilot", position=tampered, **proof)
+    assert rejected.status_code == 403
 
 
 def test_five_devices_survive_a_45_minute_pre_launch_without_ghosts(client, synchronize) -> None:

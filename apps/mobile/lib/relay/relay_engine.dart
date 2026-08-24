@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../domain/event_store.dart';
 import '../domain/rider_location.dart';
 import '../domain/ride_event.dart';
+import '../services/ride_event_authenticator.dart';
 import 'peer_transport.dart';
 import 'relay_protocol.dart';
 import 'relay_queue.dart';
@@ -14,6 +15,14 @@ import 'relay_presence.dart';
 typedef RelayClock = DateTime Function();
 typedef RelayIdFactory = String Function();
 typedef RelayDelay = Future<void> Function(Duration duration);
+typedef RelayPresenceFactory =
+    Future<RelayPresenceUpdate> Function({
+      required RiderLocation? position,
+      required bool clear,
+      required Duration ttl,
+    });
+typedef RelayPresenceVerifier =
+    Future<bool> Function(RelayPresenceUpdate update, DateTime trustedNow);
 
 enum RelayConnectionState {
   stopped,
@@ -111,6 +120,8 @@ class RelayEngineConfig {
     required this.localDeviceId,
     required this.endpointName,
     this.serviceId = 'me.osholt.balloon_crumbs.relay.v1',
+    this.presenceFactory,
+    this.presenceVerifier,
   });
 
   final String rideId;
@@ -118,6 +129,8 @@ class RelayEngineConfig {
   final String localDeviceId;
   final String endpointName;
   final String serviceId;
+  final RelayPresenceFactory? presenceFactory;
+  final RelayPresenceVerifier? presenceVerifier;
 }
 
 /// Durable, transport-neutral, application-layer relay.
@@ -268,13 +281,19 @@ class RelayEngine {
       throw ArgumentError('Invalid pre-start presence update');
     }
     final now = _clock();
-    final update = RelayPresenceUpdate(
-      riderId: config.localDeviceId,
-      sentAt: now,
-      expiresAt: now.add(ttl),
-      clear: clear,
-      position: position,
-    );
+    final update = config.presenceFactory == null
+        ? RelayPresenceUpdate(
+            riderId: config.localDeviceId,
+            sentAt: now,
+            expiresAt: now.add(ttl),
+            clear: clear,
+            position: position,
+          )
+        : await config.presenceFactory!(
+            position: position,
+            clear: clear,
+            ttl: ttl,
+          );
     _localPresence = clear ? null : update;
     await _sendPresence(update, peerIds: _status.peerIds);
   }
@@ -419,8 +438,16 @@ class RelayEngine {
     }
     if (frame.kind == RelayFrameKind.presence) {
       final presence = frame.presence;
-      if (presence != null && !_receivedPresenceController.isClosed) {
+      final accepted =
+          presence != null &&
+          (config.presenceVerifier == null ||
+              await config.presenceVerifier!(presence, now));
+      if (accepted && !_receivedPresenceController.isClosed) {
         _receivedPresenceController.add(presence);
+      } else if (presence != null) {
+        _emit(
+          _status.copyWith(rejectedFrameCount: _status.rejectedFrameCount + 1),
+        );
       }
       await _refreshQueueCount(lastExchangeAt: now);
       return;
@@ -428,6 +455,15 @@ class RelayEngine {
 
     final acknowledged = <String>[];
     for (final item in frame.events) {
+      if (!await RideEventAuthenticator.verifyAsync(
+        item.event,
+        config.rideSecret,
+      )) {
+        _emit(
+          _status.copyWith(rejectedFrameCount: _status.rejectedFrameCount + 1),
+        );
+        continue;
+      }
       acknowledged.add(item.event.id);
       if (await _queue.contains(item.event.id)) {
         continue;

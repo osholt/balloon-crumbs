@@ -1,9 +1,11 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:cryptography/cryptography.dart' hide Hmac;
 import 'package:meta/meta.dart';
 
 import '../domain/ride_event.dart';
+import 'device_identity.dart';
 
 /// Signs the current event schema and verifies both it and the development
 /// alpha's earlier event body so stored rides remain readable after upgrade.
@@ -11,7 +13,82 @@ class RideEventAuthenticator {
   const RideEventAuthenticator._();
 
   static String sign(RideEvent event, String secret) =>
-      _digest(_canonicalV1Body(event), secret);
+      _digest(_canonicalBody(event), secret);
+
+  /// Creates a schema-two event with an operation-scoped Ed25519 author proof
+  /// as well as the group HMAC retained by the transport layer.
+  static Future<RideEvent> signForDevice({
+    required RideEvent event,
+    required String secret,
+    required DeviceIdentity identity,
+  }) async {
+    if (event.schemaVersion != 2 ||
+        event.deviceId != identity.deviceId ||
+        event.devicePublicKey != identity.publicKey) {
+      throw ArgumentError('Event does not match its device identity.');
+    }
+    final groupSignature = sign(event, secret);
+    final keyPair = await Ed25519().newKeyPairFromSeed(identity.privateSeed);
+    final signature = await Ed25519().sign(
+      utf8.encode(_canonicalBody(event)),
+      keyPair: keyPair,
+    );
+    final signed = RideEvent(
+      id: event.id,
+      rideId: event.rideId,
+      deviceId: event.deviceId,
+      type: event.type,
+      priority: event.priority,
+      createdAt: event.createdAt,
+      expiresAt: event.expiresAt,
+      payload: event.payload,
+      signature: groupSignature,
+      devicePublicKey: identity.publicKey,
+      deviceSignature: _base64Url(signature.bytes),
+      acknowledged: event.acknowledged,
+      schemaVersion: 2,
+    );
+    _deviceVerdicts[signed] = true;
+    _verdicts[signed] = _Verdict(secret, true);
+    if (signed.type == RideEventType.deviceAuthorityRotated) {
+      final rotationVerdict = await _verifyRotationProof(signed);
+      _rotationVerdicts[signed] = rotationVerdict;
+      if (!rotationVerdict) {
+        throw ArgumentError('Device rotation proof is invalid.');
+      }
+    }
+    return signed;
+  }
+
+  static Future<String> signRotationProof({
+    required String rideId,
+    required String deviceId,
+    required String oldPublicKey,
+    required DeviceIdentity replacement,
+  }) async {
+    final keyPair = await Ed25519().newKeyPairFromSeed(replacement.privateSeed);
+    final signature = await Ed25519().sign(
+      utf8.encode(
+        rotationChallenge(
+          rideId: rideId,
+          deviceId: deviceId,
+          oldPublicKey: oldPublicKey,
+          newPublicKey: replacement.publicKey,
+        ),
+      ),
+      keyPair: keyPair,
+    );
+    return _base64Url(signature.bytes);
+  }
+
+  static String rotationChallenge({
+    required String rideId,
+    required String deviceId,
+    required String oldPublicKey,
+    required String newPublicKey,
+  }) =>
+      'balloon-crumbs-device-rotation-v1\n'
+      '$rideId\n$deviceId\n$oldPublicKey\n$newPublicKey';
 
   /// Verdicts already reached, keyed by event identity.
   ///
@@ -38,6 +115,54 @@ class RideEventAuthenticator {
   static int verificationsComputed = 0;
 
   static bool verify(RideEvent event, String secret) {
+    if (!_verifyGroup(event, secret)) return false;
+    if (event.schemaVersion == 1) return true;
+    if (_deviceVerdicts[event] != true) return false;
+    return event.type != RideEventType.deviceAuthorityRotated ||
+        _rotationVerdicts[event] == true;
+  }
+
+  /// Verifies the group envelope and, for schema two, the author's Ed25519
+  /// proof. Call this once at an ingress or cold-load boundary; synchronous
+  /// reducers then consume the memoized verdict through [verify].
+  static Future<bool> verifyAsync(RideEvent event, String secret) async {
+    if (!_verifyGroup(event, secret)) return false;
+    if (event.schemaVersion == 1) return true;
+    final cached = _deviceVerdicts[event];
+    if (cached != null) return cached;
+    final publicKeyText = event.devicePublicKey;
+    final signatureText = event.deviceSignature;
+    if (publicKeyText == null || signatureText == null) {
+      _deviceVerdicts[event] = false;
+      return false;
+    }
+    try {
+      final publicKeyBytes = _decodeBase64Url(publicKeyText);
+      final signatureBytes = _decodeBase64Url(signatureText);
+      if (publicKeyBytes.length != 32 || signatureBytes.length != 64) {
+        _deviceVerdicts[event] = false;
+        return false;
+      }
+      final verdict = await Ed25519().verify(
+        utf8.encode(_canonicalBody(event)),
+        signature: Signature(
+          signatureBytes,
+          publicKey: SimplePublicKey(publicKeyBytes, type: KeyPairType.ed25519),
+        ),
+      );
+      _deviceVerdicts[event] = verdict;
+      if (!verdict) return false;
+      if (event.type != RideEventType.deviceAuthorityRotated) return true;
+      final rotationVerdict = await _verifyRotationProof(event);
+      _rotationVerdicts[event] = rotationVerdict;
+      return rotationVerdict;
+    } on Object {
+      _deviceVerdicts[event] = false;
+      return false;
+    }
+  }
+
+  static bool _verifyGroup(RideEvent event, String secret) {
     final cached = _verdicts[event];
     if (cached != null && cached.secret == secret) return cached.verdict;
     verificationsComputed += 1;
@@ -49,7 +174,7 @@ class RideEventAuthenticator {
   static bool _verifyUncached(RideEvent event, String secret) {
     if (_constantTimeMatch(
           event.signature,
-          _digest(_canonicalV1Body(event), secret),
+          _digest(_canonicalBody(event), secret),
         ) ==
         1) {
       return true;
@@ -89,13 +214,13 @@ class RideEventAuthenticator {
   static String _digest(String body, String secret) =>
       Hmac(sha256, utf8.encode(secret)).convert(utf8.encode(body)).toString();
 
-  static String _canonicalV1Body(RideEvent event) =>
-      _canonicalJson(_v1Map(event));
+  static String _canonicalBody(RideEvent event) =>
+      _canonicalJson(_signedMap(event));
 
   static String _transitionalV1Body(RideEvent event) =>
-      jsonEncode(_v1Map(event));
+      jsonEncode(_signedMap(event));
 
-  static Map<String, Object?> _v1Map(RideEvent event) => {
+  static Map<String, Object?> _signedMap(RideEvent event) => {
     'schemaVersion': event.schemaVersion,
     'id': event.id,
     'rideId': event.rideId,
@@ -105,6 +230,7 @@ class RideEventAuthenticator {
     'createdAt': event.createdAt.toUtc().toIso8601String(),
     'expiresAt': event.expiresAt?.toUtc().toIso8601String(),
     'payload': event.payload,
+    if (event.schemaVersion >= 2) 'devicePublicKey': event.devicePublicKey,
   };
 
   static String _legacyBody(RideEvent event) => jsonEncode({
@@ -127,6 +253,53 @@ class RideEventAuthenticator {
     }
     return jsonEncode(value);
   }
+
+  static final Expando<bool> _deviceVerdicts = Expando<bool>(
+    'flight event device signature verdict',
+  );
+  static final Expando<bool> _rotationVerdicts = Expando<bool>(
+    'flight event replacement-key proof verdict',
+  );
+
+  static Future<bool> _verifyRotationProof(RideEvent event) async {
+    final cached = _rotationVerdicts[event];
+    if (cached != null) return cached;
+    final oldPublicKey = event.devicePublicKey;
+    final newPublicKey = event.payload['newPublicKey'];
+    final proof = event.payload['newDeviceSignature'];
+    if (oldPublicKey == null || newPublicKey is! String || proof is! String) {
+      return false;
+    }
+    try {
+      final publicKeyBytes = _decodeBase64Url(newPublicKey);
+      final signatureBytes = _decodeBase64Url(proof);
+      if (publicKeyBytes.length != 32 || signatureBytes.length != 64) {
+        return false;
+      }
+      return Ed25519().verify(
+        utf8.encode(
+          rotationChallenge(
+            rideId: event.rideId,
+            deviceId: event.deviceId,
+            oldPublicKey: oldPublicKey,
+            newPublicKey: newPublicKey,
+          ),
+        ),
+        signature: Signature(
+          signatureBytes,
+          publicKey: SimplePublicKey(publicKeyBytes, type: KeyPairType.ed25519),
+        ),
+      );
+    } on Object {
+      return false;
+    }
+  }
+
+  static String _base64Url(List<int> bytes) =>
+      base64Url.encode(bytes).replaceAll('=', '');
+
+  static List<int> _decodeBase64Url(String value) =>
+      base64Url.decode(base64Url.normalize(value));
 }
 
 class _Verdict {

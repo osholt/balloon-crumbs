@@ -414,7 +414,11 @@ class _ResolvedRouteMapPreviewState extends State<ResolvedRouteMapPreview> {
       // rather than wherever the camera started (#157).
       widget.onStyleReady?.call();
     } on Object catch (error) {
-      if (kDebugMode) debugPrint('Could not prepare route preview map: $error');
+      if (kDebugMode) {
+        debugPrint(
+          'Could not prepare route preview map (${error.runtimeType})',
+        );
+      }
     }
   }
 
@@ -439,7 +443,11 @@ class _ResolvedRouteMapPreviewState extends State<ResolvedRouteMapPreview> {
       await controller.setGeoJsonSource(_pinSource, _pinGeoJson());
       if (fit) await _fit();
     } on Object catch (error) {
-      if (kDebugMode) debugPrint('Could not refresh route preview map: $error');
+      if (kDebugMode) {
+        debugPrint(
+          'Could not refresh route preview map (${error.runtimeType})',
+        );
+      }
     } finally {
       _syncing = false;
       if (_syncAgain) {

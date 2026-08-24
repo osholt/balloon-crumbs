@@ -610,7 +610,9 @@ class CarPlayBridge {
         _publishedRideStartKey = previousRideStartKey;
         _publishedSurfaceKey = previousSurfaceKey;
       }
-      if (kDebugMode) debugPrint('Could not publish CarPlay snapshot: $error');
+      if (kDebugMode) {
+        debugPrint('Could not publish CarPlay snapshot (${error.runtimeType})');
+      }
     }
   }
 
@@ -646,7 +648,9 @@ class CarPlayBridge {
         'mapStyleUrl': viewport.mapStyleUrl,
       });
     } on Object catch (error) {
-      if (kDebugMode) debugPrint('Could not publish CarPlay viewport: $error');
+      if (kDebugMode) {
+        debugPrint('Could not publish CarPlay viewport (${error.runtimeType})');
+      }
     }
   }
 
@@ -667,7 +671,11 @@ class CarPlayBridge {
       });
       _publishedMapStyleJson = styleJson;
     } on Object catch (error) {
-      if (kDebugMode) debugPrint('Could not publish CarPlay map style: $error');
+      if (kDebugMode) {
+        debugPrint(
+          'Could not publish CarPlay map style (${error.runtimeType})',
+        );
+      }
     }
   }
 

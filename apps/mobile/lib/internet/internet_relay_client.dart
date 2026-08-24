@@ -11,6 +11,9 @@ import '../domain/rider_location.dart';
 import '../domain/ride_session.dart';
 import '../features/map/craft_icon.dart';
 import '../relay/relay_event_compatibility.dart';
+import '../relay/relay_engine.dart';
+import '../relay/relay_presence.dart';
+import '../services/presence_authenticator.dart';
 
 class InternetRelayConfiguration {
   const InternetRelayConfiguration({
@@ -65,6 +68,7 @@ abstract final class RelayProtocolCapabilities {
   /// cursor-independent ride roster. Supersedes [preStartPresence]; both are
   /// advertised so an older relay keeps working.
   static const livePresence = 'live-presence-v2';
+  static const deviceAuthority = 'device-authority-v1';
   static const routeRevisions = 'route-revisions-v1';
   static const pushNotifications = 'push-notifications-v1';
   static const observerAccess = 'observer-access-v1';
@@ -102,6 +106,7 @@ abstract final class RelayProtocolCapabilities {
     membership,
     preStartPresence,
     livePresence,
+    deviceAuthority,
     routeRevisions,
     pushNotifications,
     observerAccess,
@@ -399,6 +404,7 @@ class RideCodeCredentials {
     required this.rideCode,
     required this.inviteSecret,
     required this.joinToken,
+    this.authorityRootPublicKey,
   });
 
   final String rideId;
@@ -408,6 +414,7 @@ class RideCodeCredentials {
   /// So a rider who joins can also re-share a fully hardened invite later,
   /// not just the ride creator.
   final String joinToken;
+  final String? authorityRootPublicKey;
 }
 
 class RideCodeDirectoryException implements Exception {
@@ -479,6 +486,8 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
           'rideId': session.rideId,
           'inviteSecret': session.inviteSecret,
           'resolveToken': session.joinToken,
+          if (session.authorityRootPublicKey != null)
+            'authorityRootPublicKey': session.authorityRootPublicKey,
         }),
     );
     if (response.statusCode == 204) return;
@@ -522,6 +531,7 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
       final returnedCode = json['rideCode'];
       final secret = json['inviteSecret'];
       final returnedJoinToken = json['resolveToken'];
+      final authorityRootPublicKey = json['authorityRootPublicKey'];
       if (rideId is! String ||
           rideId.isEmpty ||
           rideId.length > 128 ||
@@ -535,11 +545,19 @@ class HttpRideCodeDirectory implements RideCodeDirectory {
           returnedJoinToken.length > 128) {
         throw const FormatException('Response fields are invalid.');
       }
+      if (authorityRootPublicKey != null &&
+          (authorityRootPublicKey is! String ||
+              !RegExp(
+                r'^[A-Za-z0-9_-]{43}$',
+              ).hasMatch(authorityRootPublicKey))) {
+        throw const FormatException('Response device authority is invalid.');
+      }
       return RideCodeCredentials(
         rideId: rideId,
         rideCode: returnedCode,
         inviteSecret: secret,
         joinToken: returnedJoinToken,
+        authorityRootPublicKey: authorityRootPublicKey as String?,
       );
     } on Object {
       // Deliberately not interpolated: a transport or TLS error message can
@@ -1001,7 +1019,7 @@ class HttpInternetRelayClient
       'rr1-${base64Url.encode(sha256.convert(bodyBytes).bytes).replaceAll('=', '')}';
 
   void _validateEventForRide(RideEvent event, String rideId) {
-    if (event.schemaVersion != 1 ||
+    if ((event.schemaVersion != 1 && event.schemaVersion != 2) ||
         event.rideId != rideId ||
         event.id.isEmpty ||
         event.id.length > 128 ||
@@ -1025,11 +1043,15 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
     required http.Client client,
     RelayClientDescriptor? clientDescriptor,
     DateTime Function()? clock,
+    RelayPresenceFactory? presenceFactory,
+    RelayPresenceVerifier? presenceVerifier,
   }) => HttpPreStartPresenceClient._(
     configuration,
     client,
     clientDescriptor ?? RelayClientDescriptor.current(),
     clock ?? DateTime.now,
+    presenceFactory,
+    presenceVerifier,
   );
 
   HttpPreStartPresenceClient._(
@@ -1037,6 +1059,8 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
     this._client,
     this._clientDescriptor,
     this._clock,
+    this._presenceFactory,
+    this._presenceVerifier,
   );
 
   @override
@@ -1044,6 +1068,8 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
   final http.Client _client;
   final RelayClientDescriptor _clientDescriptor;
   final DateTime Function() _clock;
+  final RelayPresenceFactory? _presenceFactory;
+  final RelayPresenceVerifier? _presenceVerifier;
   RelayCompatibilityResult? _cachedCompatibility;
 
   @override
@@ -1070,6 +1096,15 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
         code: 'feature_unsupported',
       );
     }
+    if (session.usesDeviceAuthority &&
+        (!compatibility.supports(RelayProtocolCapabilities.deviceAuthority) ||
+            _presenceFactory == null ||
+            _presenceVerifier == null)) {
+      throw const InternetRelayException(
+        'This flight service cannot authenticate live crew positions yet.',
+        code: 'feature_unsupported',
+      );
+    }
     if (clear && position != null) {
       throw const InternetRelayException(
         'A pre-start position cannot be published and cleared together.',
@@ -1089,6 +1124,13 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
         'A crew member can only publish their own pre-start position.',
       );
     }
+    final authorityUpdate = session.usesDeviceAuthority
+        ? await _presenceFactory!(
+            position: position,
+            clear: clear,
+            ttl: const Duration(seconds: 45),
+          )
+        : null;
     final bodyBytes = utf8.encode(
       jsonEncode({
         'protocolVersion': 1,
@@ -1106,6 +1148,8 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
                 'sample': position.sample.toJson(),
               },
         'clear': clear,
+        if (authorityUpdate?.authorityProof case final proof?)
+          ...proof.toJson(),
       }),
     );
     if (bodyBytes.length > configuration.maximumRequestBytes) {
@@ -1217,6 +1261,27 @@ class HttpPreStartPresenceClient implements PreStartPresenceApi {
             for (final field in _presenceLocationFields)
               if (raw.containsKey(field)) field: raw[field],
           });
+          if (session.usesDeviceAuthority) {
+            final proof = PresenceAuthorityProof.fromJson(raw);
+            final verified = await _presenceVerifier!(
+              RelayPresenceUpdate(
+                riderId: location.riderId,
+                sentAt: DateTime.fromMillisecondsSinceEpoch(
+                  proof.signedAtMilliseconds,
+                  isUtc: true,
+                ),
+                expiresAt: expiresAt,
+                clear: false,
+                position: location,
+                authorityProof: proof,
+              ),
+              serverTime ?? receivedAt,
+            );
+            if (!verified) {
+              unreadable += 1;
+              continue;
+            }
+          }
           if (raw['livePresence'] == false) legacyPeers.add(location.riderId);
           locations.add(location);
         } on Object {

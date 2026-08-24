@@ -32,7 +32,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 10 | P0 | Landing-phase basemap (OS topographic / aerial) | WP6b | 6 |
 | 11 | P0 | ~~Balloon/chase simulator and replay matrix, including seeded multi-route chase and controllable link/fix degradation~~ **done** | WP10 | 3–9 |
 | 11a | P0 | Full-flight archive v2: time-align balloon telemetry, available chaser/craft locations, wind observations and guidance target changes; replay any previous flight, not only the bundled Fiesta scenario | WP10 | 5–9 |
-| 12 | P0 | Security, privacy, retention, and field-test gates | WP12 | 3–11 |
+| 12 | P0 | Per-device authority, signed presence, retention and log privacy are automated; mixed-device/vehicle field evidence remains | WP12 | 3–11 |
 | 12a | P0 | Multiple operational boundaries and altitude bands: draw, name, share and update more than one line/area in the web planner or app; alert on crossing with source, age and hysteresis; support configurable high/low altitude alerts | WP10b | 5, 6, 12 |
 | 13 | P1 | ~~Carry balloon altitude through GPX export and import (#16)~~ **done** | WP5 | 2 |
 | 14 | P1 | Retarget posted speed limits at the chase driver; remove inherited camera/enforcement alerts | WP7 | 3 |

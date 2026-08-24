@@ -7,7 +7,8 @@
 /// no signal cannot form a ride at all, which is precisely the situation this
 /// product exists for.
 ///
-/// A QR code has room for all three, so scanning one needs no network.
+/// A QR code has room for the relay fields and (for current invitations) the
+/// authority root key, so scanning one needs no network.
 ///
 /// ## Why not a URL
 ///
@@ -29,6 +30,7 @@ class RideJoinPayload {
     required this.rideCode,
     required this.inviteSecret,
     required this.joinToken,
+    this.authorityRootPublicKey,
     this.crewRoomId,
     this.crewRoomAlias,
     this.crewRoomInviteToken,
@@ -37,36 +39,41 @@ class RideJoinPayload {
   /// Version prefix, so a payload from a future format is **rejected** rather
   /// than half-understood. A wrong join is worse than a refused one: a rider who
   /// silently ends up in a degraded session has no way to tell.
-  static const scheme = 'bc1';
+  static const scheme = 'bc2';
 
   /// The same format under its old name.
   ///
   /// This was `tec1` when the app was Tail End Charlie. Accepting it is not the
-  /// half-understanding the paragraph above refuses: the five fields and their
+  /// half-understanding the paragraph above refuses: the legacy fields and their
   /// bounds are byte-identical, so only the label differs, and every check below
   /// still runs. An invitation already printed on a QR code, or sitting in a
   /// message from an older build, still joins.
   ///
   /// New payloads are written as [scheme]. This can go once no build old enough
   /// to have written `tec1` is still installed anywhere.
-  static const legacyScheme = 'tec1';
+  static const legacyScheme = 'bc1';
+  static const inheritedScheme = 'tec1';
 
-  /// Colon-separated because none of the four fields can contain a colon: the
-  /// code is six digits, the id is a UUID, and both secrets are base64url, whose
-  /// alphabet is `A-Za-z0-9-_`. So splitting cannot be ambiguous, and no escaping
-  /// is needed to keep the payload short.
+  /// Colon-separated because none of the fields can contain a colon: identifiers
+  /// and aliases are bounded tokens, while secrets and public keys are base64url,
+  /// whose alphabet is `A-Za-z0-9-_`. So splitting cannot be ambiguous, and no
+  /// escaping is needed to keep the payload short.
   static const _separator = ':';
 
   final String rideId;
   final String rideCode;
   final String inviteSecret;
   final String joinToken;
+  final String? authorityRootPublicKey;
   final String? crewRoomId;
   final String? crewRoomAlias;
   final String? crewRoomInviteToken;
 
   String encode() {
-    final base = [scheme, rideCode, rideId, inviteSecret, joinToken];
+    final rootKey = authorityRootPublicKey;
+    final base = rootKey == null
+        ? [legacyScheme, rideCode, rideId, inviteSecret, joinToken]
+        : [scheme, rideCode, rideId, inviteSecret, joinToken, rootKey];
     if (crewRoomId == null ||
         crewRoomAlias == null ||
         crewRoomInviteToken == null) {
@@ -88,8 +95,13 @@ class RideJoinPayload {
   /// from a camera - anyone can print one.
   static RideJoinPayload decode(String raw) {
     final parts = raw.trim().split(_separator);
-    if ((parts.length != 5 && parts.length != 8) ||
-        (parts.first != scheme && parts.first != legacyScheme)) {
+    final isCurrent = parts.firstOrNull == scheme;
+    final isLegacy =
+        parts.firstOrNull == legacyScheme ||
+        parts.firstOrNull == inheritedScheme;
+    if ((!isCurrent && !isLegacy) ||
+        (isCurrent && parts.length != 6 && parts.length != 9) ||
+        (isLegacy && parts.length != 5 && parts.length != 8)) {
       throw const FormatException(
         'That code is not a Balloon Crumbs flight invitation.',
       );
@@ -98,6 +110,7 @@ class RideJoinPayload {
     final rideId = parts[2];
     final inviteSecret = parts[3];
     final joinToken = parts[4];
+    final authorityRootPublicKey = isCurrent ? parts[5] : null;
 
     if (!RegExp(r'^\d{6}$').hasMatch(rideCode)) {
       throw const FormatException('That invitation has no valid flight code.');
@@ -119,13 +132,20 @@ class RideJoinPayload {
         'That invitation is incomplete and cannot join securely.',
       );
     }
+    if (isCurrent &&
+        !RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(authorityRootPublicKey!)) {
+      throw const FormatException(
+        'That invitation has no valid device authority.',
+      );
+    }
     String? crewRoomId;
     String? crewRoomAlias;
     String? crewRoomInviteToken;
-    if (parts.length == 8) {
-      crewRoomId = parts[5];
-      crewRoomAlias = parts[6];
-      crewRoomInviteToken = parts[7];
+    if (parts.length == 8 || parts.length == 9) {
+      final offset = isCurrent ? 1 : 0;
+      crewRoomId = parts[5 + offset];
+      crewRoomAlias = parts[6 + offset];
+      crewRoomInviteToken = parts[7 + offset];
       if (crewRoomId.isEmpty || crewRoomId.length > 128) {
         throw const FormatException('That invitation has no valid crew room.');
       }
@@ -145,6 +165,7 @@ class RideJoinPayload {
       rideCode: rideCode,
       inviteSecret: inviteSecret,
       joinToken: joinToken,
+      authorityRootPublicKey: authorityRootPublicKey,
       crewRoomId: crewRoomId,
       crewRoomAlias: crewRoomAlias,
       crewRoomInviteToken: crewRoomInviteToken,

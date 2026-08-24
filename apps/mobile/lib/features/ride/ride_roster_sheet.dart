@@ -75,6 +75,16 @@ class _RideRosterSheetState extends State<RideRosterSheet> {
                           '$liveCount currently included · ${all.length} recorded',
                           style: const TextStyle(color: Color(0xFF9DA8B6)),
                         ),
+                        if (widget.controller.session?.usesDeviceAuthority ==
+                            true)
+                          TextButton.icon(
+                            key: const Key('rotate-local-device-key'),
+                            onPressed: widget.controller.busy
+                                ? null
+                                : _rotateLocalKey,
+                            icon: const Icon(Icons.key_outlined, size: 18),
+                            label: const Text('Rotate this device key'),
+                          ),
                       ],
                     ),
                   ),
@@ -149,13 +159,31 @@ class _RideRosterSheetState extends State<RideRosterSheet> {
                       padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
                       itemCount: visible.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) => _ParticipantTile(
-                        participant: visible[index],
-                        now: DateTime.now(),
-                        peerAppIsOlder: widget.legacyPeerRiderIds.contains(
-                          visible[index].riderId,
-                        ),
-                      ),
+                      itemBuilder: (context, index) {
+                        final participant = visible[index];
+                        final revoked = widget.controller.revokedDeviceIds
+                            .contains(participant.riderId);
+                        return _ParticipantTile(
+                          participant: participant,
+                          now: DateTime.now(),
+                          revoked: revoked,
+                          onRevoke:
+                              widget.controller.hasFlightAuthority &&
+                                  widget
+                                          .controller
+                                          .session
+                                          ?.usesDeviceAuthority ==
+                                      true &&
+                                  !participant.isLocal &&
+                                  !participant.hasLeft &&
+                                  !revoked
+                              ? () => _confirmRevoke(participant)
+                              : null,
+                          peerAppIsOlder: widget.legacyPeerRiderIds.contains(
+                            participant.riderId,
+                          ),
+                        );
+                      },
                     ),
             ),
           ],
@@ -185,6 +213,53 @@ class _RideRosterSheetState extends State<RideRosterSheet> {
     if (leftAttention != rightAttention) return leftAttention ? -1 : 1;
     if (left.isLocal != right.isLocal) return left.isLocal ? -1 : 1;
     return left.displayName.compareTo(right.displayName);
+  }
+
+  Future<void> _rotateLocalKey() async {
+    await widget.controller.rotateLocalDeviceAuthority();
+    if (!mounted) return;
+    final error = widget.controller.errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error ?? 'This device now uses a new flight security key.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmRevoke(RideParticipant participant) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove device access?'),
+        content: Text(
+          '${participant.displayName} will stop contributing positions or '
+          'flight changes from this device. They can rejoin with a new '
+          'operation identity if invited again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirm-revoke-device'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Remove access'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.controller.revokeDeviceAuthority(participant.riderId);
+    if (!mounted) return;
+    final error = widget.controller.errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error ?? '${participant.displayName} access removed.'),
+      ),
+    );
   }
 }
 
@@ -300,11 +375,15 @@ class _ParticipantTile extends StatelessWidget {
     required this.participant,
     required this.now,
     this.peerAppIsOlder = false,
+    this.revoked = false,
+    this.onRevoke,
   });
 
   final RideParticipant participant;
   final DateTime now;
   final bool peerAppIsOlder;
+  final bool revoked;
+  final VoidCallback? onRevoke;
 
   @override
   Widget build(BuildContext context) {
@@ -327,6 +406,7 @@ class _ParticipantTile extends StatelessWidget {
       ?rejoin,
       ?lastKnownPosition,
       if (peerAppIsOlder) 'app is older',
+      if (revoked) 'device access revoked',
     ].join(', ');
     return Semantics(
       label: semanticLabel,
@@ -361,6 +441,7 @@ class _ParticipantTile extends StatelessWidget {
           child: Text(
             [
               '$role · ${participant.stateLabel}',
+              if (revoked) 'Device access revoked by pilot',
               'Last seen $lastSeen · ${participant.transportLabel}',
               ?rejoin,
               ?lastKnownPosition,
@@ -368,6 +449,14 @@ class _ParticipantTile extends StatelessWidget {
             style: const TextStyle(color: Color(0xFFA6B0BD), height: 1.35),
           ),
         ),
+        trailing: onRevoke == null
+            ? null
+            : IconButton(
+                key: Key('revoke-device-${participant.riderId}'),
+                tooltip: 'Remove device access',
+                onPressed: onRevoke,
+                icon: const Icon(Icons.person_remove_outlined),
+              ),
       ),
     );
   }

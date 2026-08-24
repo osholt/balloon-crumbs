@@ -10,6 +10,7 @@ CURRENT_CAPABILITIES = [
     "crew-rooms-v1",
     "ride-start-v1",
     "live-presence-v2",
+    "device-authority-v1",
     "membership-v1",
     "observer-access-v1",
     "pilot-handover-v1",

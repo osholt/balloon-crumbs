@@ -11,6 +11,8 @@ const _relayEventEnvelopeFields = {
   'expiresAt',
   'payload',
   'signature',
+  'devicePublicKey',
+  'deviceSignature',
   'acknowledged',
 };
 
@@ -31,7 +33,7 @@ const _relayEventEnvelopeFields = {
 /// into a total, silent presence outage.
 String? describeUnsupportedRelayEvent(Map<String, Object?> raw) {
   final schemaVersion = raw['schemaVersion'];
-  if (schemaVersion is int && schemaVersion != 1) {
+  if (schemaVersion is int && schemaVersion != 1 && schemaVersion != 2) {
     return 'schema-v$schemaVersion';
   }
   final type = raw['type'];

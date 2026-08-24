@@ -49,6 +49,7 @@ class RideInvitationQrSheet extends StatelessWidget {
       rideCode: session.rideCode,
       inviteSecret: session.inviteSecret,
       joinToken: session.joinToken,
+      authorityRootPublicKey: session.authorityRootPublicKey,
       crewRoomId: crewRoom?.inviteToken == null ? null : crewRoom!.roomId,
       crewRoomAlias: crewRoom?.inviteToken == null ? null : crewRoom!.alias,
       crewRoomInviteToken: crewRoom?.inviteToken,

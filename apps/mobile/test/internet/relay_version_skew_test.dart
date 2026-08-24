@@ -32,8 +32,8 @@ void main() {
         'rideTeleported',
       );
       expect(
-        describeUnsupportedRelayEvent(_rawEvent(schemaVersion: 2)),
-        'schema-v2',
+        describeUnsupportedRelayEvent(_rawEvent(schemaVersion: 3)),
+        'schema-v3',
       );
       expect(
         describeUnsupportedRelayEvent(_rawEvent(extra: {'convoyId': 'c-1'})),
@@ -68,7 +68,7 @@ void main() {
             'events': [
               _rawEvent(id: 'future', type: 'rideTeleported'),
               known.toJson(),
-              _rawEvent(id: 'future-schema', schemaVersion: 2),
+              _rawEvent(id: 'future-schema', schemaVersion: 3),
             ],
           }),
           200,
@@ -94,7 +94,7 @@ void main() {
       expect(result.events.map((event) => event.id), ['known']);
       expect(result.cursor, 'cursor-1');
       expect(result.ignoredEventCount, 2);
-      expect(result.ignoredEventTypes, {'rideTeleported', 'schema-v2'});
+      expect(result.ignoredEventTypes, {'rideTeleported', 'schema-v3'});
     },
   );
 

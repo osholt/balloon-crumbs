@@ -1266,6 +1266,8 @@ class _EventRow extends StatelessWidget {
       RideEventType.flightStartedByCrew => 'Tracking started by chase crew',
       RideEventType.flightLanded => 'Balloon marked LANDED',
       RideEventType.flightLandingRetracted => 'Landing declaration retracted',
+      RideEventType.deviceAuthorityRevoked => 'Device access revoked',
+      RideEventType.deviceAuthorityRotated => 'Device security key rotated',
       // Also the acknowledgement of another rider's message, which is a
       // `statusMessage` carrying `acknowledgesQuickMessageEventId` and the label
       // "Seen: <what they raised>" (#151). One row either way: the log records

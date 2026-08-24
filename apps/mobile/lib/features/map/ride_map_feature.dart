@@ -3108,9 +3108,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
               commanded.target,
             );
       debugPrint(
-        'Flight map camera: centre=${camera.target.latitude.toStringAsFixed(6)},'
-        '${camera.target.longitude.toStringAsFixed(6)} '
-        'zoom=${camera.zoom.toStringAsFixed(2)} '
+        'Flight map camera: zoom=${camera.zoom.toStringAsFixed(2)} '
         'follow=$_navigationMode '
         'commanded=${commanded != null} '
         'drift=${drift?.toStringAsFixed(1) ?? 'n/a'}m '
@@ -3670,7 +3668,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       _navigationGuidance.value = next;
       widget.onNavigationGuidanceChanged?.call(next.guidance);
       if (stateChanged && kDebugMode) {
-        debugPrint('Navigation guidance: ${next.state.name} — ${next.message}');
+        debugPrint('Navigation guidance state: ${next.state.name}');
       }
       if ((visibilityChanged || stateChanged) && mounted) setState(() {});
     }
@@ -4819,7 +4817,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
     } on Object catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint(
-          'Could not prepare MapLibre flight layers: $error\n$stackTrace',
+          'Could not prepare MapLibre flight layers (${error.runtimeType})\n'
+          '$stackTrace',
         );
       }
     }
@@ -4902,7 +4901,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
       await controller.setGeoJsonSource(_overlaySource, _overlayGeoJson());
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('Could not refresh MapLibre flight layers: $error');
+        debugPrint(
+          'Could not refresh MapLibre flight layers (${error.runtimeType})',
+        );
       }
     }
   }
@@ -4965,7 +4966,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
       }
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('Could not refresh scheduled MapLibre layers: $error');
+        debugPrint(
+          'Could not refresh scheduled MapLibre layers (${error.runtimeType})',
+        );
       }
     } finally {
       _mapLibreSyncRunning = false;
@@ -6201,7 +6204,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
         'Registered-property extents are unavailable. The road map and private '
         'access notes are unaffected.',
       );
-      debugPrint('Could not load HMLR INSPIRE reference: $error');
+      debugPrint(
+        'Could not load HMLR INSPIRE reference (${error.runtimeType})',
+      );
     }
   }
 
@@ -6288,7 +6293,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
       _showMessage(
         'OS detail could not be drawn. The ordinary road map remains active.',
       );
-      debugPrint('Could not change OS final-approach layer: $error');
+      debugPrint(
+        'Could not change OS final-approach layer (${error.runtimeType})',
+      );
     }
   }
 
@@ -6363,7 +6370,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       if (!mounted || !_osFinalApproachSelected) return;
       setState(() => _osFinalApproachSelected = false);
       _showMessage('OS detail was lost. The ordinary road map remains active.');
-      debugPrint('OS final-approach tile failed: $error');
+      debugPrint('OS final-approach tile failed (${error.runtimeType})');
     });
   }
 
@@ -7958,7 +7965,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
       await _fitGroup(snapshot);
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('Could not prepare group mini-map: $error');
+        debugPrint('Could not prepare group mini-map (${error.runtimeType})');
       }
     }
   }
@@ -7993,7 +8000,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
       } while (_refreshRequestedWhileBusy && mounted);
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('Could not refresh group mini-map: $error');
+        debugPrint('Could not refresh group mini-map (${error.runtimeType})');
       }
     } finally {
       _refreshing = false;
