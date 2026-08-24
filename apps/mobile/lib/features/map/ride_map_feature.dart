@@ -19,6 +19,7 @@ import '../../data/json_file_recorded_route_store.dart';
 import '../../data/json_file_route_store.dart';
 import '../../domain/completed_ride_store.dart';
 import '../../domain/altitude.dart';
+import '../../domain/altitude_unit.dart';
 import '../../domain/distance_unit.dart';
 import '../../domain/imported_route.dart';
 import '../../domain/map_orientation.dart';
@@ -265,6 +266,7 @@ class RideMapFeature extends StatefulWidget {
     this.mapStyleString,
     this.completedRideStore,
     this.distanceUnit = DistanceUnit.kilometres,
+    this.altitudeUnit = AltitudeUnit.metres,
     this.speedLimitDisplay,
     this.showRouteProgress = true,
     this.basemapConfiguration = const BasemapConfiguration(),
@@ -333,6 +335,7 @@ class RideMapFeature extends StatefulWidget {
     CompletedRideStore? completedRideStore,
     bool canEditRoute = true,
     DistanceUnit distanceUnit = DistanceUnit.kilometres,
+    AltitudeUnit altitudeUnit = AltitudeUnit.metres,
     SpeedLimitDisplayController? speedLimitDisplay,
     bool showRouteProgress = true,
     bool darkMapStyle = false,
@@ -396,6 +399,7 @@ class RideMapFeature extends StatefulWidget {
     completedRideStore: completedRideStore,
     canEditRoute: canEditRoute,
     distanceUnit: distanceUnit,
+    altitudeUnit: altitudeUnit,
     speedLimitDisplay: speedLimitDisplay,
     showRouteProgress: showRouteProgress,
     basemapConfiguration: BasemapConfiguration.fromEnvironment().forBrightness(
@@ -497,6 +501,7 @@ class RideMapFeature extends StatefulWidget {
   final String? mapStyleString;
   final CompletedRideStore? completedRideStore;
   final DistanceUnit distanceUnit;
+  final AltitudeUnit altitudeUnit;
   final SpeedLimitDisplayController? speedLimitDisplay;
   final bool showRouteProgress;
   final BasemapConfiguration basemapConfiguration;
@@ -662,6 +667,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         chaseVehicle: widget.chaseVehicle,
         navigationExportCoordinator: widget.navigationExportCoordinator,
         distanceUnit: widget.distanceUnit,
+        altitudeUnit: widget.altitudeUnit,
         speedLimitDisplay: widget.speedLimitDisplay,
         showRouteProgress: widget.showRouteProgress,
         localCraftStyle: widget.localCraftStyle,
@@ -764,6 +770,7 @@ class RideMapScreen extends StatefulWidget {
     this.completedRideStore,
     this.storedRouteLibrary,
     this.distanceUnit = DistanceUnit.kilometres,
+    this.altitudeUnit = AltitudeUnit.metres,
     this.speedLimitDisplay,
     this.showRouteProgress = true,
     this.disposeOfflineTileCache = false,
@@ -890,6 +897,7 @@ class RideMapScreen extends StatefulWidget {
   final StoredRouteLibrary? storedRouteLibrary;
 
   final DistanceUnit distanceUnit;
+  final AltitudeUnit altitudeUnit;
   final SpeedLimitDisplayController? speedLimitDisplay;
   final bool showRouteProgress;
   final bool disposeOfflineTileCache;
@@ -1754,6 +1762,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                                 builder: (context, fix, _) =>
                                     _BalloonAltitudeCard(
                                       fix: fix,
+                                      altitudeUnit: widget.altitudeUnit,
                                       onShowMapInformation:
                                           _showBalloonMapInformation,
                                     ),
@@ -1768,6 +1777,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
                               key: const Key('wind-forecast-control-position'),
                               child: _WindForecastChip(
                                 controller: controller,
+                                altitudeUnit: widget.altitudeUnit,
                                 onShowDetails: _showWindForecastDetails,
                               ),
                             ),
@@ -4462,7 +4472,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
         'balloon-crumbs-route-remaining-border',
         ml.LineLayerProperties(
           lineColor: _casingHex,
-          lineWidth: displayedRouteStyle.casingWidthPixels,
+          lineWidth: [
+            'coalesce',
+            ['get', 'casingWidth'],
+            displayedRouteStyle.casingWidthPixels,
+          ],
           lineDasharray: displayedRouteStyle.maplibreCasingDashArray,
           lineCap: 'round',
           lineJoin: 'round',
@@ -4476,7 +4490,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
           lineColor: _route?.isBalloonForecast == true
               ? const ['get', 'color']
               : _hexColor(displayedRouteStyle.color),
-          lineWidth: displayedRouteStyle.widthPixels,
+          lineWidth: [
+            'coalesce',
+            ['get', 'width'],
+            displayedRouteStyle.widthPixels,
+          ],
           lineDasharray: displayedRouteStyle.maplibreDashArray,
           lineCap: 'round',
           lineJoin: 'round',
@@ -4635,7 +4653,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       'balloon-crumbs-trail-${kind.name}-casing',
       ml.LineLayerProperties(
         lineColor: _casingHex,
-        lineWidth: style.casingWidthPixels,
+        lineWidth: const ['get', 'casingWidth'],
         lineDasharray: style.maplibreCasingDashArray,
         lineCap: 'round',
         lineJoin: 'round',
@@ -4651,7 +4669,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         // segments use altitude colours; chase craft retain the identity
         // colour of their elected reporter across both map renderers.
         lineColor: const ['get', 'color'],
-        lineWidth: style.widthPixels,
+        lineWidth: const ['get', 'width'],
         lineDasharray: style.maplibreDashArray,
         lineCap: 'round',
         lineJoin: 'round',
@@ -4780,7 +4798,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
           {
             'type': 'Feature',
             'id': part.id,
-            'properties': {'color': _hexColor(part.color)},
+            'properties': {
+              'color': _hexColor(part.color),
+              'width':
+                  RouteTrailStyle.forecastTrack.widthPixels * part.widthFactor,
+              'casingWidth':
+                  RouteTrailStyle.forecastTrack.casingWidthPixels *
+                  part.widthFactor,
+            },
             'geometry': {
               'type': 'LineString',
               'coordinates': [
@@ -4799,11 +4824,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
       (_route?.isBalloonForecast == true
               ? RouteTrailStyle.forecastTrack
               : RouteTrailStyle.routeAhead)
-          .withColor(part.color),
+          .withColor(part.color)
+          .scaleWidth(part.widthFactor),
     ),
   );
 
-  Iterable<({String id, List<GeoPoint> points, Color color})>
+  Iterable<
+    ({String id, List<GeoPoint> points, Color color, double widthFactor})
+  >
   get _displayedRouteParts sync* {
     if (_route?.isBalloonForecast != true) {
       for (final (index, path) in _displayedRoutePaths.indexed) {
@@ -4811,6 +4839,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           id: 'remaining-route-$index',
           points: path,
           color: RouteTrailStyle.routeAhead.color,
+          widthFactor: 1,
         );
       }
       return;
@@ -4823,6 +4852,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
           id: 'forecast-$pathIndex-altitude-$segmentIndex',
           points: segment.points,
           color: segment.color,
+          widthFactor: segment.widthFactor,
         );
       }
     }
@@ -4888,17 +4918,24 @@ class _RideMapScreenState extends State<RideMapScreen> {
             (trace) => _renderedTrailParts(trace).map(
               (part) => _routePolyline(
                 part.points,
-                trace.style.withColor(part.color),
+                trace.style.withColor(part.color).scaleWidth(part.widthFactor),
               ),
             ),
           );
 
-  Iterable<({String id, List<GeoPoint> points, Color color})>
+  Iterable<
+    ({String id, List<GeoPoint> points, Color color, double widthFactor})
+  >
   _renderedTrailParts(MapOverlayTrace trace) sync* {
     if (trace.kind != RiderTrailKind.balloonGroundTrack &&
         trace.kind != RiderTrailKind.forecastTrack &&
         trace.kind != RiderTrailKind.liveProjectionTrack) {
-      yield (id: trace.id, points: trace.points, color: trace.effectiveColor);
+      yield (
+        id: trace.id,
+        points: trace.points,
+        color: trace.effectiveColor,
+        widthFactor: 1,
+      );
       return;
     }
     for (final (index, segment) in BalloonAltitudeStyle.segments(
@@ -4908,6 +4945,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
         id: '${trace.id}-altitude-$index',
         points: segment.points,
         color: segment.color,
+        widthFactor: segment.widthFactor,
       );
     }
   }
@@ -5022,6 +5060,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
               'kind': trace.kind.name,
               'label': trace.label,
               'color': _hexColor(part.color),
+              'width': trace.style.widthPixels * part.widthFactor,
+              'casingWidth': trace.style.casingWidthPixels * part.widthFactor,
             },
             'geometry': {
               'type': 'LineString',
@@ -5503,6 +5543,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       context,
       route: activeRoute,
       distanceUnit: widget.distanceUnit,
+      altitudeUnit: widget.altitudeUnit,
       distanceMeters: distanceMeters,
       duration: duration,
       warnings: confirmationWarnings,
@@ -6290,6 +6331,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
       useSafeArea: true,
       builder: (context) => _BalloonMapInformationSheet(
         configuration: widget.aeronauticalChartConfiguration,
+        altitudeUnit: widget.altitudeUnit,
         now: now,
       ),
     );
@@ -6304,7 +6346,10 @@ class _RideMapScreenState extends State<RideMapScreen> {
       useSafeArea: true,
       builder: (context) => SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        child: _WindForecastControl(controller: controller),
+        child: _WindForecastControl(
+          controller: controller,
+          altitudeUnit: widget.altitudeUnit,
+        ),
       ),
     );
   }
@@ -8459,10 +8504,12 @@ class _MapOverlayLabel extends StatelessWidget {
 class _WindForecastChip extends StatelessWidget {
   const _WindForecastChip({
     required this.controller,
+    required this.altitudeUnit,
     required this.onShowDetails,
   });
 
   final WindForecastController controller;
+  final AltitudeUnit altitudeUnit;
   final VoidCallback onShowDetails;
 
   @override
@@ -8505,7 +8552,7 @@ class _WindForecastChip extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'WIND · ${controller.selectedAltitudeMetersMsl} M',
+                      'WIND · ${altitudeUnit.altitude(controller.selectedAltitudeMetersMsl.toDouble()).toUpperCase()}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -8550,9 +8597,13 @@ class _WindForecastChip extends StatelessWidget {
 }
 
 class _WindForecastControl extends StatelessWidget {
-  const _WindForecastControl({required this.controller});
+  const _WindForecastControl({
+    required this.controller,
+    required this.altitudeUnit,
+  });
 
   final WindForecastController controller;
+  final AltitudeUnit altitudeUnit;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -8589,6 +8640,13 @@ class _WindForecastControl extends StatelessWidget {
               null => 'Forecast unavailable',
             };
       final gustRange = field?.surfaceGustRangeKmh;
+      final minimumAltitude = altitudeUnit.altitude(
+        openMeteoWindAltitudeLevels.first.toDouble(),
+      );
+      final maximumAltitude = altitudeUnit.altitude(
+        openMeteoWindAltitudeLevels.last.toDouble(),
+      );
+      final surfaceGustAltitude = altitudeUnit.altitude(10);
       return Card(
         key: const Key('wind-forecast-control'),
         margin: EdgeInsets.zero,
@@ -8612,7 +8670,7 @@ class _WindForecastControl extends StatelessWidget {
                       children: [
                         Text(
                           'FORECAST WIND · '
-                          '${controller.selectedAltitudeMetersMsl} M MSL',
+                          '${altitudeUnit.altitude(controller.selectedAltitudeMetersMsl.toDouble()).toUpperCase()} MSL',
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -8657,7 +8715,7 @@ class _WindForecastControl extends StatelessWidget {
                 ),
                 Row(
                   children: [
-                    const Text('20', style: TextStyle(fontSize: 9)),
+                    Text(minimumAltitude, style: const TextStyle(fontSize: 9)),
                     Expanded(
                       child: Slider(
                         key: const Key('wind-altitude-slider'),
@@ -8666,25 +8724,29 @@ class _WindForecastControl extends StatelessWidget {
                             .toDouble(),
                         divisions: openMeteoWindAltitudeLevels.length - 1,
                         value: selectedIndex.clamp(0, 100).toDouble(),
-                        label: '${controller.selectedAltitudeMetersMsl} m MSL',
+                        label:
+                            '${altitudeUnit.altitude(controller.selectedAltitudeMetersMsl.toDouble())} MSL',
                         onChanged: (value) => controller.setSelectedAltitude(
                           openMeteoWindAltitudeLevels[value.round()].toDouble(),
                         ),
                       ),
                     ),
-                    const Text('2000 m', style: TextStyle(fontSize: 9)),
+                    Text(maximumAltitude, style: const TextStyle(fontSize: 9)),
                   ],
                 ),
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.navigation_rounded, size: 13),
-                    SizedBox(width: 5),
+                    const Icon(Icons.navigation_rounded, size: 13),
+                    const SizedBox(width: 5),
                     Expanded(
                       child: Text(
                         'Arrow points downwind · number is km/h · G is the '
-                        'forecast gust at 10 m AGL, not at the selected MSL '
+                        'forecast gust at $surfaceGustAltitude AGL, not at the selected MSL '
                         'layer · model only, not an aviation briefing',
-                        style: TextStyle(color: Color(0xFFB7C4D1), fontSize: 9),
+                        style: const TextStyle(
+                          color: Color(0xFFB7C4D1),
+                          fontSize: 9,
+                        ),
                       ),
                     ),
                   ],
@@ -8695,8 +8757,8 @@ class _WindForecastControl extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 5),
                     child: Text(
                       gustRange == null
-                          ? '10 m AGL gust unavailable for this forecast or reference fixture.'
-                          : '10 m AGL forecast gust across this grid: '
+                          ? '$surfaceGustAltitude AGL gust unavailable for this forecast or reference fixture.'
+                          : '$surfaceGustAltitude AGL forecast gust across this grid: '
                                 '${gustRange.minimum.round()}–${gustRange.maximum.round()} km/h.',
                       key: const Key('wind-surface-gust-summary'),
                       style: const TextStyle(
@@ -8960,10 +9022,12 @@ class _HmlrInspireReferenceSheet extends StatelessWidget {
 class _BalloonMapInformationSheet extends StatelessWidget {
   const _BalloonMapInformationSheet({
     required this.configuration,
+    required this.altitudeUnit,
     required this.now,
   });
 
   final AeronauticalChartConfiguration configuration;
+  final AltitudeUnit altitudeUnit;
   final DateTime now;
 
   @override
@@ -9029,13 +9093,13 @@ class _BalloonMapInformationSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Balloon altitude and the coloured ground track are shown in '
-              'metres. GNSS altitude is not terrain clearance. Grey track '
-              'segments have no usable altitude.',
+              '${altitudeUnit.label.toLowerCase()}. GNSS altitude is not '
+              'terrain clearance. Grey track segments have no usable altitude.',
             ),
             const SizedBox(height: 14),
-            const _BalloonAltitudeLegend(),
+            _BalloonAltitudeLegend(altitudeUnit: altitudeUnit),
           ],
         ),
       ),
@@ -9198,78 +9262,106 @@ class _AeronauticalLegendRow extends StatelessWidget {
 }
 
 class _BalloonAltitudeLegend extends StatelessWidget {
-  const _BalloonAltitudeLegend();
+  const _BalloonAltitudeLegend({required this.altitudeUnit});
+
+  final AltitudeUnit altitudeUnit;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label:
-        'Balloon track altitude in metres: ${BalloonAltitudeStyle.bands.map((band) => band.label).join(', ')}. Grey means altitude unavailable.',
-    child: Card(
-      key: const Key('balloon-altitude-legend'),
-      color: const Color(0xE6252E39),
-      margin: EdgeInsets.zero,
-      child: SizedBox(
-        width: 248,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'TRACK ALTITUDE · METRES',
-                style: TextStyle(
-                  color: Color(0xFFCED6DF),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
+  Widget build(BuildContext context) {
+    final labels = BalloonAltitudeStyle.labels(altitudeUnit);
+    String threshold(double metres) =>
+        altitudeUnit.fromMetres(metres).round().toString();
+    return Semantics(
+      label:
+          'Balloon track altitude in ${altitudeUnit.label.toLowerCase()}: '
+          '${labels.join(', ')}. The line grows thicker as altitude increases. '
+          'Grey and thinnest means altitude unavailable.',
+      child: Card(
+        key: const Key('balloon-altitude-legend'),
+        color: const Color(0xE6252E39),
+        margin: EdgeInsets.zero,
+        child: SizedBox(
+          width: 248,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'TRACK ALTITUDE · ${altitudeUnit.label.toUpperCase()}',
+                  style: const TextStyle(
+                    color: Color(0xFFCED6DF),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 5),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: Row(
+                const SizedBox(height: 5),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: SizedBox(
+                    height: 14,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (final (index, band)
+                            in BalloonAltitudeStyle.bands.indexed)
+                          Expanded(
+                            child: ColoredBox(
+                              color: band.color,
+                              child: SizedBox(
+                                height:
+                                    6 +
+                                    BalloonAltitudeStyle
+                                            .bandWidthFactors[index] *
+                                        5,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    for (final band in BalloonAltitudeStyle.bands)
-                      Expanded(
-                        child: ColoredBox(
-                          color: band.color,
-                          child: const SizedBox(height: 8),
-                        ),
-                      ),
+                    Text(
+                      '<${threshold(150)}',
+                      style: const TextStyle(fontSize: 9),
+                    ),
+                    Text(threshold(300), style: const TextStyle(fontSize: 9)),
+                    Text(threshold(600), style: const TextStyle(fontSize: 9)),
+                    Text(
+                      '${threshold(900)}+ ${altitudeUnit.symbol}',
+                      style: const TextStyle(fontSize: 9),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 3),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('<150', style: TextStyle(fontSize: 9)),
-                  Text('300', style: TextStyle(fontSize: 9)),
-                  Text('600', style: TextStyle(fontSize: 9)),
-                  Text('900+ m', style: TextStyle(fontSize: 9)),
-                ],
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'Grey = altitude unavailable',
-                style: TextStyle(color: Color(0xFFB7C4D1), fontSize: 9),
-              ),
-            ],
+                const SizedBox(height: 2),
+                const Text(
+                  'Thicker = higher · grey/thinnest = altitude unavailable',
+                  style: TextStyle(color: Color(0xFFB7C4D1), fontSize: 9),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _BalloonAltitudeCard extends StatelessWidget {
   const _BalloonAltitudeCard({
     required this.fix,
+    required this.altitudeUnit,
     required this.onShowMapInformation,
   });
 
   final MapNavigationPosition? fix;
+  final AltitudeUnit altitudeUnit;
   final VoidCallback onShowMapInformation;
 
   @override
@@ -9283,13 +9375,13 @@ class _BalloonAltitudeCard extends StatelessWidget {
               .abs();
     final primary = altitude == null
         ? 'Altitude unavailable'
-        : '${altitude.round()} m';
+        : altitudeUnit.altitude(altitude);
     final trend = _trend(reading?.verticalSpeedMetersPerSecond);
     final accuracy = reading?.altitudeAccuracyMeters;
     final details = [
       if (reading != null && altitude != null) _source(reading.altitudeSource),
       if (reading != null && altitude != null) _datum(reading.altitudeDatum),
-      if (accuracy != null) '±${accuracy.round()} m',
+      if (accuracy != null) altitudeUnit.accuracy(accuracy),
       if (age != null) _age(age),
     ];
     return Semantics(
@@ -9408,7 +9500,7 @@ class _BalloonAltitudeCard extends StatelessWidget {
         ? '↓'
         : '→';
     final magnitude = metresPerSecond.abs();
-    return '$arrow ${magnitude.toStringAsFixed(1)} m/s';
+    return '$arrow ${altitudeUnit.verticalRate(magnitude)}';
   }
 
   static String _source(AltitudeSource source) => switch (source) {

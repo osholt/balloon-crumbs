@@ -44,6 +44,31 @@ criteria without putting a pre-launch action back on the pilot:
 The bounded CI set is deliberately virtual-time driven. It does not sleep for
 45 minutes and it never publishes synthetic positions to a live relay.
 
+## Balloon telemetry closure
+
+Balloon Crumbs stores telemetry internally in metres and converts only at the
+presentation boundary. Altitude defaults to metres independently of the road
+distance locale; a separate persisted setting can select feet. The telemetry
+card, wind levels, flight-plan stages, replay, map/CarPlay labels, altitude
+thresholds and legend all consume that same setting.
+
+The measured-track integrity limits are deliberately generous corruption
+guards, not operating limits: 60 m/s ground speed and 12 m/s vertical speed,
+with both fixes' reported accuracy added to the permitted displacement. A gap
+longer than two minutes starts a new segment. Missing altitude remains a valid
+position with an unknown-height segment. A rejected fix remains in the signed
+offline event journal and in the reducer's rejected-evidence list, while never
+becoming part of the canonical drawn trail.
+
+| Criterion | Policy and evidence |
+| --- | --- |
+| Fix age, source and accuracy | Local balloon telemetry states measurement age, GNSS/barometric/unknown source, datum and available vertical accuracy; shared craft details retain position accuracy, transport source and freshness. `location_sample_altitude_test.dart`, `device_location_source_test.dart`, `balloon_map_presentation_test.dart` |
+| Documented accessible scale | Fixed metric boundaries are 150/300/600/900 m; colour and progressively thicker strokes encode the same band, while unknown altitude is the thinnest grey stroke. The textual and semantic legend converts every boundary. `balloon_altitude_style_test.dart`, `route_trail_style_test.dart`, `balloon_map_presentation_test.dart` |
+| Missing or invalid altitude | A missing reading carries unknown source/datum and draws a grey segment without deleting the position or inventing a height. `location_sample_altitude_test.dart`, `balloon_altitude_style_test.dart`, `craft_track_reducer_test.dart` |
+| Impossible jumps | Horizontal and vertical teleports are excluded from the canonical balloon trail, retained as rejected evidence and surfaced in flight warnings. `balloon_telemetry_plausibility.dart`, `craft_track_reducer_test.dart` |
+| Unit consistency | Metric is the all-locale default; feet changes altitude, accuracy, vertical rate, wind levels, plan/replay values, scale thresholds and legend together. `altitude_unit_test.dart`, `distance_unit_controller_test.dart`, `balloon_map_presentation_test.dart`, `widget_test.dart` |
+| Replay/degradation matrix | The bundled flight explicitly climbs, holds level and descends; the launch-to-recovery fixture covers GPS loss and out-of-order replay; presence suites cover clock skew and reconnect; trail tests split rather than bridge reporting gaps. `fiesta_flight_simulation_test.dart`, `launch_recovery_acceptance_fixture_test.dart`, `live_presence_clock_skew_test.dart`, `live_presence_two_device_test.dart`, `rider_trail_recorder_test.dart` |
+
 ## Physical run record
 
 Create one table per run in the field-test issue or release evidence. Do not put

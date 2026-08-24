@@ -13,6 +13,7 @@ import 'package:balloon_crumbs/controllers/shared_route_controller.dart';
 import 'package:balloon_crumbs/controllers/speed_limit_display_controller.dart';
 import 'package:balloon_crumbs/data/in_memory_event_store.dart';
 import 'package:balloon_crumbs/data/in_memory_session_store.dart';
+import 'package:balloon_crumbs/domain/altitude_unit.dart';
 import 'package:balloon_crumbs/domain/distance_unit.dart';
 import 'package:balloon_crumbs/domain/flight_role.dart';
 import 'package:balloon_crumbs/domain/map_style_mode.dart';
@@ -486,11 +487,19 @@ void main() {
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     expect(find.text('DISTANCE UNITS'), findsOneWidget);
+    expect(find.text('ALTITUDE UNITS'), findsOneWidget);
+    expect(distanceUnits.altitudeUnit, AltitudeUnit.metres);
 
     await tester.tap(find.text('Miles'));
     await tester.pumpAndSettle();
     expect(distanceUnits.value, DistanceUnit.miles);
     expect(find.byKey(const Key('use-locale-distance-unit')), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Feet'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Feet'));
+    await tester.pumpAndSettle();
+    expect(distanceUnits.altitudeUnit, AltitudeUnit.feet);
 
     controller.dispose();
   });

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../controllers/flight_replay_controller.dart';
+import '../../domain/altitude_unit.dart';
 import '../../domain/distance_unit.dart';
 import '../../domain/flight_replay.dart';
 import '../../domain/geo_point.dart';
@@ -14,23 +15,27 @@ class FlightReplayScreen extends StatefulWidget {
     required this.title,
     required this.replay,
     required this.distanceUnit,
+    this.altitudeUnit = AltitudeUnit.metres,
   });
 
   final String title;
   final FlightReplay replay;
   final DistanceUnit distanceUnit;
+  final AltitudeUnit altitudeUnit;
 
   static Future<void> show(
     BuildContext context, {
     required String title,
     required FlightReplay replay,
     required DistanceUnit distanceUnit,
+    required AltitudeUnit altitudeUnit,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => FlightReplayScreen(
         title: title,
         replay: replay,
         distanceUnit: distanceUnit,
+        altitudeUnit: altitudeUnit,
       ),
     ),
   );
@@ -80,9 +85,10 @@ class _FlightReplayScreenState extends State<FlightReplayScreen> {
               replay: widget.replay,
               frame: frame,
               distanceUnit: widget.distanceUnit,
+              altitudeUnit: widget.altitudeUnit,
             ),
             const SizedBox(height: 12),
-            _WindCard(frame.wind),
+            _WindCard(frame.wind, altitudeUnit: widget.altitudeUnit),
             const SizedBox(height: 10),
             Text(
               widget.replay.peerTracksIncluded
@@ -161,11 +167,13 @@ class _TelemetryGrid extends StatelessWidget {
     required this.replay,
     required this.frame,
     required this.distanceUnit,
+    required this.altitudeUnit,
   });
 
   final FlightReplay replay;
   final FlightReplayFrame frame;
   final DistanceUnit distanceUnit;
+  final AltitudeUnit altitudeUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +207,7 @@ class _TelemetryGrid extends StatelessWidget {
                       Text(
                         sample.altitudeMeters == null
                             ? 'Altitude unknown'
-                            : _altitude(sample.altitudeMeters!, distanceUnit),
+                            : altitudeUnit.altitude(sample.altitudeMeters!),
                       ),
                       Text(
                         sample.headingDegrees == null
@@ -217,9 +225,10 @@ class _TelemetryGrid extends StatelessWidget {
 }
 
 class _WindCard extends StatelessWidget {
-  const _WindCard(this.wind);
+  const _WindCard(this.wind, {required this.altitudeUnit});
 
   final FlightReplayWindContext? wind;
+  final AltitudeUnit altitudeUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -247,7 +256,9 @@ class _WindCard extends StatelessWidget {
           for (final vector in context.vectors)
             ListTile(
               dense: true,
-              title: Text('${vector.altitudeMetersMsl.round()} m MSL'),
+              title: Text(
+                '${altitudeUnit.altitude(vector.altitudeMetersMsl)} MSL',
+              ),
               trailing: Text(
                 '${vector.fromDegrees.round().toString().padLeft(3, '0')}° from · ${vector.speedKmh.round()} km/h',
               ),
@@ -414,7 +425,3 @@ String _duration(Duration value) {
 String _clock(DateTime value) =>
     '${value.toLocal().hour.toString().padLeft(2, '0')}:'
     '${value.toLocal().minute.toString().padLeft(2, '0')}';
-
-String _altitude(double metres, DistanceUnit unit) => unit == DistanceUnit.miles
-    ? '${(metres * 3.28084).round()} ft'
-    : '${metres.round()} m';

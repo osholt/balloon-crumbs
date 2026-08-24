@@ -30,8 +30,8 @@ void main() {
   ];
 
   BalloonFlight flight() {
-    // Three samples is enough to have a climb, a level and a descent, with a
-    // known height at a known moment.
+    // Four samples make the climb, level hold and descent explicit, with a
+    // known height and vertical rate at a known moment.
     return const BalloonFlight(
       name: 'test flight',
       launch: launch,
@@ -49,6 +49,11 @@ void main() {
           position: GeoPoint(latitude: 51.4300, longitude: -2.7000),
           heightMetres: 180,
           elapsed: Duration(minutes: 26),
+        ),
+        BalloonFlightSample(
+          position: GeoPoint(latitude: 51.4260, longitude: -2.7120),
+          heightMetres: 180,
+          elapsed: Duration(minutes: 30),
         ),
         BalloonFlightSample(
           position: landing,
@@ -139,20 +144,27 @@ void main() {
     );
   });
 
-  test('the balloon climbs and descends in metric altitude', () async {
-    final simulation = await build();
-    addTearDown(simulation.dispose);
+  test(
+    'the balloon climbs, holds level and descends in metric altitude',
+    () async {
+      final simulation = await build();
+      addTearDown(simulation.dispose);
 
-    double? altitude() => simulation.riders
-        .firstWhere((rider) => rider.role == RideRole.lead)
-        .altitudeMeters;
+      SimulatedRiderSnapshot balloon() =>
+          simulation.riders.firstWhere((rider) => rider.role == RideRole.lead);
 
-    expect(altitude(), 0);
-    await simulation.advance(const Duration(minutes: 26));
-    expect(altitude(), closeTo(180, 0.1));
-    await simulation.advance(const Duration(minutes: 26));
-    expect(altitude(), closeTo(0, 0.1));
-  });
+      expect(balloon().altitudeMeters, 0);
+      expect(balloon().verticalSpeedMetersPerSecond, greaterThan(0));
+      await simulation.advance(const Duration(minutes: 26));
+      expect(balloon().altitudeMeters, closeTo(180, 0.1));
+      expect(balloon().verticalSpeedMetersPerSecond, 0);
+      await simulation.advance(const Duration(minutes: 10));
+      expect(balloon().altitudeMeters, lessThan(180));
+      expect(balloon().verticalSpeedMetersPerSecond, lessThan(0));
+      await simulation.advance(const Duration(minutes: 16));
+      expect(balloon().altitudeMeters, closeTo(0, 0.1));
+    },
+  );
 
   test(
     'forecast wind drives direction while altitude stays scripted',

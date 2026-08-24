@@ -29,6 +29,7 @@ import '../../controllers/situational_awareness_controller.dart';
 import '../../data/in_memory_event_store.dart';
 import '../../data/json_file_route_store.dart';
 import '../../data/secure_observer_grant_store.dart';
+import '../../domain/altitude_unit.dart';
 import '../../domain/event_store.dart';
 import '../../domain/completed_ride_store.dart';
 import '../../domain/flight_replay.dart';
@@ -382,6 +383,10 @@ class _CraftMapLocation {
     required this.riderSymbol,
     required this.riderColor,
     required this.altitudeMeters,
+    this.positionAccuracyMeters,
+    this.altitudeSource = AltitudeSource.unknown,
+    this.altitudeDatum = AltitudeDatum.unknown,
+    this.altitudeAccuracyMeters,
     required this.speedMetersPerSecond,
     required this.headingDegrees,
     required this.point,
@@ -396,6 +401,10 @@ class _CraftMapLocation {
   final RiderSymbol riderSymbol;
   final RiderColor riderColor;
   final double? altitudeMeters;
+  final double? positionAccuracyMeters;
+  final AltitudeSource altitudeSource;
+  final AltitudeDatum altitudeDatum;
+  final double? altitudeAccuracyMeters;
   final double? speedMetersPerSecond;
   final double? headingDegrees;
   final route_domain.GeoPoint point;
@@ -416,6 +425,35 @@ String? craftGroundMotionLabel({
     final heading = headingDegrees.round() % 360;
     const compass = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
     parts.add('${compass[((heading + 22.5) ~/ 45) % 8]} $heading°');
+  }
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
+String? _balloonFixQualityLabel(
+  _CraftMapLocation location,
+  AltitudeUnit altitudeUnit,
+) {
+  final parts = <String>[
+    if (location.positionAccuracyMeters case final accuracy?)
+      'position ±${accuracy.round()} m',
+  ];
+  if (location.altitudeMeters != null) {
+    parts.add(switch (location.altitudeSource) {
+      AltitudeSource.gnss => 'GNSS altitude',
+      AltitudeSource.barometric => 'barometric altitude',
+      AltitudeSource.unknown => 'altitude source unknown',
+    });
+    parts.add(switch (location.altitudeDatum) {
+      AltitudeDatum.wgs84Geoid => 'MSL geoid',
+      AltitudeDatum.wgs84Ellipsoid => 'WGS84 ellipsoid',
+      AltitudeDatum.relativeToLaunch => 'relative to launch',
+      AltitudeDatum.unknown => 'datum unknown',
+    });
+    if (location.altitudeAccuracyMeters case final accuracy?) {
+      parts.add(altitudeUnit.accuracy(accuracy));
+    }
+  } else {
+    parts.add('altitude unavailable');
   }
   return parts.isEmpty ? null : parts.join(' · ');
 }
@@ -2671,6 +2709,10 @@ class _ActiveRideShellState extends State<ActiveRideShell>
           riderSymbol: riderSymbolDefault,
           riderColor: reporter?.riderColor ?? riderColorDefault,
           altitudeMeters: sample.altitudeMeters,
+          positionAccuracyMeters: sample.accuracyMeters,
+          altitudeSource: sample.altitudeSource,
+          altitudeDatum: sample.altitudeDatum,
+          altitudeAccuracyMeters: sample.altitudeAccuracyMeters,
           speedMetersPerSecond: sample.speedMetersPerSecond,
           headingDegrees: sample.headingDegrees,
           point: route_domain.GeoPoint(
@@ -2907,6 +2949,11 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 freshnessByRider[location.freshnessDeviceId]?.freshnessLabel ??
                     freshness.label,
             };
+            final sources =
+                freshnessByRider[location.freshnessDeviceId]?.sources;
+            final sourceSuffix = sources == null || sources.isEmpty
+                ? null
+                : sources.map((source) => source.label).join(' + ');
             // Issue #151's map companion, kept deliberately minimal: the rider
             // who raised something already has a marker, so it says what they
             // raised rather than inventing a second symbol beside it.
@@ -2927,7 +2974,15 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 headingDegrees: location.headingDegrees,
               ),
               if (isBalloonCraft && location.altitudeMeters != null)
-                '${location.altitudeMeters!.round()} m',
+                widget.distanceUnits.altitudeUnit.altitude(
+                  location.altitudeMeters!,
+                ),
+              if (isBalloonCraft)
+                ?_balloonFixQualityLabel(
+                  location,
+                  widget.distanceUnits.altitudeUnit,
+                ),
+              ?sourceSuffix,
               ?ageSuffix,
             ].join(' · ');
             // The roster, both maps and trails share this one identity colour.
@@ -3052,7 +3107,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                   ),
                   if (session.flightRole.isAboardBalloon &&
                       navigationPosition?.altitudeMeters != null)
-                    '${navigationPosition!.altitudeMeters!.round()} m',
+                    widget.distanceUnits.altitudeUnit.altitude(
+                      navigationPosition!.altitudeMeters!,
+                    ),
                   navigationPosition == null
                       ? 'unknown'
                       : localSpeedIsAgeing
@@ -3120,7 +3177,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                 headingDegrees: craft.headingDegrees,
               ),
               if (craft.role == RideRole.lead && craft.altitudeMeters != null)
-                '${craft.altitudeMeters!.round()} m',
+                widget.distanceUnits.altitudeUnit.altitude(
+                  craft.altitudeMeters!,
+                ),
               'bundled rehearsal · now',
             ].join(' · '),
             point: route_domain.GeoPoint(
@@ -3160,7 +3219,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               headingDegrees: craft.headingDegrees,
             ),
             if (craft.isBalloon && craft.altitudeMeters != null)
-              '${craft.altitudeMeters!.round()} m',
+              widget.distanceUnits.altitudeUnit.altitude(craft.altitudeMeters!),
             freshness[craft.freshnessDeviceId]?.freshnessLabel ?? 'unknown',
           ].join(' · '),
           point: craft.point,
@@ -3224,11 +3283,20 @@ class _ActiveRideShellState extends State<ActiveRideShell>
                   id: '${trace.id}-altitude-$index',
                   points: segment.points,
                   color: segment.color,
+                  widthFactor: segment.widthFactor,
                 ),
             ]
-          : [(id: trace.id, points: trace.points, color: trace.effectiveColor)];
+          : [
+              (
+                id: trace.id,
+                points: trace.points,
+                color: trace.effectiveColor,
+                widthFactor: 1.0,
+              ),
+            ];
       for (final part in parts) {
         if (part.points.length < 2) continue;
+        final partStyle = style.scaleWidth(part.widthFactor);
         projected.add(
           CarPlayMapTrace(
             id: part.id,
@@ -3236,9 +3304,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
             label: trace.label,
             points: part.points,
             colorArgb: part.color.toARGB32(),
-            width: style.widthPixels,
-            casingWidth: style.casingWidthPixels,
-            dash: style.maplibreDashArray,
+            width: partStyle.widthPixels,
+            casingWidth: partStyle.casingWidthPixels,
+            dash: partStyle.maplibreDashArray,
           ),
         );
       }
@@ -3496,6 +3564,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       widget.rideController.events,
     );
     final balloonTrack = tracks.where((track) => track.isBalloon).firstOrNull;
+    if (balloonTrack?.rejectedSamples.isNotEmpty == true) {
+      _warnings.add(
+        'An impossible balloon position jump was excluded from the measured '
+        'track. The original fix remains in the offline flight journal.',
+      );
+    }
     if (balloonTrack?.samples.firstOrNull case final reference?) {
       final previous = _balloonReferenceFix;
       if (previous == null ||
@@ -4646,6 +4720,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       routeStore: routeStore,
       canEditRoute: _isSimulation || widget.rideController.hasFlightAuthority,
       distanceUnit: widget.distanceUnits.value,
+      altitudeUnit: widget.distanceUnits.altitudeUnit,
       speedLimitDisplay: isDriverView ? widget.speedLimitDisplay : null,
       chaseVehicle: widget.chaseVehicle?.vehicle ?? ChaseVehicle.unspecified,
       showRouteProgress:
@@ -6980,6 +7055,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     return RideSimulationScreen(
       controller: controller,
       distanceUnit: widget.distanceUnits.value,
+      altitudeUnit: widget.distanceUnits.altitudeUnit,
       onRestart: _restartSimulation,
       onExit: _leaveRide,
       onRoleChanged: _setSimulationRole,

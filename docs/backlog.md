@@ -22,7 +22,7 @@ not a claim that every P0 item is small. Work packages are defined in
 | 3 | P0 | Craft model, flight roles, and pilot authority | WP3 | 2 |
 | 4 | P0 | ~~Delete the motorcycle domain and replace user-facing ride/rider copy~~ **done**; compatibility identifiers remain until after 6, 7 | WP4 | 3 |
 | 4a | P0 | Replace the 15 motorcycle map markers with craft icons (#18) | WP4 | 6, 7 |
-| 5 | P0 | Altitude-coloured ground track and telemetry card | WP5 | 2, 3 |
+| 5 | P0 | ~~Altitude-coloured ground track and telemetry card~~ **done** | WP5 | 2, 3 |
 | 6 | P0 | Pilot view, drawn landing area, and inferred landing phase | WP6 | 3, 5 |
 | 7 | P0 | Multiple chase vehicles, rendezvous, and vehicle assignment | WP7 | 3, 5 |
 | 7a | P0 | Chaser-selectable road guidance to the balloon or intended landing area, with safe road rendezvous and balloon-divergence checks | WP7 | 6, 7 |

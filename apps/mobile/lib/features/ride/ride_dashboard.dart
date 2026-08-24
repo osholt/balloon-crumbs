@@ -8,6 +8,7 @@ import '../../controllers/internet_relay_controller.dart';
 import '../../controllers/ride_controller.dart';
 import '../../controllers/nearby_relay_controller.dart';
 import '../../domain/altitude.dart';
+import '../../domain/altitude_unit.dart';
 import '../../domain/flight_role.dart';
 import '../../domain/imported_route.dart';
 import '../../domain/quick_message.dart';
@@ -105,6 +106,7 @@ class RideDashboard extends StatelessWidget {
                   const SizedBox(height: 14),
                   _RoleLivePanel(
                     role: session.flightRole,
+                    altitudeUnit: distanceUnits.altitudeUnit,
                     sharedFlightPlan: sharedFlightPlan,
                     vehicleRoadRoute: vehicleRoadRoute,
                     navigationPosition: navigationPosition,
@@ -282,6 +284,7 @@ class _RideHeader extends StatelessWidget {
 class _RoleLivePanel extends StatelessWidget {
   const _RoleLivePanel({
     required this.role,
+    required this.altitudeUnit,
     required this.sharedFlightPlan,
     required this.vehicleRoadRoute,
     required this.navigationPosition,
@@ -296,6 +299,7 @@ class _RoleLivePanel extends StatelessWidget {
   });
 
   final FlightRole role;
+  final AltitudeUnit altitudeUnit;
   final ImportedRoute? sharedFlightPlan;
   final ImportedRoute? vehicleRoadRoute;
   final ValueListenable<MapNavigationPosition?>? navigationPosition;
@@ -397,13 +401,16 @@ class _RoleLivePanel extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             if (role.isAboardBalloon) ...[
-              _AirborneTelemetry(position: position),
+              _AirborneTelemetry(
+                position: position,
+                altitudeUnit: altitudeUnit,
+              ),
               const SizedBox(height: 12),
-              _WindSummary(wind: wind),
+              _WindSummary(wind: wind, altitudeUnit: altitudeUnit),
               const SizedBox(height: 12),
               _LiveProjectionSummary(assessment: liveFlightProjection),
               const SizedBox(height: 12),
-              _FlightPlanOverview(summary: summary),
+              _FlightPlanOverview(summary: summary, altitudeUnit: altitudeUnit),
               const SizedBox(height: 12),
               _LandingIntentRow(
                 label: landingAreaLabel,
@@ -437,17 +444,24 @@ class _RoleLivePanel extends StatelessWidget {
               _LiveProjectionSummary(assessment: liveFlightProjection),
               if (role == FlightRole.chaseCrew) ...[
                 const SizedBox(height: 12),
-                _FlightPlanOverview(summary: summary),
+                _FlightPlanOverview(
+                  summary: summary,
+                  altitudeUnit: altitudeUnit,
+                ),
                 const SizedBox(height: 12),
                 _LandingIntentRow(
                   label: landingAreaLabel,
                   updatedAt: landingAreaUpdatedAt,
                 ),
                 const SizedBox(height: 12),
-                _WindSummary(wind: wind),
+                _WindSummary(wind: wind, altitudeUnit: altitudeUnit),
               ],
             ] else ...[
-              _FlightPlanOverview(summary: summary, reduced: true),
+              _FlightPlanOverview(
+                summary: summary,
+                altitudeUnit: altitudeUnit,
+                reduced: true,
+              ),
               const SizedBox(height: 12),
               _LandingIntentRow(
                 label: landingAreaLabel,
@@ -462,9 +476,13 @@ class _RoleLivePanel extends StatelessWidget {
 }
 
 class _AirborneTelemetry extends StatelessWidget {
-  const _AirborneTelemetry({required this.position});
+  const _AirborneTelemetry({
+    required this.position,
+    required this.altitudeUnit,
+  });
 
   final MapNavigationPosition? position;
+  final AltitudeUnit altitudeUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -486,7 +504,9 @@ class _AirborneTelemetry extends StatelessWidget {
           Expanded(
             child: _Metric(
               label: 'ALTITUDE',
-              value: altitude == null ? 'Unavailable' : '${altitude.round()} m',
+              value: altitude == null
+                  ? 'Unavailable'
+                  : altitudeUnit.altitude(altitude),
               detail: altitude == null
                   ? 'No altitude fix'
                   : '${_altitudeSourceLabel(fix!.altitudeSource)} · ${_altitudeDatumLabel(fix.altitudeDatum)}',
@@ -498,7 +518,7 @@ class _AirborneTelemetry extends StatelessWidget {
               label: 'VERTICAL RATE',
               value: verticalRate == null
                   ? 'Unavailable'
-                  : '${verticalRate >= 0 ? '+' : ''}${verticalRate.toStringAsFixed(1)} m/s',
+                  : '${verticalRate >= 0 ? '+' : '-'}${altitudeUnit.verticalRate(verticalRate.abs())}',
               detail: fixAge == null
                   ? 'No fix'
                   : 'Fix ${_compactAge(fixAge)} ago',
@@ -547,9 +567,10 @@ class _Metric extends StatelessWidget {
 }
 
 class _WindSummary extends StatelessWidget {
-  const _WindSummary({required this.wind});
+  const _WindSummary({required this.wind, required this.altitudeUnit});
 
   final WindForecastController? wind;
+  final AltitudeUnit altitudeUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -561,7 +582,7 @@ class _WindSummary extends StatelessWidget {
       key: const Key('role-wind-summary'),
       icon: Icons.air,
       title: enabled && level != null
-          ? 'Forecast wind · $level m MSL'
+          ? 'Forecast wind · ${altitudeUnit.altitude(level.toDouble())} MSL'
           : 'Forecast wind off',
       detail: field == null
           ? controller?.loading == true
@@ -606,9 +627,14 @@ class _LiveProjectionSummary extends StatelessWidget {
 }
 
 class _FlightPlanOverview extends StatelessWidget {
-  const _FlightPlanOverview({required this.summary, this.reduced = false});
+  const _FlightPlanOverview({
+    required this.summary,
+    required this.altitudeUnit,
+    this.reduced = false,
+  });
 
   final FlightPlanSummary? summary;
+  final AltitudeUnit altitudeUnit;
   final bool reduced;
 
   @override
@@ -643,8 +669,8 @@ class _FlightPlanOverview extends StatelessWidget {
     final altitude = plan.altitudeCeilingMetersMsl == null
         ? plan.maximumAltitudeMetersMsl == null
               ? null
-              : 'forecast max ${plan.maximumAltitudeMetersMsl!.round()} m MSL'
-        : 'ceiling ${plan.altitudeCeilingMetersMsl!.round()} m MSL';
+              : 'forecast max ${altitudeUnit.altitude(plan.maximumAltitudeMetersMsl!)} MSL'
+        : 'ceiling ${altitudeUnit.altitude(plan.altitudeCeilingMetersMsl!)} MSL';
     final window = plan.matchingWindowStart == null
         ? null
         : plan.matchingWindowEnd == null ||
@@ -653,10 +679,10 @@ class _FlightPlanOverview extends StatelessWidget {
         : 'start window ${_formatTime(context, plan.matchingWindowStart!)}–${_formatTime(context, plan.matchingWindowEnd!)}';
     final climb = plan.maximumAscentRateMetersPerSecond == null
         ? null
-        : 'climb ${plan.maximumAscentRateMetersPerSecond!.toStringAsFixed(1)} m/s';
+        : 'climb ${altitudeUnit.verticalRate(plan.maximumAscentRateMetersPerSecond!)}';
     final descent = plan.maximumDescentRateMetersPerSecond == null
         ? null
-        : 'descent ${plan.maximumDescentRateMetersPerSecond!.toStringAsFixed(1)} m/s';
+        : 'descent ${altitudeUnit.verticalRate(plan.maximumDescentRateMetersPerSecond!)}';
     final detail = [
       times,
       duration,
@@ -713,7 +739,7 @@ class _FlightPlanOverview extends StatelessWidget {
                   trailing: Text(
                     stage.altitudeMetersMsl == null
                         ? '—'
-                        : '${stage.altitudeMetersMsl!.round()} m MSL',
+                        : '${altitudeUnit.altitude(stage.altitudeMetersMsl!)} MSL',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),

@@ -333,6 +333,7 @@ class _PreviousRideDetailScreenState extends State<PreviousRideDetailScreen> {
       title: widget.ride.title,
       replay: replay,
       distanceUnit: widget.distanceUnits.value,
+      altitudeUnit: widget.distanceUnits.altitudeUnit,
     );
   }
 
