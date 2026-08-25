@@ -1432,7 +1432,9 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
   final _codeFieldKey = GlobalKey();
   RideCoordinationMode _selectedCoordinationMode =
       RideCoordinationMode.keepTogether;
+  FlightRole _selectedCreatorRole = FlightRole.pilot;
   FlightRole _selectedJoinRole = FlightRole.chaseCrew;
+  String? _selectedCrewRoomId;
 
   /// Set once a created ride's code needs sharing before handing off to the
   /// map - the moment a leader most needs it, with people waiting nearby.
@@ -1450,6 +1452,14 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    final ownerRooms = widget.controller.crewRooms
+        .where((room) => room.owner)
+        .toList(growable: false);
+    if (widget.creating && ownerRooms.length == 1) {
+      _selectedCrewRoomId = ownerRooms.single.roomId;
+      _selectedCreatorRole = ownerRooms.single.flightRole;
+      _vehicleLabelController.text = ownerRooms.single.vehicleLabel;
+    }
     WidgetsBinding.instance.addObserver(this);
     _codeFocusNode.addListener(_keepCodeFieldVisible);
   }
@@ -1502,8 +1512,8 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
               const SizedBox(height: 8),
               Text(
                 widget.creating
-                    ? 'You will become the pilot and get a six-digit code to share.'
-                    : 'Choose your job, then enter the six-digit code shared by the pilot. You need a connection once to join, then the app keeps using the secure relay.',
+                    ? 'Choose your job, create the crew room, then share the private launch invitation.'
+                    : 'Choose your job, then enter the six-digit launch code shared by the crew. You need a connection once to join, then the app keeps using the secure relay.',
                 style: const TextStyle(color: Color(0xFFABB5C1)),
               ),
               const SizedBox(height: 24),
@@ -1543,6 +1553,66 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: 12),
+                Text(
+                  'Your role in this flight',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final role in const [
+                      FlightRole.pilot,
+                      FlightRole.balloonCrew,
+                      FlightRole.chaseDriver,
+                      FlightRole.chaseCrew,
+                    ])
+                      ChoiceChip(
+                        key: Key('create-role-${role.name}'),
+                        selected: _selectedCreatorRole == role,
+                        avatar: Icon(
+                          role == FlightRole.pilot ||
+                                  role == FlightRole.balloonCrew
+                              ? Icons.air
+                              : role == FlightRole.chaseDriver
+                              ? Icons.directions_car
+                              : Icons.groups_2_outlined,
+                          size: 18,
+                        ),
+                        label: Text(role.label),
+                        onSelected: (_) =>
+                            setState(() => _selectedCreatorRole = role),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _selectedCreatorRole == FlightRole.pilot
+                      ? 'You begin as Pilot and can transfer that role later.'
+                      : 'You coordinate setup until an arriving balloon crew member accepts the Pilot assignment.',
+                  style: const TextStyle(
+                    color: Color(0xFFABB5C1),
+                    fontSize: 13,
+                  ),
+                ),
+                if (_selectedCreatorRole.isChasing) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('create-vehicle-label-field'),
+                    controller: _vehicleLabelController,
+                    maxLength: 32,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Your chase vehicle',
+                      helperText:
+                          'Crew joining this vehicle should use the same name.',
+                      hintText: 'e.g. Land Rover',
+                      counterText: '',
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
                 TextField(
                   controller: _rideNameController,
                   maxLength: 32,
@@ -1555,24 +1625,74 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 12),
                 if (_selectedCoordinationMode.isGroup) ...[
-                  TextField(
-                    key: const Key('crew-room-alias-field'),
-                    controller: _crewRoomAliasController,
-                    maxLength: 12,
-                    textCapitalization: TextCapitalization.characters,
-                    autocorrect: false,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp('[A-Za-z0-9]')),
-                      LengthLimitingTextInputFormatter(12),
-                    ],
-                    decoration: const InputDecoration(
-                      labelText: 'Reusable crew room (optional)',
-                      hintText: 'e.g. TUCKER',
-                      helperText:
-                          '5–12 letters or numbers. The name can be reused; private device access cannot be guessed from it.',
-                      counterText: '',
+                  if (widget.controller.crewRooms.any(
+                    (room) => room.owner,
+                  )) ...[
+                    Text(
+                      'Crew room for this launch',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          key: const Key('create-new-crew-room'),
+                          selected: _selectedCrewRoomId == null,
+                          label: const Text('New room'),
+                          onSelected: (_) =>
+                              setState(() => _selectedCrewRoomId = null),
+                        ),
+                        for (final room in widget.controller.crewRooms.where(
+                          (room) => room.owner,
+                        ))
+                          ChoiceChip(
+                            key: Key('reuse-crew-room-${room.alias}'),
+                            selected: _selectedCrewRoomId == room.roomId,
+                            avatar: const Icon(Icons.tag, size: 18),
+                            label: Text(room.alias),
+                            onSelected: (_) => setState(() {
+                              _selectedCrewRoomId = room.roomId;
+                              _selectedCreatorRole = room.flightRole;
+                              _vehicleLabelController.text = room.vehicleLabel;
+                            }),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _selectedCrewRoomId == null
+                          ? 'Create a new reusable crew identity.'
+                          : 'The room name stays the same; this launch gets a fresh private journal and invitation.',
+                      style: const TextStyle(
+                        color: Color(0xFFABB5C1),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_selectedCrewRoomId == null)
+                    TextField(
+                      key: const Key('crew-room-alias-field'),
+                      controller: _crewRoomAliasController,
+                      maxLength: 12,
+                      textCapitalization: TextCapitalization.characters,
+                      autocorrect: false,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp('[A-Za-z0-9]'),
+                        ),
+                        LengthLimitingTextInputFormatter(12),
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'Reusable crew room code (optional)',
+                        hintText: 'e.g. TUCKER',
+                        helperText:
+                            '5–12 letters or numbers. TUCKER stays with the crew; every launch still has a fresh private invitation.',
+                        counterText: '',
+                      ),
+                    ),
                   const SizedBox(height: 12),
                 ],
                 TextField(
@@ -1609,6 +1729,14 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
                   runSpacing: 8,
                   children: [
                     ChoiceChip(
+                      key: const Key('join-role-pilot'),
+                      selected: _selectedJoinRole == FlightRole.pilot,
+                      avatar: const Icon(Icons.air, size: 18),
+                      label: const Text('Pilot'),
+                      onSelected: (_) =>
+                          setState(() => _selectedJoinRole = FlightRole.pilot),
+                    ),
+                    ChoiceChip(
                       key: const Key('join-role-balloon-crew'),
                       selected: _selectedJoinRole == FlightRole.balloonCrew,
                       avatar: const Icon(Icons.air, size: 18),
@@ -1637,6 +1765,13 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
+                if (_selectedJoinRole == FlightRole.pilot) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'You will join the balloon crew and request Pilot. The current coordinator must assign it, and you must accept.',
+                    style: TextStyle(color: Color(0xFFABB5C1), fontSize: 13),
+                  ),
+                ],
                 if (_selectedJoinRole.isChasing) ...[
                   const SizedBox(height: 12),
                   TextField(
@@ -1857,17 +1992,37 @@ class _RideFormState extends State<_RideForm> with WidgetsBindingObserver {
           if (mounted) setState(() => _checkingPlanCode = false);
         }
       }
-      await widget.controller.createRide(
-        name,
-        craftStyle: widget.riderProfile.craftStyle,
-        riderSymbol: widget.riderProfile.riderSymbol,
-        riderColor: widget.riderProfile.riderColor,
-        coordinationMode: _selectedCoordinationMode,
-        rideName: _rideNameController.text,
-        crewRoomAlias: _selectedCoordinationMode.isGroup
-            ? _crewRoomAliasController.text
-            : null,
-      );
+      final selectedRoom = _selectedCrewRoomId == null
+          ? null
+          : widget.controller.crewRooms
+                .where((room) => room.roomId == _selectedCrewRoomId)
+                .firstOrNull;
+      if (selectedRoom != null && _selectedCoordinationMode.isGroup) {
+        await widget.controller.startNewCrewRoomOperation(
+          selectedRoom,
+          displayName: name,
+          craftStyle: widget.riderProfile.craftStyle,
+          riderSymbol: widget.riderProfile.riderSymbol,
+          riderColor: widget.riderProfile.riderColor,
+          rideName: _rideNameController.text,
+          flightRole: _selectedCreatorRole,
+          vehicleLabel: _vehicleLabelController.text,
+        );
+      } else {
+        await widget.controller.createRide(
+          name,
+          craftStyle: widget.riderProfile.craftStyle,
+          riderSymbol: widget.riderProfile.riderSymbol,
+          riderColor: widget.riderProfile.riderColor,
+          coordinationMode: _selectedCoordinationMode,
+          rideName: _rideNameController.text,
+          crewRoomAlias: _selectedCoordinationMode.isGroup
+              ? _crewRoomAliasController.text
+              : null,
+          flightRole: _selectedCreatorRole,
+          vehicleLabel: _vehicleLabelController.text,
+        );
+      }
       if (widget.controller.hasActiveRide) {
         final target = widget.initialLandingZone;
         if (target != null) await widget.controller.setLandingZone(target);
@@ -2016,6 +2171,7 @@ class _ShareCodeStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = controller.session;
     final code = session?.rideCode ?? '';
+    final room = controller.currentCrewRoom;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
       child: Column(
@@ -2025,14 +2181,33 @@ class _ShareCodeStep extends StatelessWidget {
           const Icon(Icons.check_circle, color: Color(0xFF6ED89A), size: 40),
           const SizedBox(height: 16),
           Text(
-            session?.rideName ?? 'Flight created',
+            room?.alias ?? session?.rideName ?? 'Flight created',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Share this code so the group can join.',
-            style: TextStyle(color: Color(0xFFABB5C1)),
+          Text(
+            room == null
+                ? 'Share the private launch code so the crew can join.'
+                : '${room.alias} is the reusable crew room. It stays the same for future launches.',
+            style: const TextStyle(color: Color(0xFFABB5C1)),
           ),
+          if (room != null) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'PRIVATE CODE FOR THIS LAUNCH',
+              style: TextStyle(
+                color: Color(0xFFABB5C1),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'New phones use this code or the private QR/link. It changes when a fresh flight starts; the crew room does not.',
+              style: TextStyle(color: Color(0xFFABB5C1), fontSize: 13),
+            ),
+          ],
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 18),

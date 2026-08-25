@@ -330,6 +330,7 @@ class RideMapFeature extends StatefulWidget {
     this.speedLimitDisplay,
     this.showRouteProgress = true,
     this.routeTargetsBalloon = false,
+    this.showLandscapeChaseSplit = false,
     this.basemapConfiguration = const BasemapConfiguration(),
     this.localCraftStyle = craftIconStyleDefault,
     this.localRiderSymbol = riderSymbolDefault,
@@ -400,6 +401,7 @@ class RideMapFeature extends StatefulWidget {
     SpeedLimitDisplayController? speedLimitDisplay,
     bool showRouteProgress = true,
     bool routeTargetsBalloon = false,
+    bool showLandscapeChaseSplit = false,
     bool darkMapStyle = false,
     bool restrainedLightMapStyle = true,
     CraftIconStyle localCraftStyle = craftIconStyleDefault,
@@ -465,6 +467,7 @@ class RideMapFeature extends StatefulWidget {
     speedLimitDisplay: speedLimitDisplay,
     showRouteProgress: showRouteProgress,
     routeTargetsBalloon: routeTargetsBalloon,
+    showLandscapeChaseSplit: showLandscapeChaseSplit,
     basemapConfiguration: BasemapConfiguration.fromEnvironment().forBrightness(
       dark: darkMapStyle,
       restrainedLightStyle: restrainedLightMapStyle,
@@ -568,6 +571,7 @@ class RideMapFeature extends StatefulWidget {
   final SpeedLimitDisplayController? speedLimitDisplay;
   final bool showRouteProgress;
   final bool routeTargetsBalloon;
+  final bool showLandscapeChaseSplit;
   final BasemapConfiguration basemapConfiguration;
   final CraftIconStyle localCraftStyle;
   final RiderSymbol localRiderSymbol;
@@ -735,6 +739,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         speedLimitDisplay: widget.speedLimitDisplay,
         showRouteProgress: widget.showRouteProgress,
         routeTargetsBalloon: widget.routeTargetsBalloon,
+        showLandscapeChaseSplit: widget.showLandscapeChaseSplit,
         localCraftStyle: widget.localCraftStyle,
         localRiderSymbol: widget.localRiderSymbol,
         localDisplayName: widget.localDisplayName,
@@ -839,6 +844,7 @@ class RideMapScreen extends StatefulWidget {
     this.speedLimitDisplay,
     this.showRouteProgress = true,
     this.routeTargetsBalloon = false,
+    this.showLandscapeChaseSplit = false,
     this.disposeOfflineTileCache = false,
     this.localCraftStyle = craftIconStyleDefault,
     this.localRiderSymbol = riderSymbolDefault,
@@ -967,6 +973,7 @@ class RideMapScreen extends StatefulWidget {
   final SpeedLimitDisplayController? speedLimitDisplay;
   final bool showRouteProgress;
   final bool routeTargetsBalloon;
+  final bool showLandscapeChaseSplit;
   final bool disposeOfflineTileCache;
   final CraftIconStyle localCraftStyle;
   final RiderSymbol localRiderSymbol;
@@ -1070,8 +1077,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
   /// together and turn the road pane back into the old static TEC viewport.
   bool get _landscapeChaseSplitActive =>
       !_isBalloonView &&
-      widget.rideStarted &&
-      _hasBalloonOverlay &&
+      widget.showLandscapeChaseSplit &&
+      widget.overlayMarkers != null &&
       MediaQuery.maybeOf(context)?.orientation == Orientation.landscape;
 
   bool get _showWindForecast {

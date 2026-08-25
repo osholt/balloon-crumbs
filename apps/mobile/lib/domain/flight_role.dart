@@ -7,8 +7,10 @@
 /// craft and hold different roles; two drivers in different vehicles share a role
 /// and hold different crafts.
 enum FlightRole {
-  /// Flies the balloon. Exactly one per flight, and the only role that can start
-  /// or end it. Not necessarily the device reporting the balloon's position —
+  /// Flies the balloon. Exactly one per flight after assignment, and normally
+  /// holds authority to change the flight. During setup, the operation creator
+  /// temporarily holds that authority even when their operational role is on
+  /// the ground. Not necessarily the device reporting the balloon's position —
   /// a pilot with both hands on the burner is usually not the one holding a
   /// phone, which is the whole reason craft telemetry is elected rather than
   /// assigned.
@@ -51,8 +53,10 @@ extension FlightRoleLabel on FlightRole {
   /// driving, and never anyone in the basket.
   bool get seesRoadFurniture => this == FlightRole.chaseDriver;
 
-  /// Whether this role holds pilot-only authority over the balloon and shared
-  /// forecast. Starting live recovery is deliberately a separate permission:
+  /// Whether this role normally holds authority over the balloon and shared
+  /// forecast. The operation creator's temporary setup authority is projected
+  /// from the signed journal rather than inferred from this label. Starting
+  /// live recovery is deliberately a separate permission:
   /// field testing showed that the ground crew are the people free to do it at
   /// release, while the pilot is occupied with the aircraft.
   bool get hasFlightAuthority => this == FlightRole.pilot;

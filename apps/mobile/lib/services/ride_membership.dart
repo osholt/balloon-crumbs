@@ -442,7 +442,12 @@ class RideMembershipReducer {
         final displayName = _nonEmptyString(event.payload['displayName']);
         final role = _role(event.payload['role']);
         if (displayName == null || role == null) continue;
-        final flightRole = flightRoleFromName(event.payload['flightRole']);
+        final flightRole = flightRoleFromName(
+          event.type == RideEventType.rideCreated
+              ? event.payload['operationalFlightRole'] ??
+                    event.payload['flightRole']
+              : event.payload['flightRole'],
+        );
         final isLocal = event.deviceId == localRiderId;
         final joiningRole = isLocal ? localRole : role;
         if (joiningRole == RideRole.lead) {
@@ -724,7 +729,9 @@ class RideMembershipReducer {
                   participant.flightRole == FlightRole.pilot)
                 participant.copyWith(
                   role: RideRole.rider,
-                  flightRole: FlightRole.balloonCrew,
+                  flightRole: participant.flightRole == FlightRole.pilot
+                      ? FlightRole.balloonCrew
+                      : participant.flightRole,
                 )
               else
                 participant,

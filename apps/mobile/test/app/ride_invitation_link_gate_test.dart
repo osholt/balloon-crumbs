@@ -81,6 +81,33 @@ void main() {
     expect(fixture.rideController.hasFlightAuthority, isFalse);
   });
 
+  testWidgets('choosing Pilot requests a confirmed assignment', (tester) async {
+    const token = 'PilotRequestToken12345678';
+    final fixture = await _Fixture.create(
+      directory: _Directory(expectedCode: '123456', expectedToken: token),
+      link: rideInvitationUrl('123456', token),
+    );
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(fixture.app);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('invitation-role-pilot')));
+    await tester.pump();
+    expect(
+      find.textContaining('current coordinator must assign it'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('accept-ride-invitation-link')));
+    await tester.pumpAndSettle();
+
+    expect(fixture.rideController.session?.flightRole, FlightRole.balloonCrew);
+    expect(
+      fixture.rideController.requestedPilotDeviceIds,
+      contains(fixture.rideController.session!.localRiderId),
+    );
+    expect(fixture.rideController.hasFlightAuthority, isFalse);
+  });
+
   testWidgets('an invitation cannot silently replace an active ride', (
     tester,
   ) async {

@@ -2507,13 +2507,6 @@ void main() {
       addTearDown(navigation.dispose);
       final overlays = ValueNotifier<List<MapOverlayMarker>>(const [
         MapOverlayMarker(
-          id: 'craft-balloon',
-          point: GeoPoint(latitude: 51.37, longitude: -2.35),
-          label: 'Balloon · live',
-          craftStyle: CraftIconStyle.balloon,
-          riderDisplayName: 'Balloon',
-        ),
-        MapOverlayMarker(
           id: 'craft-recovery-two',
           point: GeoPoint(latitude: 51.355, longitude: -2.39),
           label: 'Recovery two · live',
@@ -2572,6 +2565,7 @@ void main() {
             riderTrails: trails,
             groupRiderCount: 3,
             routeTargetsBalloon: true,
+            showLandscapeChaseSplit: true,
             mapOrientation: MapOrientationMode.northUp,
             onMapOrientationChanged: (_) {},
             onNavigationViewportChanged: viewports.add,
@@ -2585,6 +2579,26 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
 
       expect(find.byKey(const Key('landscape-relative-map')), findsOneWidget);
+      expect(
+        find.textContaining('Waiting for balloon position'),
+        findsOneWidget,
+      );
+      overlays.value = const [
+        MapOverlayMarker(
+          id: 'craft-balloon',
+          point: GeoPoint(latitude: 51.37, longitude: -2.35),
+          label: 'Balloon · live',
+          craftStyle: CraftIconStyle.balloon,
+          riderDisplayName: 'Balloon',
+        ),
+        MapOverlayMarker(
+          id: 'craft-recovery-two',
+          point: GeoPoint(latitude: 51.355, longitude: -2.39),
+          label: 'Recovery two · live',
+          craftStyle: CraftIconStyle.fourByFour,
+        ),
+      ];
+      await tester.pump();
       expect(find.byKey(const Key('group-mini-map')), findsNothing);
       expect(find.byKey(const Key('route-progress-panel')), findsNothing);
       expect(find.byKey(const Key('relative-map-title')), findsOneWidget);
