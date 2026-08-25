@@ -3234,6 +3234,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         speedLimitUnlimited: widget.speedLimitDisplay.limit?.unlimited ?? false,
         routeProgress: routeProgress,
         journeyProgress: journeyProgress,
+        routeTargetsBalloon:
+            _chaseGuidanceTarget == ChaseGuidanceTarget.balloon,
         craftLocations: _carPlayCraftLocations(),
         sharedTraces: _carPlaySharedTraces(),
         intendedLandingArea: intendedLanding == null
@@ -4932,6 +4934,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       chaseVehicle: widget.chaseVehicle?.vehicle ?? ChaseVehicle.unspecified,
       showRouteProgress:
           isDriverView && (widget.routeProgressDisplay?.enabled ?? true),
+      routeTargetsBalloon: _chaseGuidanceTarget == ChaseGuidanceTarget.balloon,
       darkMapStyle: widget.mapStyleMode.resolveDark(
         MediaQuery.platformBrightnessOf(context),
       ),

@@ -31,13 +31,7 @@ void main() {
           '        equalTo: view.safeAreaLayoutGuide.leadingAnchor',
         ),
       );
-      expect(
-        source,
-        contains(
-          'routeProgressView.bottomAnchor.constraint(\n'
-          '        equalTo: groupMiniMap.topAnchor',
-        ),
-      );
+      expect(source, isNot(contains('private let routeProgressView')));
       expect(source, isNot(contains('equalTo: speedBadge.bottomAnchor')));
     });
 
@@ -50,12 +44,13 @@ void main() {
     });
   });
 
-  group('the mini-map is distinguishable from the map (#442)', () {
-    test('it scales inside a bounded left rail', () {
+  group('the north-up group map is a complete left pane', () {
+    test('it occupies 44 percent of the safe viewport', () {
       expect(source, contains('equalTo: view.safeAreaLayoutGuide.widthAnchor'));
-      expect(source, contains('multiplier: 0.28'));
-      expect(source, contains('lessThanOrEqualToConstant: 196'));
-      expect(source, contains('multiplier: 116.0 / 196.0'));
+      expect(source, contains('multiplier: 0.44'));
+      expect(source, isNot(contains('lessThanOrEqualToConstant: 196')));
+      expect(source, contains('private let navigationPane = UILayoutGuide()'));
+      expect(source, contains('equalTo: groupMiniMap.trailingAnchor'));
     });
 
     test('its border is thick enough to read against a basemap', () {
@@ -69,6 +64,28 @@ void main() {
       // "It needs a clear edge, and a scale, so a rider can tell what they are
       // looking at and how far it spans."
       expect(source, contains('static func spanLabel('));
+    });
+
+    test(
+      'it distinguishes the balloon and links it directly to the chaser',
+      () {
+        expect(source, contains('let isBalloon: Bool'));
+        expect(source, contains('drawBalloonGlyph('));
+        expect(source, contains('directLine:'));
+        expect(
+          source,
+          contains('context.setLineDash(phase: 0, lengths: [7, 5])'),
+        );
+        expect(source, contains('BALLOON'));
+        expect(source, contains('road ~'));
+      },
+    );
+
+    test('it draws every shared track on the north-up pane', () {
+      expect(source, contains('projectedTraces(from: snapshot)'));
+      expect(source, contains('snapshot["sharedTraces"]'));
+      expect(source, contains('for trace in traces'));
+      expect(source, contains('context.setStrokeColor(trace.color.cgColor)'));
     });
 
     test('the scale is in the rider units the rest of the car uses', () {
@@ -125,52 +142,45 @@ void main() {
       expect(source, isNot(contains('clockLabel.bottomAnchor.constraint(')));
     });
 
-    test('route progress sits directly above the recovery overview', () {
-      expect(source, contains('routeProgressView.leadingAnchor.constraint('));
-      expect(source, contains('routeProgressView.trailingAnchor.constraint('));
-      expect(source, contains('routeProgressView.bottomAnchor.constraint('));
-      expect(
-        source,
-        contains(
-          'groupMiniMap.leadingAnchor.constraint(\n'
-          '        equalTo: view.safeAreaLayoutGuide.leadingAnchor',
-        ),
-      );
-      expect(
-        source,
-        contains(
-          'groupMiniMap.bottomAnchor.constraint(\n'
-          '        equalTo: view.bottomAnchor,\n'
-          '        constant: -12',
-        ),
-        reason: 'the full left stack must clear CarPlay’s top navigation bar',
-      );
-      expect(
-        source,
-        contains(
-          'routeProgressView.trailingAnchor.constraint(\n'
-          '        equalTo: groupMiniMap.trailingAnchor',
-        ),
-      );
-      expect(
-        source,
-        contains(
-          'routeProgressView.bottomAnchor.constraint(\n'
-          '        equalTo: groupMiniMap.topAnchor',
-        ),
-      );
-      expect(source, contains('private final class CarPlayGuidanceView'));
-      expect(
-        source,
-        contains(
-          'guidanceView.bottomAnchor.constraint(\n'
-          '        equalTo: view.bottomAnchor',
-        ),
-      );
-      expect(source, contains('CarPlayRouteProgressView'));
-      expect(source, contains(r'\(duration)'));
-      expect(source, contains(r'\(waypointName)'));
-    });
+    test(
+      'the ETA box is removed and turn guidance stays in the right pane',
+      () {
+        expect(source, isNot(contains('private let routeProgressView')));
+        expect(
+          source,
+          contains(
+            'groupMiniMap.leadingAnchor.constraint(\n'
+            '        equalTo: view.safeAreaLayoutGuide.leadingAnchor',
+          ),
+        );
+        expect(
+          source,
+          contains(
+            'groupMiniMap.bottomAnchor.constraint(\n'
+            '        equalTo: view.bottomAnchor,\n'
+            '        constant: -4',
+          ),
+          reason: 'the complete left map reaches the bottom of the viewport',
+        );
+        expect(
+          source,
+          contains(
+            'guidanceView.trailingAnchor.constraint(\n'
+            '        equalTo: navigationPane.trailingAnchor',
+          ),
+        );
+        expect(source, contains('private final class CarPlayGuidanceView'));
+        expect(
+          source,
+          contains(
+            'guidanceView.bottomAnchor.constraint(\n'
+            '        equalTo: view.bottomAnchor',
+          ),
+        );
+        expect(source, contains('snapshot["journeyProgress"]'));
+        expect(source, contains('snapshot["routeTargetsBalloon"]'));
+      },
+    );
 
     test(
       'MapLibre attribution remains while its fixed compass is replaced',
@@ -201,7 +211,7 @@ void main() {
       );
     });
 
-    test('vertical phone framing and CarPlay traffic side are projected', () {
+    test('direction-up framing is projected inside the right pane', () {
       expect(source, contains('riderViewportFraction'));
       expect(source, contains('viewport["leftHandTraffic"]'));
       expect(
@@ -210,6 +220,18 @@ void main() {
           'let riderHorizontalFraction = leftHandTraffic ? (2.0 / 3.0) : (1.0 / 3.0)',
         ),
       );
+      expect(
+        source,
+        contains('let navigationFrame = navigationPane.layoutFrame'),
+      );
+      expect(
+        source,
+        contains(
+          'x: navigationFrame.minX + navigationFrame.width * riderHorizontalFraction',
+        ),
+      );
+      expect(source, contains('let bearing = surfaceMode == "activeRide"'));
+      expect(source, contains('? (localHeading ?? publishedBearing)'));
       expect(source, contains('let riderChromeClearance: CGFloat = 28'));
       expect(
         source,
@@ -244,23 +266,18 @@ void main() {
     });
 
     test(
-      'the narrow ETA card wraps instead of truncating timing and stops',
+      'Apple trip estimate remains cancelled without a duplicate ETA box',
       () {
-        expect(source, contains('label.numberOfLines = 2'));
-        expect(source, contains('label.lineBreakMode = .byWordWrapping'));
+        expect(
+          source,
+          contains(
+            'A CPNavigationSession always owns Apple\'s trip-estimate panel',
+          ),
+        );
+        expect(source, contains('navigationSession?.cancelTrip()'));
+        expect(source, isNot(contains('private let routeProgressView')));
       },
     );
-
-    test('Apple trip estimate is cancelled in favour of app-owned ETA', () {
-      expect(
-        source,
-        contains(
-          'A CPNavigationSession always owns Apple\'s trip-estimate panel',
-        ),
-      );
-      expect(source, contains('navigationSession?.cancelTrip()'));
-      expect(source, contains('routeProgressView.trailingAnchor.constraint('));
-    });
 
     test('completed planned route is omitted behind the rider', () {
       expect(source, isNot(contains('travelledRouteAnnotation')));

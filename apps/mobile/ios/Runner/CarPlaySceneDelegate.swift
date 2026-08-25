@@ -234,8 +234,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     guard sceneLifecycle.rootReady else { return }
     // A CPNavigationSession always owns Apple's trip-estimate panel. There is
     // no supported API to hide that panel while retaining the manoeuvre card,
-    // so the active ride now uses the app-owned guidance and ETA views together
-    // on the map canvas. Cancel a session left by an earlier build/connection.
+    // so the active ride now uses the app-owned guidance view on the map
+    // canvas. Cancel a session left by an earlier build/connection.
     navigationSession?.cancelTrip()
     navigationSession = nil
     activeRouteID = nil
@@ -1072,8 +1072,8 @@ private final class CarPlayNavigationViewController: UIViewController,
   private let speedBadge = CarPlaySpeedLimitBadge()
   private let compassBadge = CarPlayCompassBadge()
   private let groupMiniMap = CarPlayGroupMiniMapView()
+  private let navigationPane = UILayoutGuide()
   private let clockLabel = CarPlayClockLabel()
-  private let routeProgressView = CarPlayRouteProgressView()
   private let guidanceView = CarPlayGuidanceView()
   private let rideActionsView = CarPlayRideActionsView()
   private var routeSource: MLNShapeSource?
@@ -1142,9 +1142,10 @@ private final class CarPlayNavigationViewController: UIViewController,
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    // CarPlay keeps the same information hierarchy as the phone in landscape:
-    // route/status cards form a left column, the rider and road ahead stay
-    // clear through the middle, and the speed pair remains top-trailing.
+    // The left pane is a complete north-up group map. The live road-navigation
+    // map remains on the right and uses a separate camera anchor, so neither
+    // surface has to compromise the other one's orientation or framing.
+    view.addLayoutGuide(navigationPane)
     speedBadge.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(speedBadge)
     compassBadge.translatesAutoresizingMaskIntoConstraints = false
@@ -1157,8 +1158,6 @@ private final class CarPlayNavigationViewController: UIViewController,
     clockLabel.translatesAutoresizingMaskIntoConstraints = false
     clockLabel.isHidden = true
     view.addSubview(clockLabel)
-    routeProgressView.translatesAutoresizingMaskIntoConstraints = false
-    view.addSubview(routeProgressView)
     guidanceView.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(guidanceView)
     rideActionsView.translatesAutoresizingMaskIntoConstraints = false
@@ -1186,49 +1185,41 @@ private final class CarPlayNavigationViewController: UIViewController,
         constant: -3
       ),
       compassBadge.topAnchor.constraint(equalTo: speedBadge.topAnchor),
-      // Scale with the head unit instead of assuming a phone-sized 196-point
-      // card. The overview can never escape the left 28% status rail.
+      // A real second map pane, not the old 196-point mini-map card.
       groupMiniMap.widthAnchor.constraint(
         equalTo: view.safeAreaLayoutGuide.widthAnchor,
-        multiplier: 0.28
-      ),
-      groupMiniMap.widthAnchor.constraint(lessThanOrEqualToConstant: 196),
-      groupMiniMap.widthAnchor.constraint(greaterThanOrEqualToConstant: 132),
-      groupMiniMap.heightAnchor.constraint(
-        equalTo: groupMiniMap.widthAnchor,
-        multiplier: 116.0 / 196.0
+        multiplier: 0.44
       ),
       groupMiniMap.leadingAnchor.constraint(
-        equalTo: view.safeAreaLayoutGuide.leadingAnchor,
-        constant: 12
+        equalTo: view.safeAreaLayoutGuide.leadingAnchor
+      ),
+      groupMiniMap.topAnchor.constraint(
+        equalTo: view.safeAreaLayoutGuide.topAnchor,
+        constant: 4
       ),
       groupMiniMap.bottomAnchor.constraint(
         equalTo: view.bottomAnchor,
-        constant: -12
+        constant: -4
       ),
-      // Match the phone's landscape clock at top-centre.
+      navigationPane.leadingAnchor.constraint(
+        equalTo: groupMiniMap.trailingAnchor,
+        constant: 4
+      ),
+      navigationPane.trailingAnchor.constraint(
+        equalTo: view.safeAreaLayoutGuide.trailingAnchor
+      ),
+      navigationPane.topAnchor.constraint(equalTo: view.topAnchor),
+      navigationPane.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      // Centre the clock over the road-navigation pane, not over the divider.
       clockLabel.centerXAnchor.constraint(
-        equalTo: view.safeAreaLayoutGuide.centerXAnchor
+        equalTo: navigationPane.centerXAnchor
       ),
       clockLabel.topAnchor.constraint(
         equalTo: view.safeAreaLayoutGuide.topAnchor,
         constant: 12
       ),
-      // Keep group-wide status in one left-hand reading column: journey ETA,
-      // then the recovery overview. The manoeuvre remains the only
-      // bottom-trailing card, leaving the rider and road ahead unobstructed.
-      routeProgressView.leadingAnchor.constraint(
-        equalTo: groupMiniMap.leadingAnchor
-      ),
-      routeProgressView.trailingAnchor.constraint(
-        equalTo: groupMiniMap.trailingAnchor
-      ),
-      routeProgressView.bottomAnchor.constraint(
-        equalTo: groupMiniMap.topAnchor,
-        constant: -8
-      ),
       guidanceView.trailingAnchor.constraint(
-        equalTo: view.safeAreaLayoutGuide.trailingAnchor,
+        equalTo: navigationPane.trailingAnchor,
         constant: -12
       ),
       guidanceView.bottomAnchor.constraint(
@@ -1236,15 +1227,18 @@ private final class CarPlayNavigationViewController: UIViewController,
         constant: -12
       ),
       guidanceView.widthAnchor.constraint(
-        equalTo: view.safeAreaLayoutGuide.widthAnchor,
-        multiplier: 0.44
+        equalTo: navigationPane.widthAnchor,
+        multiplier: 0.66
       ),
       guidanceView.widthAnchor.constraint(lessThanOrEqualToConstant: 300),
       rideActionsView.leadingAnchor.constraint(
-        equalTo: groupMiniMap.trailingAnchor,
-        constant: 10
+        equalTo: navigationPane.leadingAnchor,
+        constant: 8
       ),
-      rideActionsView.bottomAnchor.constraint(equalTo: groupMiniMap.bottomAnchor),
+      rideActionsView.bottomAnchor.constraint(
+        equalTo: view.bottomAnchor,
+        constant: -12
+      ),
     ])
   }
 
@@ -1305,10 +1299,6 @@ private final class CarPlayNavigationViewController: UIViewController,
       )
     }
     speedBadge.apply(snapshot["speed"] as? [String: Any])
-    routeProgressView.apply(
-      snapshot["journeyProgress"] as? [String: Any],
-      usesMiles: (snapshot["distanceUnit"] as? String) == "miles"
-    )
     let requestedRiderFollow =
       (snapshot["followRider"] as? NSNumber)?.boolValue ?? false
     let cameraModeChanged = requestedRiderFollow != snapshotWantsRiderFollow
@@ -1567,9 +1557,11 @@ private final class CarPlayNavigationViewController: UIViewController,
     let rawTilt = (viewport["tilt"] as? NSNumber)?.doubleValue ?? 0
     let tilt = min(60, max(0, rawTilt))
     let publishedBearing = (viewport["bearing"] as? NSNumber)?.doubleValue ?? 0
-    let bearing = mapOrientation == "northUp"
-      ? 0
-      : (localHeading ?? publishedBearing)
+    // The left map owns north-up context. Active road navigation is therefore
+    // always direction-up, even if the saved phone preference was north-up.
+    let bearing = surfaceMode == "activeRide"
+      ? (localHeading ?? publishedBearing)
+      : (mapOrientation == "northUp" ? 0 : (localHeading ?? publishedBearing))
     let riderVerticalFraction = min(
       0.8,
       max(0.35, (viewport["riderViewportFraction"] as? NSNumber)?.doubleValue ?? 0.64)
@@ -1604,12 +1596,13 @@ private final class CarPlayNavigationViewController: UIViewController,
     // Establish scale and pitch first, then use MapLibre's own projection to
     // put the local rider at the exact phone anchor on this wider screen. This
     // avoids a fixed-offset approximation and also lifts the marker above the
-    // app-owned guidance/ETA rail when that rail is taller than the phone's.
+    // app-owned guidance rail when that rail is taller than the phone's.
     mapView.setCamera(camera, animated: false)
     view.layoutIfNeeded()
     let frame = view.safeAreaLayoutGuide.layoutFrame
+    let navigationFrame = navigationPane.layoutFrame
     var desired = CGPoint(
-      x: frame.minX + frame.width * riderHorizontalFraction,
+      x: navigationFrame.minX + navigationFrame.width * riderHorizontalFraction,
       y: frame.minY + frame.height * riderVerticalFraction
     )
     // Keep the 18-point-radius rider marker, plus a ten-point visual gap,
@@ -1620,11 +1613,6 @@ private final class CarPlayNavigationViewController: UIViewController,
       desired.y = min(
         desired.y,
         guidanceView.frame.minY - riderChromeClearance
-      )
-    } else if !routeProgressView.isHidden {
-      desired.y = min(
-        desired.y,
-        routeProgressView.frame.minY - riderChromeClearance
       )
     }
     if let localCoordinate {
@@ -1981,7 +1969,12 @@ private final class CarPlayNavigationViewController: UIViewController,
     mapView.setVisibleCoordinates(
       &coordinates,
       count: UInt(coordinates.count),
-      edgePadding: UIEdgeInsets(top: 60, left: 60, bottom: 60, right: 60),
+      edgePadding: UIEdgeInsets(
+        top: 60,
+        left: navigationPane.layoutFrame.minX + 40,
+        bottom: 60,
+        right: 60
+      ),
       animated: true
     )
   }
@@ -2269,20 +2262,29 @@ private final class CarPlayRiderAnnotationView: MLNAnnotationView {
   ]
 }
 
-/// A low-frequency overview of the whole group while the main map stays in the
-/// phone's navigation viewport. It uses MapLibre's snapshotter instead of a
-/// second live renderer: the tiles still come from the phone's exact resolved
-/// style and shared cache, but a long ride does not pay to animate two maps at
-/// every GPS fix.
+/// The north-up group pane beside the direction-up navigation map. It uses
+/// MapLibre's snapshotter instead of a second live renderer: the tiles still
+/// come from the phone's exact resolved style and shared cache, but a long ride
+/// does not pay to animate two maps at every GPS fix.
 private final class CarPlayGroupMiniMapView: UIView {
   private struct Rider {
     let coordinate: CLLocationCoordinate2D
     let color: UIColor
     let isLocal: Bool
     let isTec: Bool
+    let isBalloon: Bool
+  }
+
+  private struct Trace {
+    let coordinates: [CLLocationCoordinate2D]
+    let color: UIColor
+    let width: CGFloat
+    let casingWidth: CGFloat
+    let dash: [CGFloat]
   }
 
   private let imageView = UIImageView()
+  private let headingCaption = UILabel()
   private let caption = UILabel()
   private var snapshotter: MLNMapSnapshotter?
   private var lastRenderedAt: Date?
@@ -2294,7 +2296,7 @@ private final class CarPlayGroupMiniMapView: UIView {
     isHidden = true
     isUserInteractionEnabled = false
     backgroundColor = CarPlayPalette.primaryPanelFill
-    layer.cornerRadius = 10
+    layer.cornerRadius = 8
     layer.cornerCurve = .continuous
     // Thicker and brighter than the 1.5 px casing it had (#442): "it blends into
     // the main map, so it is not obvious which is which". A hairline in the
@@ -2313,8 +2315,19 @@ private final class CarPlayGroupMiniMapView: UIView {
     imageView.contentMode = .scaleAspectFill
     addSubview(imageView)
 
+    headingCaption.translatesAutoresizingMaskIntoConstraints = false
+    headingCaption.text = "NORTH UP · GROUP MAP"
+    headingCaption.font = .systemFont(ofSize: 11, weight: .black)
+    headingCaption.textColor = CarPlayPalette.cardTitle
+    headingCaption.backgroundColor = CarPlayPalette.cardFill
+    headingCaption.layer.cornerRadius = 6
+    headingCaption.layer.cornerCurve = .continuous
+    headingCaption.clipsToBounds = true
+    headingCaption.textAlignment = .center
+    addSubview(headingCaption)
+
     caption.translatesAutoresizingMaskIntoConstraints = false
-    caption.font = .systemFont(ofSize: 11, weight: .bold)
+    caption.font = .systemFont(ofSize: 12, weight: .bold)
     caption.textColor = CarPlayPalette.cardTitle
     caption.backgroundColor = CarPlayPalette.cardFill
     caption.layer.cornerRadius = 6
@@ -2323,6 +2336,7 @@ private final class CarPlayGroupMiniMapView: UIView {
     caption.textAlignment = .center
     caption.adjustsFontSizeToFitWidth = true
     caption.minimumScaleFactor = 0.7
+    caption.numberOfLines = 2
     addSubview(caption)
 
     NSLayoutConstraint.activate([
@@ -2330,16 +2344,14 @@ private final class CarPlayGroupMiniMapView: UIView {
       imageView.trailingAnchor.constraint(equalTo: trailingAnchor),
       imageView.topAnchor.constraint(equalTo: topAnchor),
       imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
-      caption.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-      // Bounded on both sides now that it carries a scale as well as a count:
-      // the view is 110pt wide and the text must give way inside it rather than
-      // widening the overview.
-      caption.trailingAnchor.constraint(
-        lessThanOrEqualTo: trailingAnchor,
-        constant: -6
-      ),
-      caption.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
-      caption.heightAnchor.constraint(equalToConstant: 19),
+      headingCaption.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+      headingCaption.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+      headingCaption.heightAnchor.constraint(equalToConstant: 22),
+      headingCaption.widthAnchor.constraint(equalToConstant: 142),
+      caption.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+      caption.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+      caption.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+      caption.heightAnchor.constraint(equalToConstant: 40),
     ])
   }
 
@@ -2381,12 +2393,7 @@ private final class CarPlayGroupMiniMapView: UIView {
     force: Bool = false
   ) {
     let riders = projectedRiders(from: snapshot)
-    var route = (snapshot["remainingRoutePoints"] as? [[String: Any]] ?? [])
-      .compactMap(Self.coordinate(from:))
-    if route.count < 2 {
-      route = (snapshot["routePoints"] as? [[String: Any]] ?? [])
-        .compactMap(Self.coordinate(from:))
-    }
+    let traces = projectedTraces(from: snapshot)
     guard !riders.isEmpty else {
       isHidden = true
       snapshotter?.cancel()
@@ -2395,21 +2402,44 @@ private final class CarPlayGroupMiniMapView: UIView {
     }
 
     isHidden = false
-    let craftWord = "craft"
-    // How far the picture spans, so a rider can tell what they are looking at
-    // (#442: "It needs a clear edge, and a scale"). Without it the overview could
-    // be a hundred metres or ten miles and there is nothing on it to say which.
+    let usesMiles = (snapshot["distanceUnit"] as? String) == "miles"
+    let framingCoordinates = riders.map(\.coordinate)
+      + traces.flatMap(\.coordinates)
+    let bounds = Self.groupBounds(for: framingCoordinates)
     let span = Self.spanLabel(
-      for: Self.groupBounds(for: riders.map(\.coordinate)),
-      usesMiles: (snapshot["distanceUnit"] as? String) == "miles"
+      for: bounds,
+      usesMiles: usesMiles
     )
-    caption.text = "  \(riders.count) \(craftWord) · \(span)  "
-    accessibilityLabel = "Group overview, \(riders.count) \(craftWord)"
+    let local = riders.first(where: \.isLocal)
+    let balloon = riders.first(where: \.isBalloon)
+    let directDistance = local.flatMap { local in
+      balloon.map {
+        CLLocation(latitude: local.coordinate.latitude, longitude: local.coordinate.longitude)
+          .distance(from: CLLocation(
+            latitude: $0.coordinate.latitude,
+            longitude: $0.coordinate.longitude
+          ))
+      }
+    }
+    let distance = directDistance.map {
+      Self.distanceLabel($0, usesMiles: usesMiles)
+    } ?? "position unavailable"
+    let routeTargetsBalloon =
+      (snapshot["routeTargetsBalloon"] as? NSNumber)?.boolValue ?? false
+    let remainingSeconds = routeTargetsBalloon
+      ? ((snapshot["journeyProgress"] as? [String: Any])?["remainingSeconds"]
+        as? NSNumber)?.doubleValue
+      : nil
+    let roadTime = remainingSeconds.map(Self.durationLabel) ?? "road time —"
+    caption.text = "  BALLOON \(distance) · \(roadTime)\n  \(riders.count) craft · span \(span)  "
+    accessibilityLabel =
+      "North-up group map. Balloon \(distance). \(roadTime). "
+      + "\(riders.count) craft visible."
 
     let now = Date()
     if !force,
       snapshotter != nil
-        || lastRenderedAt.map({ now.timeIntervalSince($0) < 3 }) == true
+        || lastRenderedAt.map({ now.timeIntervalSince($0) < 2 }) == true
     {
       return
     }
@@ -2421,7 +2451,6 @@ private final class CarPlayGroupMiniMapView: UIView {
     guard let resolvedStyleURL = resolvedStyleURL(json: styleJSON, fallback: styleURL)
     else { return }
 
-    let bounds = Self.groupBounds(for: riders.map(\.coordinate))
     let camera = MLNMapCamera(
       lookingAtCenter: CLLocationCoordinate2D(
         latitude: (bounds.sw.latitude + bounds.ne.latitude) / 2,
@@ -2431,9 +2460,8 @@ private final class CarPlayGroupMiniMapView: UIView {
       pitch: 0,
       heading: 0
     )
-    // Render at the dynamically constrained rail size. A fixed 110x70 image
-    // stretched into a 196-point view was both blurry and made it easy to miss
-    // that the outer view had escaped the intended column.
+    // Render at the whole left-pane size so labels, traces and the balloon stay
+    // crisp on both compact and wide head units.
     let renderSize = self.bounds.width >= 100 && self.bounds.height >= 60
       ? self.bounds.size
       : CGSize(width: 160, height: 95)
@@ -2451,7 +2479,14 @@ private final class CarPlayGroupMiniMapView: UIView {
     self.snapshotter = snapshotter
     snapshotter.start(
       overlayHandler: { overlay in
-        Self.draw(route: route, riders: riders, on: overlay)
+        Self.draw(
+          traces: traces,
+          directLine: local.flatMap { local in
+            balloon.map { [local.coordinate, $0.coordinate] }
+          },
+          riders: riders,
+          on: overlay
+        )
       },
       completionHandler: { [weak self, weak snapshotter] snapshot, _ in
         guard let self, self.snapshotter === snapshotter else { return }
@@ -2502,9 +2537,34 @@ private final class CarPlayGroupMiniMapView: UIView {
       guard let coordinate = Self.coordinate(from: raw) else { return nil }
       return Rider(
         coordinate: coordinate,
-        color: Self.identityColor(named: raw["riderColor"] as? String),
+        color: (raw["riderColorArgb"] as? NSNumber)
+          .map { Self.colorFromArgb($0.uint32Value) }
+          ?? Self.identityColor(named: raw["riderColor"] as? String),
         isLocal: (raw["isLocal"] as? NSNumber)?.boolValue ?? false,
-        isTec: (raw["isTec"] as? NSNumber)?.boolValue ?? false
+        isTec: (raw["isTec"] as? NSNumber)?.boolValue ?? false,
+        isBalloon:
+          ((raw["craftStyle"] as? String)
+            ?? (raw["motorcycleStyle"] as? String)) == "balloon"
+      )
+    }
+  }
+
+  private func projectedTraces(from snapshot: [String: Any]) -> [Trace] {
+    (snapshot["sharedTraces"] as? [[String: Any]] ?? []).compactMap { raw in
+      let coordinates = (raw["points"] as? [[String: Any]] ?? [])
+        .compactMap(Self.coordinate(from:))
+      guard
+        coordinates.count >= 2,
+        let color = (raw["colorArgb"] as? NSNumber)?.uint32Value,
+        let width = (raw["width"] as? NSNumber)?.doubleValue,
+        let casingWidth = (raw["casingWidth"] as? NSNumber)?.doubleValue
+      else { return nil }
+      return Trace(
+        coordinates: coordinates,
+        color: Self.colorFromArgb(color),
+        width: CGFloat(width),
+        casingWidth: CGFloat(casingWidth),
+        dash: (raw["dash"] as? [NSNumber] ?? []).map { CGFloat($0.doubleValue) }
       )
     }
   }
@@ -2537,7 +2597,8 @@ private final class CarPlayGroupMiniMapView: UIView {
   }
 
   private static func draw(
-    route: [CLLocationCoordinate2D],
+    traces: [Trace],
+    directLine: [CLLocationCoordinate2D]?,
     riders: [Rider],
     on overlay: MLNMapSnapshotOverlay
   ) {
@@ -2546,26 +2607,34 @@ private final class CarPlayGroupMiniMapView: UIView {
     defer { context.restoreGState() }
     context.clip(to: overlay.context.boundingBoxOfClipPath)
 
-    if route.count >= 2 {
-      let points = route.map(overlay.point(for:))
+    for trace in traces {
+      let points = trace.coordinates.map(overlay.point(for:))
       context.setLineCap(.round)
       context.setLineJoin(.round)
       addPath(points, to: context)
       context.setStrokeColor(CarPlayPalette.casing.cgColor)
-      context.setLineWidth(6)
-      context.setLineDash(phase: 0, lengths: [7, 4])
+      context.setLineWidth(trace.casingWidth)
+      context.setLineDash(phase: 0, lengths: trace.dash)
       context.strokePath()
       addPath(points, to: context)
-      context.setStrokeColor(CarPlayPalette.routeAhead.cgColor)
-      context.setLineWidth(3.5)
-      context.setLineDash(phase: 0, lengths: [7, 4])
+      context.setStrokeColor(trace.color.cgColor)
+      context.setLineWidth(trace.width)
+      context.setLineDash(phase: 0, lengths: trace.dash)
+      context.strokePath()
+    }
+
+    if let directLine, directLine.count == 2 {
+      addPath(directLine.map(overlay.point(for:)), to: context)
+      context.setStrokeColor(UIColor.white.withAlphaComponent(0.9).cgColor)
+      context.setLineWidth(2.5)
+      context.setLineDash(phase: 0, lengths: [7, 5])
       context.strokePath()
     }
 
     context.setLineDash(phase: 0, lengths: [])
     for rider in riders {
       let point = overlay.point(for: rider.coordinate)
-      let radius: CGFloat = rider.isLocal ? 7 : 6
+      let radius: CGFloat = rider.isBalloon ? 13 : (rider.isLocal ? 9 : 7)
       let rect = CGRect(
         x: point.x - radius,
         y: point.y - radius,
@@ -2584,7 +2653,46 @@ private final class CarPlayGroupMiniMapView: UIView {
       )
       context.setLineWidth(rider.isLocal ? 2.5 : 2)
       context.strokeEllipse(in: rect)
+      if rider.isBalloon {
+        drawBalloonGlyph(at: point, in: context)
+      }
     }
+  }
+
+  private static func drawBalloonGlyph(at point: CGPoint, in context: CGContext) {
+    context.setFillColor(CarPlayPalette.markerGlyph.cgColor)
+    context.fillEllipse(in: CGRect(x: point.x - 5, y: point.y - 8, width: 10, height: 12))
+    context.setStrokeColor(CarPlayPalette.markerGlyph.cgColor)
+    context.setLineWidth(1.5)
+    context.beginPath()
+    context.move(to: CGPoint(x: point.x - 3.5, y: point.y + 2))
+    context.addLine(to: CGPoint(x: point.x - 2, y: point.y + 6))
+    context.move(to: CGPoint(x: point.x + 3.5, y: point.y + 2))
+    context.addLine(to: CGPoint(x: point.x + 2, y: point.y + 6))
+    context.strokePath()
+    context.fill(CGRect(x: point.x - 3, y: point.y + 5.5, width: 6, height: 3.5))
+  }
+
+  private static func distanceLabel(_ metres: Double, usesMiles: Bool) -> String {
+    if usesMiles {
+      let miles = metres / 1_609.344
+      return miles < 0.1
+        ? "\(Int((metres * 1.093613).rounded())) yd"
+        : String(format: "%.1f mi", miles)
+    }
+    return metres < 1_000
+      ? "\(Int(metres.rounded())) m"
+      : String(format: "%.1f km", metres / 1_000)
+  }
+
+  private static func durationLabel(_ seconds: Double) -> String {
+    let minutes = max(1, Int(ceil(seconds / 60)))
+    if minutes < 60 { return "road ~\(minutes) min" }
+    let hours = minutes / 60
+    let remainder = minutes % 60
+    return remainder == 0
+      ? "road ~\(hours) h"
+      : "road ~\(hours) h \(remainder) min"
   }
 
   private static func addPath(_ points: [CGPoint], to context: CGContext) {
@@ -2615,6 +2723,15 @@ private final class CarPlayGroupMiniMapView: UIView {
     case "crimson": return UIColor(red: 0xD9 / 255, green: 0x60 / 255, blue: 0x7A / 255, alpha: 1)
     default: return CarPlayPalette.rider
     }
+  }
+
+  private static func colorFromArgb(_ argb: UInt32) -> UIColor {
+    UIColor(
+      red: CGFloat((argb >> 16) & 0xFF) / 255,
+      green: CGFloat((argb >> 8) & 0xFF) / 255,
+      blue: CGFloat(argb & 0xFF) / 255,
+      alpha: CGFloat((argb >> 24) & 0xFF) / 255
+    )
   }
 }
 
@@ -2674,7 +2791,7 @@ private final class CarPlayCompassBadge: UIView {
 
 /// Phone-style turn card used instead of starting a template navigation
 /// session. The latter always adds Apple's separate trip-estimate panel, which
-/// duplicated the app-owned ETA and could not be hidden independently.
+/// cannot be hidden independently.
 private final class CarPlayGuidanceView: UIView {
   private let symbol = UIImageView()
   private let title = UILabel()
@@ -2993,115 +3110,6 @@ private final class CarPlaySpeedLimitBadge: UIView {
       ?? "unavailable"
     accessibilityLabel = "Mapped speed limit \(limitDescription). "
       + "Your GPS speed is \(speedDescription)."
-  }
-}
-
-/// Compact route-wide timing above the recovery overview.
-///
-/// Dart owns the estimate and waypoint selection so the phone and car never
-/// disagree. Native only formats the rider's units and local clock convention.
-private final class CarPlayRouteProgressView: UIView {
-  private let routeLabel = UILabel()
-  private let waypointLabel = UILabel()
-  private let timeFormatter = DateFormatter()
-
-  init() {
-    super.init(frame: .zero)
-    isHidden = true
-    isUserInteractionEnabled = false
-    backgroundColor = CarPlayPalette.cardFill
-    layer.cornerRadius = 10
-    layer.cornerCurve = .continuous
-    layer.borderWidth = 1
-    layer.borderColor = UIColor.white.withAlphaComponent(0.18).cgColor
-    timeFormatter.setLocalizedDateFormatFromTemplate("j:mm")
-
-    routeLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-    routeLabel.textColor = CarPlayPalette.cardTitle
-    routeLabel.adjustsFontSizeToFitWidth = true
-    routeLabel.minimumScaleFactor = 0.78
-    waypointLabel.font = .systemFont(ofSize: 11, weight: .medium)
-    waypointLabel.textColor = CarPlayPalette.cardLabel
-    waypointLabel.adjustsFontSizeToFitWidth = true
-    waypointLabel.minimumScaleFactor = 0.78
-    for label in [routeLabel, waypointLabel] {
-      label.translatesAutoresizingMaskIntoConstraints = false
-      label.numberOfLines = 2
-      label.lineBreakMode = .byWordWrapping
-      addSubview(label)
-    }
-    NSLayoutConstraint.activate([
-      routeLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-      routeLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-      routeLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-      waypointLabel.leadingAnchor.constraint(equalTo: routeLabel.leadingAnchor),
-      waypointLabel.trailingAnchor.constraint(equalTo: routeLabel.trailingAnchor),
-      waypointLabel.topAnchor.constraint(equalTo: routeLabel.bottomAnchor, constant: 4),
-      waypointLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
-    ])
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-  func apply(_ progress: [String: Any]?, usesMiles: Bool) {
-    guard
-      let progress,
-      let remaining = (progress["remainingDistanceMeters"] as? NSNumber)?.doubleValue
-    else {
-      isHidden = true
-      return
-    }
-    isHidden = false
-    let duration = durationLabel(progress["remainingSeconds"] as? NSNumber)
-    let arrival = timeLabel(progress["arrivalTimeMillis"] as? NSNumber)
-    routeLabel.text =
-      "\(duration) · \(distanceLabel(remaining, usesMiles: usesMiles)) left · ETA \(arrival)"
-
-    let waypointName = (progress["nextWaypointName"] as? String)?
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    let waypointDistance =
-      (progress["nextWaypointDistanceMeters"] as? NSNumber)?.doubleValue
-    if let waypointName, !waypointName.isEmpty, let waypointDistance {
-      let waypointArrival = timeLabel(
-        progress["nextWaypointArrivalTimeMillis"] as? NSNumber
-      )
-      waypointLabel.isHidden = false
-      waypointLabel.text =
-        "⚑ \(waypointName) · \(distanceLabel(waypointDistance, usesMiles: usesMiles)) · \(waypointArrival)"
-    } else {
-      waypointLabel.isHidden = true
-      waypointLabel.text = nil
-    }
-    accessibilityLabel = [routeLabel.text, waypointLabel.text]
-      .compactMap { $0 }
-      .joined(separator: ". ")
-  }
-
-  private func durationLabel(_ seconds: NSNumber?) -> String {
-    guard let seconds else { return "Time —" }
-    let minutes = Int(ceil(seconds.doubleValue / 60))
-    guard minutes >= 60 else { return "\(minutes) min" }
-    let hours = minutes / 60
-    let remainder = minutes % 60
-    return remainder == 0 ? "\(hours) h" : "\(hours) h \(remainder) min"
-  }
-
-  private func timeLabel(_ milliseconds: NSNumber?) -> String {
-    guard let milliseconds else { return "—" }
-    return timeFormatter.string(
-      from: Date(timeIntervalSince1970: milliseconds.doubleValue / 1_000)
-    )
-  }
-
-  private func distanceLabel(_ metres: Double, usesMiles: Bool) -> String {
-    if usesMiles {
-      let miles = metres / 1_609.344
-      if miles < 0.1 { return "\(Int((metres * 1.093613).rounded())) yd" }
-      return String(format: "%.1f mi", miles)
-    }
-    if metres < 1_000 { return "\(Int(metres.rounded())) m" }
-    return String(format: "%.1f km", metres / 1_000)
   }
 }
 
