@@ -14,6 +14,7 @@ import 'package:balloon_crumbs/domain/distance_unit.dart';
 import 'package:balloon_crumbs/domain/geo_point.dart' as awareness_geo;
 import 'package:balloon_crumbs/domain/hazard.dart';
 import 'package:balloon_crumbs/domain/imported_route.dart';
+import 'package:balloon_crumbs/domain/map_orientation.dart';
 import 'package:balloon_crumbs/domain/quick_message.dart';
 import 'package:balloon_crumbs/domain/recorded_route_store.dart';
 import 'package:balloon_crumbs/domain/route_store.dart';
@@ -2478,6 +2479,188 @@ void main() {
     },
   );
 
+  testWidgets(
+    'landscape chase separates north-up balloon context from direction-up navigation',
+    (tester) async {
+      tester.view.physicalSize = const Size(844, 390);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final directory = Directory.systemTemp.createTempSync(
+        'split-chase-map-test',
+      );
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final cache = OfflineTileCache(
+        rootDirectory: directory,
+        configuration: const BasemapConfiguration(),
+        httpClient: MockClient((_) async => http.Response('', 404)),
+      );
+      addTearDown(cache.dispose);
+      final navigation = ValueNotifier<MapNavigationPosition?>(
+        MapNavigationPosition(
+          point: const GeoPoint(latitude: 51.36, longitude: -2.38),
+          recordedAt: DateTime.utc(2026, 8, 25, 9),
+          speedMetersPerSecond: 10,
+          headingDegrees: 90,
+        ),
+      );
+      addTearDown(navigation.dispose);
+      final overlays = ValueNotifier<List<MapOverlayMarker>>(const [
+        MapOverlayMarker(
+          id: 'craft-balloon',
+          point: GeoPoint(latitude: 51.37, longitude: -2.35),
+          label: 'Balloon · live',
+          craftStyle: CraftIconStyle.balloon,
+          riderDisplayName: 'Balloon',
+        ),
+        MapOverlayMarker(
+          id: 'craft-recovery-two',
+          point: GeoPoint(latitude: 51.355, longitude: -2.39),
+          label: 'Recovery two · live',
+          craftStyle: CraftIconStyle.fourByFour,
+        ),
+      ]);
+      addTearDown(overlays.dispose);
+      final trails = ValueNotifier<List<MapOverlayTrace>>(const [
+        MapOverlayTrace(
+          id: 'balloon-track',
+          label: 'Balloon track',
+          kind: RiderTrailKind.balloonGroundTrack,
+          points: [
+            GeoPoint(latitude: 51.36, longitude: -2.36),
+            GeoPoint(latitude: 51.37, longitude: -2.35),
+          ],
+        ),
+        MapOverlayTrace(
+          id: 'recovery-track',
+          label: 'Recovery track',
+          points: [
+            GeoPoint(latitude: 51.35, longitude: -2.40),
+            GeoPoint(latitude: 51.355, longitude: -2.39),
+          ],
+        ),
+      ]);
+      addTearDown(trails.dispose);
+      final route = ImportedRoute(
+        id: 'live-balloon-rendezvous',
+        name: 'Road rendezvous near balloon',
+        importedAt: DateTime.utc(2026, 8, 25, 9),
+        sourceFileName: 'balloon-crumbs-personal-chase-route',
+        paths: const [
+          RoutePath(
+            kind: RoutePathKind.route,
+            points: [
+              GeoPoint(latitude: 51.36, longitude: -2.38),
+              GeoPoint(latitude: 51.37, longitude: -2.35),
+            ],
+          ),
+        ],
+        waypoints: const [],
+        plannedDuration: const Duration(minutes: 8),
+      );
+      final viewports = <NavigationCameraViewport>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(useMaterial3: true),
+          home: RideMapScreen(
+            routeStore: InMemoryRouteStore(route),
+            routeImporter: RouteImporter(source: const _NoFileSource()),
+            offlineTileCache: cache,
+            navigationPosition: navigation,
+            overlayMarkers: overlays,
+            riderTrails: trails,
+            groupRiderCount: 3,
+            routeTargetsBalloon: true,
+            mapOrientation: MapOrientationMode.northUp,
+            onMapOrientationChanged: (_) {},
+            onNavigationViewportChanged: viewports.add,
+            onOpenRideMenu: () async {},
+            onEmergencyAlert: () async {},
+            onLeaveRide: () async {},
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(find.byKey(const Key('landscape-relative-map')), findsOneWidget);
+      expect(find.byKey(const Key('group-mini-map')), findsNothing);
+      expect(find.byKey(const Key('route-progress-panel')), findsNothing);
+      expect(find.byKey(const Key('relative-map-title')), findsOneWidget);
+      expect(find.textContaining('RELATIVE MAP · NORTH UP'), findsOneWidget);
+      expect(
+        find.byKey(const Key('relative-map-balloon-summary')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('BALLOON ·'), findsOneWidget);
+      expect(find.textContaining('Road near balloon'), findsOneWidget);
+      expect(find.byKey(const Key('map-orientation-toggle')), findsNothing);
+
+      final relativeSummary = tester.getRect(
+        find.byKey(const Key('relative-map-balloon-summary-position')),
+      );
+      for (final key in const [
+        'ride-menu-button',
+        'emergency-alert-button',
+        'leave-ride-button',
+      ]) {
+        expect(
+          relativeSummary.overlaps(tester.getRect(find.byKey(Key(key)))),
+          isFalse,
+          reason: 'balloon summary overlaps $key',
+        );
+      }
+
+      final relativeRect = tester.getRect(
+        find.byKey(const Key('landscape-relative-map')),
+      );
+      final navigationRect = tester.getRect(find.byType(FlutterMap));
+      expect(relativeRect.left, 0);
+      expect(relativeRect.width, closeTo(844 * 0.44, 1));
+      expect(navigationRect.left, closeTo(relativeRect.right, 1));
+      expect(navigationRect.right, closeTo(844, 1));
+
+      final semantics = tester.ensureSemantics();
+      expect(
+        tester
+            .getSemantics(find.byKey(const Key('landscape-relative-map')))
+            .label,
+        allOf(contains('Balloon shown'), contains('2 shared tracks shown')),
+      );
+      semantics.dispose();
+      trails.value = [
+        ...trails.value,
+        const MapOverlayTrace(
+          id: 'recovery-three-track',
+          label: 'Recovery three track',
+          points: [
+            GeoPoint(latitude: 51.34, longitude: -2.41),
+            GeoPoint(latitude: 51.345, longitude: -2.40),
+          ],
+        ),
+      ];
+      await tester.pump();
+      final updatedSemantics = tester.ensureSemantics();
+      expect(
+        tester
+            .getSemantics(find.byKey(const Key('landscape-relative-map')))
+            .label,
+        contains('3 shared tracks shown'),
+      );
+      updatedSemantics.dispose();
+      final drivenViewport = viewports.lastWhere(
+        (viewport) => viewport.sourceViewportWidthPixels > 0,
+      );
+      expect(drivenViewport.sourceViewportWidthPixels, closeTo(473, 2));
+      expect(drivenViewport.bearing, closeTo(90, 0.1));
+
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
   testWidgets('shows a stopped-rider assistance sheet after an alert', (
     tester,
   ) async {
@@ -3430,6 +3613,7 @@ void main() {
     expect(plan.riderViewportFraction, greaterThan(0.5));
     expect(projectedViewport, isNotNull);
     expect(projectedViewport!.latitude, closeTo(53, 0.01));
+    expect(projectedViewport!.bearing, closeTo(90, 0.01));
     expect(projectedViewport!.longitude, greaterThan(-1.015));
     expect(projectedViewport!.zoom, closeTo(plan.zoom, 0.01));
     expect(projectedViewport!.tilt, 0);

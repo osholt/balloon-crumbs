@@ -161,11 +161,26 @@ List<MapOverlayMarker> groupMiniMapCraftMarkers(
     )
     .toList(growable: false);
 
+bool _overlayListHasBalloon(Iterable<MapOverlayMarker> markers) =>
+    markers.any((marker) => marker.craftStyle == CraftIconStyle.balloon);
+
 @visibleForTesting
 bool rideMapShowsForecastContext({
   required RideMapPerspective perspective,
   bool? explicitPreference,
 }) => explicitPreference ?? perspective == RideMapPerspective.balloon;
+
+@visibleForTesting
+String balloonRoadTimeLabel(Duration? duration) {
+  if (duration == null) return 'Road time unavailable';
+  final minutes = math.max(1, (duration.inSeconds / 60).ceil());
+  if (minutes < 60) return 'Road near balloon · about $minutes min';
+  final hours = minutes ~/ 60;
+  final remainder = minutes.remainder(60);
+  return remainder == 0
+      ? 'Road near balloon · about $hours h'
+      : 'Road near balloon · about $hours h $remainder min';
+}
 
 /// A deliberately approximate area where the balloon intends or is expected
 /// to land.
@@ -314,6 +329,7 @@ class RideMapFeature extends StatefulWidget {
     this.altitudeUnit = AltitudeUnit.metres,
     this.speedLimitDisplay,
     this.showRouteProgress = true,
+    this.routeTargetsBalloon = false,
     this.basemapConfiguration = const BasemapConfiguration(),
     this.localCraftStyle = craftIconStyleDefault,
     this.localRiderSymbol = riderSymbolDefault,
@@ -383,6 +399,7 @@ class RideMapFeature extends StatefulWidget {
     AltitudeUnit altitudeUnit = AltitudeUnit.metres,
     SpeedLimitDisplayController? speedLimitDisplay,
     bool showRouteProgress = true,
+    bool routeTargetsBalloon = false,
     bool darkMapStyle = false,
     bool restrainedLightMapStyle = true,
     CraftIconStyle localCraftStyle = craftIconStyleDefault,
@@ -447,6 +464,7 @@ class RideMapFeature extends StatefulWidget {
     altitudeUnit: altitudeUnit,
     speedLimitDisplay: speedLimitDisplay,
     showRouteProgress: showRouteProgress,
+    routeTargetsBalloon: routeTargetsBalloon,
     basemapConfiguration: BasemapConfiguration.fromEnvironment().forBrightness(
       dark: darkMapStyle,
       restrainedLightStyle: restrainedLightMapStyle,
@@ -549,6 +567,7 @@ class RideMapFeature extends StatefulWidget {
   final AltitudeUnit altitudeUnit;
   final SpeedLimitDisplayController? speedLimitDisplay;
   final bool showRouteProgress;
+  final bool routeTargetsBalloon;
   final BasemapConfiguration basemapConfiguration;
   final CraftIconStyle localCraftStyle;
   final RiderSymbol localRiderSymbol;
@@ -715,6 +734,7 @@ class _RideMapFeatureState extends State<RideMapFeature> {
         altitudeUnit: widget.altitudeUnit,
         speedLimitDisplay: widget.speedLimitDisplay,
         showRouteProgress: widget.showRouteProgress,
+        routeTargetsBalloon: widget.routeTargetsBalloon,
         localCraftStyle: widget.localCraftStyle,
         localRiderSymbol: widget.localRiderSymbol,
         localDisplayName: widget.localDisplayName,
@@ -818,6 +838,7 @@ class RideMapScreen extends StatefulWidget {
     this.altitudeUnit = AltitudeUnit.metres,
     this.speedLimitDisplay,
     this.showRouteProgress = true,
+    this.routeTargetsBalloon = false,
     this.disposeOfflineTileCache = false,
     this.localCraftStyle = craftIconStyleDefault,
     this.localRiderSymbol = riderSymbolDefault,
@@ -945,6 +966,7 @@ class RideMapScreen extends StatefulWidget {
   final AltitudeUnit altitudeUnit;
   final SpeedLimitDisplayController? speedLimitDisplay;
   final bool showRouteProgress;
+  final bool routeTargetsBalloon;
   final bool disposeOfflineTileCache;
   final CraftIconStyle localCraftStyle;
   final RiderSymbol localRiderSymbol;
@@ -1037,9 +1059,20 @@ class _RideMapScreenState extends State<RideMapScreen> {
       _hmlrInspireReference != null;
 
   double get _effectiveCameraBearingDegrees =>
-      widget.mapOrientation == MapOrientationMode.northUp
+      !_landscapeChaseSplitActive &&
+          widget.mapOrientation == MapOrientationMode.northUp
       ? 0
       : _cameraBearingDegrees;
+
+  /// Landscape chase mode has two maps with deliberately different jobs. The
+  /// left overview is always north-up; the road-navigation pane is always
+  /// direction-up. A persisted phone-map preference must not rotate both panes
+  /// together and turn the road pane back into the old static TEC viewport.
+  bool get _landscapeChaseSplitActive =>
+      !_isBalloonView &&
+      widget.rideStarted &&
+      _hasBalloonOverlay &&
+      MediaQuery.maybeOf(context)?.orientation == Orientation.landscape;
 
   bool get _showWindForecast {
     final controller = widget.windForecastController;
@@ -1153,6 +1186,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
   bool _routing = false;
   bool _routingToStart = false;
   bool _navigationMode = false;
+  late bool _hasBalloonOverlay;
   RecoveryMapViewpoint? _recoveryMapViewpoint;
   DateTime? _lastBalloonViewpointUpdateAt;
   bool _navigationCanvasActive = false;
@@ -1357,12 +1391,32 @@ class _RideMapScreenState extends State<RideMapScreen> {
     _mapLibreOfflineManager =
         widget.mapLibreOfflineManager ??
         MapLibreOfflineManager(configuration: _basemap);
+    _hasBalloonOverlay = _overlayListHasBalloon(
+      widget.overlayMarkers?.value ?? const [],
+    );
     widget.currentPosition?.addListener(_onPositionChanged);
     widget.navigationPosition?.addListener(_onPositionChanged);
     widget.overlayMarkers?.addListener(_onOverlayDataChanged);
     widget.riderTrails?.addListener(_onOverlayDataChanged);
     widget.landingZoneUpdates?.addListener(_onLandingZoneChanged);
     widget.windForecastController?.addListener(_onWindForecastChanged);
+    // Seed direction-up before the first camera command. Previously the
+    // smoother only saw listener callbacks, so an already-populated location
+    // notifier opened at bearing zero and stayed north-up until another GPS fix
+    // happened to arrive — the same frozen navigation viewport inherited from
+    // TEC.
+    final initialNavigationFix = _navigationFix;
+    final initialHeading = initialNavigationFix?.headingDegrees;
+    if (initialHeading != null && initialHeading.isFinite) {
+      _cameraBearingDegrees =
+          _headingSmoother.update(
+            headingDegrees: initialHeading,
+            speedMetersPerSecond: initialNavigationFix?.speedMetersPerSecond,
+            at: initialNavigationFix!.recordedAt,
+          ) ??
+          0;
+    }
+    _previousNavigationPoint = _effectivePosition;
     _connectorProgressGeometry = _connectorProgressTracker.update(
       _connectorRoute,
       _effectivePosition,
@@ -1395,6 +1449,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
     if (oldWidget.overlayMarkers != widget.overlayMarkers) {
       oldWidget.overlayMarkers?.removeListener(_onOverlayDataChanged);
       widget.overlayMarkers?.addListener(_onOverlayDataChanged);
+      _hasBalloonOverlay = _overlayListHasBalloon(
+        widget.overlayMarkers?.value ?? const [],
+      );
     }
     if (oldWidget.riderTrails != widget.riderTrails) {
       oldWidget.riderTrails?.removeListener(_onOverlayDataChanged);
@@ -1558,6 +1615,13 @@ class _RideMapScreenState extends State<RideMapScreen> {
         !_isBalloonView && widget.overlayMarkers != null;
     final groupMiniMapWidth = landscape ? 196.0 : 150.0;
     final groupMiniMapHeight = landscape ? 116.0 : 104.0;
+    final landscapeChaseSplit = _landscapeChaseSplitActive;
+    final landscapeChaseSplitWidth = landscapeChaseSplit
+        ? math.min(
+            420.0,
+            math.max(280.0, MediaQuery.sizeOf(context).width * 0.44),
+          )
+        : 0.0;
     final showRideMenu = hideChrome && widget.onOpenRideMenu != null;
     // A route can contain manoeuvres before the device has a usable location.
     // The guidance banner is only composed into the band while guidance is
@@ -1769,7 +1833,11 @@ class _RideMapScreenState extends State<RideMapScreen> {
           ? _ErrorState(error: _loadError!, onRetry: _loadPersistedRoute)
           : Stack(
               children: [
-                Positioned.fill(
+                Positioned(
+                  left: landscapeChaseSplit ? landscapeChaseSplitWidth : 0,
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
                   child: Listener(
                     key: _mapViewportKey,
                     behavior: HitTestBehavior.opaque,
@@ -1854,6 +1922,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
                     canShowGroupMiniMap: canShowGroupMiniMap,
                     groupMiniMapWidth: groupMiniMapWidth,
                     groupMiniMapHeight: groupMiniMapHeight,
+                    landscapeChaseSplit: landscapeChaseSplit,
+                    landscapeChaseSplitWidth: landscapeChaseSplitWidth,
                     safeLeft: overlayLeft,
                     safeRight: overlayRight,
                     safeTop: overlayTop,
@@ -1975,6 +2045,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
     required bool canShowGroupMiniMap,
     required double groupMiniMapWidth,
     required double groupMiniMapHeight,
+    required bool landscapeChaseSplit,
+    required double landscapeChaseSplitWidth,
     required double safeLeft,
     required double safeRight,
     required double safeTop,
@@ -2067,15 +2139,30 @@ class _RideMapScreenState extends State<RideMapScreen> {
             )
           : null;
       const Widget? tecGap = null;
-      final miniMap = canShowGroupMiniMap
+      final miniMap = canShowGroupMiniMap && !landscapeChaseSplit
           ? _buildGroupMiniMap(
               overlays: overlays,
               width: groupMiniMapWidth,
               height: groupMiniMapHeight,
             )
           : null;
+      final relativeFlightMap = landscapeChaseSplit
+          ? _buildGroupMiniMap(
+              overlays: overlays,
+              width: landscapeChaseSplitWidth,
+              height: MediaQuery.sizeOf(context).height - (hideChrome ? 0 : 42),
+              expanded: true,
+              safePadding: EdgeInsets.fromLTRB(
+                safeLeft + 10,
+                safeTop + 10,
+                10,
+                safeBottom + 10,
+              ),
+            )
+          : null;
       final routeProgressPanel =
-          _isBalloonView ||
+          landscapeChaseSplit ||
+              _isBalloonView ||
               _route?.isBalloonForecast == true ||
               !widget.showRouteProgress ||
               _route == null ||
@@ -2338,7 +2425,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
               label: const Text('Follow me'),
             )
           : null;
-      final orientation = widget.onMapOrientationChanged == null
+      final orientation =
+          landscapeChaseSplit || widget.onMapOrientationChanged == null
           ? null
           : FilledButton.tonalIcon(
               key: const Key('map-orientation-toggle'),
@@ -2422,6 +2510,25 @@ class _RideMapScreenState extends State<RideMapScreen> {
             (miniMap == null && safetyCluster != null ? 184 : 0);
         return Stack(
           children: [
+            if (relativeFlightMap != null)
+              Positioned(
+                key: const Key('landscape-relative-map-position'),
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: landscapeChaseSplitWidth,
+                child: relativeFlightMap,
+              ),
+            if (landscapeChaseSplit)
+              Positioned(
+                left: landscapeChaseSplitWidth - 1,
+                top: 0,
+                bottom: 0,
+                width: 2,
+                child: const IgnorePointer(
+                  child: ColoredBox(color: Color(0xCC0B0F14)),
+                ),
+              ),
             if (rideMenu != null)
               Positioned(
                 left: safeLeft + 10,
@@ -2447,7 +2554,7 @@ class _RideMapScreenState extends State<RideMapScreen> {
             // the phone is already in front of the rider.
             if (widget.rideStarted)
               Positioned(
-                left: safeLeft,
+                left: landscapeChaseSplit ? landscapeChaseSplitWidth : safeLeft,
                 right: safeRight,
                 top: safeTop + 12,
                 child: IgnorePointer(
@@ -2508,8 +2615,9 @@ class _RideMapScreenState extends State<RideMapScreen> {
             if (safetyCluster != null)
               Positioned(
                 key: const Key('map-landscape-action-position'),
-                left: actionLeft,
-                bottom: safeBottom + 10,
+                left: landscapeChaseSplit ? safeLeft + 10 : actionLeft,
+                top: landscapeChaseSplit ? safeTop + 70 : null,
+                bottom: landscapeChaseSplit ? null : safeBottom + 10,
                 child: safetyCluster,
               ),
             Positioned(
@@ -2691,6 +2799,8 @@ class _RideMapScreenState extends State<RideMapScreen> {
     required List<MapOverlayMarker> overlays,
     required double width,
     required double height,
+    bool expanded = false,
+    EdgeInsets safePadding = EdgeInsets.zero,
   }) {
     final groupRiders = groupMiniMapCraftMarkers(overlays);
     final inferredGroupSize =
@@ -2699,30 +2809,87 @@ class _RideMapScreenState extends State<RideMapScreen> {
     // rider overlays are live. Taking only the snapshot left the iOS mini-map
     // hidden when it still said "1" after remote positions arrived.
     final groupSize = math.max(widget.groupRiderCount ?? 0, inferredGroupSize);
-    if (groupSize <= 1) return const SizedBox.shrink();
-    return _GroupMiniMap(
-      width: width,
-      height: height,
-      routePaths:
-          _route?.paths
-              .map((path) => path.points)
-              .where((points) => points.length >= 2)
-              .toList(growable: false) ??
-          const [],
-      currentPosition: _effectivePosition,
-      riders: groupRiders,
-      riderCount: groupSize,
-      localCraftStyle: _localCraftStyle,
-      localRiderSymbol: widget.localRiderSymbol,
-      localDisplayName: widget.localDisplayName,
-      onTap: widget.onOpenRoster,
-      renderer: groupMiniMapRenderer(
-        mapLibreEnabled: _basemap.usesMapLibre,
-        platform: defaultTargetPlatform,
-      ),
-      mapStyleUrl: _basemap.styleUrl,
-      mapStyleString: widget.mapStyleString,
-    );
+    if (!expanded && groupSize <= 1) return const SizedBox.shrink();
+
+    Widget buildForLiveValues(List<MapOverlayTrace> traces) =>
+        ValueListenableBuilder<({double value, bool ageing})?>(
+          valueListenable: _riderSpeed,
+          builder: (context, riderSpeed, _) {
+            final balloon = groupRiders
+                .where((marker) => marker.craftStyle == CraftIconStyle.balloon)
+                .firstOrNull;
+            final currentPosition = _effectivePosition;
+            final separationMeters = balloon == null || currentPosition == null
+                ? null
+                : _mapDistanceMeters(currentPosition, balloon.point);
+            final progress = !expanded || !widget.routeTargetsBalloon
+                ? null
+                : _routeJourneyProgressTracker.update(
+                    route: _route,
+                    geometry: _progressGeometry,
+                    speedMetersPerSecond: riderSpeed?.ageing == false
+                        ? riderSpeed!.value
+                        : null,
+                    now: DateTime.now(),
+                  );
+            return _GroupMiniMap(
+              width: width,
+              height: height,
+              routePaths:
+                  _route?.paths
+                      .map((path) => path.points)
+                      .where((points) => points.length >= 2)
+                      .toList(growable: false) ??
+                  const [],
+              trails: traces,
+              currentPosition: currentPosition,
+              riders: groupRiders,
+              riderCount: groupSize,
+              localCraftStyle: _localCraftStyle,
+              localRiderSymbol: widget.localRiderSymbol,
+              localDisplayName: widget.localDisplayName,
+              onTap: widget.onOpenRoster,
+              renderer: groupMiniMapRenderer(
+                mapLibreEnabled: _basemap.usesMapLibre,
+                platform: defaultTargetPlatform,
+              ),
+              mapStyleUrl: _basemap.styleUrl,
+              mapStyleString: widget.mapStyleString,
+              expanded: expanded,
+              safePadding: safePadding,
+              balloonPoint: balloon?.point,
+              balloonDistanceLabel: separationMeters == null
+                  ? 'Waiting for balloon position'
+                  : MeasurementFormatter(
+                      widget.distanceUnit,
+                    ).distance(separationMeters),
+              balloonTravelTimeLabel: balloonRoadTimeLabel(
+                progress?.remainingTime,
+              ),
+            );
+          },
+        );
+
+    Widget buildForPosition() => widget.riderTrails == null
+        ? buildForLiveValues(const [])
+        : ValueListenableBuilder<List<MapOverlayTrace>>(
+            valueListenable: widget.riderTrails!,
+            builder: (context, traces, _) => buildForLiveValues(traces),
+          );
+
+    if (widget.navigationPosition case final navigation?) {
+      return ValueListenableBuilder<MapNavigationPosition?>(
+        valueListenable: navigation,
+        builder: (context, _, _) => buildForPosition(),
+      );
+    }
+    if (widget.currentPosition case final position?) {
+      return ValueListenableBuilder<GeoPoint?>(
+        valueListenable: position,
+        builder: (context, _, _) => buildForPosition(),
+      );
+    }
+    return buildForPosition();
   }
 
   Widget _buildMap() {
@@ -3293,6 +3460,13 @@ class _RideMapScreenState extends State<RideMapScreen> {
       final measured = _bottomChromeHeightPixels;
       if (measured == _measuredBottomChromeHeight) return;
       setState(() => _measuredBottomChromeHeight = measured);
+      // The first follow command can precede layout and use the conservative
+      // fallback band. Reframe once the real band is known; otherwise that
+      // provisional command can remain aimed behind the vehicle even though
+      // the final, decluttered layout has room for road-ahead context.
+      if (_navigationMode) {
+        unawaited(_followNavigationCamera(force: true));
+      }
     });
   }
 
@@ -3687,9 +3861,14 @@ class _RideMapScreenState extends State<RideMapScreen> {
 
   void _onOverlayDataChanged() {
     if (!mounted) return;
+    final hasBalloon = _overlayListHasBalloon(
+      widget.overlayMarkers?.value ?? const [],
+    );
+    final splitAvailabilityChanged = hasBalloon != _hasBalloonOverlay;
+    _hasBalloonOverlay = hasBalloon;
     // The mini-map listens to rider updates itself. Rebuilding the parent
     // platform map here can resize it and briefly bring the top chrome back.
-    if (!_basemap.usesMapLibre) setState(() {});
+    if (!_basemap.usesMapLibre || splitAvailabilityChanged) setState(() {});
     _scheduleMapLibreSync(overlays: true);
     unawaited(_publishGroupPipSnapshot());
     if (_recoveryMapViewpoint == RecoveryMapViewpoint.balloon) {
@@ -7461,6 +7640,7 @@ class _GroupMiniMap extends StatefulWidget {
     required this.width,
     required this.height,
     required this.routePaths,
+    required this.trails,
     required this.currentPosition,
     required this.riders,
     required this.riderCount,
@@ -7471,11 +7651,17 @@ class _GroupMiniMap extends StatefulWidget {
     required this.renderer,
     required this.mapStyleUrl,
     required this.mapStyleString,
+    this.expanded = false,
+    this.safePadding = EdgeInsets.zero,
+    this.balloonPoint,
+    this.balloonDistanceLabel,
+    this.balloonTravelTimeLabel,
   });
 
   final double width;
   final double height;
   final List<List<GeoPoint>> routePaths;
+  final List<MapOverlayTrace> trails;
   final GeoPoint? currentPosition;
   final List<MapOverlayMarker> riders;
   final int riderCount;
@@ -7486,6 +7672,11 @@ class _GroupMiniMap extends StatefulWidget {
   final GroupMiniMapRenderer renderer;
   final String mapStyleUrl;
   final String mapStyleString;
+  final bool expanded;
+  final EdgeInsets safePadding;
+  final GeoPoint? balloonPoint;
+  final String? balloonDistanceLabel;
+  final String? balloonTravelTimeLabel;
 
   @override
   State<_GroupMiniMap> createState() => _GroupMiniMapState();
@@ -7493,12 +7684,15 @@ class _GroupMiniMap extends StatefulWidget {
 
 typedef _MiniMapSnapshot = ({
   List<List<GeoPoint>> routePaths,
+  List<MapOverlayTrace> trails,
   GeoPoint? currentPosition,
   List<MapOverlayMarker> riders,
 });
 
 class _GroupMiniMapState extends State<_GroupMiniMap> {
   static const _routeSource = 'balloon-crumbs-mini-route';
+  static const _trailSource = 'balloon-crumbs-mini-trails';
+  static const _separationSource = 'balloon-crumbs-mini-separation';
   static const _riderSource = 'balloon-crumbs-mini-riders';
 
   /// Radius of a rider's badge on the group overview, which is smaller than the
@@ -7530,7 +7724,16 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
   /// arriving between calls) hand later steps newer data than earlier ones,
   /// which could visually detach a rider's dot from its trimmed route line.
   _MiniMapSnapshot _snapshot() => (
-    routePaths: widget.routePaths,
+    routePaths: widget.expanded ? const [] : widget.routePaths,
+    trails: widget.trails
+        .where(
+          (trace) =>
+              trace.points.length >= 2 &&
+              (trace.kind == RiderTrailKind.rider ||
+                  trace.kind == RiderTrailKind.leader ||
+                  trace.kind == RiderTrailKind.balloonGroundTrack),
+        )
+        .toList(growable: false),
     currentPosition: widget.currentPosition,
     riders: widget.riders,
   );
@@ -7605,9 +7808,15 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
     // fell off the edge. The key is on the whole footprint so an overlap test
     // measures what is actually on screen, caption included.
     return Semantics(
-      key: const Key('group-mini-map'),
+      key: widget.expanded
+          ? const Key('landscape-relative-map')
+          : const Key('group-mini-map'),
       button: widget.onTap != null,
-      label: widget.onTap == null
+      label: widget.expanded
+          ? 'North-up relative map, $riderCount crew members. '
+                '${widget.balloonPoint == null ? 'Balloon position unavailable' : 'Balloon shown, ${widget.balloonDistanceLabel}'}. '
+                '${_snapshot().trails.length} shared tracks shown.'
+          : widget.onTap == null
           ? null
           : 'Open flight crew, $riderCount members',
       child: GestureDetector(
@@ -7618,31 +7827,33 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildMiniMapCanvas(visibleRoutePaths),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.only(left: 7),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0xD90D1117),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
+            if (!widget.expanded) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 7),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xD90D1117),
+                    borderRadius: BorderRadius.circular(9),
                   ),
-                  child: Text(
-                    '$riderCount CREW',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
+                    child: Text(
+                      '$riderCount CREW',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -7657,18 +7868,24 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
         height: widget.height,
         decoration: BoxDecoration(
           color: const Color(0xF2111820),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFF566273), width: 1.5),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black54,
-              blurRadius: 8,
-              offset: Offset(0, 2),
-            ),
-          ],
+          borderRadius: widget.expanded ? null : BorderRadius.circular(14),
+          border: widget.expanded
+              ? null
+              : Border.all(color: const Color(0xFF566273), width: 1.5),
+          boxShadow: widget.expanded
+              ? null
+              : const [
+                  BoxShadow(
+                    color: Colors.black54,
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: widget.expanded
+              ? BorderRadius.zero
+              : BorderRadius.circular(12),
           child: Stack(
             children: [
               Positioned.fill(
@@ -7685,7 +7902,17 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
               // The primary map retains MapLibre's attribution control. The
               // overview repeats the same licensed map inside that surface, so
               // a second verbose provider banner only obscures group markers.
-              if (widget.currentPosition != null)
+              if (widget.expanded)
+                Positioned(
+                  left: widget.safePadding.left + 54,
+                  top: widget.safePadding.top,
+                  child: _MiniMapBadge(
+                    key: const Key('relative-map-title'),
+                    label:
+                        'RELATIVE MAP · NORTH UP · ${widget.riderCount} CREW',
+                  ),
+                )
+              else if (widget.currentPosition != null)
                 const Positioned(
                   left: 6,
                   top: 6,
@@ -7695,11 +7922,12 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
                     dotColor: Color(0xFFFF7A1A),
                   ),
                 ),
-              if (widget.renderer != GroupMiniMapRenderer.mapLibre)
-                const Positioned(
-                  right: 6,
-                  top: 6,
-                  child: _MiniMapBadge(
+              if (widget.expanded ||
+                  widget.renderer != GroupMiniMapRenderer.mapLibre)
+                Positioned(
+                  right: widget.expanded ? widget.safePadding.right : 6,
+                  top: widget.expanded ? widget.safePadding.top : 6,
+                  child: const _MiniMapBadge(
                     key: Key('mini-map-north-indicator'),
                     label: 'N ↑',
                   ),
@@ -7709,8 +7937,8 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
               // asked for exactly this: something that says at a glance whether
               // the group is spread over half a mile or 195 miles (#172).
               Positioned(
-                left: 7,
-                bottom: 6,
+                left: widget.expanded ? widget.safePadding.left : 7,
+                bottom: widget.expanded ? widget.safePadding.bottom : 6,
                 child: _MiniMapScaleBar(
                   width: widget.width,
                   points: [
@@ -7719,6 +7947,20 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
                   ],
                 ),
               ),
+              if (widget.expanded)
+                Positioned(
+                  key: const Key('relative-map-balloon-summary-position'),
+                  right: widget.safePadding.right,
+                  bottom: widget.safePadding.bottom,
+                  child: _BalloonRelativeSummary(
+                    distanceLabel:
+                        widget.balloonDistanceLabel ??
+                        'Waiting for balloon position',
+                    travelTimeLabel:
+                        widget.balloonTravelTimeLabel ??
+                        'Road time unavailable',
+                  ),
+                ),
             ],
           ),
         ),
@@ -7731,8 +7973,11 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
         key: const Key('group-mini-map-local-fallback'),
         painter: _GroupMiniMapPainter(
           routePaths: visibleRoutePaths,
+          trails: _snapshot().trails,
           currentPosition: widget.currentPosition,
+          balloonPoint: widget.balloonPoint,
           riders: widget.riders,
+          localCraftStyle: widget.localCraftStyle,
           localRiderSymbol: widget.localRiderSymbol,
           localDisplayName: widget.localDisplayName,
           brightness: Theme.of(context).brightness,
@@ -7779,6 +8024,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
   Widget _buildFlutterVectorMap(List<List<GeoPoint>> visibleRoutePaths) {
     final styleFuture = _vectorStyle;
     if (styleFuture == null) return _buildLocalOverview(visibleRoutePaths);
+    final miniSnapshot = _snapshot();
     return FutureBuilder<vmt.Style>(
       future: styleFuture,
       builder: (context, snapshot) {
@@ -7831,7 +8077,10 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
                   fileCacheTtl: Duration.zero,
                   fileCacheMaximumSizeInBytes: 0,
                 ),
-                if (visibleRoutePaths.isNotEmpty)
+                if (visibleRoutePaths.isNotEmpty ||
+                    miniSnapshot.trails.isNotEmpty ||
+                    (widget.currentPosition != null &&
+                        widget.balloonPoint != null))
                   PolylineLayer(
                     polylines: [
                       for (final path in visibleRoutePaths)
@@ -7851,6 +8100,40 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
                                 RouteTrailStyle.miniMapRoute.casingWidthPixels -
                                 RouteTrailStyle.miniMapRoute.widthPixels,
                           ),
+                      for (final trace in miniSnapshot.trails)
+                        Polyline(
+                          points: trace.points
+                              .map(
+                                (point) =>
+                                    LatLng(point.latitude, point.longitude),
+                              )
+                              .toList(growable: false),
+                          color: trace.effectiveColor,
+                          strokeWidth: trace.style.widthPixels,
+                          borderColor: RouteTrailStyle.casing,
+                          borderStrokeWidth:
+                              trace.style.fallbackBorderWidthPixels,
+                          pattern: trace.style.dashPixels == null
+                              ? const StrokePattern.solid()
+                              : StrokePattern.dashed(
+                                  segments: trace.style.dashPixels!,
+                                ),
+                        ),
+                      if (widget.currentPosition case final current?)
+                        if (widget.balloonPoint case final balloon?)
+                          Polyline(
+                            points: [
+                              LatLng(current.latitude, current.longitude),
+                              LatLng(balloon.latitude, balloon.longitude),
+                            ],
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                            borderColor: RouteTrailStyle.casing,
+                            borderStrokeWidth: 2.5,
+                            pattern: StrokePattern.dashed(
+                              segments: const [8, 7],
+                            ),
+                          ),
                     ],
                   ),
                 MarkerLayer(
@@ -7859,7 +8142,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
                       _vectorRiderMarker(
                         point: rider.point,
                         color: rider.color,
-                        size: 16,
+                        size: widget.expanded ? 28 : 16,
                         craftStyle: rider.craftStyle ?? craftIconStyleDefault,
                         riderSymbol: rider.riderSymbol,
                         displayName: rider.riderDisplayName ?? rider.label,
@@ -7868,7 +8151,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
                       _vectorRiderMarker(
                         point: point,
                         color: const Color(0xFFFF7A1A),
-                        size: 18,
+                        size: widget.expanded ? 30 : 18,
                         craftStyle: widget.localCraftStyle,
                         riderSymbol: widget.localRiderSymbol,
                         displayName: widget.localDisplayName,
@@ -7943,15 +8226,64 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
         ),
         enableInteraction: false,
       );
+      await controller.addGeoJsonSource(_trailSource, _trailGeoJson(snapshot));
+      await controller.addLineLayer(
+        _trailSource,
+        'balloon-crumbs-mini-trail-casing',
+        const ml.LineLayerProperties(
+          lineColor: RouteTrailStyle.casingHex,
+          lineWidth: ['get', 'casingWidth'],
+          lineCap: 'round',
+          lineJoin: 'round',
+        ),
+        enableInteraction: false,
+      );
+      await controller.addLineLayer(
+        _trailSource,
+        'balloon-crumbs-mini-trails',
+        const ml.LineLayerProperties(
+          lineColor: ['get', 'color'],
+          lineWidth: ['get', 'width'],
+          lineCap: 'round',
+          lineJoin: 'round',
+        ),
+        enableInteraction: false,
+      );
+      await controller.addGeoJsonSource(
+        _separationSource,
+        _separationGeoJson(snapshot),
+      );
+      await controller.addLineLayer(
+        _separationSource,
+        'balloon-crumbs-mini-separation-casing',
+        const ml.LineLayerProperties(
+          lineColor: RouteTrailStyle.casingHex,
+          lineWidth: 5,
+          lineDasharray: [3.2, 2.8],
+          lineCap: 'round',
+        ),
+        enableInteraction: false,
+      );
+      await controller.addLineLayer(
+        _separationSource,
+        'balloon-crumbs-mini-separation',
+        const ml.LineLayerProperties(
+          lineColor: '#FFFFFF',
+          lineWidth: 2.5,
+          lineDasharray: [3.2, 2.8],
+          lineCap: 'round',
+        ),
+        enableInteraction: false,
+      );
       await controller.addGeoJsonSource(_riderSource, _riderGeoJson(snapshot));
       await controller.addCircleLayer(
         _riderSource,
         'balloon-crumbs-mini-rider-circles',
-        const ml.CircleLayerProperties(
-          circleRadius: _miniBadgeRadius,
-          circleColor: ['get', 'color'],
-          circleStrokeWidth: 1.5,
-          circleStrokeColor: ['get', 'strokeColor'],
+        ml.CircleLayerProperties(
+          circleRadius: widget.expanded ? 12 : _miniBadgeRadius,
+          circleColor: const ['get', 'color'],
+          circleStrokeWidth: widget.expanded ? 2.5 : 1.5,
+          circleStrokeColor: const ['get', 'strokeColor'],
         ),
         enableInteraction: false,
       );
@@ -7963,7 +8295,7 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
           iconColor: RouteTrailStyle.markerGlyphHex,
           // The same rule as the main map, at this map's badge size (#259).
           iconSize: _RideMapScreenState._riderIconSize(
-            _miniBadgeRadius * 2,
+            (widget.expanded ? 12 : _miniBadgeRadius) * 2,
             0.09,
           ),
           iconAllowOverlap: true,
@@ -8002,6 +8334,14 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
         await controller.setGeoJsonSource(
           _routeSource,
           _routeGeoJson(snapshot),
+        );
+        await controller.setGeoJsonSource(
+          _trailSource,
+          _trailGeoJson(snapshot),
+        );
+        await controller.setGeoJsonSource(
+          _separationSource,
+          _separationGeoJson(snapshot),
         );
         await controller.setGeoJsonSource(
           _riderSource,
@@ -8067,6 +8407,42 @@ class _GroupMiniMapState extends State<_GroupMiniMap> {
 
   Map<String, dynamic> _routeGeoJson(_MiniMapSnapshot snapshot) =>
       MapGeoJson.lines(_visibleRoutePaths(snapshot), idPrefix: 'mini-route');
+
+  Map<String, dynamic> _trailGeoJson(_MiniMapSnapshot snapshot) => {
+    'type': 'FeatureCollection',
+    'features': [
+      for (final trace in snapshot.trails)
+        {
+          'type': 'Feature',
+          'id': trace.id,
+          'properties': {
+            'color': _hexColor(trace.effectiveColor),
+            'width': trace.style.widthPixels,
+            'casingWidth': trace.style.casingWidthPixels,
+          },
+          'geometry': {
+            'type': 'LineString',
+            'coordinates': [
+              for (final point in trace.points)
+                [point.longitude, point.latitude],
+            ],
+          },
+        },
+    ],
+  };
+
+  Map<String, dynamic> _separationGeoJson(_MiniMapSnapshot snapshot) {
+    final current = snapshot.currentPosition;
+    final balloon = widget.balloonPoint;
+    return MapGeoJson.lines(
+      current == null || balloon == null
+          ? const []
+          : [
+              [current, balloon],
+            ],
+      idPrefix: 'balloon-separation',
+    );
+  }
 
   /// The mini-map follows the group, not the entire ride. Rendering a long
   /// route in a tight group viewport creates clipped, disconnected-looking
@@ -8241,6 +8617,68 @@ class _MiniMapBadge extends StatelessWidget {
   );
 }
 
+class _BalloonRelativeSummary extends StatelessWidget {
+  const _BalloonRelativeSummary({
+    required this.distanceLabel,
+    required this.travelTimeLabel,
+  });
+
+  final String distanceLabel;
+  final String travelTimeLabel;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    key: const Key('relative-map-balloon-summary'),
+    container: true,
+    label: 'Balloon $distanceLabel. $travelTimeLabel.',
+    child: Container(
+      constraints: const BoxConstraints(maxWidth: 205),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xE6252E39),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x80566273)),
+        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6)],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.air_outlined, size: 22, color: Color(0xFF72D5A4)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'BALLOON · $distanceLabel',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.25,
+                  ),
+                ),
+                Text(
+                  travelTimeLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFC4CDD8),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _MiniMapScaleBar extends StatelessWidget {
   const _MiniMapScaleBar({required this.width, required this.points});
 
@@ -8342,16 +8780,22 @@ class _MiniMapScaleBar extends StatelessWidget {
 class _GroupMiniMapPainter extends CustomPainter {
   const _GroupMiniMapPainter({
     required this.routePaths,
+    required this.trails,
     required this.currentPosition,
+    required this.balloonPoint,
     required this.riders,
+    required this.localCraftStyle,
     required this.localRiderSymbol,
     required this.localDisplayName,
     required this.brightness,
   });
 
   final List<List<GeoPoint>> routePaths;
+  final List<MapOverlayTrace> trails;
   final GeoPoint? currentPosition;
+  final GeoPoint? balloonPoint;
   final List<MapOverlayMarker> riders;
+  final CraftIconStyle localCraftStyle;
   final RiderSymbol localRiderSymbol;
   final String localDisplayName;
   final Brightness brightness;
@@ -8406,6 +8850,61 @@ class _GroupMiniMapPainter extends CustomPainter {
       gridPaint,
     );
 
+    void drawGeoPath(List<GeoPoint> points, RouteLineStyle style) {
+      if (points.length < 2) return;
+      final path = ui.Path()
+        ..moveTo(project(points.first).dx, project(points.first).dy);
+      final stride = math.max(1, points.length ~/ 1200);
+      for (var index = stride; index < points.length; index += stride) {
+        final offset = project(points[index]);
+        path.lineTo(offset.dx, offset.dy);
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = RouteTrailStyle.casing
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = style.casingWidthPixels
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = style.color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = style.widthPixels
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    for (final trace in trails) {
+      drawGeoPath(trace.points, trace.style.withColor(trace.effectiveColor));
+    }
+
+    if (currentPosition != null && balloonPoint != null) {
+      final from = project(currentPosition!);
+      final to = project(balloonPoint!);
+      final direct = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round;
+      const dash = 8.0;
+      const gap = 7.0;
+      final delta = to - from;
+      final length = delta.distance;
+      if (length > 0) {
+        final direction = delta / length;
+        for (var travelled = 0.0; travelled < length; travelled += dash + gap) {
+          final start = from + direction * travelled;
+          final end = from + direction * math.min(travelled + dash, length);
+          canvas.drawLine(start, end, direct);
+        }
+      }
+    }
+
     for (final route in routePaths.where((path) => path.length >= 2)) {
       final path = ui.Path()
         ..moveTo(project(route.first).dx, project(route.first).dy);
@@ -8442,6 +8941,7 @@ class _GroupMiniMapPainter extends CustomPainter {
       double radius,
       RiderSymbol symbol,
       String displayName,
+      CraftIconStyle craftStyle,
     ) {
       canvas.drawCircle(offset, radius + 2, Paint()..color = Colors.black87);
       canvas.drawCircle(offset, radius, Paint()..color = color);
@@ -8453,7 +8953,72 @@ class _GroupMiniMapPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
       );
-      if (symbol.kind == RiderSymbolKind.craft) return;
+      if (symbol.kind == RiderSymbolKind.craft) {
+        final glyph = Paint()
+          ..color = RouteTrailStyle.markerGlyph
+          ..style = PaintingStyle.fill
+          ..strokeWidth = math.max(1.0, radius * 0.15)
+          ..strokeCap = StrokeCap.round;
+        if (craftStyle == CraftIconStyle.balloon) {
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: offset.translate(0, -radius * 0.18),
+              width: radius * 0.9,
+              height: radius * 1.05,
+            ),
+            glyph,
+          );
+          canvas.drawLine(
+            offset.translate(-radius * 0.18, radius * 0.25),
+            offset.translate(-radius * 0.1, radius * 0.48),
+            glyph..style = PaintingStyle.stroke,
+          );
+          canvas.drawLine(
+            offset.translate(radius * 0.18, radius * 0.25),
+            offset.translate(radius * 0.1, radius * 0.48),
+            glyph,
+          );
+          canvas.drawRect(
+            Rect.fromCenter(
+              center: offset.translate(0, radius * 0.58),
+              width: radius * 0.45,
+              height: radius * 0.25,
+            ),
+            glyph..style = PaintingStyle.fill,
+          );
+        } else {
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                center: offset.translate(0, radius * 0.1),
+                width: radius * 1.2,
+                height: radius * 0.65,
+              ),
+              Radius.circular(radius * 0.12),
+            ),
+            glyph,
+          );
+          canvas.drawRect(
+            Rect.fromCenter(
+              center: offset.translate(-radius * 0.15, -radius * 0.3),
+              width: radius * 0.65,
+              height: radius * 0.38,
+            ),
+            glyph,
+          );
+          canvas.drawCircle(
+            offset.translate(-radius * 0.38, radius * 0.48),
+            radius * 0.16,
+            glyph,
+          );
+          canvas.drawCircle(
+            offset.translate(radius * 0.38, radius * 0.48),
+            radius * 0.16,
+            glyph,
+          );
+        }
+        return;
+      }
       final text = symbol.kind == RiderSymbolKind.initials
           ? riderInitials(displayName)
           : symbol.emoji!;
@@ -8496,6 +9061,7 @@ class _GroupMiniMapPainter extends CustomPainter {
             double radius,
             RiderSymbol symbol,
             String displayName,
+            CraftIconStyle craftStyle,
           })
         >[
           for (final rider in riders)
@@ -8505,6 +9071,7 @@ class _GroupMiniMapPainter extends CustomPainter {
               radius: 7,
               symbol: rider.riderSymbol,
               displayName: rider.riderDisplayName ?? rider.label,
+              craftStyle: rider.craftStyle ?? craftIconStyleDefault,
             ),
           if (currentPosition case final point?)
             (
@@ -8513,6 +9080,7 @@ class _GroupMiniMapPainter extends CustomPainter {
               radius: 8,
               symbol: localRiderSymbol,
               displayName: localDisplayName,
+              craftStyle: localCraftStyle,
             ),
         ];
     final placedOffsets = <Offset>[];
@@ -8535,7 +9103,14 @@ class _GroupMiniMapPainter extends CustomPainter {
         offset.dy.clamp(7.0, size.height - 7.0),
       );
       placedOffsets.add(offset);
-      drawRider(offset, dot.color, dot.radius, dot.symbol, dot.displayName);
+      drawRider(
+        offset,
+        dot.color,
+        dot.radius,
+        dot.symbol,
+        dot.displayName,
+        dot.craftStyle,
+      );
     }
   }
 

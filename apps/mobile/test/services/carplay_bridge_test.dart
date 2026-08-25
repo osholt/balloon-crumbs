@@ -72,6 +72,7 @@ void main() {
       'remainingRoutePoints': <Object?>[],
       'riddenRoutePoints': <Object?>[],
       'journeyProgress': null,
+      'routeTargetsBalloon': false,
       'guidanceTitle': 'turn right',
       'guidanceDetail': '400 m · A27',
       'guidanceRoadName': null,
@@ -141,6 +142,7 @@ void main() {
       mapOrientation: MapOrientationMode.northUp,
       voiceMode: 'Alerts only',
       voiceMuted: false,
+      routeTargetsBalloon: true,
       craftLocations: const [
         CarPlayCraftLocation(
           id: 'balloon',
@@ -186,6 +188,7 @@ void main() {
     expect(snapshot['mapOrientation'], 'northUp');
     expect(snapshot['voiceMode'], 'Alerts only');
     expect(snapshot['voiceMuted'], isFalse);
+    expect(snapshot['routeTargetsBalloon'], isTrue);
     expect(snapshot['riders'], hasLength(1));
     expect(
       (snapshot['riders'] as List).single,
