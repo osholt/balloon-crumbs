@@ -166,6 +166,11 @@ submission uses the separate App Manager key. The `submit_external` workflow
 input defaults to true and the operation is idempotent: a retry leaves an
 existing group assignment or active review submission in place.
 
+To submit an already-processed build without rebuilding or uploading its IPA,
+run the `TestFlight status` workflow with that build number and
+`submit_external` enabled. With the option disabled, the same workflow remains
+a read-only status check.
+
 OpenAIP is not a mobile release secret. Aeronautical charts are optional
 planner-only context and the planner reaches them through the relay's bounded
 server-side proxy, so TestFlight binaries contain no OpenAIP credential.
