@@ -7,19 +7,20 @@ matched to its changes.
 
 ## Next tester build
 
-- Fixes web-planner codes so the app loads the saved flight through the live
-  relay instead of receiving the planner webpage as an invalid response.
-- Fixes **Open in Balloon Crumbs** for both iOS and Play-installed Android
-  builds by aligning the native link handlers and signed domain association.
-- Restores the same relay path for creating and joining live rides with a
-  six-digit ride code.
-- Adds **Plan a balloon flight** to the home map's More menu and opens the live
-  planner in the iOS/Android in-app browser.
-- Includes the planner's maximum-altitude landing envelope, draggable launch
-  and destination points, wind-route search, and timed altitude profile without
-  maintaining a second forecast implementation in the app.
-- Keeps the planner's Open-Meteo/OpenAIP source labels and advisory safety
-  warning visible.
+- Lets the person creating a flight choose Pilot, balloon crew, chase driver,
+  or chase crew instead of assuming that the creator is the Pilot.
+- Lets a joining balloonist request Pilot, with a deliberate assignment and
+  acceptance step so an invitation cannot silently seize flight authority.
+- Makes reusable crew rooms such as `TUCKER` selectable during flight creation
+  and clearly distinguishes the persistent room name from the fresh private
+  six-digit invitation for each launch.
+- Preserves the creator's selected role and chase-vehicle name when starting a
+  fresh flight in the same crew room.
+- Shows the chase split view immediately in phone landscape: a complete
+  north-up crew/balloon overview on the left and direction-up road guidance on
+  the right, including the waiting state before the first balloon fix.
+- Keeps that landscape presentation aligned with CarPlay, including shared
+  tracks, balloon context, road distance, and travel time.
 
 ## 1.0.1 (Play build 26 / TestFlight build 27) — 21 August 2026
 
