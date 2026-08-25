@@ -80,7 +80,13 @@ class DeviceAuthorityPolicy {
         return false;
       }
       _pilotDeviceId = event.deviceId;
-      _roles[event.deviceId] = FlightRole.pilot;
+      final operationalRole = flightRoleFromName(
+        event.payload['operationalFlightRole'],
+        fallback: FlightRole.pilot,
+      );
+      _roles[event.deviceId] = operationalRole == FlightRole.observer
+          ? FlightRole.pilot
+          : operationalRole;
       return true;
     }
     if (event.type != RideEventType.riderJoined) {
@@ -172,7 +178,9 @@ class DeviceAuthorityPolicy {
               offer.offeredAt.subtract(PilotAuthorityReducer.maximumClockSkew),
             )) {
           final previousPilot = _pilotDeviceId!;
-          _roles[previousPilot] = FlightRole.balloonCrew;
+          if (_roles[previousPilot] == FlightRole.pilot) {
+            _roles[previousPilot] = FlightRole.balloonCrew;
+          }
           _roles[event.deviceId] = FlightRole.pilot;
           _pilotDeviceId = event.deviceId;
         }

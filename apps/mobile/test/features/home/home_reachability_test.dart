@@ -14,6 +14,7 @@ import 'package:balloon_crumbs/data/in_memory_event_store.dart';
 import 'package:balloon_crumbs/data/in_memory_session_store.dart';
 import 'package:balloon_crumbs/domain/completed_ride.dart';
 import 'package:balloon_crumbs/domain/completed_ride_store.dart';
+import 'package:balloon_crumbs/domain/flight_role.dart';
 import 'package:balloon_crumbs/domain/rider_color.dart';
 import 'package:balloon_crumbs/domain/recorded_route_store.dart';
 import 'package:balloon_crumbs/domain/ride_session.dart';
@@ -179,11 +180,45 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('crew-room-alias-field')), findsOneWidget);
-    expect(find.text('Reusable crew room (optional)'), findsOneWidget);
+    expect(find.text('Reusable crew room code (optional)'), findsOneWidget);
     expect(
-      find.textContaining('private device access cannot be guessed'),
+      find.textContaining('every launch still has a fresh private invitation'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('the flight creator chooses their operational role', (
+    tester,
+  ) async {
+    await pumpHome(tester);
+    await tester.tap(find.text('Create flight'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('create-role-pilot')), findsOneWidget);
+    expect(find.byKey(const Key('create-role-chaseDriver')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('create-role-chaseDriver')));
+    await tester.pump();
+    expect(find.byKey(const Key('create-vehicle-label-field')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('rider-name-field')), 'Oliver');
+
+    await tester.scrollUntilVisible(
+      find.widgetWithText(FilledButton, 'Create private flight'),
+      180,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('ride-form-scroll-view')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Create private flight'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(rideController.session?.flightRole, FlightRole.chaseDriver);
+    expect(rideController.localCraft?.isBalloon, isFalse);
+    expect(rideController.hasFlightAuthority, isTrue);
   });
 
   testWidgets('a past ride is reachable by words alone', (tester) async {

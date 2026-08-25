@@ -160,6 +160,7 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
                     runSpacing: 8,
                     children: [
                       for (final role in const [
+                        FlightRole.pilot,
                         FlightRole.balloonCrew,
                         FlightRole.chaseDriver,
                         FlightRole.chaseCrew,
@@ -173,6 +174,13 @@ class _RideInvitationLinkGateState extends State<RideInvitationLinkGate> {
                         ),
                     ],
                   ),
+                  if (selectedRole == FlightRole.pilot) ...[
+                    const SizedBox(height: 10),
+                    const Text(
+                      'You will join the balloon crew and request Pilot. The current coordinator must assign it, and you must accept.',
+                      style: TextStyle(color: Color(0xFFABB5C1), fontSize: 13),
+                    ),
+                  ],
                   if (selectedRole.isChasing) ...[
                     const SizedBox(height: 14),
                     TextField(

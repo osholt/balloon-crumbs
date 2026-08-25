@@ -48,6 +48,11 @@ void main() {
       expect(controller.currentCrewRoom?.alias, 'TUCKER');
       expect(controller.currentCrewRoom?.owner, isTrue);
       expect(controller.currentCrewRoom?.inviteToken, startsWith('cri1_'));
+      expect(controller.rideCodeShareText, contains('TUCKER crew room'));
+      expect(
+        controller.rideCodeShareText,
+        contains('private code for this launch'),
+      );
       final firstRideId = controller.session!.rideId;
       final membership = controller.currentCrewRoom!;
 
@@ -67,6 +72,32 @@ void main() {
         isTrue,
       );
       expect(directory.startedRideIds, [controller.session!.rideId]);
+    },
+  );
+
+  test(
+    'the room owner keeps their chosen chase role on fresh flights',
+    () async {
+      await controller.createRide(
+        'Oliver',
+        crewRoomAlias: 'TUCKER',
+        flightRole: FlightRole.chaseDriver,
+        vehicleLabel: 'Recovery One',
+      );
+      final membership = controller.currentCrewRoom!;
+      expect(membership.flightRole, FlightRole.chaseDriver);
+      expect(membership.vehicleLabel, 'Recovery One');
+
+      await controller.startRide();
+      await controller.endRide();
+      await controller.startNewCrewRoomOperation(
+        membership,
+        displayName: 'Oliver',
+      );
+
+      expect(controller.session?.flightRole, FlightRole.chaseDriver);
+      expect(controller.localCraft?.craft.label, 'Recovery One');
+      expect(controller.hasFlightAuthority, isTrue);
     },
   );
 

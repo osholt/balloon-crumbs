@@ -801,9 +801,9 @@ class _RideActionsPanel extends StatelessWidget {
             ListTile(
               key: const Key('flight-offer-pilot-handover'),
               leading: const Icon(Icons.swap_horiz_rounded),
-              title: const Text('Transfer pilot role'),
+              title: const Text('Assign pilot'),
               subtitle: const Text(
-                'Offer authority to an active crew member in the balloon',
+                'Confirm a Pilot request or transfer authority in the balloon',
               ),
               onTap: onOfferPilotHandover,
             ),
@@ -4935,6 +4935,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       showRouteProgress:
           isDriverView && (widget.routeProgressDisplay?.enabled ?? true),
       routeTargetsBalloon: _chaseGuidanceTarget == ChaseGuidanceTarget.balloon,
+      showLandscapeChaseSplit: _isChaserPerspective,
       darkMapStyle: widget.mapStyleMode.resolveDark(
         MediaQuery.platformBrightnessOf(context),
       ),
@@ -6454,7 +6455,8 @@ class _ActiveRideShellState extends State<ActiveRideShell>
     final balloonDeviceIds =
         widget.rideController.resolveCraftRoster().balloon?.deviceIds.toSet() ??
         const <String>{};
-    return widget.rideController.liveParticipants
+    final requested = widget.rideController.requestedPilotDeviceIds;
+    final targets = widget.rideController.liveParticipants
         .where(
           (participant) =>
               !participant.isLocal &&
@@ -6462,6 +6464,12 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               balloonDeviceIds.contains(participant.riderId),
         )
         .toList(growable: false);
+    return targets..sort((left, right) {
+      final leftRequested = requested.contains(left.riderId);
+      final rightRequested = requested.contains(right.riderId);
+      if (leftRequested != rightRequested) return leftRequested ? -1 : 1;
+      return left.displayName.compareTo(right.displayName);
+    });
   }
 
   String? get _pendingPilotHandoverFrom {
@@ -6493,9 +6501,9 @@ class _ActiveRideShellState extends State<ActiveRideShell>
         mainAxisSize: MainAxisSize.min,
         children: [
           const ListTile(
-            title: Text('Transfer pilot role'),
+            title: Text('Assign pilot'),
             subtitle: Text(
-              'Choose someone in the balloon. They become pilot only after accepting the ten-minute offer; you remain pilot until then.',
+              'Choose someone in the balloon. They become Pilot only after accepting the ten-minute offer; you retain flight authority until then.',
             ),
           ),
           for (final participant in targets)
@@ -6503,7 +6511,13 @@ class _ActiveRideShellState extends State<ActiveRideShell>
               key: Key('pilot-handover-target-${participant.riderId}'),
               leading: const Icon(Icons.person_outline),
               title: Text(participant.displayName),
-              subtitle: Text(participant.stateLabel),
+              subtitle: Text(
+                widget.rideController.requestedPilotDeviceIds.contains(
+                      participant.riderId,
+                    )
+                    ? 'Requested Pilot · ${participant.stateLabel}'
+                    : participant.stateLabel,
+              ),
               onTap: () => Navigator.pop(sheetContext, participant),
             ),
           const SizedBox(height: 12),
@@ -6518,7 +6532,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       SnackBar(
         content: Text(
           error ??
-              'Pilot handover offered to ${target.displayName}. You retain authority until they accept.',
+              'Pilot assignment offered to ${target.displayName}. You retain authority until they accept.',
         ),
       ),
     );
@@ -6533,7 +6547,7 @@ class _ActiveRideShellState extends State<ActiveRideShell>
       builder: (dialogContext) => AlertDialog(
         title: const Text('Accept pilot authority?'),
         content: Text(
-          '${pilot?.displayName ?? 'The current pilot'} will become balloon crew and this device will gain authority to update landing intent and end the flight.',
+          '${pilot?.displayName ?? 'The current coordinator'} will no longer hold flight authority. This device will become Pilot and can update landing intent and end the flight.',
         ),
         actions: [
           TextButton(

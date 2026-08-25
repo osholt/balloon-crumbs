@@ -116,6 +116,52 @@ void main() {
   );
 
   test(
+    'a chase crew creator coordinates setup without becoming Pilot',
+    () async {
+      await controller.createRide(
+        'Oliver',
+        flightRole: FlightRole.chaseCrew,
+        vehicleLabel: 'Recovery One',
+      );
+
+      expect(controller.session?.flightRole, FlightRole.chaseCrew);
+      expect(controller.localCraft?.isBalloon, isFalse);
+      expect(controller.localCraft?.craft.label, 'Recovery One');
+      expect(controller.resolveCraftRoster().balloon, isNotNull);
+      expect(controller.hasFlightAuthority, isTrue);
+      final created = controller.events.first;
+      expect(created.payload['flightRole'], FlightRole.pilot.name);
+      expect(
+        created.payload['operationalFlightRole'],
+        FlightRole.chaseCrew.name,
+      );
+    },
+  );
+
+  test(
+    'choosing Pilot while joining makes an explicit assignment request',
+    () async {
+      await controller.createRide('Oliver');
+      final joiningPilot = await joinedController(FlightRole.pilot);
+
+      expect(joiningPilot.session?.flightRole, FlightRole.balloonCrew);
+      expect(joiningPilot.localCraft?.isBalloon, isTrue);
+      expect(joiningPilot.hasFlightAuthority, isFalse);
+      final joined = joiningPilot.events.singleWhere(
+        (event) => event.type == RideEventType.riderJoined,
+      );
+      expect(joined.payload['requestedFlightRole'], FlightRole.pilot.name);
+      for (final event in joiningPilot.events) {
+        controller.ingestStoredEvent(event);
+      }
+      expect(
+        controller.requestedPilotDeviceIds,
+        contains(joiningPilot.session!.localRiderId),
+      );
+    },
+  );
+
+  test(
     'pilot handover is offered, accepted and applied on both devices',
     () async {
       await controller.createRide('Oliver');

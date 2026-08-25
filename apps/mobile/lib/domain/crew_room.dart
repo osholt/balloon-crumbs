@@ -84,6 +84,8 @@ class CrewRoomMembership {
 
   CrewRoomMembership copyWith({
     String? alias,
+    FlightRole? flightRole,
+    String? vehicleLabel,
     bool? owner,
     int? operationGeneration,
     DateTime? operationExpiresAt,
@@ -94,8 +96,8 @@ class CrewRoomMembership {
     deviceId: deviceId,
     deviceCredential: deviceCredential,
     displayName: displayName,
-    flightRole: flightRole,
-    vehicleLabel: vehicleLabel,
+    flightRole: flightRole ?? this.flightRole,
+    vehicleLabel: vehicleLabel ?? this.vehicleLabel,
     owner: owner ?? this.owner,
     operationGeneration: operationGeneration ?? this.operationGeneration,
     operationExpiresAt: operationExpiresAt ?? this.operationExpiresAt,

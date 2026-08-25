@@ -147,6 +147,7 @@ class RideController extends ChangeNotifier {
   /// never reached this phone's journal (#144).
   List<PresenceRosterMember> _presenceRoster = const [];
   List<RideParticipant>? _membershipParticipantsCache;
+  Set<String>? _requestedPilotDeviceIdsCache;
   int _membershipProjectionCount = 0;
   LandingZoneTarget? _landingZoneCache;
   bool _landingZoneDirty = true;
@@ -257,6 +258,32 @@ class RideController extends ChangeNotifier {
   PilotHandoverOffer? get pendingLocalPilotHandover {
     final localId = _session?.localRiderId;
     return localId == null ? null : pilotAuthority.pendingFor(localId);
+  }
+
+  /// Devices that chose Pilot while joining and are waiting for the current
+  /// flight coordinator to offer the existing two-party authority handover.
+  ///
+  /// The request is deliberately advisory: possession of an invitation must
+  /// never be enough to take control of a flight.
+  Set<String> get requestedPilotDeviceIds {
+    final cached = _requestedPilotDeviceIdsCache;
+    if (cached != null) return cached;
+    final requests = <String>{};
+    final ordered = _events.toList(growable: false)
+      ..sort(RideLifecycleReducer.compareEvents);
+    for (final event in ordered) {
+      if (event.type == RideEventType.riderJoined) {
+        if (event.payload['requestedFlightRole'] == FlightRole.pilot.name) {
+          requests.add(event.deviceId);
+        } else {
+          requests.remove(event.deviceId);
+        }
+      } else if (event.type == RideEventType.pilotHandoverAccepted) {
+        final assigned = event.payload['toDeviceId'];
+        if (assigned is String) requests.remove(assigned);
+      }
+    }
+    return _requestedPilotDeviceIdsCache = Set.unmodifiable(requests);
   }
 
   String? get localCraftId => _session?.localCraftId;
@@ -501,6 +528,7 @@ class RideController extends ChangeNotifier {
 
   void _invalidateMembershipProjection() {
     _membershipParticipantsCache = null;
+    _requestedPilotDeviceIdsCache = null;
   }
 
   /// Whether the ride has ended, by the later of its end and reopen events.
@@ -658,6 +686,7 @@ class RideController extends ChangeNotifier {
     final activeSession = _requireSession();
     final name = activeSession.rideName;
     final group = name == null ? 'my Balloon Crumbs group' : '"$name"';
+    final room = currentCrewRoom;
     final invite = joinInviteText(
       activeSession.rideCode,
       activeSession.joinToken,
@@ -666,7 +695,8 @@ class RideController extends ChangeNotifier {
       activeSession.rideCode,
       activeSession.joinToken,
     );
-    return 'Join $group in Balloon Crumbs: $link\n\n'
+    return '${room == null ? '' : '${room.alias} crew room · private code for this launch ${activeSession.rideCode}\n\n'}'
+        'Join $group in Balloon Crumbs: $link\n\n'
         'Enter flight code ${activeSession.rideCode} in the app, or paste this '
         'private invite: $invite.';
   }
@@ -831,6 +861,8 @@ class RideController extends ChangeNotifier {
     RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,
     String? rideName,
     String? crewRoomAlias,
+    FlightRole flightRole = FlightRole.pilot,
+    String vehicleLabel = 'Land Rover',
   }) async {
     await _run(() async {
       final roomAlias = crewRoomAlias == null || crewRoomAlias.trim().isEmpty
@@ -843,6 +875,8 @@ class RideController extends ChangeNotifier {
         riderColor: riderColor,
         coordinationMode: coordinationMode,
         rideName: rideName,
+        flightRole: flightRole,
+        vehicleLabel: vehicleLabel,
       );
       if (roomAlias != null) {
         final operation = _requireSession();
@@ -860,7 +894,8 @@ class RideController extends ChangeNotifier {
             deviceId: deviceId,
             deviceCredential: access.deviceCredential,
             displayName: operation.displayName,
-            flightRole: FlightRole.pilot,
+            flightRole: operation.flightRole,
+            vehicleLabel: vehicleLabel,
             owner: access.owner,
             operationGeneration: access.operationGeneration,
             operationExpiresAt: access.operationExpiresAt,
@@ -884,6 +919,9 @@ class RideController extends ChangeNotifier {
     CraftIconStyle craftStyle = craftIconStyleDefault,
     RiderSymbol riderSymbol = riderSymbolDefault,
     RiderColor riderColor = riderColorDefault,
+    String? rideName,
+    FlightRole? flightRole,
+    String? vehicleLabel,
   }) async {
     await _run(() async {
       if (!membership.owner) {
@@ -891,6 +929,8 @@ class RideController extends ChangeNotifier {
           'Only the crew room owner can start a fresh flight.',
         );
       }
+      final operationRole = flightRole ?? membership.flightRole;
+      final operationVehicle = vehicleLabel ?? membership.vehicleLabel;
       await _createRide(
         displayName: displayName,
         craftStyle: craftStyle,
@@ -898,6 +938,9 @@ class RideController extends ChangeNotifier {
         riderColor: riderColor,
         coordinationMode: RideCoordinationMode.keepTogether,
         crewRoomId: membership.roomId,
+        rideName: rideName,
+        flightRole: operationRole,
+        vehicleLabel: operationVehicle,
       );
       final operation = _requireSession();
       try {
@@ -907,6 +950,8 @@ class RideController extends ChangeNotifier {
         );
         await _saveCrewRoomMembership(
           membership.copyWith(
+            flightRole: operationRole,
+            vehicleLabel: operationVehicle,
             operationGeneration: access.operationGeneration,
             operationExpiresAt: access.operationExpiresAt,
             inviteToken: access.inviteToken,
@@ -950,7 +995,7 @@ class RideController extends ChangeNotifier {
           deviceId: membership.deviceId,
           deviceCredential: access.deviceCredential,
           displayName: membership.displayName,
-          flightRole: membership.flightRole,
+          flightRole: _requireSession().flightRole,
           vehicleLabel: membership.vehicleLabel,
           owner: access.owner,
           operationGeneration: access.operationGeneration,
@@ -1009,7 +1054,7 @@ class RideController extends ChangeNotifier {
           deviceId: deviceId,
           deviceCredential: access.deviceCredential,
           displayName: _normaliseName(displayName),
-          flightRole: flightRole,
+          flightRole: _requireSession().flightRole,
           vehicleLabel: vehicleLabel,
           owner: access.owner,
           operationGeneration: access.operationGeneration,
@@ -1224,7 +1269,7 @@ class RideController extends ChangeNotifier {
             deviceId: roomDeviceId,
             deviceCredential: access.deviceCredential,
             displayName: _normaliseName(displayName),
-            flightRole: flightRole,
+            flightRole: _requireSession().flightRole,
             vehicleLabel: vehicleLabel,
             owner: access.owner,
             operationGeneration: access.operationGeneration,
@@ -1314,13 +1359,16 @@ class RideController extends ChangeNotifier {
         joinToken: joinToken,
       );
       final now = _clock();
-      if ((flightRole == FlightRole.pilot && !allowPilotRole) ||
-          flightRole == FlightRole.observer) {
+      if (flightRole == FlightRole.observer) {
         throw const FormatException(
-          'Join as balloon crew, a chase driver, or chase crew.',
+          'Join as pilot, balloon crew, a chase driver, or chase crew.',
         );
       }
-      final craftKind = flightRole.isAboardBalloon
+      final requestedPilot = flightRole == FlightRole.pilot && !allowPilotRole;
+      final assignedFlightRole = requestedPilot
+          ? FlightRole.balloonCrew
+          : flightRole;
+      final craftKind = assignedFlightRole.isAboardBalloon
           ? CraftKind.balloon
           : CraftKind.vehicle;
       final craftLabel = craftKind == CraftKind.balloon
@@ -1346,8 +1394,10 @@ class RideController extends ChangeNotifier {
         authorityRootPublicKey: authorityRootPublicKey,
         localDevicePublicKey: identity?.publicKey,
         displayName: _normaliseName(displayName),
-        role: flightRole == FlightRole.pilot ? RideRole.lead : RideRole.rider,
-        flightRole: flightRole,
+        role: assignedFlightRole == FlightRole.pilot
+            ? RideRole.lead
+            : RideRole.rider,
+        flightRole: assignedFlightRole,
         localCraftId: craftId,
         joinedAt: now,
         craftStyle: craftStyle.kind == craftKind
@@ -1370,6 +1420,7 @@ class RideController extends ChangeNotifier {
           'displayName': session.displayName,
           'role': session.role.name,
           'flightRole': session.flightRole.name,
+          if (requestedPilot) 'requestedFlightRole': FlightRole.pilot.name,
           ...craftStyleWireFields(
             symbol: session.riderSymbol,
             craftStyle: session.craftStyle,
@@ -1484,7 +1535,7 @@ class RideController extends ChangeNotifier {
       if (!hasFlightAuthority ||
           pilotAuthority.pilotDeviceId != session.localRiderId) {
         throw const FormatException(
-          'Only the current pilot can offer handover.',
+          'Only the current flight coordinator can assign the pilot.',
         );
       }
       final balloon = resolveCraftRoster().balloon;
@@ -1495,7 +1546,7 @@ class RideController extends ChangeNotifier {
           target.flightRole != FlightRole.balloonCrew ||
           !target.isIncludedInLiveCount) {
         throw const FormatException(
-          'Choose an active balloon crew member for pilot handover.',
+          'Choose an active balloon crew member to assign as pilot.',
         );
       }
       final now = _clock();
@@ -1757,13 +1808,22 @@ class RideController extends ChangeNotifier {
   /// reporting device, or declare a landing.
   ///
   /// The inherited leader flag remains on the wire for older builds, but it no
-  /// longer grants authority. A restored legacy session is deliberately denied
-  /// authority until its explicit flight assignment has been repaired.
+  /// longer grants authority in device-signed flights. A restored version-one
+  /// creator is deliberately denied authority until they explicitly repair the
+  /// assignment as Pilot; version-one has no signed creation event from which
+  /// stronger authority can be reconstructed.
   bool get hasFlightAuthority {
     final session = _session;
-    return session != null &&
-        !session.requiresFlightAssignment &&
-        session.flightRole.hasFlightAuthority;
+    if (session == null || session.requiresFlightAssignment) return false;
+    final journalPilotDeviceId = pilotAuthority.pilotDeviceId;
+    if (journalPilotDeviceId != null) {
+      return journalPilotDeviceId == session.localRiderId;
+    }
+    if (!session.usesDeviceAuthority) {
+      return session.role == RideRole.lead &&
+          session.flightRole == FlightRole.pilot;
+    }
+    return false;
   }
 
   /// Whether this device may record balloon release and begin live tracking.
@@ -2771,6 +2831,8 @@ class RideController extends ChangeNotifier {
     RideCoordinationMode coordinationMode = RideCoordinationMode.keepTogether,
     String? rideName,
     String? crewRoomId,
+    FlightRole flightRole = FlightRole.pilot,
+    String vehicleLabel = 'Land Rover',
   }) async {
     // The home screen deliberately remains available while an ended ride is
     // set aside (#207). Creating its replacement must file that completed ride
@@ -2802,6 +2864,24 @@ class RideController extends ChangeNotifier {
       kind: CraftKind.balloon,
       label: 'Balloon',
     );
+    final localCraftKind = flightRole.isChasing
+        ? CraftKind.vehicle
+        : CraftKind.balloon;
+    final localCraftLabel = localCraftKind == CraftKind.balloon
+        ? 'Balloon'
+        : _normaliseVehicleLabel(vehicleLabel);
+    final localCraftId = localCraftKind == CraftKind.balloon
+        ? balloonCraftId
+        : _craftIdFor(
+            rideId: rideId,
+            kind: localCraftKind,
+            label: localCraftLabel,
+          );
+    final localCraftStyle = localCraftKind == CraftKind.balloon
+        ? CraftIconStyle.balloon
+        : craftStyle.kind == CraftKind.vehicle
+        ? craftStyle
+        : defaultCraftIconStyleFor(CraftKind.vehicle);
     final session = RideSession(
       rideId: rideId,
       rideCode: _generateCode(),
@@ -2813,12 +2893,12 @@ class RideController extends ChangeNotifier {
       localDevicePublicKey: identity?.publicKey,
       displayName: normalisedDisplayName,
       role: RideRole.lead,
-      flightRole: FlightRole.pilot,
-      localCraftId: balloonCraftId,
+      flightRole: flightRole,
+      localCraftId: localCraftId,
       joinedAt: now,
       isSimulation: isSimulation,
       simulationRiderCount: simulationRiderCount,
-      craftStyle: CraftIconStyle.balloon,
+      craftStyle: localCraftStyle,
       riderSymbol: riderSymbol,
       riderColor: riderColor,
       coordinationMode: coordinationMode,
@@ -2834,7 +2914,10 @@ class RideController extends ChangeNotifier {
       payload: {
         'displayName': session.displayName,
         'role': session.role.name,
-        'flightRole': session.flightRole.name,
+        // Keep the authority-root declaration readable by build 35 and older
+        // clients while newer builds render the creator's actual job.
+        'flightRole': FlightRole.pilot.name,
+        'operationalFlightRole': session.flightRole.name,
         if (isSimulation) 'simulation': true,
         ...craftStyleWireFields(
           symbol: session.riderSymbol,
@@ -2855,22 +2938,34 @@ class RideController extends ChangeNotifier {
         'craftStyle': CraftIconStyle.balloon.name,
       },
     );
+    if (localCraftId != balloonCraftId) {
+      await _record(
+        type: RideEventType.craftRegistered,
+        priority: EventPriority.important,
+        payload: {
+          'craftId': localCraftId,
+          'kind': localCraftKind.name,
+          'label': localCraftLabel,
+          'craftStyle': session.craftStyle.name,
+        },
+      );
+    }
     await _record(
       type: RideEventType.deviceAttachedToCraft,
       priority: EventPriority.important,
       payload: {
         'deviceId': session.localRiderId,
-        'craftId': balloonCraftId,
-        'craftLabel': 'Balloon',
+        'craftId': localCraftId,
+        'craftLabel': localCraftLabel,
       },
     );
     await _record(
       type: RideEventType.craftPrimaryDeviceNominated,
       priority: EventPriority.important,
       payload: {
-        'craftId': balloonCraftId,
+        'craftId': localCraftId,
         'deviceId': session.localRiderId,
-        'craftLabel': 'Balloon',
+        'craftLabel': localCraftLabel,
       },
     );
   }

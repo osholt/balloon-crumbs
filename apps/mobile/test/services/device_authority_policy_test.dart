@@ -103,6 +103,68 @@ void main() {
     },
   );
 
+  test(
+    'a chase coordinator keeps their operational permissions after assigning Pilot',
+    () async {
+      final policy = DeviceAuthorityPolicy(session);
+      final created = await signed(
+        identity: root,
+        type: RideEventType.rideCreated,
+        payload: const {
+          'role': 'lead',
+          'flightRole': 'pilot',
+          'operationalFlightRole': 'chaseDriver',
+        },
+        minute: 0,
+      );
+      final joined = await signed(
+        identity: crew,
+        type: RideEventType.riderJoined,
+        payload: const {
+          'displayName': 'Actual pilot',
+          'role': 'rider',
+          'flightRole': 'balloonCrew',
+          'requestedFlightRole': 'pilot',
+        },
+        minute: 1,
+      );
+      final offered = await signed(
+        identity: root,
+        type: RideEventType.pilotHandoverOffered,
+        payload: {
+          'transferId': 'transfer-1',
+          'fromDeviceId': root.deviceId,
+          'toDeviceId': crew.deviceId,
+          'expiresAt': DateTime.utc(2026, 8, 24, 12, 12).toIso8601String(),
+        },
+        minute: 2,
+      );
+      final accepted = await signed(
+        identity: crew,
+        type: RideEventType.pilotHandoverAccepted,
+        payload: {
+          'transferId': 'transfer-1',
+          'fromDeviceId': root.deviceId,
+          'toDeviceId': crew.deviceId,
+        },
+        minute: 3,
+      );
+      final chaseAction = await signed(
+        identity: root,
+        type: RideEventType.craftChaseAssigned,
+        payload: const {'craftId': 'recovery-one'},
+        minute: 4,
+      );
+
+      expect(policy.accept(created), isTrue);
+      expect(policy.accept(joined), isTrue);
+      expect(policy.accept(offered), isTrue);
+      expect(policy.accept(accepted), isTrue);
+      expect(policy.pilotDeviceId, crew.deviceId);
+      expect(policy.accept(chaseAction), isTrue);
+    },
+  );
+
   test('pilot revocation makes all later device events inert', () async {
     final events = <RideEvent>[
       await signed(
