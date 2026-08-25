@@ -138,15 +138,15 @@ jobs:
           REQUESTED: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s' "$APPSTORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 -D \
+            > "$HOME/.appstoreconnect/private_keys/AuthKey_$APPSTORE_CONNECT_API_KEY_ID.p8"
+          chmod 600 "$HOME/.appstoreconnect/private_keys/AuthKey_$APPSTORE_CONNECT_API_KEY_ID.p8"
           if [ -n "$REQUESTED" ]; then
             echo "BUILD_NUMBER=$REQUESTED" >> "$GITHUB_ENV"
             echo "Using the requested build number $REQUESTED."
             exit 0
           fi
-          mkdir -p "$HOME/.appstoreconnect/private_keys"
-          printf '%s' "$APPSTORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 -D \
-            > "$HOME/.appstoreconnect/private_keys/AuthKey_$APPSTORE_CONNECT_API_KEY_ID.p8"
-          chmod 600 "$HOME/.appstoreconnect/private_keys/AuthKey_$APPSTORE_CONNECT_API_KEY_ID.p8"
           build_number_venv="$RUNNER_TEMP/testflight-build-number-venv"
           python3 -m venv "$build_number_venv"
           "$build_number_venv/bin/python" -m pip install \

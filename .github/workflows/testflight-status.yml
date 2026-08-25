@@ -1,5 +1,7 @@
 # Reports whether a processed build is assigned to the configured external
-# tester group and what Apple currently reports for its beta review state.
+# tester group and what Apple currently reports for its beta review state. It
+# can also idempotently assign and submit an existing build without rebuilding
+# or uploading the IPA again.
 name: TestFlight status
 
 on:
@@ -9,6 +11,11 @@ on:
         description: iOS build number to inspect
         required: true
         type: string
+      submit_external:
+        description: Assign this existing build and submit it for external beta review
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -19,7 +26,7 @@ concurrency:
 
 jobs:
   status:
-    name: Report external TestFlight status
+    name: Report or submit external TestFlight build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -31,6 +38,7 @@ jobs:
           REVIEW_API_KEY_ID: ${{ secrets.APPSTORE_CONNECT_REVIEW_API_KEY_ID }}
           REVIEW_API_ISSUER_ID: ${{ secrets.APPSTORE_CONNECT_REVIEW_API_ISSUER_ID }}
           REVIEW_API_PRIVATE_KEY_BASE64: ${{ secrets.APPSTORE_CONNECT_REVIEW_API_PRIVATE_KEY_BASE64 }}
+          SUBMIT_EXTERNAL: ${{ inputs.submit_external }}
         run: |
           set -euo pipefail
           test -n "$BUILD_NUMBER"
@@ -52,6 +60,10 @@ jobs:
           review_venv="$RUNNER_TEMP/testflight-status-venv"
           python3 -m venv "$review_venv"
           "$review_venv/bin/python" -m pip install --quiet "PyJWT[crypto]==2.10.1"
+          submit_args=()
+          if [ "$SUBMIT_EXTERNAL" != "true" ]; then
+            submit_args+=(--dry-run)
+          fi
           "$review_venv/bin/python" tools/testflight/submit_external.py \
             --bundle-id dev.osholt.ballooncrumbs \
             --build-number "$BUILD_NUMBER" \
@@ -59,4 +71,4 @@ jobs:
             --issuer-id "$REVIEW_API_ISSUER_ID" \
             --key-id "$REVIEW_API_KEY_ID" \
             --private-key "$review_key_path" \
-            --dry-run
+            "${submit_args[@]}"
