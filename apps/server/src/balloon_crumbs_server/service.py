@@ -1305,14 +1305,21 @@ class RelayService:
             )
         except ValueError as error:
             raise RelayServiceError(500, "Crew room record is invalid") from error
-        if not isinstance(value, dict) or set(value) != {
-            "rideId",
-            "rideCode",
-            "inviteSecret",
-            "resolveToken",
-        }:
+        required_fields = {"rideId", "rideCode", "inviteSecret", "resolveToken"}
+        allowed_fields = required_fields | {"authorityRootPublicKey"}
+        if (
+            not isinstance(value, dict)
+            or not required_fields.issubset(value)
+            or not set(value).issubset(allowed_fields)
+        ):
             raise RelayServiceError(500, "Crew room record is invalid")
-        if not all(isinstance(item, str) for item in value.values()):
+        if not all(isinstance(value.get(field), str) for field in required_fields):
+            raise RelayServiceError(500, "Crew room record is invalid")
+        authority_root_public_key = value.get("authorityRootPublicKey")
+        if authority_root_public_key is not None and not (
+            isinstance(authority_root_public_key, str)
+            and re.fullmatch(r"[A-Za-z0-9_-]{43}", authority_root_public_key)
+        ):
             raise RelayServiceError(500, "Crew room record is invalid")
         return {key: value[key] for key in value}
 
