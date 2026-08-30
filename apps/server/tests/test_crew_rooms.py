@@ -119,6 +119,55 @@ def test_private_invite_enrols_a_returning_device_and_qr_operation(client) -> No
     assert reopened.json()["operation"] == _operation()
 
 
+def test_device_authority_round_trips_when_room_starts_a_fresh_operation(client) -> None:
+    authority_root = "A" * 43
+    first_operation = {
+        **_operation(),
+        "authorityRootPublicKey": authority_root,
+    }
+    created_response = client.post(
+        "/api/v1/crew-rooms/create",
+        json={
+            "alias": "TUCKER",
+            "deviceId": "room-device-owner",
+            "displayName": "Oliver",
+            "operation": first_operation,
+        },
+        headers={
+            "authorization": (
+                f"Bearer {ride_token(first_operation['rideId'], first_operation['inviteSecret'])}"
+            )
+        },
+    )
+    assert created_response.status_code == 201
+    created = created_response.json()
+
+    reopened = client.post("/api/v1/crew-rooms/open", json=_auth(created))
+    assert reopened.status_code == 200
+    assert reopened.json()["operation"] == first_operation
+
+    second_operation = {
+        **_operation(
+            ride_id="operation-two",
+            ride_code="654321",
+            secret=SECRET_TWO,
+            resolve_token=RESOLVE_TWO,
+        ),
+        "authorityRootPublicKey": "B" * 43,
+    }
+    restarted = client.post(
+        "/api/v1/crew-rooms/start-operation",
+        json={**_auth(created), "operation": second_operation},
+        headers={
+            "authorization": (
+                f"Bearer {ride_token(second_operation['rideId'], second_operation['inviteSecret'])}"
+            )
+        },
+    )
+    assert restarted.status_code == 200
+    assert restarted.json()["operation"] == second_operation
+
+
 def test_reusing_alias_starts_a_fresh_isolated_operation(client) -> None:
     first = _create(client).json()
     second_operation = _operation(
